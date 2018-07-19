@@ -4,13 +4,6 @@
  *  Author: Meenchen
  */
 
-/* Prototypes for the standard FreeRTOS callback/hook functions implemented
-within this file. */
-void vApplicationMallocFailedHook( void );
-void vApplicationIdleHook( void );
-void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName );
-void vApplicationTickHook( void );
-
 /* Used for maintaining a 32-bit run time stats counter from a 16-bit timer. */
 volatile uint32_t ulRunTimeCounterOverflows = 0;
 
@@ -48,26 +41,15 @@ int avgtempID;
 #pragma NOINIT(avgcapID)
 int avgcapID;
 
-/* for checkpointing */
-//#define CHECKPOINT
-#ifdef CHECKPOINT
-#pragma NOINIT(backup_sram)
-unsigned char backup_sram[4096];
-#define PER 80//8 //every PERIOD =  PER * 2.5ms
-#pragma NOINIT(exectued)
-int exectued;
-#endif
-
-/* Used for dump online info to uart through button */
-#ifdef CHECKPOINT
-#pragma location = 0x3A00 //Progress result saved in VM Space and need to be checkpointed
-unsigned long information[10];
-#else
 #pragma DATA_SECTION(information, ".map")
 unsigned long information[10];
-#endif
 
 /* -------------- FreeRTOS related functions --------------- */
+/* Prototypes for the standard FreeRTOS callback/hook functions implemented */
+void vApplicationMallocFailedHook( void );
+void vApplicationIdleHook( void );
+void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName );
+void vApplicationTickHook( void );
 /*-----------------------------------------------------------*/
 /* Called if a call to pvPortMalloc() fails because there is insufficient
 free memory available in the FreeRTOS heap.  pvPortMalloc() is called

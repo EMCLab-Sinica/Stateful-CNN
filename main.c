@@ -3,9 +3,7 @@
  *
  *  Author: Meenchen
  */
-//#define TestFail
 #define TestDB
-//#define TestStack
 
 /* Scheduler include files. */
 #include <RecoveryHandler/Recovery.h>
@@ -55,26 +53,10 @@ int main( void )
 	    pvInitHeapVar();
 	    for(i = 0; i < NUMTASK;i++)
 	        information[i] = 0;
-        #ifdef TestStack
-        main_counting();
-        #endif
-        #ifdef TestDB
         main_DBtest();
-        #endif
-        #ifdef TestFail
-        main_failureTest();
-        #endif
 	}
 	else{
-#ifdef CHECKPOINT
-        memcpy(((void*) 0x2C00), backup_sram,   0x1000);
-#endif
-#ifdef DATACONSISTENCY
 	    failureRecovery();
-#else
-	    freePreviousTasks();
-	    main_DBtest();
-#endif
 	}
 	return 0;
 }
