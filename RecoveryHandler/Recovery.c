@@ -9,7 +9,7 @@
 #include "FreeRTOS.h"
 #include <stdio.h>
 #include "task.h"
-#include "myuart.h"
+#include "Tools/myuart.h"
 #include "driverlib.h"
 
 /* Used to check whether memory address is valid */

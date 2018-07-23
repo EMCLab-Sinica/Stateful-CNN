@@ -81,7 +81,7 @@ task.h is included from an application file. */
 #include "task.h"
 #include "timers.h"
 #include "StackMacros.h"
-#include "myuart.h"
+#include "Tools/myuart.h"
 
 /* Extend for recovery */
 #include <RecoveryHandler/Recovery.h>

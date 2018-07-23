@@ -4,11 +4,11 @@
  *  Created on: 2017¦~5¤ë25¤é
  *      Author: Meenchen
  */
-#include<stdio.h>
-#include<stdarg.h>
-#include<myuart.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <Tools/myuart.h>
 #include "driverlib.h"
-#include <dvfs.h>
+#include <Tools/dvfs.h>
 
 
 // The following structure will configure the EUSCI_A port to run at 9600 baud from an 1~16MHz ACLK

@@ -71,15 +71,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-
-
-//#define CHECKPOINT
-#ifdef CHECKPOINT
-#define PER 8//8 //every PERIOD =  PER * 2.5ms
-extern unsigned char backup_sram[4096];
-extern int exectued;
-#endif
-
 /*-----------------------------------------------------------
  * Implementation of functions defined in portable.h for the MSP430X port.
  *----------------------------------------------------------*/
@@ -342,16 +333,6 @@ interrupt void vTickISREntry( void )
 extern void vPortTickISR( void );
 
 	__bic_SR_register_on_exit( SCG1 + SCG0 + OSCOFF + CPUOFF );
-//    Tickcount++;
-#ifdef CHECKPOINT
-    exectued++;
-    if(exectued >= PER)
-    {
-        exectued = 0;
-        taskRecency[0] = timeCounter;
-        memcpy(backup_sram, ((void*) 0x2C00),   0x1000);
-    }
-#endif
     timeCounter++;
 
 #ifdef Meenchen

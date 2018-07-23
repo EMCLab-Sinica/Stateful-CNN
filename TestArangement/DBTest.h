@@ -6,4 +6,3 @@
  */
 
 void main_DBtest( void );
-static void prvTest( void *pvParameters );

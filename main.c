@@ -7,25 +7,25 @@
 
 /* Scheduler include files. */
 #include <RecoveryHandler/Recovery.h>
-#include "myuart.h"
-#include "FreeRTOS.h"
-#include "task.h"
-#include "semphr.h"
+#include <Tools/myuart.h>
+#include <FreeRTOS.h>
+#include <task.h>
+#include <semphr.h>
 
 #ifdef TestStack
 #include "StackInVM.h"
 #endif
 #ifdef TestDB
-#include "DBTest.h"
+#include <DBTest.h>
 #endif
 #ifdef TestFail
-#include "FailureTest.h"
+#include <FailureTest.h>
 #endif
 
 /* Standard demo includes, used so the tick hook can exercise some FreeRTOS
 functionality in an interrupt. */
-#include "driverlib.h"
-#include "main.h"
+#include <driverlib.h>
+#include <main.h>
 
 /*-----------------------------------------------------------*/
 /*
@@ -215,5 +215,3 @@ __interrupt void ADC12_ISR(void)
     default: break;
   }
 }
-
-
