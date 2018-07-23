@@ -52,17 +52,6 @@ const unsigned int FINPUT[] =
 
 unsigned int SINPUT[67];
 
-#ifdef ONVM
-void readback_fir()
-{
-    int i;
-    for(i = 0; i < 67; i++)
-        SINPUT[i] = FINPUT[i];
-    for(i = 0; i < FIR_LENGTH; i++)
-        SCOEFF[i] = FCOEFF[i];
-}
-#endif
-
 #pragma NOINIT(Fsum)
 volatile float Fsum;
 volatile float Ssum;
@@ -73,10 +62,6 @@ void firFilter()
     volatile float OUTPUT[36];
     int k;
 
-#ifdef ONVM
-    readback_fir();
-#endif
-
     while(1){
         for(k = 0; k < ITERFIR; k++){
             for(y = 0; y < 36; y++)
@@ -85,23 +70,8 @@ void firFilter()
                 Ssum=0;
                 for(i = 0; i < FIR_LENGTH/2; i++)
                 {
-#ifdef ONNVM
-                    Fsum = Fsum+FCOEFF[i] * ( FINPUT[y + 16 - i] + FINPUT[y + i] );
-                    OUTPUT[y] = Fsum;
-#endif
-#ifdef OUR
                     Ssum = Ssum+FCOEFF[i] * ( FINPUT[y + 16 - i] + FINPUT[y + i] );
                     OUTPUT[y] = Ssum;
-#endif
-#ifdef ONEVERSION
-                    Ssum = Ssum+FCOEFF[i] * ( FINPUT[y + 16 - i] + FINPUT[y + i] );
-                    OUTPUT[y] = Ssum;
-#endif
-#ifdef ONVM
-                    Ssum = Ssum+SCOEFF[i] * ( SINPUT[y + 16 - i] + SINPUT[y + i] );
-                    OUTPUT[y] = Ssum;
-#endif
-                }
             }
         }
         information[IDFIR]++;

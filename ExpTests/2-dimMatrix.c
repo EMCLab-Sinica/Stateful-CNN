@@ -47,28 +47,9 @@ volatile UInt16 Smm[16][4];
 volatile UInt16 Smm2[16][4];
 volatile UInt16 Smm3[16][4];
 
-#ifdef ONVM
-void readback_dim()
-{
-    int i,j;
-    for(i = 0; i < 16; i++)
-    {
-        for(j = 0; j < 4; j++){
-            Smm[i][j] = Fmm[i][j];
-            Smm2[i][j] = Fmm2[i][j];
-            Smm3[i][j] = Fmm3[i][j];
-        }
-    }
-}
-#endif
-
 void dimMatrix()
 {
     int i, j, k;
-
-#ifdef ONVM
-    readback_dim();
-#endif
 
     while(1){
         for(k = 0; k < ITER2DMATRIX; k++){
@@ -76,30 +57,10 @@ void dimMatrix()
             {
                 for(j = 0; j < 4; j++)
                 {
-#ifdef ONNVM
-                    Fmm2[i][j] = Fmm[i][j];
-                    Fmm3[i][j] = Fmm2[i][j];
-                    Fmm2[i][j] = Fmm3[i][j];
-                    Fmm3[i][j] = Fmm2[i][j];
-#endif
-#ifdef OUR
                     Smm2[i][j] = Fmm[i][j];
                     Smm3[i][j] = Smm2[i][j];
                     Smm2[i][j] = Smm3[i][j];
                     Fmm[i][j] = Smm2[i][j];
-#endif
-#ifdef ONEVERSION
-                    Smm2[i][j] = Fmm[i][j];
-                    Smm3[i][j] = Fmm2[i][j];
-                    Smm2[i][j] = Fmm3[i][j];
-                    Fmm[i][j] = Fmm2[i][j];
-#endif
-#ifdef ONVM
-                    Smm2[i][j] = Smm[i][j];
-                    Smm3[i][j] = Smm2[i][j];
-                    Smm2[i][j] = Smm3[i][j];
-                    Fmm[i][j] = Smm2[i][j];
-#endif
                 }
             }
         }

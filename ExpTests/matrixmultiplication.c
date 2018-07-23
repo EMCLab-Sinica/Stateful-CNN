@@ -41,29 +41,11 @@ volatile UInt16 Sm1[3][5];
 volatile UInt16 Sm2[3][5];
 volatile UInt16 Sm3[3][5];
 
-#ifdef ONVM
-void readback_mm()
-{
-    int i,j;
-    for(i = 0; i < 4; i++)
-    {
-        for(j = 0; j < 5; j++){
-            Sm3[i][j] = Fm3[i][j];
-        }
-    }
-}
-#endif
-
 void matrixmultiplication()
 {
     int m, n, p;
 
-
     int k;
-
-#ifdef ONVM
-    readback_mm();
-#endif
 
     while(1){
         for(k = 0; k < ITERMATRIXMUL; k++){
@@ -71,34 +53,11 @@ void matrixmultiplication()
             {
                 for(p = 0; p < 5; p++)
                 {
-#ifdef ONNVM
-                    Fm3[m][p] = 0;
-#endif
-#ifdef OUR
                     Sm3[m][p] = 0;
-#endif
-#ifdef ONEVERSION
-                    Fm3[m][p] = 0;
-#endif
-#ifdef ONVM
-                    Sm3[m][p] = 0;
-#endif
 
                     for(n = 0; n < 4; n++)
                     {
-#ifdef ONNVM
-                        Fm3[m][p] += Fm1[m][n] * Fm2[n][p];
-#endif
-#ifdef OUR
                         Sm3[m][p] += Sm1[m][n] * Sm2[n][p];
-#endif
-#ifdef ONEVERSION
-                        Fm3[m][p] += Sm1[m][n] * Sm2[n][p];
-#endif
-#ifdef ONVM
-                        Sm3[m][p] += Sm1[m][n] * Sm2[n][p];
-#endif
-
                     }
                 }
             }
