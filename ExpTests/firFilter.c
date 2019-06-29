@@ -72,6 +72,7 @@ void firFilter()
                 {
                     Ssum = Ssum+FCOEFF[i] * ( FINPUT[y + 16 - i] + FINPUT[y + i] );
                     OUTPUT[y] = Ssum;
+                }
             }
         }
         information[IDFIR]++;
