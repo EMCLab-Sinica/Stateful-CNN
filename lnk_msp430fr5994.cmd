@@ -63,7 +63,7 @@ MEMORY
     INFOB                   : origin = 0x1900, length = 0x80
     INFOA                   : origin = 0x1980, length = 0x80
     RAM                     : origin = 0x1C00, length = 0x1000
-    RAM2					: origin = 0x2C00, length = 0x1000//for working space(~0x3800), and stacks(~0x3C00)
+    /*RAM2					: origin = 0x2C00, length = 0x1000//for working space(~0x3800), and stacks(~0x3C00)*/
     FRAM                    : origin = 0x4000, length = 0xBE00
     MAP						: origin = 0xFE00, length = 0x0180
     NOINI                   : origin = 0x10000,length = 0x24000
@@ -132,6 +132,14 @@ MEMORY
 /****************************************************************************/
 /* Specify the LEA memory map                                               */
 /****************************************************************************/
+
+#define LEASTACK_SIZE 0x138
+
+MEMORY
+{
+    LEARAM                  : origin = 0x2C00, length = 0x1000 - LEASTACK_SIZE
+    LEASTACK                : origin = 0x3C00 - LEASTACK_SIZE, length = LEASTACK_SIZE
+}
 
 /****************************************************************************/
 /* SPECIFY THE SECTIONS ALLOCATION INTO MEMORY                              */
@@ -214,7 +222,9 @@ SECTIONS
     .infoC       : {} > INFOC
     .infoD       : {} > INFOD
 
-
+    /* https://e2echina.ti.com/question_answer/microcontrollers/msp430/f/55/t/147380 */
+    .leaRAM     : {} > LEARAM /* LEA RAM */
+    .leaStack   : {} > LEASTACK (HIGH) /* LEA STACK */
 
     /* MSP430 interrupt vectors */
 

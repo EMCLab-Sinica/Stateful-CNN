@@ -44,11 +44,12 @@ void LEATest() {
         maxParams.length = SAMPLES;
 
         /* Invoke the msp_max_q15 API. */
-        //msp_benchmarkStart(MSP_BENCHMARK_BASE, 1);
+        msp_benchmarkStart(MSP_BENCHMARK_BASE, 1);
         status = msp_max_q15(&maxParams, input, &q15MaxVector, &uint16MaxIndex);
-        //cycleCount = msp_benchmarkStop(MSP_BENCHMARK_BASE);
+        cycleCount = msp_benchmarkStop(MSP_BENCHMARK_BASE);
         msp_checkStatus(status);
-        print2uart("LEATest: %d\n", q15MaxVector);
+        print2uart("LEATest: cycleCount=%d\r\n", cycleCount);
+        print2uart("LEATest: q15MaxVector=%d\r\n", q15MaxVector);
     }
 }
 
