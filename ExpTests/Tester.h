@@ -18,6 +18,7 @@
 #include "../ExpTests/matrixmultiplication.h"
 #include "../ExpTests/math32.h"
 #include "../ExpTests/2-dimMatrix.h"
+#include "../ExpTests/LEATest.h"
 
 
 #endif /* EXPTESTS_TESTER_H_ */
