@@ -1,7 +1,7 @@
 /*
  * myserial.c
  *
- *  Created on: 2017¦~5¤ë25¤é
+ *  Created on: 2017/5/25
  *      Author: Meenchen
  */
 #include <stdio.h>

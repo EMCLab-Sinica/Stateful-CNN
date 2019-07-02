@@ -1,7 +1,7 @@
 /*
  * maps.h
  *
- *  Created on: 2017¦~8¤ë15¤é
+ *  Created on: 2017/8/15
  *      Author: Meenchen
  *  Description : This header file is used to define the address maps for atomic commit
  *              ** What we need to protect for atomicity

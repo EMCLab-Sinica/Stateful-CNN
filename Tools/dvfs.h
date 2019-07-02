@@ -1,7 +1,7 @@
 /*
  * dvfs.h
  *
- *  Created on: 2016¦~1¤ë26¤é
+ *  Created on: 2016/1/26
  *      Author: WeiMingChen
  */
 

@@ -1,7 +1,7 @@
 /*
  * 2-dimMatrix.h
  *
- *  Created on: 2018¦~3¤ë19¤é
+ *  Created on: 2018/3/19
  *      Author: Meenchen
  */
 

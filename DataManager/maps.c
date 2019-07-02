@@ -1,7 +1,7 @@
 /*
  * maps.c
  *
- *  Created on: 2017¦~8¤ë15¤é
+ *  Created on: 2017/8/15
  *      Author: Meenchen
  */
 #include <DataManager/maps.h>

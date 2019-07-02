@@ -1,7 +1,7 @@
 /*
  * SenseTemp.c
  *
- *  Created on: 2018¦~3¤ë13¤é
+ *  Created on: 2018/3/13
  *      Author: Meenchen
  */
 #define CALADC12_12V_30C  *((unsigned int *)0x1A1A)   // Temperature Sensor Calibration-30 C

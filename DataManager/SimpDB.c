@@ -1,7 +1,7 @@
 /*
  * SimpDB.cpp
  *
- *  Created on: 2017¦~7¤ë12¤é
+ *  Created on: 2017/7/12
  *      Author: WeiMingChen
  */
 

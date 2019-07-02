@@ -1,7 +1,7 @@
 /*
  * config.h
  *
- *  Created on: 2018¦~2¤ë13¤é
+ *  Created on: 2018/2/13
  *      Author: Meenchen
  */
 

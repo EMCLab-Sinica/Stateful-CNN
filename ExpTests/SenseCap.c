@@ -1,7 +1,7 @@
 /*
  * SenseCap.c
  *
- *  Created on: 2018¦~3¤ë13¤é
+ *  Created on: 2018/3/13
  *      Author: Meenchen
  */
 #include <FreeRTOS.h>

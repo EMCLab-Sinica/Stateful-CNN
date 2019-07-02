@@ -1,7 +1,7 @@
 /*
  * Recovery.c
  *
- *  Created on: 2018¦~2¤ë12¤é
+ *  Created on: 2018/2/12
  *      Author: Meenchen
  */
 
