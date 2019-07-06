@@ -5,6 +5,7 @@
 
 int main(void) {
   Onnx__ModelProto *msg;
+  size_t i, j;
 
   uint8_t *buf = malloc(MAX_MSG_SIZE);
   size_t msg_len = read_buffer(MAX_MSG_SIZE, buf);
@@ -22,16 +23,20 @@ int main(void) {
 
   Onnx__GraphProto *graph = msg->graph;
   printf("Inputs:\n");
-  for (size_t i = 0; i < graph->n_input; i++) {
+  for (i = 0; i < graph->n_input; i++) {
       printf("%s\n", graph->input[i]->name);
   }
   printf("\nNodes:\n");
-  for (size_t i = 0; i < graph->n_node; i++) {
+  for (i = 0; i < graph->n_node; i++) {
       Onnx__NodeProto *n = graph->node[i];
       printf("name = %s, op_type = %s\n", n->name, n->op_type);
       printf("\tNode inputs:\n");
-      for (size_t j = 0; j < n->n_input; j++) {
-          printf("\t%s\n", n->input[j]);
+      for (j = 0; j < n->n_input; j++) {
+          printf("\t\t%s\n", n->input[j]);
+      }
+      printf("\tNode outputs:\n");
+      for (j = 0; j < n->n_output; j++) {
+          printf("\t\t%s\n", n->output[j]);
       }
   }
 

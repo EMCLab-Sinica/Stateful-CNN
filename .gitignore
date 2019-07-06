@@ -3,3 +3,5 @@ onnx-nanopb.*
 main
 parse_model
 parse_model_nanopb
+*.dSYM
+model.bin

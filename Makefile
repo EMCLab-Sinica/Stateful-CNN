@@ -1,5 +1,5 @@
-CPPFLAGS = -I .
-CFLAGS ?= -Wall -Wextra -Wstrict-prototypes
+CPPFLAGS = -I . `pkg-config --cflags libprotobuf-c`
+CFLAGS = -std=gnu89 -Dinline= -g -Wall -Wextra -Wstrict-prototypes
 PROGS = main parse_model parse_model_nanopb
 
 all: $(PROGS)
@@ -24,6 +24,6 @@ parse_model_nanopb: CPPFLAGS+=-I nanopb
 
 clean:
 	git submodule foreach git clean -dfx
-	rm -f $(PROGS) *.o *.pb.* onnx-nanopb.proto3 inputs_table.bin
+	rm -rf $(PROGS) *.o *.pb.* onnx-nanopb.proto3 model.bin *.dSYM
 
 .PHONY: all clean
