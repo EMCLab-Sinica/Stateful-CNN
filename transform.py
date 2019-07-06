@@ -23,7 +23,7 @@ for idx, n in enumerate(g.node):
     names[n.output[0]] = idx + n_input
 
 model = [
-    [names[i] for i in n.input]
+    sorted([names[i] for i in n.input])
     for n in g.node]
 
 print(model)

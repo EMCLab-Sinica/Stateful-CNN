@@ -76,6 +76,7 @@ int main (void) {
 
     uint16_t cur_group[16] = { 0 };
     uint8_t grp_index = 0;
+    uint16_t group_last_item;
 
     uint16_t i, j, k;
 
@@ -136,13 +137,18 @@ int main (void) {
         }
         printf(" - %d element(s)." NEWLINE, grp_index);
 
-        if (cur_group[grp_index - 1] == model.nodes_len - 1) {
+        group_last_item = cur_group[grp_index - 1];
+
+        if (group_last_item == model.nodes_len - 1) {
             break;
         }
 
         for (i = cur_group[0]; i < model.nodes_len; i++) {
             Node *cur_node = &(model.nodes[i]);
             for (j = 0; j < cur_node->inputs_len; j++) {
+                if (cur_node->inputs[j] > group_last_item + model.n_input) {
+                    break;
+                }
                 for (k = 0; k < grp_index; k++) {
                     if (cur_node->inputs[j] == cur_group[k] + model.n_input) {
                         cur_node->inputs[j] = -1;
