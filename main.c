@@ -7,9 +7,12 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#define NEWLINE "\n"
+
 typedef struct {
     uint16_t inputs_len;
     int16_t *inputs;
+    uint8_t scheduled;
 } Node;
 
 typedef struct {
@@ -31,6 +34,7 @@ void load_model(int fd) {
     for (i = 0; i < model.nodes_len; i++) {
         Node *cur_node = &(model.nodes[i]);
         read(fd, &(cur_node->inputs_len), sizeof(uint16_t));
+        cur_node->scheduled = 0;
         cur_node->inputs = malloc(cur_node->inputs_len * sizeof(int16_t));
 
         for (j = 0; j < cur_node->inputs_len; j++) {
@@ -50,6 +54,7 @@ void free_model(void) {
 }
 
 void dump_model(void) {
+#ifndef NDEBUG
     uint16_t i, j;
     for (i = 0; i < model.nodes_len; i++) {
         Node *cur_node = &(model.nodes[i]);
@@ -62,7 +67,8 @@ void dump_model(void) {
         }
         printf(") ");
     }
-    printf("\n");
+    printf(NEWLINE);
+#endif
 }
 
 int main (void) {
@@ -77,41 +83,64 @@ int main (void) {
 
     load_model(fd);
 
-    printf("model.n_input = %d\n", model.n_input);
+    printf("model.n_input = %d" NEWLINE, model.n_input);
 
     /* initialize - the first node must have no inputs as
      * ONNX already sort nodes topologically */
     cur_group[0] = 0;
     grp_index = 1;
 
+    dump_model();
+
     while (next_node_idx < model.nodes_len) {
         for (i = next_node_idx; i < model.nodes_len; i++) {
             Node *cur_node = &(model.nodes[i]);
             uint8_t no_inputs = 1;
+
+            if (cur_node->scheduled) {
+                continue;
+            }
+
             for (j = 0; j < cur_node->inputs_len; j++) {
                 if (cur_node->inputs[j] >= model.n_input) {
                     no_inputs = 0;
                 }
             }
             if (no_inputs) {
-                printf("Node %d has not inputs.\n", i);
+#ifndef NDEBUG
+                printf("Node %d has no inputs." NEWLINE, i);
+#endif
+                cur_group[grp_index] = i;
+                grp_index++;
                 next_node_idx = i + 1;
-                if (grp_index < 16) {
-                    cur_group[grp_index] = i;
-                    grp_index++;
-                } else {
+                if (grp_index == 16) {
                     break;
                 }
             }
         }
 
+        if (!grp_index) {
+            printf("Error!" NEWLINE);
+            break;
+        }
+
+        if (grp_index < 16) {
+            next_node_idx = 0;
+        }
+
         printf("Current group: ");
         for (i = 0; i < grp_index; i++) {
             printf("%d ", cur_group[i]);
+            /* schedule it */
+            model.nodes[cur_group[i]].scheduled = 1;
         }
-        printf("\n");
+        printf(" - %d element(s)." NEWLINE, grp_index);
 
-        for (i = 0; i < model.nodes_len; i++) {
+        if (cur_group[grp_index - 1] == model.nodes_len - 1) {
+            break;
+        }
+
+        for (i = cur_group[0]; i < model.nodes_len; i++) {
             Node *cur_node = &(model.nodes[i]);
             for (j = 0; j < cur_node->inputs_len; j++) {
                 for (k = 0; k < grp_index; k++) {

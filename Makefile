@@ -1,5 +1,12 @@
 CPPFLAGS = -I . `pkg-config --cflags libprotobuf-c`
-CFLAGS = -std=gnu89 -Dinline= -g -Wall -Wextra -Wstrict-prototypes
+DEBUG = 0
+CFLAGS = -std=gnu89 -Dinline= -Wall -Wextra -Wstrict-prototypes
+ifeq ($(DEBUG),1)
+    CFLAGS += -g -O0
+else
+    CFLAGS += -O3
+    CPPFLAGS += -DNDEBUG
+endif
 PROGS = main parse_model parse_model_nanopb
 
 all: $(PROGS)
