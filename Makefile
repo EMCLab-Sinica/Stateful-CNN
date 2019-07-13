@@ -19,7 +19,6 @@ parse_model: CPPFLAGS += `pkg-config --cflags libprotobuf-c`
 parse_model: LDFLAGS += `pkg-config --libs libprotobuf-c`
 
 clean:
-	git submodule foreach git clean -dfx
 	rm -rf $(PROGS) *.o *.pb.* external/*.pb-c.* model.bin *.dSYM
 
 .PHONY: all clean
