@@ -27,6 +27,8 @@ im = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
 # for data formats
 im = 255 - im
 print(im)
+# TI's DSPLib requires values to be in [-1, 1)
+im = im / 256
 im = np.expand_dims(im, axis=0)
 im = np.expand_dims(im, axis=0)
 outputs = rep.run(im.astype(np.float32))
