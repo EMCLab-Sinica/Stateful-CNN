@@ -1,8 +1,6 @@
 *.o
-onnx-nanopb.*
 external/*.pb-c.*
 main
 parse_model
-parse_model_nanopb
 *.dSYM
 model.bin
