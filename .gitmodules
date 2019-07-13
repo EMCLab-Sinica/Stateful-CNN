@@ -1,9 +1,6 @@
 [submodule "nanopb"]
 	path = nanopb
 	url = https://github.com/nanopb/nanopb
-[submodule "onnx"]
-	path = onnx
-	url = https://github.com/onnx/onnx
 [submodule "protobuf-c"]
 	path = protobuf-c
 	url = https://github.com/protobuf-c/protobuf-c

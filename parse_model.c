@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "onnx/onnx/onnx.proto3.pb-c.h"
+#include "external/onnx.proto3.pb-c.h"
 #include "utils.h"
 
 int main(void) {
