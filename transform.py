@@ -64,12 +64,20 @@ def to_bytes(i):
     return i.to_bytes(2, byteorder=sys.byteorder)
 
 
-output = to_bytes(len(model))
-output += to_bytes(n_input)
+outputs = {}
+model_bin = to_bytes(len(model))
+model_bin += to_bytes(n_input)
+inputs_bin = b''
 for inputs in model:
-    output += to_bytes(len(inputs))
+    model_bin += to_bytes(len(inputs))
+    model_bin += to_bytes(len(inputs_bin))  # Node.inputs_offset
     for inp in inputs:
-        output += to_bytes(inp)
+        inputs_bin += to_bytes(inp)
+    model_bin += to_bytes(0)  # Node.scheduled
 
-with open('model.bin', 'wb') as f:
-    f.write(output)
+outputs['model.bin'] = model_bin
+outputs['inputs.bin'] = inputs_bin
+
+for filename, data in outputs.items():
+    with open(filename, 'wb') as f:
+        f.write(data)

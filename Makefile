@@ -19,6 +19,6 @@ parse_model: CPPFLAGS += `pkg-config --cflags libprotobuf-c`
 parse_model: LDFLAGS += `pkg-config --libs libprotobuf-c`
 
 clean:
-	rm -rf $(PROGS) *.o *.pb.* external/*.pb-c.* model.bin *.dSYM
+	rm -rf $(PROGS) *.o *.pb.* external/*.pb-c.* *.bin *.dSYM
 
 .PHONY: all clean

@@ -6,61 +6,40 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/mman.h>
 
 #define NEWLINE "\n"
 
 typedef struct {
     uint16_t inputs_len;
-    int16_t *inputs;
-    uint8_t scheduled;
+    uint16_t inputs_offset;
+    uint16_t scheduled;  /* 16 bits for aligned memory */
 } Node;
 
 typedef struct {
     uint16_t nodes_len;
     uint16_t n_input;
-    Node *nodes;
 } Model;
 
-Model model;
+Model *model;
+uint16_t *inputs;
 
-void load_model(int fd) {
-    uint16_t i, j;
-
-    read(fd, &(model.nodes_len), sizeof(model.nodes_len));
-    model.nodes = malloc(model.nodes_len * sizeof(Node));
-
-    read(fd, &(model.n_input), sizeof(model.n_input));
-
-    for (i = 0; i < model.nodes_len; i++) {
-        Node *cur_node = &(model.nodes[i]);
-        read(fd, &(cur_node->inputs_len), sizeof(uint16_t));
-        cur_node->scheduled = 0;
-        cur_node->inputs = malloc(cur_node->inputs_len * sizeof(int16_t));
-
-        for (j = 0; j < cur_node->inputs_len; j++) {
-            read(fd, &(cur_node->inputs[j]), sizeof(int16_t));
-        }
-    }
+static inline Node* model_node(size_t i) {
+    return (Node*)(model + 1) + i;
 }
 
-void free_model(void) {
-    uint16_t i;
-
-    for (i = 0; i < model.nodes_len; i++) {
-        free(model.nodes[i].inputs);
-    }
-
-    free(model.nodes);
+static inline int16_t* node_input(Node *node, size_t i) {
+    return (int16_t*)((uint8_t*)inputs + node->inputs_offset) + i;
 }
 
-void dump_model(void) {
+static void dump_model(void) {
 #ifndef NDEBUG
     uint16_t i, j;
-    for (i = 0; i < model.nodes_len; i++) {
-        Node *cur_node = &(model.nodes[i]);
+    for (i = 0; i < model->nodes_len; i++) {
+        Node *cur_node = model_node(i);
         printf("(");
         for (j = 0; j < cur_node->inputs_len; j++) {
-            printf("%d", cur_node->inputs[j]);
+            printf("%d", *node_input(cur_node, j));
             if (j != cur_node->inputs_len - 1) {
                 printf(", ");
             }
@@ -71,9 +50,40 @@ void dump_model(void) {
 #endif
 }
 
-int main (void) {
-    int fd = open("model.bin", O_RDONLY);
+static int map_files(void) {
+    int map_size;
+    int fd_model = -1, fd_inputs = -1;
+    int ret = 0;
 
+    fd_model = open("model.bin", O_RDONLY);
+    fd_inputs = open("inputs.bin", O_RDONLY);
+    if (fd_model == -1 || fd_inputs == -1) {
+        perror("open files failed");
+        ret = -1;
+        goto error;
+    }
+
+    map_size = 4 * getpagesize();
+    model = mmap(NULL, map_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd_model, 0);
+    inputs = mmap(NULL, map_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd_inputs, 0);
+
+    if (model == MAP_FAILED || inputs == MAP_FAILED) {
+        perror("mmap failed");
+        ret = -1;
+    }
+
+error:
+    if (fd_model != -1) {
+        close(fd_model);
+    }
+    if (fd_inputs != -1) {
+        close(fd_inputs);
+    }
+
+    return ret;
+}
+
+int main (void) {
     uint16_t cur_group[16] = { 0 };
     uint8_t grp_index = 0;
     uint16_t group_last_item;
@@ -82,9 +92,11 @@ int main (void) {
 
     uint16_t next_node_idx = 1;
 
-    load_model(fd);
+    if (map_files() != 0) {
+        return 1;
+    }
 
-    printf("model.n_input = %d" NEWLINE, model.n_input);
+    printf("model->n_input = %d" NEWLINE, model->n_input);
 
     /* initialize - the first node must have no inputs as
      * ONNX already sort nodes topologically */
@@ -93,9 +105,9 @@ int main (void) {
 
     dump_model();
 
-    while (next_node_idx < model.nodes_len) {
-        for (i = next_node_idx; i < model.nodes_len; i++) {
-            Node *cur_node = &(model.nodes[i]);
+    while (next_node_idx < model->nodes_len) {
+        for (i = next_node_idx; i < model->nodes_len; i++) {
+            Node *cur_node = model_node(i);
             uint8_t no_inputs = 1;
 
             if (cur_node->scheduled) {
@@ -103,7 +115,7 @@ int main (void) {
             }
 
             for (j = 0; j < cur_node->inputs_len; j++) {
-                if (cur_node->inputs[j] >= model.n_input) {
+                if (*node_input(cur_node, j) >= model->n_input) {
                     no_inputs = 0;
                 }
             }
@@ -133,25 +145,25 @@ int main (void) {
         for (i = 0; i < grp_index; i++) {
             printf("%d ", cur_group[i]);
             /* schedule it */
-            model.nodes[cur_group[i]].scheduled = 1;
+            model_node(cur_group[i])->scheduled = 1;
         }
         printf(" - %d element(s)." NEWLINE, grp_index);
 
         group_last_item = cur_group[grp_index - 1];
 
-        if (group_last_item == model.nodes_len - 1) {
+        if (group_last_item == model->nodes_len - 1) {
             break;
         }
 
-        for (i = cur_group[0]; i < model.nodes_len; i++) {
-            Node *cur_node = &(model.nodes[i]);
+        for (i = cur_group[0]; i < model->nodes_len; i++) {
+            Node *cur_node = model_node(i);
             for (j = 0; j < cur_node->inputs_len; j++) {
-                if (cur_node->inputs[j] > group_last_item + model.n_input) {
+                if (*node_input(cur_node, j) > group_last_item + model->n_input) {
                     break;
                 }
                 for (k = 0; k < grp_index; k++) {
-                    if (cur_node->inputs[j] == cur_group[k] + model.n_input) {
-                        cur_node->inputs[j] = -1;
+                    if (*node_input(cur_node, j) == cur_group[k] + model->n_input) {
+                        *node_input(cur_node, j) = -1;
                     }
                 }
             }
@@ -162,10 +174,6 @@ int main (void) {
 
         dump_model();
     }
-
-    free_model();
-
-    close(fd);
 
     return 0;
 }

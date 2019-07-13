@@ -3,4 +3,4 @@ external/*.pb-c.*
 main
 parse_model
 *.dSYM
-model.bin
+*.bin
