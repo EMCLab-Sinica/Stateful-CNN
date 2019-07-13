@@ -1,4 +1,4 @@
-CPPFLAGS = -I . `pkg-config --cflags libprotobuf-c`
+CPPFLAGS = -I .
 DEBUG = 0
 CFLAGS = -std=gnu89 -Dinline= -Wall -Wextra -Wstrict-prototypes
 ifeq ($(DEBUG),1)
@@ -14,7 +14,9 @@ all: $(PROGS)
 external/onnx.proto3.pb-c.c : external/onnx.proto3
 	protoc-c $< --c_out=.
 
-parse_model: external/onnx.proto3.pb-c.o utils.o protobuf-c/protobuf-c/protobuf-c.o
+parse_model: external/onnx.proto3.pb-c.o utils.o
+parse_model: CPPFLAGS += `pkg-config --cflags libprotobuf-c`
+parse_model: LDFLAGS += `pkg-config --libs libprotobuf-c`
 
 clean:
 	git submodule foreach git clean -dfx
