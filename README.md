@@ -1,5 +1,9 @@
 # Intermittent CNN
 
+## Prerequisites
+
+* DSPLib for MSP. Available at http://www.ti.com/tool/MSP-DSPLIB (a TI account needed)
+
 ## Build the project
 
 ```
