@@ -6,6 +6,8 @@ import warnings
 import cv2
 import onnx
 
+import ops
+
 """
 Goal: Mapping name-based nodes to integer-based ones.
 Indexing policy:
@@ -54,7 +56,7 @@ for idx, n in enumerate(g.node):
 pprint.pprint(names)
 
 model = [
-    sorted([names[i] for i in n.input])
+    (sorted([names[i] for i in n.input]), n.op_type)
     for n in g.node]
 parameters = [None for _ in range(n_input)]
 
@@ -85,12 +87,13 @@ model_bin += to_bytes(0, size=POINTER_SIZE)  # placeholder for parameters pointe
 inputs_bin = b''
 parameters_bin = open('parameters.bin', 'wb')
 parameters_bin_offset = 0
-for inputs in model:
+for inputs, op_type in model:
     model_bin += to_bytes(len(inputs))
     model_bin += to_bytes(len(inputs_bin))  # Node.inputs_offset
     for inp in inputs:
         # the lowest bit is used as a flag in topological sort
         inputs_bin += to_bytes(inp * 2)
+    model_bin += to_bytes(ops.ops[op_type])
     model_bin += to_bytes(0)  # Node.scheduled
 
 for params in parameters:

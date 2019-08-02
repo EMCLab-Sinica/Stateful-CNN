@@ -5,3 +5,4 @@ parse_model
 *.dSYM
 *.bin
 /DSPLib_1_30_00_02/
+*.pyc
