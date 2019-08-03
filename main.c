@@ -43,6 +43,8 @@ static uint16_t cur_group[16] = { 0 };
 static uint8_t grp_index = 0;
 static uint16_t group_last_item;
 
+static uint8_t intermediate_values[65536] = { 0 };
+
 static inline int16_t* node_input_ptr(Node *node, size_t i) {
     return (int16_t*)((uint8_t*)inputs + node->inputs_offset) + i;
 }
@@ -149,30 +151,11 @@ static void dump_params(ParameterInfo *cur_param) {
 #endif
 }
 
-static void handle_conv(Node *cur_node) {
-    printf("Conv!" NEWLINE);
-    if (cur_node->inputs_len != 2) {
-        printf("Error!" NEWLINE);
-        return;
-    }
-    int16_t conv_input_id = node_input(cur_node, 0),
-            conv_filter_id = node_input(cur_node, 1);
-#ifndef NDEBUG
-    printf("conv_input_id = %d, conv_filter_id = %d" NEWLINE, conv_input_id, conv_filter_id);
-#endif
-    if (conv_filter_id >= model->n_input) {
-        printf("Not implemented: intermediate data" NEWLINE);
-        return;
-    }
-    /* input: N x C x H x W, filter: M x C x kH x kW */
-    ParameterInfo *conv_input = &(model->parameter_info[conv_input_id]),
-                  *conv_filter = &(model->parameter_info[conv_filter_id]);
-    dump_params(conv_input);
-    dump_params(conv_filter);
-    /* TODO: add flags; assume auto_pad=SAME_UPPER, stride=(1, 1), dilation=(1, 1) for now */
+static void handle_conv(ParameterInfo *conv_input, ParameterInfo *conv_filter, int16_t *cur_intermediate_values) {
     uint16_t H = conv_input->dims[2], W = conv_input->dims[3],
              kH = conv_filter->dims[2], kW = conv_filter->dims[3],
-             C = conv_filter->dims[1];
+             N = conv_filter->dims[0], C = conv_filter->dims[1];
+    int32_t *iq31_intermediate_values = malloc(sizeof(int32_t) * N * H * W);
     /* MSP430 LEA requires length to be even */
     msp_mac_q15_params params = { .length = (uint16_t)(kH * kW / 2 * 2) };
     uint8_t truncated = (params.length != kH * kW);
@@ -210,6 +193,7 @@ static void handle_conv(Node *cur_node) {
 #ifndef NDEBUG
                     printf("%f ", (float)mac_result / 2147483648.0f);
 #endif
+                    iq31_intermediate_values[conv_idx * H * W + output_h * W + output_w] = mac_result;
                 }
             }
 #ifndef NDEBUG
@@ -217,6 +201,13 @@ static void handle_conv(Node *cur_node) {
 #endif
         }
     }
+
+    msp_iq31_to_q15_params params2 = { .length = (uint16_t)(N * H * W) };
+    msp_status status = msp_iq31_to_q15(&params2, iq31_intermediate_values, cur_intermediate_values);
+    msp_checkStatus(status);
+
+    free(iq31_intermediate_values);
+
     free(lea_buffer_input);
     free(lea_buffer_filter);
 }
@@ -228,6 +219,8 @@ static void handle_maxpool(Node *cur_node) {
 }
 
 static void handle_cur_group(void) {
+    uint16_t intermediate_values_offset = 0;
+
     printf("Current group: ");
     for (uint8_t i = 0; i < grp_index; i++) {
         printf("%d ", cur_group[i]);
@@ -241,7 +234,34 @@ static void handle_cur_group(void) {
             continue;
         }
         if (cur_node->op_type == Conv) {
-            handle_conv(cur_node);
+            printf("Conv!" NEWLINE);
+            if (cur_node->inputs_len != 2) {
+                printf("Error!" NEWLINE);
+                return;
+            }
+            int16_t conv_input_id = node_input(cur_node, 0),
+                    conv_filter_id = node_input(cur_node, 1);
+#ifndef NDEBUG
+            printf("conv_input_id = %d, conv_filter_id = %d" NEWLINE, conv_input_id, conv_filter_id);
+#endif
+            if (conv_filter_id >= model->n_input) {
+                printf("Not implemented: intermediate data" NEWLINE);
+                cur_node->scheduled = 1;
+                return;
+            }
+            /* input: N x C x H x W, filter: M x C x kH x kW */
+            ParameterInfo *conv_input = &(model->parameter_info[conv_input_id]),
+                          *conv_filter = &(model->parameter_info[conv_filter_id]);
+            dump_params(conv_input);
+            dump_params(conv_filter);
+            /* TODO: add flags; assume auto_pad=SAME_UPPER, stride=(1, 1), dilation=(1, 1) for now */
+            handle_conv(conv_input, conv_filter, (int16_t*)(intermediate_values + intermediate_values_offset));
+            uint16_t H = conv_input->dims[2], W = conv_input->dims[3],
+                     output_C = conv_filter->dims[0]; // output_C = input_N
+            if (intermediate_values_offset + output_C * H * W * 4>= 65536) {
+                printf("Error: too many immediate values" NEWLINE);
+            }
+            intermediate_values_offset = (uint16_t)(intermediate_values_offset + output_C * H * W * 4);
         }
         if (cur_node->op_type == MaxPool) {
             handle_maxpool(cur_node);
