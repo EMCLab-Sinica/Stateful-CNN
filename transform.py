@@ -110,7 +110,7 @@ for params in parameters:
             for j in range(im.shape[1]):
                 parameters_bin.write(to_bytes(_Q15(im[i, j])))
                 parameters_bin_offset += 2
-        model_bin += to_bytes(16)
+        model_bin += to_bytes(16 * 2)  # bitwidth_and_flags
         # extend_dims
         model_bin += to_bytes(1)
         model_bin += to_bytes(1)
@@ -132,14 +132,14 @@ for params in parameters:
             for param in float_data:
                 parameters_bin.write(to_bytes(_Q15(param)))
                 parameters_bin_offset += 2
-            model_bin += to_bytes(16)
+            model_bin += to_bytes(16 * 2)  # bitwidth_and_flags
         elif params.data_type == onnx.TensorProto.INT64:
             data_len = len(params.int64_data)
             model_bin += to_bytes(data_len * 8, size=32)
             for param in params.int64_data:
                 parameters_bin.write(to_bytes(param, size=64))
                 parameters_bin_offset += 8
-            model_bin += to_bytes(64)
+            model_bin += to_bytes(64 * 2)  # bitwidth_and_flags
         else:
             assert False
         print('dims = {}, length = {}'.format(params.dims, data_len))

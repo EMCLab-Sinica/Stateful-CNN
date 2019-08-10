@@ -14,6 +14,8 @@
 
 #define NEWLINE "\n"
 
+const uint16_t FLAG_INTERMEDIATE_VALUES = 1;
+
 typedef struct {
     uint16_t inputs_len;
     uint16_t inputs_offset;
@@ -21,10 +23,18 @@ typedef struct {
     uint16_t scheduled;  /* 16 bits for aligned memory */
 } Node;
 
+/* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct __attribute__((__packed__)) {
     uint32_t params_offset;
     uint32_t params_len;  /* in bytes */
-    uint16_t bitwidth;
+    /* Known bitwidth values:
+     * 16: q15
+     * 32: iq31
+     * 64: INT64 (from ONNX)
+     *
+     * The least sigfinicant bit is a flag to indicate where the data are - parameters or intermediate_values
+     */
+    uint16_t bitwidth_and_flags;
     uint16_t dims[4];
 } ParameterInfo;
 
@@ -43,6 +53,7 @@ static uint16_t cur_group[16] = { 0 };
 static uint8_t grp_index = 0;
 static uint16_t group_last_item;
 
+/* on FRAM */
 static uint8_t intermediate_values[65536] = { 0 };
 
 static inline int16_t* node_input_ptr(Node *node, size_t i) {
@@ -63,12 +74,28 @@ static inline uint8_t node_input_marked(Node *node, size_t i) {
     return *ptr & 0x1;
 }
 
-static inline int16_t* get_q15_param(ParameterInfo *param, size_t i) {
-    return (int16_t*)((uint8_t*)parameters + param->params_offset) + i;
+static inline uint8_t* get_param_base_pointer(ParameterInfo *param) {
+    if (param->bitwidth_and_flags & FLAG_INTERMEDIATE_VALUES) {
+        return &(intermediate_values[0]);
+    } else {
+        return (uint8_t*)parameters;
+    }
 }
 
-static inline float get_q15_param_as_float(ParameterInfo *param, size_t i) {
-    return *get_q15_param(param, i) / 32768.0f;
+static inline int16_t* get_q15_param(ParameterInfo *param, size_t i) {
+    if ((param->bitwidth_and_flags >> 1) != 16) {
+        printf("Error: incorrect param passed to %s" NEWLINE, __func__);
+        return NULL;
+    }
+    return (int16_t*)(get_param_base_pointer(param) + param->params_offset) + i;
+}
+
+static inline int32_t* get_iq31_param(ParameterInfo *param, size_t i) {
+    if ((param->bitwidth_and_flags >> 1) != 32) {
+        printf("Error: incorrect param passed to %s" NEWLINE, __func__);
+        return NULL;
+    }
+    return (int32_t*)(get_param_base_pointer(param) + param->params_offset) + i;
 }
 
 static inline int64_t get_int64_param(ParameterInfo *param, size_t i) {
@@ -138,10 +165,13 @@ error:
 static void dump_params(ParameterInfo *cur_param) {
 #ifndef NDEBUG
     printf("offset=%d len=%d" NEWLINE, cur_param->params_offset, cur_param->params_len);
-    for (uint32_t k = 0; k < cur_param->params_len / (cur_param->bitwidth / 8); k++) {
-        if (cur_param->bitwidth == 16) {
-            printf("%f ", get_q15_param_as_float(cur_param, k));
-        } else if (cur_param->bitwidth == 64) {
+    uint16_t bitwidth = cur_param->bitwidth_and_flags >> 1;
+    for (uint32_t k = 0; k < cur_param->params_len / (bitwidth / 8); k++) {
+        if (bitwidth == 16) {
+            printf("%f ", *get_q15_param(cur_param, k) / 32768.0f);
+        } else if (bitwidth == 32) {
+            printf("%f ", (float)(*get_iq31_param(cur_param, k)) / 2147483648.0f);
+        } else if (bitwidth == 64) {
             printf("%ld ", get_int64_param(cur_param, k));
         }
     }
@@ -151,17 +181,17 @@ static void dump_params(ParameterInfo *cur_param) {
 #endif
 }
 
-static void handle_conv(ParameterInfo *conv_input, ParameterInfo *conv_filter, int16_t *cur_intermediate_values) {
+static void handle_conv(ParameterInfo *conv_input, ParameterInfo *conv_filter, ParameterInfo *output) {
     uint16_t H = conv_input->dims[2], W = conv_input->dims[3],
              kH = conv_filter->dims[2], kW = conv_filter->dims[3],
-             N = conv_filter->dims[0], C = conv_filter->dims[1];
-    int32_t *iq31_intermediate_values = malloc(sizeof(int32_t) * N * H * W);
+             C = conv_filter->dims[1];
     /* MSP430 LEA requires length to be even */
     msp_mac_q15_params params = { .length = (uint16_t)(kH * kW / 2 * 2) };
     uint8_t truncated = (params.length != kH * kW);
     uint16_t buffer_size = (uint16_t)(sizeof(uint16_t) * params.length);
     int16_t *lea_buffer_input = malloc(buffer_size),
             *lea_buffer_filter = malloc(buffer_size);
+    int32_t *output_data = get_iq31_param(output, 0);
     for (uint16_t conv_idx = 0; conv_idx < conv_filter->dims[0]; conv_idx++) {
         for (uint16_t channel = 0; channel < C; channel++) {
             /* copy filter data */
@@ -185,7 +215,7 @@ static void handle_conv(ParameterInfo *conv_input, ParameterInfo *conv_filter, i
                     msp_checkStatus(status);
                     if (truncated) {
 #ifndef NDEBUG
-                        printf("Adding truncated product back" NEWLINE);
+                        // printf("Adding truncated product back" NEWLINE);
 #endif
                         uint16_t last_idx = (uint16_t)(kH * kW - 1);
                         mac_result += (*get_q15_param(conv_input, last_idx)) * (*get_q15_param(conv_filter, last_idx)) * 2;
@@ -193,7 +223,7 @@ static void handle_conv(ParameterInfo *conv_input, ParameterInfo *conv_filter, i
 #ifndef NDEBUG
                     printf("%f ", (float)mac_result / 2147483648.0f);
 #endif
-                    iq31_intermediate_values[conv_idx * H * W + output_h * W + output_w] = mac_result;
+                    output_data[conv_idx * H * W + output_h * W + output_w] = mac_result;
                 }
             }
 #ifndef NDEBUG
@@ -201,12 +231,6 @@ static void handle_conv(ParameterInfo *conv_input, ParameterInfo *conv_filter, i
 #endif
         }
     }
-
-    msp_iq31_to_q15_params params2 = { .length = (uint16_t)(N * H * W) };
-    msp_status status = msp_iq31_to_q15(&params2, iq31_intermediate_values, cur_intermediate_values);
-    msp_checkStatus(status);
-
-    free(iq31_intermediate_values);
 
     free(lea_buffer_input);
     free(lea_buffer_filter);
@@ -254,14 +278,23 @@ static void handle_cur_group(void) {
                           *conv_filter = &(model->parameter_info[conv_filter_id]);
             dump_params(conv_input);
             dump_params(conv_filter);
-            /* TODO: add flags; assume auto_pad=SAME_UPPER, stride=(1, 1), dilation=(1, 1) for now */
-            handle_conv(conv_input, conv_filter, (int16_t*)(intermediate_values + intermediate_values_offset));
             uint16_t H = conv_input->dims[2], W = conv_input->dims[3],
                      output_C = conv_filter->dims[0]; // output_C = input_N
-            if (intermediate_values_offset + output_C * H * W * 4>= 65536) {
+            /* TODO: add flags; assume auto_pad=SAME_UPPER, stride=(1, 1), dilation=(1, 1) for now */
+            ParameterInfo *output = (ParameterInfo*)(intermediate_values + intermediate_values_offset);
+            output->params_len = (uint16_t)(output_C * H * W * 4); /* 4 bytes as IQ31 values are stored */
+            output->params_offset = intermediate_values_offset;
+            output->bitwidth_and_flags = 32 << 1 | FLAG_INTERMEDIATE_VALUES;
+            uint32_t new_intermediate_values_offset = (uint32_t)(
+                /* use uint32_t here to avoid overflow */
+                intermediate_values_offset + sizeof(ParameterInfo) + output->params_len
+            );
+            if (new_intermediate_values_offset >= 65536) {
+                /* TODO: reuse the ring buffer */
                 printf("Error: too many immediate values" NEWLINE);
             }
-            intermediate_values_offset = (uint16_t)(intermediate_values_offset + output_C * H * W * 4);
+            handle_conv(conv_input, conv_filter, output);
+            intermediate_values_offset = (uint16_t)new_intermediate_values_offset;
         }
         if (cur_node->op_type == MaxPool) {
             handle_maxpool(cur_node);
