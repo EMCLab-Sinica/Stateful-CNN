@@ -36,8 +36,8 @@ def _Q15(num):
     return int(num * 2 ** 15)
 
 
-model = onnx.load(sys.argv[1])
-g = model.graph
+onnx_model = onnx.load(sys.argv[1])
+g = onnx_model.graph
 names = {}
 n_input = len(g.input)
 print("n_input = {}".format(n_input))
@@ -56,7 +56,7 @@ for idx, n in enumerate(g.node):
 pprint.pprint(names)
 
 model = [
-    (sorted([names[i] for i in n.input]), n.op_type)
+    ([names[i] for i in n.input], n.op_type)
     for n in g.node]
 parameters = [None for _ in range(n_input)]
 

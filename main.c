@@ -113,8 +113,8 @@ static uint8_t handle_cur_group(void) {
 #ifndef NDEBUG
         printf("op_type = %d" NEWLINE, cur_node->op_type);
 #endif
-        int16_t input_id[2];
-        ParameterInfo *input[2];
+        int16_t input_id[3];
+        ParameterInfo *input[3];
         if (cur_node->inputs_len != expected_inputs_len[cur_node->op_type]) {
             printf("Error: unexpected input length." NEWLINE);
             return 1;
@@ -145,6 +145,30 @@ static uint8_t handle_cur_group(void) {
             return 1;
         }
         intermediate_values_offset = (uint16_t)new_intermediate_values_offset;
+
+#ifndef NDEBUG
+        printf("output dims: ");
+#endif
+        uint8_t has_dims = 0;
+        for (uint8_t j = 0; j < 4; j++) {
+            if (output->dims[j]) {
+                has_dims = 1;
+#ifndef NDEBUG
+                printf("%d, ", output->dims[j]);
+#endif
+            }
+        }
+#ifndef NDEBUG
+        printf(NEWLINE);
+#endif
+        if (!has_dims) {
+            printf("Error: missing dims." NEWLINE);
+            return 1;
+        }
+        if (output->bitwidth_and_flags >> 1 == 0) {
+            printf("Error: invalid bitwidth." NEWLINE);
+            return 1;
+        }
 
         cur_node->scheduled = 1;
     }
@@ -223,9 +247,6 @@ int main (void) {
         for (uint16_t i = cur_group[0]; i < model->nodes_len; i++) {
             Node *cur_node = &(model->nodes[i]);
             for (uint16_t j = 0; j < cur_node->inputs_len; j++) {
-                if (node_input(cur_node, j) > group_last_item + model->n_input) {
-                    break;
-                }
                 for (uint8_t k = 0; k < grp_index; k++) {
                     if (node_input(cur_node, j) == cur_group[k] + model->n_input) {
                         node_input_mark(cur_node, j);

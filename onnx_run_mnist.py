@@ -14,7 +14,7 @@ else:
     sys.exit(1)
 
 # model is from https://github.com/onnx/models/tree/master/mnist
-model = onnx.load_model("../models/mnist/model.onnx")
+model = onnx.load_model("../models/mnist/model_optimized.onnx")
 
 onnx.checker.check_model(model)
 

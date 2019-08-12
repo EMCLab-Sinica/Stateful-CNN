@@ -55,6 +55,7 @@ int64_t get_int64_param(ParameterInfo *param, size_t i);
 int16_t node_input(Node *node, size_t i);
 void node_input_mark(Node *node, size_t i);
 uint8_t node_input_marked(Node *node, size_t i);
+int16_t iq31_to_q15(int32_t *iq31_val_ptr);
 
 /**********************************
  *       Operation handlers       *

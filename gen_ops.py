@@ -1,10 +1,11 @@
 ops = {
     'Add': 2,
-    'Conv': 2,
+    'Conv': 3,
     'MatMul': 2,
     'MaxPool': 1,
     'Relu': 1,
     'Reshape': 2,
+    'Squeeze': 1,
 }
 
 with open('ops.py', 'w') as f_py, open('ops.h', 'w') as f_h, open('ops.c', 'w') as f_c:

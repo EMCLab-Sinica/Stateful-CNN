@@ -20,6 +20,10 @@ uint8_t node_input_marked(Node *node, size_t i) {
     return *ptr & 0x1;
 }
 
+int16_t iq31_to_q15(int32_t *iq31_val_ptr) {
+    return *(int16_t*)iq31_val_ptr;
+}
+
 static uint8_t* get_param_base_pointer(ParameterInfo *param) {
     if (param->bitwidth_and_flags & FLAG_INTERMEDIATE_VALUES) {
         return &(intermediate_values[0]);

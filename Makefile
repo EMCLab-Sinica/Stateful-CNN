@@ -1,6 +1,6 @@
 CPPFLAGS = -I .
 DEBUG = 0
-CFLAGS = -std=c99 -Wall -Wextra -Wstrict-prototypes -Wconversion
+CFLAGS = -std=c99 -Wall -Wextra -Wstrict-prototypes -Wconversion -Wshadow
 ifeq ($(DEBUG),1)
     CFLAGS += -g -O0
 else
@@ -12,9 +12,8 @@ PROGS = main parse_model
 DSPLIB_SRC_PATH = DSPLib_1_30_00_02/source
 
 DSPLIB_OBJS = \
-    $(DSPLIB_SRC_PATH)/utility/msp_iq31_to_q15.o \
-    $(DSPLIB_SRC_PATH)/utility/msp_deinterleave_q15.o \
     $(DSPLIB_SRC_PATH)/vector/msp_mac_q15.o \
+    $(DSPLIB_SRC_PATH)/vector/msp_max_q15.o \
     fake-msp430sdk/msp430.o
 
 all: $(PROGS)
