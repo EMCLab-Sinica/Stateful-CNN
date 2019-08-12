@@ -149,6 +149,14 @@ for params in parameters:
         for _ in range(4 - len(params.dims)):
             model_bin += to_bytes(0)
 
+# Placeholder for ParameterInfo of intermediate values
+for idx, n in enumerate(g.node):
+    model_bin += to_bytes(0, size=32)  # params_offset
+    model_bin += to_bytes(0, size=32)  # params_len
+    model_bin += to_bytes(0)  # bitwidth_and_flags
+    for _ in range(4):  # dims[4]
+        model_bin += to_bytes(0)
+
 outputs['model.bin'] = model_bin
 outputs['inputs.bin'] = inputs_bin
 parameters_bin.close()

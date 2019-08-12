@@ -22,13 +22,18 @@ all: $(PROGS)
 external/onnx.proto3.pb-c.c : external/onnx.proto3
 	protoc-c $< --c_out=.
 
-main: $(DSPLIB_OBJS)
+main: $(DSPLIB_OBJS) ops.o op_handlers.o common.o
 main: CPPFLAGS += -isystem DSPLib_1_30_00_02/include -I fake-msp430sdk
+
+ops.c: ops.h gen_ops.py
+
+ops.h: gen_ops.py
+	python $<
 
 parse_model: external/onnx.proto3.pb-c.o utils.o
 parse_model: LDFLAGS += -lprotobuf-c
 
 clean:
-	rm -rf $(PROGS) *.o $(DSPLIB_OBJS) *.pb.* external/*.pb-c.* *.dSYM __pycache__
+	rm -rf $(PROGS) *.o $(DSPLIB_OBJS) *.pb.* external/*.pb-c.* *.dSYM __pycache__ ops.*
 
 .PHONY: all clean
