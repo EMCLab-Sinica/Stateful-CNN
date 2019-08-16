@@ -3,7 +3,11 @@
 #include <stddef.h> /* size_t, see https://stackoverflow.com/a/26413264 */
 #include <stdint.h>
 
-#define NEWLINE "\n"
+#ifdef __linux__
+#include <stdio.h>
+#elif defined(__MSP430__)
+#include <Tools/myuart.h>
+#endif
 
 #define FLAG_INTERMEDIATE_VALUES 1
 
@@ -35,16 +39,18 @@ typedef struct __attribute__((__packed__)) {
 typedef struct __attribute__((__packed__)) {
     uint16_t nodes_len;
     uint16_t n_input;
-    Node *nodes;
-    ParameterInfo *parameter_info;
 } Model;
 
 /**********************************
  *          Global data           *
  **********************************/
+#define INTERMEDIATE_VALUES_SIZE 65536
+extern Model *model;
+extern Node *nodes;
+extern ParameterInfo *parameter_info;
 extern uint16_t *inputs;
 extern uint16_t *parameters;
-extern uint8_t intermediate_values[];
+extern uint8_t intermediate_values[INTERMEDIATE_VALUES_SIZE];
 
 /**********************************
  *       Helpers for nodes        *
@@ -63,3 +69,14 @@ int16_t iq31_to_q15(int32_t *iq31_val_ptr);
 typedef uint8_t (*handler)(ParameterInfo *input[], ParameterInfo *output);
 extern uint8_t expected_inputs_len[];
 extern handler handlers[];
+
+/**********************************
+ *          Miscellaneous         *
+ **********************************/
+#if defined(__linux__)
+#  define my_printf printf
+#  define NEWLINE "\n"
+#elif defined(__MSP430__)
+#  define my_printf print2uart
+#  define NEWLINE "\r\n"
+#endif

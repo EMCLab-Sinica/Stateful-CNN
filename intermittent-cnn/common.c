@@ -1,6 +1,16 @@
-#include <stdio.h>
-
 #include "common.h"
+
+Model *model;
+Node *nodes;
+ParameterInfo *parameter_info;
+uint16_t *inputs;
+uint16_t *parameters;
+
+/* on FRAM */
+#ifdef __MSP430__
+#pragma NOINIT(intermediate_values)
+#endif
+uint8_t intermediate_values[INTERMEDIATE_VALUES_SIZE];
 
 static int16_t* node_input_ptr(Node *node, size_t i) {
     return (int16_t*)((uint8_t*)inputs + node->inputs_offset) + i;
@@ -34,7 +44,7 @@ static uint8_t* get_param_base_pointer(ParameterInfo *param) {
 
 int16_t* get_q15_param(ParameterInfo *param, size_t i) {
     if ((param->bitwidth_and_flags >> 1) != 16) {
-        printf("Error: incorrect param passed to %s" NEWLINE, __func__);
+        my_printf("Error: incorrect param passed to %s" NEWLINE, __func__);
         return NULL;
     }
     return (int16_t*)(get_param_base_pointer(param) + param->params_offset) + i;
@@ -42,7 +52,7 @@ int16_t* get_q15_param(ParameterInfo *param, size_t i) {
 
 int32_t* get_iq31_param(ParameterInfo *param, size_t i) {
     if ((param->bitwidth_and_flags >> 1) != 32) {
-        printf("Error: incorrect param passed to %s" NEWLINE, __func__);
+        my_printf("Error: incorrect param passed to %s" NEWLINE, __func__);
         return NULL;
     }
     return (int32_t*)(get_param_base_pointer(param) + param->params_offset) + i;

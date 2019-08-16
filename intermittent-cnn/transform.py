@@ -15,8 +15,6 @@ Indexing policy:
     len(g.input)~ : other (hidden) nodes
 """
 
-POINTER_SIZE = 64  # 64-bit systems
-
 
 def _Q15(num):
     """Transform a floating point number to TI's fixed point _q15 format"""
@@ -82,8 +80,6 @@ def to_bytes(i, size=16):
 outputs = {}
 model_bin = to_bytes(len(model))
 model_bin += to_bytes(n_input)
-model_bin += to_bytes(0, size=POINTER_SIZE)  # placeholder for nodes pointer
-model_bin += to_bytes(0, size=POINTER_SIZE)  # placeholder for parameters pointer
 inputs_bin = b''
 parameters_bin = open('parameters.bin', 'wb')
 parameters_bin_offset = 0

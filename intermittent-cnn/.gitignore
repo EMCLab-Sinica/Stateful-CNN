@@ -2,3 +2,4 @@
 /intermittent-cnn
 *.bin
 ops.*
+data.*
