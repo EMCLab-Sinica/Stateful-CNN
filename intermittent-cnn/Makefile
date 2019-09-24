@@ -1,6 +1,8 @@
 DSPLIB_SRC_PATH = DSPLib_1_30_00_02/source
 
 DSPLIB_OBJS = \
+    $(DSPLIB_SRC_PATH)/matrix/msp_matrix_mpy_q15.o \
+    $(DSPLIB_SRC_PATH)/vector/msp_add_q15.o \
     $(DSPLIB_SRC_PATH)/vector/msp_mac_q15.o \
     $(DSPLIB_SRC_PATH)/vector/msp_max_q15.o \
     fake-msp430sdk/msp430.o

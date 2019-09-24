@@ -2,17 +2,39 @@
 
 #include <DSPLib.h>
 
+#ifdef __MSP430__
+#include <driverlib.h>
+#define USE_DMA 1
+#else
+#define USE_DMA 0
+#endif
+
 #include "ops.h"
 
 #ifdef __MSP430__
 #pragma DATA_SECTION(lea_buffer_input, ".leaRAM")
 #pragma DATA_SECTION(lea_buffer_filter, ".leaRAM")
-#pragma DATA_SECTION(lea_buffer_maxpool, ".leaRAM")
+#pragma DATA_SECTION(lea_buffer_another, ".leaRAM")
+#pragma DATA_SECTION(lea_buffer_temp, ".leaRAM")
 #pragma DATA_SECTION(iq31_mac_result, ".leaRAM")
 #endif
-int16_t lea_buffer_input[256], lea_buffer_filter[256];
-int16_t lea_buffer_maxpool[4];
+int16_t lea_buffer_input[256], lea_buffer_filter[256], lea_buffer_another[256], lea_buffer_temp[64];
 int32_t iq31_mac_result;
+
+static inline void my_memcpy(void *dest, const void *src, size_t n) {
+#if !USE_DMA
+    memcpy(dest, src, n);
+#else
+    DMA0SA = (void (*)( )) src;
+    DMA0DA = (void (*)( )) dest;
+
+    DMA0SZ = n >> 1;  /* DMAxSZ is in words (2 bytes) */
+
+    DMA0CTL = DMA_TRANSFER_BLOCK + DMASRCINCR_3 + DMADSTINCR_3 + DMAEN;
+
+    DMA0CTL |= DMAREQ;
+#endif
+}
 
 uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     my_printf("Conv!" NEWLINE);
@@ -45,22 +67,25 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     }
     int16_t *output_data = get_q15_param(output, 0);
     for (uint16_t conv_idx = 0; conv_idx < conv_filter->dims[0]; conv_idx++) {
+        //my_printf("conv_idx = %d" NEWLINE, conv_idx);
         for (uint16_t channel_idx = 0; channel_idx < channel; channel_idx++) {
             /* copy filter data */
-            memcpy(lea_buffer_filter,
-                   get_q15_param(conv_filter, (size_t)((conv_idx * channel + channel_idx) * params.length)),
-                   buffer_size);
+            my_memcpy(lea_buffer_filter,
+                      get_q15_param(conv_filter, (size_t)((conv_idx * channel + channel_idx) * params.length)),
+                      buffer_size);
             for (uint16_t output_h = 0; output_h < H; output_h++) {
                 for (uint16_t output_w = 0; output_w < W; output_w++) {
                     /* copy input data, row by row */
+                    int16_t *input_addr = get_q15_param(conv_input, (size_t)(channel_idx * output_h * output_w + output_h * W + output_w));
                     for (uint16_t h = 0; h < kH; h++) {
                         size_t size = kW;
                         if (truncated && h == kH - 1) {
                             size--;
                         }
-                        memcpy(lea_buffer_input + h * kW,  /* dest */
-                               get_q15_param(conv_input, (size_t)(output_h * W + output_w)),  /* src */
-                               size * sizeof(uint16_t));  /* size */
+                        /* TODO: handle padding */
+                        my_memcpy(lea_buffer_input + h * kW,  // dest
+                                  input_addr + h * output_w,  // src
+                                  size * sizeof(uint16_t));  // size
                     }
                     msp_status status = msp_mac_q15(&params, lea_buffer_input, lea_buffer_filter, &iq31_mac_result);
                     msp_checkStatus(status);
@@ -103,6 +128,7 @@ uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output) {
     msp_max_q15_params params = { .length = 4 };
     int16_t max_val;
     uint16_t index;
+    int16_t *lea_buffer_maxpool = lea_buffer_input;
     for (uint16_t i = 0; i < channel; i++) {
         for (uint16_t j = 0; j < H; j = (uint16_t)(j + stride)) {
             for (uint16_t k = 0; k < W; k = (uint16_t)(k + stride)) {
@@ -122,22 +148,77 @@ uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output) {
 uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output) {
     /* Add: Y = X + W */
     my_printf("Add!" NEWLINE);
-    if (input[0]->bitwidth_and_flags >> 1 != input[1]->bitwidth_and_flags >> 1) {
-        my_printf("Error: mismatched bitwidth" NEWLINE);
+    if (input[0]->bitwidth_and_flags >> 1 != 16 || input[1]->bitwidth_and_flags >> 1 != 16) {
+        my_printf("Error: unsupported bitwidth" NEWLINE);
         return 1;
     }
+    ParameterInfo *A = input[0], *B = input[1];
     output->params_len = input[0]->params_len;
     output->bitwidth_and_flags = input[0]->bitwidth_and_flags | FLAG_INTERMEDIATE_VALUES;
-    /* TODO */
-    return 1;
+    output->dims[0] = 1;
+    output->dims[1] = A->dims[1];
+
+    msp_add_q15_params params = { .length = A->dims[1] };
+
+    int16_t *lea_buffer_A = lea_buffer_input,
+            *lea_buffer_B = lea_buffer_another;
+    my_memcpy(lea_buffer_A, get_q15_param(A, 0), output->params_len);
+    my_memcpy(lea_buffer_B, get_q15_param(B, 0), output->params_len);
+    msp_status status = msp_add_q15(&params, lea_buffer_A, lea_buffer_B, lea_buffer_A);
+    msp_checkStatus(status);
+
+    my_memcpy(get_q15_param(output, 0), lea_buffer_A, output->params_len);
+
+    return 0;
 }
 
 uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
-    my_printf("MatMul!" NEWLINE);
-    /* TODO */
-    (void)input;
-    (void)output;
-    return 1;
+    ParameterInfo *A = input[0], *B = input[1];
+
+    my_printf("MatMul! A: (%dx%d), B: (%dx%d)" NEWLINE,
+              A->dims[0], A->dims[1], B->dims[0], B->dims[1]);
+
+    uint16_t output_len = (uint16_t)(A->dims[0] * B->dims[1]);
+    output->dims[0] = A->dims[0];
+    output->dims[1] = B->dims[1];
+    output->params_len = (uint16_t)(output_len * 2);
+    output->bitwidth_and_flags = 16 << 1 | FLAG_INTERMEDIATE_VALUES;
+
+    if (A->dims[0] * A->dims[1] > 256) {
+        my_printf("Matrix A too large!" NEWLINE);
+        return 1;
+    }
+
+    int16_t *lea_buffer_A = lea_buffer_filter,
+            *lea_buffer_B = lea_buffer_another,
+            *lea_buffer_matmul = lea_buffer_input;
+    my_memcpy(lea_buffer_A, get_q15_param(A, 0), (uint16_t)(A->dims[0] * A->dims[1]));
+
+    /* LEA wants addresses to be 4-aligned */
+    uint16_t step = (uint16_t)((256 / B->dims[1]) / 4 * 4);
+    for (uint16_t i = 0; i < B->dims[0]; i = (uint16_t)(i + step)) {
+        msp_matrix_mpy_q15_params params;
+        uint16_t current_width = (uint16_t)MIN_VAL(step, B->dims[0] - i);
+        params.srcARows = A->dims[0];
+        params.srcACols = current_width;
+        params.srcBRows = current_width;
+        params.srcBCols = B->dims[1];
+
+        my_memcpy(lea_buffer_B, get_q15_param(B, (uint16_t)(i * B->dims[1])), (uint16_t)(current_width * B->dims[1]));
+        msp_status status = msp_matrix_mpy_q15(
+            &params,
+            lea_buffer_A + A->dims[0] * i,
+            lea_buffer_B,
+            lea_buffer_temp);
+        msp_checkStatus(status);
+
+        msp_add_q15_params params2 = { .length = output_len };
+        status = msp_add_q15(&params2, lea_buffer_matmul, lea_buffer_temp, lea_buffer_matmul);
+        msp_checkStatus(status);
+    }
+    my_memcpy(get_q15_param(output, 0), lea_buffer_matmul, output->params_len);
+
+    return 0;
 }
 
 uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output) {

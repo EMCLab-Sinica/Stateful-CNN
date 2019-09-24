@@ -90,7 +90,8 @@ static uint8_t handle_cur_group(void) {
             /* TODO: reuse the ring buffer */
             my_printf("Error: too many immediate values" NEWLINE);
         }
-        if (handlers[cur_node->op_type](input, output) != 0) {
+        uint8_t ret = handlers[cur_node->op_type](input, output);
+        if (ret != 0) {
             return 1;
         }
         intermediate_values_offset = (uint16_t)new_intermediate_values_offset;
@@ -211,6 +212,13 @@ int run_model(void) {
 
         dump_model();
     }
+
+    /* TODO: is the last node always the output node? */
+    ParameterInfo *output_node = &(parameter_info[model->nodes_len + model->n_input - 1]);
+    for (uint16_t i = 0; i < output_node->dims[1]; i++) {
+        my_printf("%d ", *get_q15_param(output_node, i));
+    }
+    my_printf(NEWLINE);
 
     return 0;
 }

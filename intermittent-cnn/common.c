@@ -34,22 +34,6 @@ int16_t iq31_to_q15(int32_t *iq31_val_ptr) {
     return *(int16_t*)iq31_val_ptr;
 }
 
-static uint8_t* get_param_base_pointer(ParameterInfo *param) {
-    if (param->bitwidth_and_flags & FLAG_INTERMEDIATE_VALUES) {
-        return &(intermediate_values[0]);
-    } else {
-        return (uint8_t*)parameters;
-    }
-}
-
-int16_t* get_q15_param(ParameterInfo *param, size_t i) {
-    if ((param->bitwidth_and_flags >> 1) != 16) {
-        my_printf("Error: incorrect param passed to %s" NEWLINE, __func__);
-        return NULL;
-    }
-    return (int16_t*)(get_param_base_pointer(param) + param->params_offset) + i;
-}
-
 int32_t* get_iq31_param(ParameterInfo *param, size_t i) {
     if ((param->bitwidth_and_flags >> 1) != 32) {
         my_printf("Error: incorrect param passed to %s" NEWLINE, __func__);
