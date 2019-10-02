@@ -40,69 +40,68 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     my_printf("Conv!" NEWLINE);
 
     ParameterInfo *conv_input = input[0], *conv_filter = input[1], *bias = input[2];
-    /* input: N x C x H x W, filter: M x C x kH x kW */
+    /* input: N x H x W x C, filter: M x kH x kW x C*/
     if (conv_input->bitwidth_and_flags >> 1 != 16 || conv_filter->bitwidth_and_flags >> 1 != 16) {
         my_printf("Error: incorrect bitwidth." NEWLINE);
         return 1;
     }
-    const uint16_t H = conv_input->dims[2], W = conv_input->dims[3],
-                   output_C = conv_filter->dims[0], // output_C = input_N
-                   kH = conv_filter->dims[2], kW = conv_filter->dims[3],
-                   channel = conv_filter->dims[1];
+    /* Cannot use C as a variable name here as C is a macro on MSP430 :( */
+    const uint16_t H = conv_input->dims[1], W = conv_input->dims[2],
+                   input_N = conv_filter->dims[0],
+                   kH = conv_filter->dims[1], kW = conv_filter->dims[2],
+                   CHANNEL = conv_filter->dims[3];
     /* TODO: add flags; assume auto_pad=SAME_UPPER, stride=(1, 1), dilation=(1, 1) for now */
-    output->params_len = (uint16_t)(output_C * H * W * 2);
+    output->params_len = (uint16_t)(input_N * H * W * 2);
     output->bitwidth_and_flags = 16 << 1 | FLAG_INTERMEDIATE_VALUES;
     output->dims[0] = 1;
-    output->dims[1] = output_C;
-    output->dims[2] = H;
-    output->dims[3] = W;
+    output->dims[1] = H;
+    output->dims[2] = W;
+    output->dims[3] = input_N;
 
     /* MSP430 LEA requires length to be even */
-    msp_mac_q15_params params = { .length = (uint16_t)(kH * kW / 2 * 2) };
-    uint8_t truncated = (params.length != kH * kW);
+    msp_mac_q15_params params = { .length = (uint16_t)(CHANNEL * kH * kW / 2 * 2) };
+    uint8_t truncated = (params.length != CHANNEL * kH * kW);
     uint16_t buffer_size = (uint16_t)(sizeof(uint16_t) * params.length);
     if (buffer_size > sizeof(lea_buffer_filter)) {
         my_printf("Error: buffer too small." NEWLINE);
         return 1;
     }
     int16_t *output_data = get_q15_param(output, 0);
-    for (uint16_t conv_idx = 0; conv_idx < conv_filter->dims[0]; conv_idx++) {
+    for (uint16_t conv_idx = 0; conv_idx < input_N; conv_idx++) {
         //my_printf("conv_idx = %d" NEWLINE, conv_idx);
-        for (uint16_t channel_idx = 0; channel_idx < channel; channel_idx++) {
-            /* copy filter data */
-            my_memcpy(lea_buffer_filter,
-                      get_q15_param(conv_filter, (size_t)((conv_idx * channel + channel_idx) * params.length)),
-                      buffer_size);
-            for (uint16_t output_h = 0; output_h < H; output_h++) {
-                for (uint16_t output_w = 0; output_w < W; output_w++) {
-                    /* copy input data, row by row */
-                    int16_t *input_addr = get_q15_param(conv_input, (size_t)(channel_idx * output_h * output_w + output_h * W + output_w));
-                    for (uint16_t h = 0; h < kH; h++) {
-                        size_t size = kW;
-                        if (truncated && h == kH - 1) {
-                            size--;
-                        }
-                        /* TODO: handle padding */
-                        my_memcpy(lea_buffer_input + h * kW,  // dest
-                                  input_addr + h * output_w,  // src
-                                  size * sizeof(uint16_t));  // size
+        /* copy filter data */
+        my_memcpy(lea_buffer_filter,
+                  get_q15_param(conv_filter, (size_t)(conv_idx * CHANNEL * kH * kW)),
+                  buffer_size);
+        for (uint16_t output_h = 0; output_h < H; output_h++) {
+            for (uint16_t output_w = 0; output_w < W; output_w++) {
+                /* copy input data, row by row */
+                int16_t *input_addr = get_q15_param(conv_input, (size_t)((output_h * W + output_w) * CHANNEL));
+                for (uint16_t h = 0; h < kH; h++) {
+                    size_t size = (size_t)(kW * CHANNEL);
+                    if (truncated && h == kH - 1) {
+                        size--;
                     }
-                    msp_status status = msp_mac_q15(&params, lea_buffer_input, lea_buffer_filter, &iq31_mac_result);
-                    msp_checkStatus(status);
-                    if (truncated) {
-#ifndef NDEBUG
-                        // my_printf("Adding truncated product back" NEWLINE);
-#endif
-                        uint16_t last_idx = (uint16_t)(kH * kW - 1);
-                        iq31_mac_result += (*get_q15_param(conv_input, last_idx)) * (*get_q15_param(conv_filter, last_idx)) * 2;
-                    }
-#ifndef NDEBUG
-                    my_printf("%f ", (float)iq31_mac_result / 2147483648.0f);
-#endif
-                    int16_t q15_mac_result = iq31_to_q15(&iq31_mac_result);
-                    q15_mac_result = (int16_t)(q15_mac_result + *get_q15_param(bias, conv_idx));
-                    output_data[conv_idx * H * W + output_h * W + output_w] = q15_mac_result;
+                    /* TODO: handle padding */
+                    my_memcpy(lea_buffer_input + h * kW * CHANNEL,  // dest
+                              input_addr + h * W * CHANNEL,  // src
+                              size * sizeof(uint16_t));  // size
                 }
+                msp_status status = msp_mac_q15(&params, lea_buffer_input, lea_buffer_filter, &iq31_mac_result);
+                msp_checkStatus(status);
+                if (truncated) {
+#ifndef NDEBUG
+                    // my_printf("Adding truncated product back" NEWLINE);
+#endif
+                    uint16_t last_idx = (uint16_t)(kH * kW - 1);
+                    iq31_mac_result += (*get_q15_param(conv_input, last_idx)) * (*get_q15_param(conv_filter, last_idx)) * 2;
+                }
+#ifndef NDEBUG
+                my_printf("%f ", (float)iq31_mac_result / 2147483648.0f);
+#endif
+                int16_t q15_mac_result = iq31_to_q15(&iq31_mac_result);
+                q15_mac_result = (int16_t)(q15_mac_result + *get_q15_param(bias, conv_idx));
+                output_data[conv_idx * H * W + output_h * W + output_w] = q15_mac_result;
             }
 #ifndef NDEBUG
             my_printf(NEWLINE);

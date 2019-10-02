@@ -40,6 +40,8 @@ names = {}
 n_input = len(g.input)
 print("n_input = {}".format(n_input))
 
+conv_param_names = set()
+
 for idx, inp in enumerate(g.input):
     names[inp.name] = idx
 
@@ -49,6 +51,9 @@ for idx, n in enumerate(g.node):
     else:
         output = n.output
     assert len(output) == 1
+    if n.op_type == 'Conv':
+        for inp in n.input:
+            conv_param_names.add(inp)
     names[output[0]] = idx + n_input
 
 pprint.pprint(names)
@@ -75,6 +80,19 @@ def to_bytes(i, size=16):
         return struct.pack('q', i)
     else:
         raise ValueError(f'Unsupported size {size}')
+
+
+def nchw2nhwc(arr, dims):
+    N, C, H, W = dims
+    ret = [0] * (N * C * H * W)
+    for n in range(N):
+        for c in range(C):
+            for h in range(H):
+                for w in range(W):
+                    old_idx = n * C * H * W + c * H * W + h * W + w
+                    new_idx = n * H * W * C + h * W * C + w * C + c
+                    ret[new_idx] = arr[old_idx]
+    return ret, (N, H, W, C)
 
 
 outputs = {}
@@ -114,6 +132,7 @@ for params in parameters:
         model_bin += to_bytes(dimY)
     else:
         assert len(params.dims) <= 4
+        reordered_dims = params.dims
         if params.data_type == onnx.TensorProto.FLOAT:
             if params.float_data:
                 float_data = params.float_data
@@ -125,7 +144,12 @@ for params in parameters:
             data_len = len(float_data)
             assert data_len > 0
             model_bin += to_bytes(data_len * 2, size=32)  # A _q15 is 16-bit
-            for param in float_data:
+            if params.name in conv_param_names:
+                print(f'Reorder conv param {params.name}')
+                float_data_reordered, reordered_dims = nchw2nhwc(float_data, params.dims)
+            else:
+                float_data_reordered = float_data
+            for param in float_data_reordered:
                 parameters_bin.write(to_bytes(_Q15(param)))
                 parameters_bin_offset += 2
             model_bin += to_bytes(16 * 2)  # bitwidth_and_flags
@@ -138,11 +162,11 @@ for params in parameters:
             model_bin += to_bytes(64 * 2)  # bitwidth_and_flags
         else:
             assert False
-        print('dims = {}, length = {}'.format(params.dims, data_len))
-        for dim in params.dims:
+        print('dims = {}, length = {}'.format(reordered_dims, data_len))
+        for dim in reordered_dims:
             model_bin += to_bytes(dim)
         # dims are always 4 uint16_t's in C
-        for _ in range(4 - len(params.dims)):
+        for _ in range(4 - len(reordered_dims)):
             model_bin += to_bytes(0)
 
 # Placeholder for ParameterInfo of intermediate values
