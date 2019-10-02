@@ -30,7 +30,7 @@ static inline void my_memcpy(void *dest, const void *src, size_t n) {
 
     DMA0SZ = n >> 1;  /* DMAxSZ is in words (2 bytes) */
 
-    DMA0CTL = DMA_TRANSFER_BLOCK + DMASRCINCR_3 + DMADSTINCR_3 + DMAEN;
+    DMA0CTL = DMA_TRANSFER_BLOCK + DMASRCINCR_3 + DMADSTINCR_3 + DMAIE + DMAEN;
 
     DMA0CTL |= DMAREQ;
 #endif
@@ -269,4 +269,22 @@ uint8_t handle_squeeze(ParameterInfo *input[], ParameterInfo *output) {
         }
     }
     return 0;
+}
+
+#pragma vector=DMA_VECTOR
+__interrupt void DMA_ISR(void)
+{
+    switch(__even_in_range(DMAIV,16))
+    {
+        case 0: break;
+        case 2: break; // DMA0IFG = DMA Channel 0
+        case 4: break; // DMA1IFG = DMA Channel 1
+        case 6: break; // DMA2IFG = DMA Channel 2
+        case 8: break; // DMA3IFG = DMA Channel 3
+        case 10: break; // DMA4IFG = DMA Channel 4
+        case 12: break; // DMA5IFG = DMA Channel 5
+        case 14: break; // DMA6IFG = DMA Channel 6
+        case 16: break; // DMA7IFG = DMA Channel 7
+        default: break;
+    }
 }
