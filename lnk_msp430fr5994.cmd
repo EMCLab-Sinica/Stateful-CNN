@@ -1,6 +1,6 @@
 /******************************************************************************
 *
-* Copyright (C) 2012 - 2016 Texas Instruments Incorporated - http://www.ti.com/
+* Copyright (C) 2012 - 2019 Texas Instruments Incorporated - http://www.ti.com/
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions
@@ -47,7 +47,7 @@
 /* -heap   0x0100                                   HEAP AREA SIZE            */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
-/* Version: 1.198                                                             */
+/* 1.207 */
 /*----------------------------------------------------------------------------*/
 
 /****************************************************************************/
@@ -63,9 +63,8 @@ MEMORY
     INFOB                   : origin = 0x1900, length = 0x80
     INFOA                   : origin = 0x1980, length = 0x80
     RAM                     : origin = 0x1C00, length = 0x1000
-    /*RAM2					: origin = 0x2C00, length = 0x1000//for working space(~0x3800), and stacks(~0x3C00)*/
     FRAM                    : origin = 0x4000, length = 0xBE00
-    MAP						: origin = 0xFE00, length = 0x0180
+    MAP                     : origin = 0xFE00, length = 0x0180
     NOINI                   : origin = 0x10000,length = 0x24000
     FRAM2                   : origin = 0x34000,length = 0x10000
     JTAGSIGNATURE           : origin = 0xFF80, length = 0x0004, fill = 0xFFFF
@@ -133,7 +132,7 @@ MEMORY
 /* Specify the LEA memory map                                               */
 /****************************************************************************/
 
-#define LEASTACK_SIZE 0x138
+#define LEASTACK_SIZE   0x138
 
 MEMORY
 {
@@ -183,7 +182,7 @@ SECTIONS
     .const            : {} >> FRAM | FRAM2  /* Constant data                     */
 #endif
 
-#ifndef __LARGE_DATA_MODEL__
+#ifndef __LARGE_CODE_MODEL__
     .text             : {} > FRAM           /* Code                              */
 #else
     .text             : {} >> FRAM2 | FRAM  /* Code                              */
@@ -191,7 +190,7 @@ SECTIONS
 
     #ifdef __TI_COMPILER_VERSION__
         #if __TI_COMPILER_VERSION__ >= 15009000
-            #ifndef __LARGE_DATA_MODEL__
+            #ifndef __LARGE_CODE_MODEL__
                 .TI.ramfunc : {} load=FRAM, run=RAM, table(BINIT)
             #else
                 .TI.ramfunc : {} load=FRAM | FRAM2, run=RAM, table(BINIT)
@@ -211,20 +210,20 @@ SECTIONS
     .bss        : {} > RAM                  /* Global & static vars              */
     .data       : {} > RAM                  /* Global & static vars              */
     .TI.noinit  : {} > NOINI type=NOINIT    /* For #pragma noinit                */
-    .map		: {} > MAP type=NOINIT
+    .map        : {} > MAP type=NOINIT
     .stack      : {} > RAM (HIGH)           /* Software system stack             */
 
     .tinyram    : {} > TINYRAM              /* Tiny RAM                          */
 
     /* MSP430 INFO memory segments */
-    .infoA       : {} > INFOA
-    .infoB       : {} > INFOB
-    .infoC       : {} > INFOC
-    .infoD       : {} > INFOD
+    .infoA : type = NOINIT{} > INFOA
+    .infoB : type = NOINIT{} > INFOB
+    .infoC : type = NOINIT{} > INFOC
+    .infoD : type = NOINIT{} > INFOD
 
-    /* https://e2echina.ti.com/question_answer/microcontrollers/msp430/f/55/t/147380 */
-    .leaRAM     : {} > LEARAM /* LEA RAM */
-    .leaStack   : {} > LEASTACK (HIGH) /* LEA STACK */
+
+    .leaRAM      : {} > LEARAM               /* LEA RAM                           */
+    .leaStack    : {} > LEASTACK (HIGH)      /* LEA STACK                         */
 
     /* MSP430 interrupt vectors */
 
