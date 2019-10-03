@@ -271,6 +271,8 @@ uint8_t handle_squeeze(ParameterInfo *input[], ParameterInfo *output) {
     return 0;
 }
 
+#ifdef __MSP430__
+
 #pragma vector=DMA_VECTOR
 __interrupt void DMA_ISR(void)
 {
@@ -288,3 +290,5 @@ __interrupt void DMA_ISR(void)
         default: break;
     }
 }
+
+#endif

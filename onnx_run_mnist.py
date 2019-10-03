@@ -15,7 +15,10 @@ else:
     sys.exit(1)
 
 # model is from https://github.com/onnx/models/tree/master/mnist
+# https://github.com/onnx/onnx/blob/master/docs/PythonAPIOverview.md
 model = onnx.load_model("../models/mnist/model_optimized.onnx")
+
+# model.graph.initializer[1].float_data[1] = 3
 
 onnx.checker.check_model(model)
 
@@ -32,6 +35,7 @@ if filename.endswith('.png'):
     # for data formats
     im = 255 - im
     print(im)
+    im = im / 256
     im = np.expand_dims(im, axis=0)
     im = np.expand_dims(im, axis=0)
     images.append(im)
