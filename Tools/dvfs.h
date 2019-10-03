@@ -22,7 +22,7 @@ extern unsigned int FreqLevel;
  *        7: 8MHz
  *        8: 16MHz
  */
-void setFrequency(int level)
+inline void setFrequency(int level)
 {
     switch(level)
     {
@@ -64,7 +64,7 @@ void setFrequency(int level)
     }
 }
 
-unsigned long getFrequency(int level)
+inline unsigned long getFrequency(int level)
 {
     switch(level)
     {

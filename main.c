@@ -8,6 +8,7 @@
 /* Scheduler include files. */
 #include <RecoveryHandler/Recovery.h>
 #include <Tools/myuart.h>
+#include <Tools/dvfs.h>
 #include <FreeRTOS.h>
 #include <task.h>
 #include <semphr.h>

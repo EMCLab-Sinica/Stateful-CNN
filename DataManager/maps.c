@@ -8,6 +8,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include <stdio.h>
+#include <string.h>
 
 /*
  * Task control block.  A task control block (TCB) is allocated for each task,

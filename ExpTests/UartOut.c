@@ -9,6 +9,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 #include <config.h>
+#include <DataManager/SimpDB.h>
 
 extern int avgtempID;
 extern int avgcapID;
