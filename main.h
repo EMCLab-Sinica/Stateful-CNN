@@ -10,7 +10,9 @@ volatile uint32_t ulRunTimeCounterOverflows = 0;
 #pragma NOINIT(taskRecency)
 unsigned long taskRecency[NUMTASK];
 
+#ifdef Meenchen
 #pragma NOINIT(ucHeap)
+#endif
 uint8_t ucHeap[ configTOTAL_HEAP_SIZE ];
 
 #pragma NOINIT(timeCounter)
