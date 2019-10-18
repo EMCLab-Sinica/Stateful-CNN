@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <launchConfiguration type="com.ti.ccstudio.debug.launchType.device.debugging">
 <stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_CPUS_WITH_PROJECT" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#13;&#10;&lt;cpus_with_project&gt;&#13;&#10;&lt;id id=&quot;TI MSP430 USB1/MSP430&quot; isa=&quot;MSP430FR59xx&quot;/&gt;&#13;&#10;&lt;/cpus_with_project&gt;"/>
-<stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_DEBUGGER_PROPERTIES./Volumes/Data/local/School/newslab/NVP/Failure-Resistent/FailureResilient/targetConfigs/MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;no&quot; ?&gt;&#10;&lt;PropertyValues&gt;&#10;&#10;  &lt;property id=&quot;ConnectOnStartup&quot;&gt;&#10;    &lt;curValue&gt;1&lt;/curValue&gt;&#10;  &lt;/property&gt;&#10;&#10;  &lt;property id=&quot;EnableInstalledBreakpoint&quot;&gt;&#10;    &lt;curValue&gt;1&lt;/curValue&gt;&#10;  &lt;/property&gt;&#10;&#10;  &lt;property id=&quot;MSP430LPMx5Mode&quot;&gt;&#10;    &lt;curValue&gt;0&lt;/curValue&gt;&#10;  &lt;/property&gt;&#10;&#10;&lt;/PropertyValues&gt;&#10;"/>
-<stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_DEBUGGER_PROPERTIES./home/yen/var/local/School/newslab/NVP/Failure-Resistent/FailureResilient/targetConfigs/MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;no&quot; ?&gt;&#10;&lt;PropertyValues&gt;&#10;&#10;  &lt;property id=&quot;ConnectOnStartup&quot;&gt;&#10;    &lt;curValue&gt;1&lt;/curValue&gt;&#10;  &lt;/property&gt;&#10;&#10;  &lt;property id=&quot;EnableInstalledBreakpoint&quot;&gt;&#10;    &lt;curValue&gt;1&lt;/curValue&gt;&#10;  &lt;/property&gt;&#10;&#10;  &lt;property id=&quot;MSP430LPMx5Mode&quot;&gt;&#10;    &lt;curValue&gt;0&lt;/curValue&gt;&#10;  &lt;/property&gt;&#10;&#10;&lt;/PropertyValues&gt;&#10;"/>
+<stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_DEBUGGER_PROPERTIES.MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;no&quot; ?&gt;&#10;&lt;PropertyValues&gt;&#10;&#10;  &lt;property id=&quot;ConnectOnStartup&quot;&gt;&#10;    &lt;curValue&gt;1&lt;/curValue&gt;&#10;  &lt;/property&gt;&#10;&#10;  &lt;property id=&quot;EnableInstalledBreakpoint&quot;&gt;&#10;    &lt;curValue&gt;1&lt;/curValue&gt;&#10;  &lt;/property&gt;&#10;&#10;&lt;/PropertyValues&gt;&#10;"/>
 <setAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_HIDE_CONFIG_ELEMENT_TYPES">
 <setEntry value="BOARD"/>
 <setEntry value="BYPASSED_CPU"/>
@@ -15,13 +14,10 @@
 <setEntry value="SUBPATH"/>
 <setEntry value="SYSTEM"/>
 </setAttribute>
-<stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_PROGRAM./Volumes/Data/local/School/newslab/NVP/Failure-Resistent/FailureResilient/targetConfigs/MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="${build_artifact:Intermittent_FreeRTOS}"/>
-<stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_PROGRAM./home/yen/var/local/School/newslab/NVP/Failure-Resistent/FailureResilient/targetConfigs/MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="${build_artifact:Intermittent_FreeRTOS}"/>
-<stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_PROJECT./Volumes/Data/local/School/newslab/NVP/Failure-Resistent/FailureResilient/targetConfigs/MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="Intermittent_FreeRTOS"/>
-<stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_PROJECT./home/yen/var/local/School/newslab/NVP/Failure-Resistent/FailureResilient/targetConfigs/MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="Intermittent_FreeRTOS"/>
+<stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_PROGRAM.MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="${build_artifact:Intermittent_FreeRTOS}"/>
+<stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_PROJECT.MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="Intermittent_FreeRTOS"/>
 <stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_TARGET_CONFIG" value="${target_config_active_default:Intermittent_FreeRTOS}"/>
-<stringAttribute key="com.ti.ccstudio.debug.debugModel.MRU_PROGRAM./Volumes/Data/local/School/newslab/NVP/Failure-Resistent/FailureResilient/targetConfigs/MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="/Volumes/Data/local/School/newslab/NVP/Failure-Resistent/FailureResilient/Large_Data/Intermittent_FreeRTOS.out"/>
-<stringAttribute key="com.ti.ccstudio.debug.debugModel.MRU_PROGRAM./home/yen/var/local/School/newslab/NVP/Failure-Resistent/FailureResilient/targetConfigs/MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="/home/yen/var/local/School/newslab/NVP/Failure-Resistent/FailureResilient/Large_Data/Intermittent_FreeRTOS.out"/>
+<stringAttribute key="com.ti.ccstudio.debug.debugModel.MRU_PROGRAM.MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="/home/yen/var/local/School/newslab/FailureResilient/Large_Data/Intermittent_FreeRTOS.out"/>
 <listAttribute key="org.eclipse.debug.core.MAPPED_RESOURCE_PATHS">
 <listEntry value="/Intermittent_FreeRTOS"/>
 </listAttribute>
