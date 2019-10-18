@@ -186,3 +186,6 @@ size_t xPortGetFreeHeapSize( void )
 
 
 
+void pvInitHeapVar()
+{
+}
