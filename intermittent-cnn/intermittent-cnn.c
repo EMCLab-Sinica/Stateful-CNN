@@ -176,7 +176,7 @@ int run_model(void) {
 
         if (!grp_index) {
             my_printf("Error: unable to establish a group." NEWLINE);
-            break;
+            return 1;
         }
 
         if (grp_index < 16) {
