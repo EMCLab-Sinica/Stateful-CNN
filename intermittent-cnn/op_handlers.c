@@ -5,11 +5,21 @@
 #ifdef __MSP430__
 #include <driverlib.h>
 #define USE_DMA 1
+#define USE_CONCURRENT_CONV 1
 #else
 #define USE_DMA 0
+#define USE_CONCURRENT_CONV 0
+#endif
+
+#if USE_CONCURRENT_CONV
+#include <FreeRTOS.h>
+#include <queue.h>
+#include <task.h>
 #endif
 
 #include "ops.h"
+
+#define configCONV_STACK_SIZE 100
 
 #ifdef __MSP430__
 #pragma DATA_SECTION(lea_buffer_input, ".leaRAM")
@@ -20,6 +30,21 @@
 #endif
 int16_t lea_buffer_input[256], lea_buffer_filter[256], lea_buffer_another[256], lea_buffer_temp[64];
 int32_t iq31_mac_result;
+
+#if USE_CONCURRENT_CONV
+static TaskHandle_t xConvTaskHandle[2] = { NULL, NULL };
+static QueueHandle_t xQueueConv = NULL;
+#endif
+
+struct ConvTaskParams {
+    ParameterInfo *conv_input;
+    ParameterInfo *conv_filter;
+    ParameterInfo *bias;
+    ParameterInfo *output;
+    uint16_t conv_idx;
+    uint16_t output_h;
+    uint16_t output_w;
+};
 
 static inline void my_memcpy(void *dest, const void *src, size_t n) {
 #if !USE_DMA
@@ -36,17 +61,16 @@ static inline void my_memcpy(void *dest, const void *src, size_t n) {
 #endif
 }
 
-uint8_t convTask(ParameterInfo *input[], ParameterInfo *output, uint16_t conv_idx, uint16_t output_h, uint16_t output_w) {
-    ParameterInfo *conv_input = input[0], *conv_filter = input[1], *bias = input[2];
-
-    uint16_t H = conv_input->dims[1], W = conv_input->dims[2],
-             kH = conv_filter->dims[1], kW = conv_filter->dims[2],
-             CHANNEL = conv_filter->dims[3];
+static inline uint8_t convTask(struct ConvTaskParams *params) {
+    /* Cannot use C as a variable name here as C is a macro on MSP430 :( */
+    uint16_t H = params->conv_input->dims[1], W = params->conv_input->dims[2],
+             kH = params->conv_filter->dims[1], kW = params->conv_filter->dims[2],
+             CHANNEL = params->conv_filter->dims[3];
 
     /* MSP430 LEA requires length to be even */
-    msp_mac_q15_params params = { .length = (uint16_t)(CHANNEL * kH * kW / 2 * 2) };
-    uint8_t truncated = (params.length != CHANNEL * kH * kW);
-    uint16_t buffer_size = (uint16_t)(sizeof(uint16_t) * params.length);
+    msp_mac_q15_params mac_params = { .length = (uint16_t)(CHANNEL * kH * kW / 2 * 2) };
+    uint8_t truncated = (mac_params.length != CHANNEL * kH * kW);
+    uint16_t buffer_size = (uint16_t)(sizeof(uint16_t) * mac_params.length);
     if (buffer_size > sizeof(lea_buffer_filter)) {
         my_printf("Error: buffer too small." NEWLINE);
         return 1;
@@ -55,11 +79,11 @@ uint8_t convTask(ParameterInfo *input[], ParameterInfo *output, uint16_t conv_id
     /* copy filter data */
     /* TODO: cache it */
     my_memcpy(lea_buffer_filter,
-              get_q15_param(conv_filter, (size_t)(conv_idx * CHANNEL * kH * kW)),
+              get_q15_param(params->conv_filter, (size_t)(params->conv_idx * CHANNEL * kH * kW)),
               buffer_size);
 
     /* copy input data, row by row */
-    int16_t *input_addr = get_q15_param(conv_input, (size_t)((output_h * W + output_w) * CHANNEL));
+    int16_t *input_addr = get_q15_param(params->conv_input, (size_t)((params->output_h * W + params->output_w) * CHANNEL));
     for (uint16_t h = 0; h < kH; h++) {
         size_t size = (size_t)(kW * CHANNEL);
         if (truncated && h == kH - 1) {
@@ -70,37 +94,54 @@ uint8_t convTask(ParameterInfo *input[], ParameterInfo *output, uint16_t conv_id
                   input_addr + h * W * CHANNEL,  // src
                   size * sizeof(uint16_t));  // size
     }
-    msp_status status = msp_mac_q15(&params, lea_buffer_input, lea_buffer_filter, &iq31_mac_result);
+    msp_status status = msp_mac_q15(&mac_params, lea_buffer_input, lea_buffer_filter, &iq31_mac_result);
     msp_checkStatus(status);
     if (truncated) {
 #ifndef NDEBUG
         // my_printf("Adding truncated product back" NEWLINE);
 #endif
         uint16_t last_idx = (uint16_t)(kH * kW - 1);
-        iq31_mac_result += (*get_q15_param(conv_input, last_idx)) * (*get_q15_param(conv_filter, last_idx)) * 2;
+        iq31_mac_result += (*get_q15_param(params->conv_input, last_idx)) * (*get_q15_param(params->conv_filter, last_idx)) * 2;
     }
 #ifndef NDEBUG
     my_printf("%f ", (float)iq31_mac_result / 2147483648.0f);
 #endif
     int16_t q15_mac_result = iq31_to_q15(&iq31_mac_result);
-    q15_mac_result = (int16_t)(q15_mac_result + *get_q15_param(bias, conv_idx));
+    q15_mac_result = (int16_t)(q15_mac_result + *get_q15_param(params->bias, params->conv_idx));
 
-    int16_t *output_data = get_q15_param(output, 0);
-    output_data[conv_idx * H * W + output_h * W + output_w] = q15_mac_result;
+    int16_t *output_data = get_q15_param(params->output, 0);
+    output_data[params->conv_idx * H * W + params->output_h * W + params->output_w] = q15_mac_result;
 
     return 0;
 }
 
+#if USE_CONCURRENT_CONV
+static void convTaskWorker(void *vParam) {
+    for (;;) {
+        struct ConvTaskParams params;
+        if (xQueueReceive(xQueueConv, &params, portMAX_DELAY) != pdTRUE) {
+            goto error;
+        }
+        if (convTask(&params) != 0) {
+            goto error;
+        }
+    }
+error:
+    for (;;) {
+        __no_operation();
+    }
+}
+#endif
+
 uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     my_printf("Conv!" NEWLINE);
 
-    ParameterInfo *conv_input = input[0], *conv_filter = input[1];
+    ParameterInfo *conv_input = input[0], *conv_filter = input[1], *bias = input[2];
     /* input: N x H x W x C, filter: M x kH x kW x C*/
     if (conv_input->bitwidth_and_flags >> 1 != 16 || conv_filter->bitwidth_and_flags >> 1 != 16) {
         my_printf("Error: incorrect bitwidth." NEWLINE);
         return 1;
     }
-    /* Cannot use C as a variable name here as C is a macro on MSP430 :( */
     const uint16_t H = conv_input->dims[1], W = conv_input->dims[2],
                    input_N = conv_filter->dims[0];
     /* TODO: add flags; assume auto_pad=SAME_UPPER, stride=(1, 1), dilation=(1, 1) for now */
@@ -111,13 +152,43 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     output->dims[2] = W;
     output->dims[3] = input_N;
 
+    uint8_t ret = 0;
+
+#if USE_CONCURRENT_CONV
+    if (!xQueueConv) {
+        xQueueConv = xQueueCreate(3, sizeof(struct ConvTaskParams));
+    }
+
+    if (!xConvTaskHandle[0]) {
+        xTaskCreate( convTaskWorker, "Conv1", configCONV_STACK_SIZE, NULL, tskIDLE_PRIORITY, &xConvTaskHandle[0]);
+        xTaskCreate( convTaskWorker, "Conv2", configCONV_STACK_SIZE, NULL, tskIDLE_PRIORITY, &xConvTaskHandle[1]);
+    }
+#endif
+
     for (uint16_t conv_idx = 0; conv_idx < input_N; conv_idx++) {
         //my_printf("conv_idx = %d" NEWLINE, conv_idx);
         for (uint16_t output_h = 0; output_h < H; output_h++) {
             for (uint16_t output_w = 0; output_w < W; output_w++) {
-                if (convTask(input, output, conv_idx, output_h, output_w) != 0) {
-                    return 1;
+                struct ConvTaskParams params = {
+                    .conv_input = conv_input,
+                    .conv_filter = conv_filter,
+                    .bias = bias,
+                    .output = output,
+                    .conv_idx = conv_idx,
+                    .output_h = output_h,
+                    .output_w = output_w,
+                };
+#if USE_CONCURRENT_CONV
+                if (xQueueSendToBack(xQueueConv, &params, portMAX_DELAY) != pdTRUE) {
+                    ret = 1;
+                    goto out;
                 }
+#else
+                if (convTask(&params) != 0) {
+                    ret = 1;
+                    goto out;
+                }
+#endif
             }
 #ifndef NDEBUG
             my_printf(NEWLINE);
@@ -125,7 +196,8 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
         }
     }
 
-    return 0;
+out:
+    return ret;
 }
 
 uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output) {
