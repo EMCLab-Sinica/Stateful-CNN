@@ -1,0 +1,1 @@
+../../intermittent-cnn/src/intermittent-cnn/intermittent-cnn.h
