@@ -43,8 +43,9 @@ void main_DBtest( void )
     xTaskCreate( math32, "math32", configMINIMAL_STACK_SIZE, NULL, COUNTER_TASK_PRIORITY, NULL );
     xTaskCreate( dimMatrix, "dimMatrix", configMINIMAL_STACK_SIZE, NULL, COUNTER_TASK_PRIORITY, NULL );
     xTaskCreate( matrixmultiplication, "matrixmultiplication", configMINIMAL_STACK_SIZE, NULL, COUNTER_TASK_PRIORITY, NULL );
-*/
     xTaskCreate( LEATest, "LEATest", configMINIMAL_STACK_SIZE, NULL, COUNTER_TASK_PRIORITY, NULL );
+*/
+    xTaskCreate( IntermittentCNNTest, "IntermittentCNNTest", 200, NULL, COUNTER_TASK_PRIORITY, NULL );
 
     /* Start the scheduler. */
     vTaskStartScheduler();
