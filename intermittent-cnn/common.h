@@ -77,7 +77,7 @@ static inline uint8_t* get_param_base_pointer(ParameterInfo *param) {
     }
 }
 
-static int16_t* get_q15_param(ParameterInfo *param, size_t i) {
+static inline int16_t* get_q15_param(ParameterInfo *param, size_t i) {
     if ((param->bitwidth_and_flags >> 1) != 16) {
         my_printf("Error: incorrect param passed to %s" NEWLINE, __func__);
         return NULL;
