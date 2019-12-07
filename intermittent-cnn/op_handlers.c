@@ -4,17 +4,18 @@
 
 #ifdef __MSP430__
 #include <driverlib.h>
+#include <FreeRTOS.h>
+#include <task.h>
 #define USE_DMA 1
 #define USE_CONCURRENT_CONV 1
+TaskHandle_t xMainTask = NULL;
 #else
 #define USE_DMA 0
 #define USE_CONCURRENT_CONV 0
 #endif
 
 #if USE_CONCURRENT_CONV
-#include <FreeRTOS.h>
 #include <queue.h>
-#include <task.h>
 #define QUEUE_SIZE 3
 #endif
 
@@ -37,7 +38,6 @@ uint16_t counters[10];
 uint8_t counter_idx = 0;
 
 #if USE_CONCURRENT_CONV
-TaskHandle_t xMainTask = NULL;
 static TaskHandle_t xConvTaskHandle[2] = { NULL, NULL };
 static QueueHandle_t xQueueConv = NULL;
 #endif
