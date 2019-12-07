@@ -1127,7 +1127,7 @@ extern void msp_lea_init(void);
 //! \return none
 //
 //******************************************************************************
-static inline void msp_lea_invokeCommand(uint16_t cmdId)
+static inline void msp_lea_doInvokeCommand(uint16_t cmdId, uint8_t sleep)
 {
     /* Save interrupt state and disable interrupts. */
     uint16_t interruptState = __get_interrupt_state();
@@ -1148,11 +1148,21 @@ static inline void msp_lea_invokeCommand(uint16_t cmdId)
     while(!msp_lea_ifg);
 #else
     /* Enter LPM0 and wait for command complete interrupt to wake the device. */
-    __bis_SR_register(GIE+LPM0_bits);
+    if (sleep) {
+        __bis_SR_register(GIE+LPM0_bits);
+    } else {
+        /* Do not enter LPM0 so that CPU can do other work */
+        __bis_SR_register(GIE);
+    }
 #endif
 
     /* Restore original interrupt state. */
     __set_interrupt_state(interruptState);
+}
+
+static inline void msp_lea_invokeCommand(uint16_t cmdId)
+{
+    msp_lea_doInvokeCommand(cmdId, 1);
 }
 
 //******************************************************************************

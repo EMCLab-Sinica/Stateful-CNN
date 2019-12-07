@@ -34,7 +34,7 @@
 
 #if defined(MSP_USE_LEA)
 
-msp_status msp_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const _q15 *srcB, _iq31 *result)
+msp_status msp_do_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const _q15 *srcB, _iq31 *result, uint8_t sleep)
 {
     uint16_t length;
     msp_status status;
@@ -80,7 +80,7 @@ msp_status msp_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const
     LEAPMS1 = MSP_LEA_CONVERT_ADDRESS(leaParams);
 
     /* Invoke the LEACMD__MAC command. */
-    msp_lea_invokeCommand(LEACMD__MAC);
+    msp_lea_doInvokeCommand(LEACMD__MAC, sleep);
 
     /* Free MSP_LEA_MAC_PARAMS structure. */
     msp_lea_freeMemory(sizeof(MSP_LEA_MAC_PARAMS)/sizeof(uint32_t));
@@ -104,6 +104,10 @@ msp_status msp_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const
     /* Free lock for LEA module and return status. */
     msp_lea_freeLock();
     return status;
+}
+
+msp_status msp_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const _q15 *srcB, _iq31 *result) {
+    return msp_do_mac_q15(params, srcA, srcB, result, 1);
 }
 
 #else //MSP_USE_LEA    
