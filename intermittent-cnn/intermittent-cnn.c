@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "intermittent-cnn.h"
+#include "op_handlers.h"
 #include "common.h"
 #include "data.h"
 #include "ops.h"
@@ -53,10 +54,14 @@ static void dump_params(ParameterInfo *cur_param) {
 static uint8_t handle_cur_group(void) {
     uint16_t intermediate_values_offset = 0;
 
+#ifndef NDEBUG
     my_printf("Current group: ");
+#endif
     for (uint8_t i = 0; i < grp_index; i++) {
         uint16_t cur_node_id = cur_group[i];
+#ifndef NDEBUG
         my_printf("%d ", cur_node_id);
+#endif
         /* schedule it */
         Node *cur_node = &(nodes[cur_node_id]);
 #ifndef NDEBUG
@@ -122,7 +127,9 @@ static uint8_t handle_cur_group(void) {
 
         cur_node->scheduled = 1;
     }
+#ifndef NDEBUG
     my_printf(" - %d element(s)." NEWLINE, grp_index);
+#endif
     return 0;
 }
 
@@ -136,7 +143,9 @@ int run_model(void) {
     nodes = (Node*)(model + 1);
     parameter_info = (ParameterInfo*)(nodes + model->nodes_len);
 
+#ifndef NDEBUG
     my_printf("model->n_input = %d" NEWLINE, model->n_input);
+#endif
 
     /* initialize - the first node must have no inputs as
      * ONNX already sort nodes topologically */
@@ -213,12 +222,18 @@ int run_model(void) {
         dump_model();
     }
 
+    for (uint8_t i = 0; i < counter_idx; i++) {
+        my_printf("%d ticks" NEWLINE, counters[i]);
+    }
+
+#ifndef NDEBUG
     /* TODO: is the last node always the output node? */
     ParameterInfo *output_node = &(parameter_info[model->nodes_len + model->n_input - 1]);
     for (uint16_t i = 0; i < output_node->dims[1]; i++) {
         my_printf("%d ", *get_q15_param(output_node, i));
     }
     my_printf(NEWLINE);
+#endif
 
     return 0;
 }
