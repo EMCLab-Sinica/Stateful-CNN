@@ -3,11 +3,8 @@
 #include "data.h"
 
 void IntermittentCNNTest() {
+    run_model();
     while (1) {
-        if (run_model() != 0) {
-            while (1) {
-                __no_operation();
-            }
-        }
+        __no_operation();
     }
 }
