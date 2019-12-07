@@ -67,7 +67,7 @@
     1 tab == 4 spaces!
 */
 
-#include <stdint.h>
+#include <stdint.h> // used by ulRunTimeCounterOverflows
 
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
@@ -89,8 +89,8 @@ __persistent keyword to be used.  See http://www.freertos.org/a00111.html#heap_4
 #define configUSE_PREEMPTION					1
 #define configMAX_PRIORITIES					( 5 )
 #define configCPU_CLOCK_HZ						( 8000000 )
-#define configTICK_RATE_HZ						( 500 ) /* default: 1000 , In this non-real time simulated environment the tick frequency has to be at least a multiple of the Win32 tick frequency, and therefore very slow. */
-#define configTOTAL_HEAP_SIZE					( 65535 )
+#define configTICK_RATE_HZ						( 1000 ) /* In this non-real time simulated environment the tick frequency has to be at least a multiple of the Win32 tick frequency, and therefore very slow. */
+#define configTOTAL_HEAP_SIZE					( 3072 )
 #define configMAX_TASK_NAME_LEN					( 15 )
 #define configUSE_TRACE_FACILITY				1
 #define configUSE_16_BIT_TICKS					0
@@ -109,7 +109,7 @@ __persistent keyword to be used.  See http://www.freertos.org/a00111.html#heap_4
 #define configUSE_TICK_HOOK				1
 #define configUSE_IDLE_HOOK				1
 #define configUSE_MALLOC_FAILED_HOOK	1
-#define configCHECK_FOR_STACK_OVERFLOW	2
+#define configCHECK_FOR_STACK_OVERFLOW	0
 
 /* Software timer related definitions. */
 #define configUSE_TIMERS				1
@@ -121,7 +121,7 @@ __persistent keyword to be used.  See http://www.freertos.org/a00111.html#heap_4
 #define configUSE_EVENT_GROUPS			0
 
 /* Run time stats gathering definitions. */
-#define configGENERATE_RUN_TIME_STATS	1
+#define configGENERATE_RUN_TIME_STATS	0
 #define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() vConfigureTimerForRunTimeStats()
 /* Return the current timer counter value + the overflow counter. */
 #define portGET_RUN_TIME_COUNTER_VALUE() 	( ( ( uint32_t ) TA1R ) + ulRunTimeCounterOverflows )
@@ -199,8 +199,7 @@ CLI. */
 #else
 	/* Using the CCS pre-processor constants. */
 	#ifdef __LARGE_DATA_MODEL__
-	    //#define configMINIMAL_STACK_SIZE        ( ( unsigned short ) 85 )
-		#define configMINIMAL_STACK_SIZE		( ( unsigned short ) 100 )
+		#define configMINIMAL_STACK_SIZE		( ( unsigned short ) 85 )
 	#else
 		#define configMINIMAL_STACK_SIZE		( ( unsigned short ) 140 )
 	#endif
