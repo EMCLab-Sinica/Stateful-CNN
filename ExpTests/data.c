@@ -1,1 +1,0 @@
-../../intermittent-cnn/src/intermittent-cnn/data.c
