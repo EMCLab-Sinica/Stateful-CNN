@@ -1,3 +1,13 @@
+CPPFLAGS = -I .
+DEBUG = 0
+CFLAGS = -std=c99 -Wall -Wextra -Wstrict-prototypes -Wconversion -Wshadow
+ifeq ($(DEBUG),1)
+    CFLAGS += -g -O0
+else
+    CFLAGS += -O3
+    CPPFLAGS += -DNDEBUG
+endif
+
 DSPLIB_SRC_PATH = DSPLib_1_30_00_02/source
 
 DSPLIB_OBJS = \
@@ -32,9 +42,7 @@ data.c data.h: bin2c.py model.bin
 model.bin: transform.py
 	python transform.py $(MODEL) $(IMAGE)
 
-clean: clean-common
-	rm -rf intermittent-cnn $(DSPLIB_OBJS) ops.* *.bin data.*
-
-include ../common.mk
+clean:
+	rm -rf intermittent-cnn $(DSPLIB_OBJS) *.o __pycache__ ops.* *.bin data.*
 
 .PHONY: all clean

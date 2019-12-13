@@ -1,3 +1,5 @@
+CPPFLAGS = -I .
+
 all: parse_model
 
 external/onnx.proto3.pb-c.c : external/onnx.proto3
@@ -6,9 +8,7 @@ external/onnx.proto3.pb-c.c : external/onnx.proto3
 parse_model: external/onnx.proto3.pb-c.o utils.o
 parse_model: LDFLAGS += -lprotobuf-c
 
-clean: clean-common
-	rm -rf parse_model *.pb.* external/*.pb-c.*
-
-include ../common.mk
+clean:
+	rm -rf parse_model *.o *.pb.* external/*.pb-c.*
 
 .PHONY: all clean
