@@ -15,21 +15,20 @@ DSPLIB_OBJS = \
     $(DSPLIB_SRC_PATH)/vector/msp_add_q15.o \
     $(DSPLIB_SRC_PATH)/vector/msp_mac_q15.o \
     $(DSPLIB_SRC_PATH)/vector/msp_max_q15.o \
+    $(DSPLIB_SRC_PATH)/utility/msp_fill_q15.o \
     fake-msp430sdk/msp430.o
 
 UNAME_S := $(shell uname -s)
 
 MODEL := $(DATA_PATH)/models/mnist/model_optimized.onnx
 IMAGE := $(DATA_PATH)/example3.png
-DATA_FILES = data.c ops.c model.bin
+DATA_FILES = data.c data.h ops.c ops.py ops.h inputs.bin model.bin parameters.bin
 
 all: intermittent-cnn
 
 data_files: $(DATA_FILES)
 
-ops.py ops.c: ops.h gen_ops.py
-
-ops.h: gen_ops.py
+ops.py ops.c ops.h: gen_ops.py
 	python $<
 
 intermittent-cnn: $(DSPLIB_OBJS) ops.o op_handlers.o common.o data.o
@@ -42,7 +41,7 @@ endif
 data.c data.h: bin2c.py model.bin
 	python bin2c.py
 
-model.bin: transform.py ops.py
+inputs.bin model.bin parameters.bin: transform.py ops.py
 	python transform.py $(MODEL) $(IMAGE)
 
 clean:

@@ -2,6 +2,7 @@
 
 #include <stddef.h> /* size_t, see https://stackoverflow.com/a/26413264 */
 #include <stdint.h>
+#include <msp430.h> /* __no_operation() */
 
 #ifdef __linux__
 #include <stdio.h>
@@ -66,6 +67,8 @@ extern uint8_t intermediate_values[INTERMEDIATE_VALUES_SIZE];
 /* MSP430 SDK already defines MIN, which means minutes */
 #define MIN_VAL(x, y) ((x) < (y) ? (x) : (y))
 
+#define ERROR_OCCURRED() for (;;) { __no_operation(); }
+
 /**********************************
  *       Helpers for nodes        *
  **********************************/
@@ -92,6 +95,11 @@ int16_t node_input(Node *node, size_t i);
 void node_input_mark(Node *node, size_t i);
 uint8_t node_input_marked(Node *node, size_t i);
 int16_t iq31_to_q15(int32_t *iq31_val_ptr);
+#if !defined(MY_NDEBUG) && defined(DUMP_PARAMS)
+void dump_params(ParameterInfo *cur_param);
+#else
+#define dump_params(cur_param)
+#endif
 
 /**********************************
  *       Operation handlers       *

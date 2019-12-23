@@ -46,3 +46,22 @@ int64_t get_int64_param(ParameterInfo *param, size_t i) {
     return *((int64_t*)((uint8_t*)parameters + param->params_offset) + i);
 }
 
+#if !defined(MY_NDEBUG) && defined(DUMP_PARAMS)
+void dump_params(ParameterInfo *cur_param) {
+    my_printf("offset=%d len=%d" NEWLINE, cur_param->params_offset, cur_param->params_len);
+    uint16_t bitwidth = cur_param->bitwidth_and_flags >> 1;
+    for (uint32_t k = 0; k < cur_param->params_len / (bitwidth / 8); k++) {
+        if (k && (k % 16 == 0)) {
+            my_printf(NEWLINE);
+        }
+        if (bitwidth == 16) {
+            my_printf("%d ", *get_q15_param(cur_param, k));
+        } else if (bitwidth == 32) {
+            my_printf("%d ", *get_iq31_param(cur_param, k));
+        } else if (bitwidth == 64) {
+            my_printf("%ld ", get_int64_param(cur_param, k));
+        }
+    }
+    my_printf(NEWLINE);
+}
+#endif

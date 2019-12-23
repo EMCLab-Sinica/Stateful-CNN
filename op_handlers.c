@@ -6,17 +6,12 @@
 #include <driverlib.h>
 #include <FreeRTOS.h>
 #include <task.h>
+#include <croutine.h>
 #define USE_DMA 1
 #define USE_CONCURRENT_CONV 1
-TaskHandle_t xMainTask = NULL;
 #else
 #define USE_DMA 0
 #define USE_CONCURRENT_CONV 0
-#endif
-
-#if USE_CONCURRENT_CONV
-#include <queue.h>
-#define QUEUE_SIZE 3
 #endif
 
 #include "ops.h"
@@ -37,12 +32,7 @@ int32_t iq31_mac_result;
 uint16_t counters[10];
 uint8_t counter_idx = 0;
 
-#if USE_CONCURRENT_CONV
-static TaskHandle_t xConvTaskHandle[2] = { NULL, NULL };
-static QueueHandle_t xQueueConv = NULL;
-#endif
-
-struct ConvTaskParams {
+static struct ConvTaskParams {
     ParameterInfo *conv_input;
     ParameterInfo *conv_filter;
     ParameterInfo *bias;
@@ -50,28 +40,44 @@ struct ConvTaskParams {
     uint16_t conv_idx;
     uint16_t output_h;
     uint16_t output_w;
-};
+} conv_params;
 
-static inline void my_memcpy(void *dest, const void *src, size_t n) {
+#if USE_DMA
+#define MY_DMA_CHANNEL DMA_CHANNEL_0
+static DMA_initParam dma_params = {
+    .channelSelect = MY_DMA_CHANNEL,
+    .transferModeSelect = DMA_TRANSFER_BLOCK,
+};
+#endif
+
+static void my_memcpy(void* dest, const void* src, size_t n) {
 #if !USE_DMA
     memcpy(dest, src, n);
 #else
-    DMA0SA = (void (*)( )) src;
-    DMA0DA = (void (*)( )) dest;
-
-    DMA0SZ = n >> 1;  /* DMAxSZ is in words (2 bytes) */
-
-    DMA0CTL = DMA_TRANSFER_BLOCK + DMASRCINCR_3 + DMADSTINCR_3 + DMAIE + DMAEN;
-
-    DMA0CTL |= DMAREQ;
+    DMA_init(&dma_params);
+    DMA_setSrcAddress(MY_DMA_CHANNEL, (uint32_t)(src), DMA_DIRECTION_INCREMENT);
+    DMA_setDstAddress(MY_DMA_CHANNEL, (uint32_t)(dest), DMA_DIRECTION_INCREMENT);
+    /* transfer size is in words (2 bytes) */
+    DMA_setTransferSize(MY_DMA_CHANNEL, (n) >> 1);
+    DMA_enableInterrupt(MY_DMA_CHANNEL);
+    DMA_enableTransfers(MY_DMA_CHANNEL);
+    DMA_startTransfer(MY_DMA_CHANNEL);
 #endif
 }
 
-static inline uint8_t convTask(struct ConvTaskParams *params) {
+
+#if USE_CONCURRENT_CONV
+static void convTask(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
+    crSTART(xHandle);
+
+    for (;;) {
+#else
+static void convTask(void) {
+#endif
     /* Cannot use C as a variable name here as C is a macro on MSP430 :( */
-    uint16_t H = params->conv_input->dims[1], W = params->conv_input->dims[2],
-             kH = params->conv_filter->dims[1], kW = params->conv_filter->dims[2],
-             CHANNEL = params->conv_filter->dims[3];
+    uint16_t H = conv_params.conv_input->dims[1], W = conv_params.conv_input->dims[2],
+             kH = conv_params.conv_filter->dims[1], kW = conv_params.conv_filter->dims[2],
+             CHANNEL = conv_params.conv_filter->dims[3];
 
     /* MSP430 LEA requires length to be even */
     msp_mac_q15_params mac_params = { .length = (uint16_t)(CHANNEL * kH * kW / 2 * 2) };
@@ -79,17 +85,17 @@ static inline uint8_t convTask(struct ConvTaskParams *params) {
     uint16_t buffer_size = (uint16_t)(sizeof(uint16_t) * mac_params.length);
     if (buffer_size > sizeof(lea_buffer_filter)) {
         my_printf("Error: buffer too small." NEWLINE);
-        return 1;
+        ERROR_OCCURRED();
     }
 
     /* copy filter data */
     /* TODO: cache it */
     my_memcpy(lea_buffer_filter,
-              get_q15_param(params->conv_filter, (size_t)(params->conv_idx * CHANNEL * kH * kW)),
+              get_q15_param(conv_params.conv_filter, (size_t)(conv_params.conv_idx * CHANNEL * kH * kW)),
               buffer_size);
 
     /* copy input data, row by row */
-    int16_t *input_addr = get_q15_param(params->conv_input, (size_t)((params->output_h * W + params->output_w) * CHANNEL));
+    int16_t *input_addr = get_q15_param(conv_params.conv_input, (size_t)((conv_params.output_h * W + conv_params.output_w) * CHANNEL));
     for (uint16_t h = 0; h < kH; h++) {
         size_t size = (size_t)(kW * CHANNEL);
         if (truncated && h == kH - 1) {
@@ -100,86 +106,76 @@ static inline uint8_t convTask(struct ConvTaskParams *params) {
                   input_addr + h * W * CHANNEL,  // src
                   size * sizeof(uint16_t));  // size
     }
+
 #if USE_CONCURRENT_CONV
-    msp_status status = msp_do_mac_q15(&mac_params, lea_buffer_input, lea_buffer_filter, &iq31_mac_result, 0);
+    /* TODO: do context switch after msp_lea_doInvokeCommand */
+    msp_status status = msp_do_mac_q15(&mac_params, lea_buffer_input, lea_buffer_filter, &iq31_mac_result, 1);
 #else
     msp_status status = msp_mac_q15(&mac_params, lea_buffer_input, lea_buffer_filter, &iq31_mac_result);
 #endif
     msp_checkStatus(status);
     if (truncated) {
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
         // my_printf("Adding truncated product back" NEWLINE);
 #endif
         uint16_t last_idx = (uint16_t)(kH * kW - 1);
-        iq31_mac_result += (*get_q15_param(params->conv_input, last_idx)) * (*get_q15_param(params->conv_filter, last_idx)) * 2;
+        iq31_mac_result += (*get_q15_param(conv_params.conv_input, last_idx)) * (*get_q15_param(conv_params.conv_filter, last_idx)) * 2;
     }
-#ifndef NDEBUG
+
+#if defined(DUMP_PARAMS) && !defined(__MSP430__)
     my_printf("%f ", (float)iq31_mac_result / 2147483648.0f);
 #endif
     int16_t q15_mac_result = iq31_to_q15(&iq31_mac_result);
-    q15_mac_result = (int16_t)(q15_mac_result + *get_q15_param(params->bias, params->conv_idx));
+    q15_mac_result = (int16_t)(q15_mac_result + *get_q15_param(conv_params.bias, conv_params.conv_idx));
 
-    int16_t *output_data = get_q15_param(params->output, 0);
-    output_data[params->conv_idx * H * W + params->output_h * W + params->output_w] = q15_mac_result;
-
-    return 0;
-}
+    int16_t *output_data = get_q15_param(conv_params.output, 0);
+    output_data[conv_params.conv_idx * H * W + conv_params.output_h * W + conv_params.output_w] = q15_mac_result;
 
 #if USE_CONCURRENT_CONV
-static void convTaskWorker(void *vParam) {
-    for (;;) {
-        struct ConvTaskParams params;
-        if (uxQueueMessagesWaiting(xQueueConv) == 0) {
-            vTaskPrioritySet(xMainTask, tskIDLE_PRIORITY + 2);
-            portYIELD();
-        }
-        if (xQueueReceive(xQueueConv, &params, portMAX_DELAY) != pdTRUE) {
-            goto error;
-        }
-        if (convTask(&params) != 0) {
-            goto error;
-        }
+    crDELAY(xHandle, 0);
+
     }
-error:
-    for (;;) {
-        __no_operation();
-    }
-}
+
+    crEND();
 #endif
+}
 
 uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
     my_printf("Conv!" NEWLINE);
 #endif
 
+#if USE_CONCURRENT_CONV
+    static bool task_created = false;
+
+    if (!task_created) {
+        if (xCoRoutineCreate(convTask, 0, 0) != pdPASS) {
+            my_printf("Failed to create co-routines." NEWLINE);
+            ERROR_OCCURRED();
+        }
+        task_created = true;
+    }
+#endif
+
     ParameterInfo *conv_input = input[0], *conv_filter = input[1], *bias = input[2];
-    /* input: N x H x W x C, filter: M x kH x kW x C*/
     if (conv_input->bitwidth_and_flags >> 1 != 16 || conv_filter->bitwidth_and_flags >> 1 != 16) {
         my_printf("Error: incorrect bitwidth." NEWLINE);
         return 1;
     }
-    const uint16_t H = conv_input->dims[1], W = conv_input->dims[2],
+    /* original: input: N x C x H x W, filter: M x C x kW x kW
+     * remapped: input: N x H x W x C, filter: M x kH x kW x C */
+    /* TODO: really use remapped dimensions */
+    const uint16_t H = conv_input->dims[2], W = conv_input->dims[3],
                    input_N = conv_filter->dims[0];
     /* TODO: add flags; assume auto_pad=SAME_UPPER, stride=(1, 1), dilation=(1, 1) for now */
     output->params_len = (uint16_t)(input_N * H * W * 2);
     output->bitwidth_and_flags = 16 << 1 | FLAG_INTERMEDIATE_VALUES;
     output->dims[0] = 1;
-    output->dims[1] = H;
-    output->dims[2] = W;
-    output->dims[3] = input_N;
+    output->dims[1] = input_N;
+    output->dims[2] = H;
+    output->dims[3] = W;
 
     uint8_t ret = 0;
-
-#if USE_CONCURRENT_CONV
-    if (!xQueueConv) {
-        xQueueConv = xQueueCreate(QUEUE_SIZE, sizeof(struct ConvTaskParams));
-    }
-
-    if (!xConvTaskHandle[0]) {
-        xTaskCreate( convTaskWorker, "Conv1", configCONV_STACK_SIZE, NULL, tskIDLE_PRIORITY + 1, &xConvTaskHandle[0]);
-        xTaskCreate( convTaskWorker, "Conv2", configCONV_STACK_SIZE, NULL, tskIDLE_PRIORITY + 1, &xConvTaskHandle[1]);
-    }
-#endif
 
 #ifdef __MSP430__
     TickType_t start, end;
@@ -189,35 +185,19 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
         //my_printf("conv_idx = %d" NEWLINE, conv_idx);
         for (uint16_t output_h = 0; output_h < H; output_h++) {
             for (uint16_t output_w = 0; output_w < W; output_w++) {
-                struct ConvTaskParams params = {
-                    .conv_input = conv_input,
-                    .conv_filter = conv_filter,
-                    .bias = bias,
-                    .output = output,
-                    .conv_idx = conv_idx,
-                    .output_h = output_h,
-                    .output_w = output_w,
-                };
+                conv_params.conv_input = conv_input;
+                conv_params.conv_filter = conv_filter;
+                conv_params.bias = bias;
+                conv_params.output = output;
+                conv_params.conv_idx = conv_idx;
+                conv_params.output_h = output_h;
+                conv_params.output_w = output_w;
 #if USE_CONCURRENT_CONV
-                if (xQueueSendToBack(xQueueConv, &params, portMAX_DELAY) != pdTRUE) {
-                    ret = 1;
-                    goto out;
-                }
-                // do context switch only when the queue is full
-                if (uxQueueMessagesWaiting(xQueueConv) == QUEUE_SIZE) {
-                    vTaskPrioritySet(NULL, tskIDLE_PRIORITY);
-                    portYIELD();
-                }
+                vCoRoutineSchedule();
 #else
-                if (convTask(&params) != 0) {
-                    ret = 1;
-                    goto out;
-                }
+                convTask();
 #endif
             }
-#ifndef NDEBUG
-            my_printf(NEWLINE);
-#endif
         }
     }
 #ifdef __MSP430__
@@ -226,12 +206,15 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     counter_idx++;
 #endif
 
-out:
+#ifndef MY_NDEBUG
+    my_printf("handle_conv output" NEWLINE);
+#endif
+
     return ret;
 }
 
 uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output) {
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
     my_printf("MaxPool!" NEWLINE);
 #endif
     /* TODO: add flags; assume stripe=2, no padding for now */
@@ -261,12 +244,18 @@ uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output) {
             }
         }
     }
+
+#ifndef MY_NDEBUG
+    my_printf("handle_maxpool output" NEWLINE);
+    dump_params(output);
+#endif
+
     return 0;
 }
 
 uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output) {
     /* Add: Y = X + W */
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
     my_printf("Add!" NEWLINE);
 #endif
     if (input[0]->bitwidth_and_flags >> 1 != 16 || input[1]->bitwidth_and_flags >> 1 != 16) {
@@ -293,10 +282,29 @@ uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output) {
     return 0;
 }
 
+
+#ifdef DUMP_PARAMS
+static void dump_matrix(int16_t *mat, size_t len) {
+    for (size_t j = 0; j < len; j++) {
+        my_printf("%d ", mat[j]);
+        if (j && (j % 16 == 0)) {
+            my_printf(NEWLINE);
+        }
+    }
+    my_printf(NEWLINE);
+}
+#else
+#define dump_matrix(mat, len)
+#endif
+
 uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
     ParameterInfo *A = input[0], *B = input[1];
 
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
+    my_printf("handle_matmul inputs" NEWLINE);
+    dump_params(A);
+    dump_params(B);
+
     my_printf("MatMul! A: (%dx%d), B: (%dx%d)" NEWLINE,
               A->dims[0], A->dims[1], B->dims[0], B->dims[1]);
 #endif
@@ -312,9 +320,18 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
         return 1;
     }
 
-    int16_t *lea_buffer_A = lea_buffer_filter,
-            *lea_buffer_B = lea_buffer_another,
-            *lea_buffer_matmul = lea_buffer_input;
+    /* Seems TI's debugger does not like alias of pointers :/ */
+#define lea_buffer_A lea_buffer_filter
+#define lea_buffer_B lea_buffer_another
+#define lea_buffer_matmul lea_buffer_input
+
+    msp_fill_q15_params fill_params = {
+        .length = 256,
+        .value = 0,
+    };
+    msp_status status = msp_fill_q15(&fill_params, lea_buffer_matmul);
+    msp_checkStatus(status);
+
     my_memcpy(lea_buffer_A, get_q15_param(A, 0), (uint16_t)(A->dims[0] * A->dims[1]));
 
     /* LEA wants addresses to be 4-aligned */
@@ -328,12 +345,25 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
         params.srcBCols = B->dims[1];
 
         my_memcpy(lea_buffer_B, get_q15_param(B, (uint16_t)(i * B->dims[1])), (uint16_t)(current_width * B->dims[1]));
-        msp_status status = msp_matrix_mpy_q15(
+
+#ifdef DUMP_PARAMS
+        my_printf("strip for A" NEWLINE);
+        dump_matrix(lea_buffer_A + A->dims[0] * i, (size_t)(A->dims[0] * current_width));
+        my_printf("B" NEWLINE);
+        dump_matrix(lea_buffer_B, (size_t)(current_width * B->dims[1]));
+#endif
+
+        status = msp_matrix_mpy_q15(
             &params,
             lea_buffer_A + A->dims[0] * i,
             lea_buffer_B,
             lea_buffer_temp);
         msp_checkStatus(status);
+
+#ifdef DUMP_PARAMS
+        my_printf("temp" NEWLINE);
+        dump_matrix(lea_buffer_temp, (size_t)(A->dims[0] * B->dims[1]));
+#endif
 
         msp_add_q15_params params2 = { .length = output_len };
         status = msp_add_q15(&params2, lea_buffer_matmul, lea_buffer_temp, lea_buffer_matmul);
@@ -341,11 +371,20 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
     }
     my_memcpy(get_q15_param(output, 0), lea_buffer_matmul, output->params_len);
 
+#undef lea_buffer_A
+#undef lea_buffer_B
+#undef lea_buffer_matmul
+
+#ifndef MY_NDEBUG
+    my_printf("handle_matmul output" NEWLINE);
+    dump_params(output);
+#endif
+
     return 0;
 }
 
 uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output) {
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
     my_printf("ReLu!" NEWLINE);
 #endif
     ParameterInfo *X = input[0];
@@ -362,11 +401,14 @@ uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output) {
             my_printf("Error: unsupported bitwidth for ReLu." NEWLINE);
         }
     }
+#ifndef MY_NDEBUG
+    dump_params(output);
+#endif
     return 0;
 }
 
 uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output) {
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
     my_printf("Reshape!" NEWLINE);
 #endif
     ParameterInfo *data = input[0], *shape = input[1];
@@ -384,7 +426,7 @@ uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output) {
 }
 
 uint8_t handle_squeeze(ParameterInfo *input[], ParameterInfo *output) {
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
     my_printf("Squeeze!" NEWLINE);
 #endif
     ParameterInfo *data = input[0];
