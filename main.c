@@ -23,6 +23,8 @@
 #include <FailureTest.h>
 #endif
 
+#include "ExpTests/IntermittentCNNTest.h"
+
 /* Standard demo includes, used so the tick hook can exercise some FreeRTOS
 functionality in an interrupt. */
 #include <driverlib.h>
@@ -54,7 +56,8 @@ int main( void )
 	    pvInitHeapVar();
 	    for(i = 0; i < NUMTASK;i++)
 	        information[i] = 0;
-        main_DBtest();
+        //main_DBtest();
+        IntermittentCNNTest();
 	}
 	else{
 	    failureRecovery();

@@ -12,7 +12,7 @@ static uint8_t grp_index = 0;
 static uint16_t group_last_item;
 
 static void dump_model(void) {
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
     uint16_t i, j;
     for (i = 0; i < model->nodes_len; i++) {
         Node *cur_node = &(nodes[i]);
@@ -29,57 +29,35 @@ static void dump_model(void) {
 #endif
 }
 
-static void dump_params(ParameterInfo *cur_param) {
-#ifndef NDEBUG
-    my_printf("offset=%d len=%d" NEWLINE, cur_param->params_offset, cur_param->params_len);
-    uint16_t bitwidth = cur_param->bitwidth_and_flags >> 1;
-    for (uint32_t k = 0; k < cur_param->params_len / (bitwidth / 8); k++) {
-        if (k && (k % 16 == 0)) {
-            my_printf(NEWLINE);
-        }
-        if (bitwidth == 16) {
-            my_printf("%d ", *get_q15_param(cur_param, k));
-        } else if (bitwidth == 32) {
-            my_printf("%d ", *get_iq31_param(cur_param, k));
-        } else if (bitwidth == 64) {
-            my_printf("%ld ", get_int64_param(cur_param, k));
-        }
-    }
-    my_printf(NEWLINE);
-#else
-    (void)cur_param;
-#endif
-}
-
 static uint8_t handle_cur_group(void) {
     uint16_t intermediate_values_offset = 0;
 
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
     my_printf("Current group: ");
 #endif
     for (uint8_t i = 0; i < grp_index; i++) {
         uint16_t cur_node_id = cur_group[i];
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
         my_printf("%d ", cur_node_id);
 #endif
         /* schedule it */
         Node *cur_node = &(nodes[cur_node_id]);
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
         my_printf("op_type = %d" NEWLINE, cur_node->op_type);
 #endif
         int16_t input_id[3];
         ParameterInfo *input[3];
         if (cur_node->inputs_len != expected_inputs_len[cur_node->op_type]) {
             my_printf("Error: unexpected input length." NEWLINE);
-            return 1;
+            ERROR_OCCURRED();
         }
         for (uint16_t j = 0; j < cur_node->inputs_len; j++) {
             input_id[j] = node_input(cur_node, j);
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
             my_printf("input_id[%d] = %d ", j, input_id[j]);
 #endif
             input[j] = &(parameter_info[input_id[j]]);
-            dump_params(input[j]);
+            // dump_params(input[j]);
         }
 
         /* Allocate an ParameterInfo for output. Details are filled by
@@ -101,19 +79,19 @@ static uint8_t handle_cur_group(void) {
         }
         intermediate_values_offset = (uint16_t)new_intermediate_values_offset;
 
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
         my_printf("output dims: ");
 #endif
         uint8_t has_dims = 0;
         for (uint8_t j = 0; j < 4; j++) {
             if (output->dims[j]) {
                 has_dims = 1;
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
                 my_printf("%d, ", output->dims[j]);
 #endif
             }
         }
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
         my_printf(NEWLINE);
 #endif
         if (!has_dims) {
@@ -127,7 +105,7 @@ static uint8_t handle_cur_group(void) {
 
         cur_node->scheduled = 1;
     }
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
     my_printf(" - %d element(s)." NEWLINE, grp_index);
 #endif
     return 0;
@@ -143,7 +121,7 @@ int run_model(void) {
     nodes = (Node*)(model + 1);
     parameter_info = (ParameterInfo*)(nodes + model->nodes_len);
 
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
     my_printf("model->n_input = %d" NEWLINE, model->n_input);
 #endif
 
@@ -170,7 +148,7 @@ int run_model(void) {
                 }
             }
             if (no_inputs) {
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
                 my_printf("Node %d has no inputs." NEWLINE, i);
 #endif
                 cur_group[grp_index] = i;
@@ -226,7 +204,7 @@ int run_model(void) {
         my_printf("%d ticks" NEWLINE, counters[i]);
     }
 
-#ifndef NDEBUG
+#ifndef MY_NDEBUG
     /* TODO: is the last node always the output node? */
     ParameterInfo *output_node = &(parameter_info[model->nodes_len + model->n_input - 1]);
     for (uint16_t i = 0; i < output_node->dims[1]; i++) {

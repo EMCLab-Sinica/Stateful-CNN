@@ -20,8 +20,6 @@ static void prvTest( void *pvParameters );
 static void prvTest1( void *pvParameters );
 static void prvTest2( void *pvParameters );
 
-extern TaskHandle_t xMainTask;
-
 extern int firstTime;
 int id;
 /*-----------------------------------------------------------*/
@@ -47,7 +45,6 @@ void main_DBtest( void )
     xTaskCreate( matrixmultiplication, "matrixmultiplication", configMINIMAL_STACK_SIZE, NULL, COUNTER_TASK_PRIORITY, NULL );
     xTaskCreate( LEATest, "LEATest", configMINIMAL_STACK_SIZE, NULL, COUNTER_TASK_PRIORITY, NULL );
 */
-    xTaskCreate( IntermittentCNNTest, "IntermittentCNNTest", 200, NULL, (tskIDLE_PRIORITY+1), &xMainTask );
 
     /* Start the scheduler. */
     vTaskStartScheduler();

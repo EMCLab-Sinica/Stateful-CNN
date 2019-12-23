@@ -13,7 +13,8 @@ unsigned long taskRecency[NUMTASK];
 #ifdef Meenchen
 #pragma NOINIT(ucHeap)
 #endif
-uint8_t ucHeap[ configTOTAL_HEAP_SIZE ];
+#pragma PERSISTENT( ucHeap )
+uint8_t ucHeap[ configTOTAL_HEAP_SIZE ] = { 0 };
 
 #pragma NOINIT(timeCounter)
 unsigned long timeCounter;
