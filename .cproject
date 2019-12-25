@@ -55,8 +55,6 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/DataManager}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/FreeRTOS_Source/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/FreeRTOS_Source/portable/CCS/MSP430X}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Full_Demo/FreeRTOS+CLI}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Full_Demo/Standard_Demo_Tasks/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${CG_TOOL_ROOT}/include&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${PROJECT_LOC}/driverlib/MSP430FR5xx_6xx&quot;"/>
 								</option>
