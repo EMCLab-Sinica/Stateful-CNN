@@ -57,6 +57,7 @@ int main( void )
 	    for(i = 0; i < NUMTASK;i++)
 	        information[i] = 0;
         //main_DBtest();
+        vApplicationSetupTimerInterrupt();
         IntermittentCNNTest();
 	}
 	else{

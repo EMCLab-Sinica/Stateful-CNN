@@ -1,5 +1,10 @@
 #pragma once
 
+//#define MY_NDEBUG
+#ifndef MY_NDEBUG
+#define DUMP_PARAMS
+#endif
+
 #include <stddef.h> /* size_t, see https://stackoverflow.com/a/26413264 */
 #include <stdint.h>
 #include <msp430.h> /* __no_operation() */
@@ -83,7 +88,7 @@ static inline uint8_t* get_param_base_pointer(ParameterInfo *param) {
 static inline int16_t* get_q15_param(ParameterInfo *param, size_t i) {
     if ((param->bitwidth_and_flags >> 1) != 16) {
         my_printf("Error: incorrect param passed to %s" NEWLINE, __func__);
-        return NULL;
+        ERROR_OCCURRED();
     }
     return (int16_t*)(get_param_base_pointer(param) + param->params_offset) + i;
 }
@@ -99,6 +104,20 @@ int16_t iq31_to_q15(int32_t *iq31_val_ptr);
 void dump_params(ParameterInfo *cur_param);
 #else
 #define dump_params(cur_param)
+#endif
+
+#ifdef DUMP_PARAMS
+static void dump_matrix(int16_t *mat, size_t len) {
+    for (size_t j = 0; j < len; j++) {
+        my_printf("%d ", mat[j]);
+        if (j && (j % 16 == 0)) {
+            my_printf(NEWLINE);
+        }
+    }
+    my_printf(NEWLINE);
+}
+#else
+#define dump_matrix(mat, len)
 #endif
 
 /**********************************

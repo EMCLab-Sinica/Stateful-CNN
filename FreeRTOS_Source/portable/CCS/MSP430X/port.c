@@ -327,6 +327,7 @@ void vPortSetupTimerInterrupt( void )
 /*-----------------------------------------------------------*/
 
 long Tickcount = 0;
+#if 0
 #pragma vector=configTICK_VECTOR
 interrupt void vTickISREntry( void )
 {
@@ -445,6 +446,7 @@ extern void vPortTickISR( void );
     /*------------------------------  Extend to support dynamic caching: End ------------------------------*/
 #endif
 }
+#endif
 
 /*-----------------------------------------------------------*/
 	
