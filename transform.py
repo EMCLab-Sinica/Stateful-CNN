@@ -83,6 +83,9 @@ def to_bytes(i, size=16):
 
 
 def nchw2nhwc(arr, dims):
+    if True:
+        return arr, dims
+
     N, C, H, W = dims
     ret = [0] * (N * C * H * W)
     for n in range(N):
