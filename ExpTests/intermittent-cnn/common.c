@@ -10,7 +10,7 @@ uint16_t *parameters;
 #ifdef __MSP430__
 #pragma NOINIT(intermediate_values)
 #endif
-uint8_t intermediate_values[INTERMEDIATE_VALUES_SIZE];
+uint8_t intermediate_values[2][INTERMEDIATE_VALUES_SIZE];
 
 static int16_t* node_input_ptr(Node *node, size_t i) {
     return (int16_t*)((uint8_t*)inputs + node->inputs_offset) + i;
@@ -35,7 +35,7 @@ int16_t iq31_to_q15(int32_t *iq31_val_ptr) {
 }
 
 int32_t* get_iq31_param(ParameterInfo *param, size_t i) {
-    if ((param->bitwidth_and_flags >> 1) != 32) {
+    if (get_param_bitwidth(param) != 32) {
         my_printf("Error: incorrect param passed to %s" NEWLINE, __func__);
         return NULL;
     }
@@ -49,7 +49,7 @@ int64_t get_int64_param(ParameterInfo *param, size_t i) {
 #if !defined(MY_NDEBUG) && defined(DUMP_PARAMS)
 void dump_params(ParameterInfo *cur_param) {
     my_printf("offset=%d len=%d" NEWLINE, cur_param->params_offset, cur_param->params_len);
-    uint16_t bitwidth = cur_param->bitwidth_and_flags >> 1;
+    uint16_t bitwidth = get_param_bitwidth(cur_param);
     for (uint32_t k = 0; k < cur_param->params_len / (bitwidth / 8); k++) {
         if (k && (k % 16 == 0)) {
             my_printf(NEWLINE);
