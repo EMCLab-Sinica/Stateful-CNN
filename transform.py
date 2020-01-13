@@ -113,6 +113,13 @@ for inputs, op_type in model:
     model_bin += to_bytes(ops.ops[op_type])
     model_bin += to_bytes(0)  # Node.scheduled
 
+def bitwidth_and_flags_for_parameters(bitwidth):
+    # Keep this in sync with common.h
+    FLAG_SLOTS = 0b11
+    FLAG_SLOTS_WIDTH = 2
+
+    return bitwidth << FLAG_SLOTS_WIDTH | FLAG_SLOTS
+
 for params in parameters:
     model_bin += to_bytes(parameters_bin_offset, size=32)  # params_offset
     if params is None:  # input
@@ -127,7 +134,7 @@ for params in parameters:
             for j in range(im.shape[1]):
                 parameters_bin.write(to_bytes(_Q15(im[i, j])))
                 parameters_bin_offset += 2
-        model_bin += to_bytes(16 * 2)  # bitwidth_and_flags
+        model_bin += to_bytes(bitwidth_and_flags_for_parameters(16))  # bitwidth_and_flags
         # extend_dims
         model_bin += to_bytes(1)
         model_bin += to_bytes(1)
@@ -155,14 +162,14 @@ for params in parameters:
             for param in float_data_reordered:
                 parameters_bin.write(to_bytes(_Q15(param)))
                 parameters_bin_offset += 2
-            model_bin += to_bytes(16 * 2)  # bitwidth_and_flags
+            model_bin += to_bytes(bitwidth_and_flags_for_parameters(16))  # bitwidth_and_flags
         elif params.data_type == onnx.TensorProto.INT64:
             data_len = len(params.int64_data)
             model_bin += to_bytes(data_len * 8, size=32)
             for param in params.int64_data:
                 parameters_bin.write(to_bytes(param, size=64))
                 parameters_bin_offset += 8
-            model_bin += to_bytes(64 * 2)  # bitwidth_and_flags
+            model_bin += to_bytes(bitwidth_and_flags_for_parameters(64))  # bitwidth_and_flags
         else:
             assert False
         print('dims = {}, length = {}'.format(reordered_dims, data_len))

@@ -98,7 +98,7 @@ static uint8_t handle_cur_group(void) {
             my_printf("Error: missing dims." NEWLINE);
             return 1;
         }
-        if (output->bitwidth_and_flags >> 1 == 0) {
+        if (get_param_bitwidth(output) == 0) {
             my_printf("Error: invalid bitwidth." NEWLINE);
             return 1;
         }
@@ -204,14 +204,12 @@ int run_model(void) {
         my_printf("%d ticks" NEWLINE, counters[i]);
     }
 
-#ifndef MY_NDEBUG
     /* TODO: is the last node always the output node? */
     ParameterInfo *output_node = &(parameter_info[model->nodes_len + model->n_input - 1]);
     for (uint16_t i = 0; i < output_node->dims[1]; i++) {
         my_printf("%d ", *get_q15_param(output_node, i));
     }
     my_printf(NEWLINE);
-#endif
 
     return 0;
 }

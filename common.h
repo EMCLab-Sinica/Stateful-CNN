@@ -1,6 +1,6 @@
 #pragma once
 
-//#define MY_NDEBUG
+#define MY_NDEBUG
 #ifndef MY_NDEBUG
 #define DUMP_PARAMS
 #endif
@@ -15,7 +15,9 @@
 #include <Tools/myuart.h>
 #endif
 
-#define FLAG_INTERMEDIATE_VALUES 1
+#define NUM_SLOTS 2
+#define FLAG_SLOTS 0b11
+#define FLAG_SLOTS_WIDTH 2
 
 /**********************************
  *        Data structures         *
@@ -36,7 +38,9 @@ typedef struct __attribute__((__packed__)) {
      * 32: iq31
      * 64: INT64 (from ONNX)
      *
-     * The least sigfinicant bit is a flag to indicate where the data are - parameters or intermediate_values
+     * The least two sigfinicant bits contains a flag to indicate where the
+     * data are. All 1's indicate data are in parameters, otherwise it's the
+     * slot number for one of intermediate_values.
      */
     uint16_t bitwidth_and_flags;
     uint16_t dims[4];
@@ -56,7 +60,8 @@ extern Node *nodes;
 extern ParameterInfo *parameter_info;
 extern uint16_t *inputs;
 extern uint16_t *parameters;
-extern uint8_t intermediate_values[INTERMEDIATE_VALUES_SIZE];
+// similar to double buffering
+extern uint8_t intermediate_values[NUM_SLOTS][INTERMEDIATE_VALUES_SIZE];
 
 /**********************************
  *          Miscellaneous         *
@@ -77,16 +82,38 @@ extern uint8_t intermediate_values[INTERMEDIATE_VALUES_SIZE];
 /**********************************
  *       Helpers for nodes        *
  **********************************/
+static inline uint16_t get_param_bitwidth(ParameterInfo *param) {
+    return param->bitwidth_and_flags >> FLAG_SLOTS_WIDTH;
+}
+
+static inline uint16_t get_param_slot_id(ParameterInfo *param) {
+    return param->bitwidth_and_flags & FLAG_SLOTS;
+}
+
+static inline uint16_t get_next_slot(ParameterInfo *param) {
+    uint16_t slot_id = get_param_slot_id(param);
+    /* Some cases:
+     * 1. slot_id == FLAG_SLOTS -> pick the first slot as the current param is input
+     * 2. Otherwise, pick the next slot
+     */
+    uint16_t next_slot_id = (slot_id + 1) & FLAG_SLOTS;
+    if (next_slot_id >= NUM_SLOTS) {
+        next_slot_id = 0;
+    }
+    return next_slot_id;
+}
+
 static inline uint8_t* get_param_base_pointer(ParameterInfo *param) {
-    if (param->bitwidth_and_flags & FLAG_INTERMEDIATE_VALUES) {
-        return &(intermediate_values[0]);
+    uint16_t slot_id = get_param_slot_id(param);
+    if (slot_id != FLAG_SLOTS) {
+        return &(intermediate_values[slot_id][0]);
     } else {
         return (uint8_t*)parameters;
     }
 }
 
 static inline int16_t* get_q15_param(ParameterInfo *param, size_t i) {
-    if ((param->bitwidth_and_flags >> 1) != 16) {
+    if (get_param_bitwidth(param) != 16) {
         my_printf("Error: incorrect param passed to %s" NEWLINE, __func__);
         ERROR_OCCURRED();
     }
@@ -107,7 +134,7 @@ void dump_params(ParameterInfo *cur_param);
 #endif
 
 #ifdef DUMP_PARAMS
-static void dump_matrix(int16_t *mat, size_t len) {
+static inline void dump_matrix(int16_t *mat, size_t len) {
     for (size_t j = 0; j < len; j++) {
         my_printf("%d ", mat[j]);
         if (j && (j % 16 == 0)) {
