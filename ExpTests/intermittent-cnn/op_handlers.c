@@ -83,10 +83,12 @@ static uint16_t arrH[NUM_TASKS], arrW[NUM_TASKS], arrkH[NUM_TASKS], arrkW[NUM_TA
 static msp_mac_q15_params mac_params[NUM_TASKS];
 static uint8_t truncated[NUM_TASKS];
 
-uint8_t use_concurrent_conv;
+uint8_t use_concurrent_conv = 1;
 uint8_t dump_conv_params;
 
 #if __MSP430__
+static uint32_t idleCounter = 0;
+
 static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
     /* put var declarations first to make the compiler happy */
     ConvTaskParams *conv_params;
@@ -104,7 +106,9 @@ static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
     #include "conv_pre.h"
 
     /* XXX: need more co-routines? */
-    while(!msp_lea_ifg);
+    while(!msp_lea_ifg) {
+        idleCounter++;
+    }
 
     /* modified from DSPLib_1_30_00_02/source/vector/msp_mac_q15.c */
     // different tasks need different buffers for LEA params, or the program
@@ -180,10 +184,8 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
 #endif
 
     if (conv_filter->dims[1] == 1) {
-        use_concurrent_conv = 0;
         dump_conv_params = 0;
     } else {
-        use_concurrent_conv = 0;
         dump_conv_params = 0;
     }
 
@@ -216,8 +218,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     /* TODO: really use remapped dimensions */
     const uint16_t H = conv_input->dims[2], W = conv_input->dims[3],
                    input_N = conv_filter->dims[0];
-    /* TODO: add flags; assume auto_pad=SAME_UPPER, stride=(1, 1), dilation=(1, 1) for now */
-    /* TODO: use zeroes for padding */
+    /* XXX: add flags; assume auto_pad=SAME_UPPER, stride=(1, 1), dilation=(1, 1) for now */
     output->params_len = (uint16_t)(input_N * H * W * 2);
     output->bitwidth_and_flags = 16 << FLAG_SLOTS_WIDTH | get_next_slot(conv_input);
     output->dims[0] = 1;
@@ -269,6 +270,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     end = getTickCounter();
     counters[counter_idx] = end - start;
     counter_idx++;
+    my_printf("idle for %l cycles" NEWLINE, idleCounter);
 #endif
 
 #ifndef MY_NDEBUG
@@ -282,7 +284,7 @@ uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output) {
 #ifndef MY_NDEBUG
     my_printf("MaxPool!" NEWLINE);
 #endif
-    /* TODO: add flags; assume stripe=2, no padding for now */
+    /* XXX: add flags; assume stripe=2, no padding for now */
     const uint16_t stride = 2; // for less type conversions
     ParameterInfo *data = input[0];
     output->params_len = data->params_len / (uint16_t)(stride * stride);
@@ -352,9 +354,10 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
 #ifndef MY_NDEBUG
 
 # ifdef DUMP_PARAMS
-    // my_printf("handle_matmul inputs" NEWLINE);
+    my_printf("handle_matmul inputs" NEWLINE);
     // dump_params(A);
-    // dump_params(B);
+    my_printf("B" NEWLINE);
+    dump_params(B);
 # endif
 
     my_printf("MatMul! A: (%dx%d), B: (%dx%d)" NEWLINE,
@@ -382,7 +385,7 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
     msp_status status = msp_fill_q15(&fill_params, lea_buffer_matmul);
     msp_checkStatus(status);
 
-    my_memcpy(lea_buffer.general.A, get_q15_param(A, 0), (uint16_t)(A->dims[0] * A->dims[1]));
+    my_memcpy(lea_buffer.general.A, get_q15_param(A, 0), (uint16_t)(A->dims[0] * A->dims[1] * sizeof(uint16_t)));
 
     /* LEA wants addresses to be 4-aligned */
     uint16_t step = (uint16_t)((256 / B->dims[1]) / 4 * 4);
@@ -394,7 +397,7 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
         params.srcBRows = current_width;
         params.srcBCols = B->dims[1];
 
-        my_memcpy(lea_buffer.general.B, get_q15_param(B, (uint16_t)(i * B->dims[1])), (uint16_t)(current_width * B->dims[1]));
+        my_memcpy(lea_buffer.general.B, get_q15_param(B, (uint16_t)(i * B->dims[1])), (uint16_t)(current_width * B->dims[1] * sizeof(uint16_t)));
 
 #ifdef DUMP_PARAMS
         my_printf("strip for A" NEWLINE);
@@ -437,7 +440,7 @@ uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output) {
 #endif
     ParameterInfo *X = input[0];
     memcpy(output, X, sizeof(ParameterInfo));
-    /* TODO: use LEA? */
+    /* XXX: use LEA? */
     uint16_t bitwidth = get_param_bitwidth(X);
     for (uint32_t i = 0; i < X->params_len / (bitwidth / 8); i++) {
         if (bitwidth == 16) {
@@ -478,7 +481,7 @@ uint8_t handle_squeeze(ParameterInfo *input[], ParameterInfo *output) {
     my_printf("Squeeze!" NEWLINE);
 #endif
     ParameterInfo *data = input[0];
-    /* TODO: add flags; assume squeeze all one-size axes */
+    /* XXX: add flags; assume squeeze all one-size axes */
     output->params_offset = data->params_offset;
     output->params_len = data->params_len;
     output->bitwidth_and_flags = data->bitwidth_and_flags;
