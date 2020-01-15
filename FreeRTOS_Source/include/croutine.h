@@ -330,6 +330,8 @@ void vCoRoutineSchedule( void );
  * \ingroup Tasks
  */
 #define crDELAY( xHandle, xTicksToDelay )												\
+	/* disable delay list to improve performance */										\
+	configASSERT( !xTicksToDelay );														\
 	if( ( xTicksToDelay ) > 0 )															\
 	{																					\
 		vCoRoutineAddToDelayedList( ( xTicksToDelay ), NULL );							\

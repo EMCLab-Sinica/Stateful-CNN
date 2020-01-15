@@ -323,7 +323,8 @@ void vCoRoutineSchedule( void )
 	prvCheckPendingReadyList();
 
 	/* See if any delayed co-routines have timed out. */
-	prvCheckDelayedList();
+	/* disable delay list to improve performance */
+	// prvCheckDelayedList();
 
 	/* Find the highest priority queue that contains ready co-routines. */
 	while( listLIST_IS_EMPTY( &( pxReadyCoRoutineLists[ uxTopCoRoutineReadyPriority ] ) ) )

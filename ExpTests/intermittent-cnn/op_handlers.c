@@ -1,3 +1,6 @@
+// disable debug code in DSPLib
+#define MSP_DISABLE_DIAGNOSTICS
+
 #include <string.h>
 
 #include <DSPLib.h>
@@ -18,6 +21,7 @@
 
 #define configCONV_STACK_SIZE 100
 #define NUM_TASKS 2
+#define USE_CONCURRENT_CONV_BY_DEFAULT 0
 
 #ifdef __MSP430__
 #pragma DATA_SECTION(lea_buffer, ".leaRAM")
@@ -83,7 +87,7 @@ static uint16_t arrH[NUM_TASKS], arrW[NUM_TASKS], arrkH[NUM_TASKS], arrkW[NUM_TA
 static msp_mac_q15_params mac_params[NUM_TASKS];
 static uint8_t truncated[NUM_TASKS];
 
-uint8_t use_concurrent_conv = 1;
+uint8_t use_concurrent_conv = USE_CONCURRENT_CONV_BY_DEFAULT;
 uint8_t dump_conv_params;
 
 #if __MSP430__
