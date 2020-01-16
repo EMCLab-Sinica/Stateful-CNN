@@ -817,12 +817,6 @@ extern msp_status msp_mac_q15(const msp_mac_q15_params *params,
                               const _q15 *srcB,
                               _iq31 *result);
 
-extern msp_status msp_do_mac_q15(const msp_mac_q15_params *params,
-                                 const _q15 *srcA,
-                                 const _q15 *srcB,
-                                 _iq31 *result,
-                                 uint8_t sleep);
-
 //******************************************************************************
 //
 //! \ingroup dsplib_vector_real

@@ -31,10 +31,11 @@
  * --/COPYRIGHT--*/
 
 #include "DSPLib.h"
+#include "common.h"
 
 #if defined(MSP_USE_LEA)
 
-msp_status msp_do_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const _q15 *srcB, _iq31 *result, uint8_t sleep)
+msp_status msp_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const _q15 *srcB, _iq31 *result)
 {
     uint16_t length;
     msp_status status;
@@ -80,7 +81,7 @@ msp_status msp_do_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, co
     LEAPMS1 = MSP_LEA_CONVERT_ADDRESS(leaParams);
 
     /* Invoke the LEACMD__MAC command. */
-    msp_lea_doInvokeCommand(LEACMD__MAC, sleep);
+    msp_lea_invokeCommand(LEACMD__MAC);
 
     /* Free MSP_LEA_MAC_PARAMS structure. */
     msp_lea_freeMemory(sizeof(MSP_LEA_MAC_PARAMS)/sizeof(uint32_t));
@@ -106,11 +107,9 @@ msp_status msp_do_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, co
     return status;
 }
 
-msp_status msp_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const _q15 *srcB, _iq31 *result) {
-    return msp_do_mac_q15(params, srcA, srcB, result, 1);
-}
-
 #else //MSP_USE_LEA    
+
+uint32_t msp_mac_q15_overflow_counter = 0;
 
 msp_status msp_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const _q15 *srcB, _iq31 *result)
 {
@@ -159,7 +158,12 @@ msp_status msp_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const
     /* Loop through all vector elements. */
     while (length--) {
         /* Multiply srcA and srcB and accumulate to the result. */
-        *result += (int32_t)*srcA++ * (int32_t)*srcB++;
+        int64_t v = *result + (int64_t)*srcA++ * (int64_t)*srcB++;
+        my_printf("v=%ld" NEWLINE, v);
+        if (v > INT32_MAX || v < INT32_MIN) {
+            msp_mac_q15_overflow_counter++;
+        }
+        *result = (int32_t)v;
     }
     
     /* Scale result by 2. */
