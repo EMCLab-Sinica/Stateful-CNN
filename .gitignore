@@ -1,3 +1,6 @@
+# Dependency files
+*.d
+
 # Object files
 *.o
 *.ko
