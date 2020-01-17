@@ -1,5 +1,5 @@
 // disable debug code in DSPLib
-#define MSP_DISABLE_DIAGNOSTICS
+//#define MSP_DISABLE_DIAGNOSTICS
 
 #include <string.h>
 
@@ -22,6 +22,7 @@
 #define configCONV_STACK_SIZE 100
 #define NUM_TASKS 2
 #define USE_CONCURRENT_CONV_BY_DEFAULT 0
+#define DUMP_CONV_PARAMS_BY_DEFAULT 1
 
 #ifdef __MSP430__
 #pragma DATA_SECTION(lea_buffer, ".leaRAM")
@@ -83,21 +84,20 @@ static void my_memcpy(void* dest, const void* src, size_t n) {
 #endif
 }
 
-static uint16_t arrH[NUM_TASKS], arrW[NUM_TASKS], arrkH[NUM_TASKS], arrkW[NUM_TASKS], arrCHANNEL[NUM_TASKS];
+static uint16_t arrH[NUM_TASKS], arrW[NUM_TASKS], arrkH[NUM_TASKS], arrkW[NUM_TASKS], arrCHANNEL[NUM_TASKS], arrOUTPUT_CHANNEL[NUM_TASKS];
+static int16_t *arr_filter_addr[NUM_TASKS], *arr_input_addr[NUM_TASKS];
 static msp_mac_q15_params mac_params[NUM_TASKS];
 static uint8_t truncated[NUM_TASKS];
 
 uint8_t use_concurrent_conv = USE_CONCURRENT_CONV_BY_DEFAULT;
-uint8_t dump_conv_params;
+uint8_t dump_conv_params = DUMP_CONV_PARAMS_BY_DEFAULT;
 
 #if __MSP430__
 static uint32_t idleCounter = 0;
 
 static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
-    /* put var declarations first to make the compiler happy */
-    ConvTaskParams *conv_params;
-    int16_t *input_addr;
-    uint16_t buffer_size;
+    #include "conv_prologue.h"
+
     MSP_LEA_MAC_PARAMS *leaParams;
     //uint16_t interruptState;
 
@@ -154,6 +154,7 @@ static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
     kH = arrkH[uxIndex];
     kW = arrkW[uxIndex];
     CHANNEL = arrCHANNEL[uxIndex];
+    OUTPUT_CHANNEL = arrOUTPUT_CHANNEL[uxIndex];
 
     #include "conv_post.h"
 
@@ -166,10 +167,7 @@ static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
 #endif
 
 static void convTask(unsigned short uxIndex) {
-    /* put var declarations first to make the compiler happy */
-    ConvTaskParams *conv_params;
-    int16_t *input_addr;
-    uint16_t buffer_size;
+    #include "conv_prologue.h"
 
     #include "conv_pre.h"
 
@@ -181,17 +179,16 @@ static void convTask(unsigned short uxIndex) {
     #include "conv_post.h"
 }
 
+extern uint32_t msp_mac_q15_overflow_counter;
+
 uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1], *bias = input[2];
 #ifndef MY_NDEBUG
     my_printf("Conv!" NEWLINE);
 #endif
 
-    if (conv_filter->dims[1] == 1) {
-        dump_conv_params = 0;
-    } else {
-        dump_conv_params = 0;
-    }
+    // use_concurrent_conv and dump_conv_params can be configured for different
+    // convolution neurons here.
 
 #ifdef __MSP430__
     if (use_concurrent_conv) {
@@ -220,15 +217,15 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     /* original: input: N x C x H x W, filter: M x C x kW x kW
      * remapped: input: N x H x W x C, filter: M x kH x kW x C */
     /* TODO: really use remapped dimensions */
-    const uint16_t H = conv_input->dims[2], W = conv_input->dims[3],
+    const uint16_t H = conv_input->dims[1], W = conv_input->dims[2],
                    input_N = conv_filter->dims[0];
     /* XXX: add flags; assume auto_pad=SAME_UPPER, stride=(1, 1), dilation=(1, 1) for now */
     output->params_len = (uint16_t)(input_N * H * W * 2);
     output->bitwidth_and_flags = 16 << FLAG_SLOTS_WIDTH | get_next_slot(conv_input);
     output->dims[0] = 1;
-    output->dims[1] = input_N;
-    output->dims[2] = H;
-    output->dims[3] = W;
+    output->dims[1] = H;
+    output->dims[2] = W;
+    output->dims[3] = input_N;
 
     uint8_t ret = 0;
 
@@ -277,9 +274,25 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     my_printf("idle for %l cycles" NEWLINE, idleCounter);
 #endif
 
-#ifndef MY_NDEBUG
-    my_printf("handle_conv output" NEWLINE);
+#ifdef DUMP_PARAMS
+    if (dump_conv_params) {
+        my_printf("handle_conv raw output (NHWC)" NEWLINE);
+        dump_params(output);
+        my_printf("handle_conv output in NCHW format" NEWLINE);
+        for (uint8_t i = 0; i < input_N; i++) {
+            for (uint8_t j = 0; j < H; j++) {
+                for (uint8_t k = 0; k < W; k++) {
+                    // internal format is NHWC
+                    print_q15(*get_q15_param(output, (size_t)(j * W * input_N + k * input_N + i)));
+                }
+                my_printf(NEWLINE);
+            }
+            my_printf(NEWLINE);
+        }
+    }
 #endif
+
+    my_printf("msp_mac_q15_overflow_counter=%d" NEWLINE, msp_mac_q15_overflow_counter);
 
     return ret;
 }
@@ -288,30 +301,37 @@ uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output) {
 #ifndef MY_NDEBUG
     my_printf("MaxPool!" NEWLINE);
 #endif
+
     /* XXX: add flags; assume stripe=2, no padding for now */
     const uint16_t stride = 2; // for less type conversions
     ParameterInfo *data = input[0];
+
+#ifdef DUMP_PARAMS
+    my_printf("handle_maxpool input" NEWLINE);
+    dump_params(data);
+#endif
+
+    const uint16_t channel = data->dims[3], H = data->dims[1], W = data->dims[2];
     output->params_len = data->params_len / (uint16_t)(stride * stride);
     output->bitwidth_and_flags = data->bitwidth_and_flags | get_next_slot(data);
     output->dims[0] = 1;
-    output->dims[1] = data->dims[1];
-    output->dims[2] = data->dims[2] / stride;
-    output->dims[3] = data->dims[3] / stride;
-    const uint16_t channel = data->dims[1], H = data->dims[2], W = data->dims[3];
+    output->dims[1] = H / stride;
+    output->dims[2] = W / stride;
+    output->dims[3] = channel;
     msp_max_q15_params params = { .length = 4 };
     int16_t max_val;
     uint16_t index;
 #define lea_buffer_maxpool lea_buffer.general.A
-    for (uint16_t i = 0; i < channel; i++) {
-        for (uint16_t j = 0; j < H; j = (uint16_t)(j + stride)) {
-            for (uint16_t k = 0; k < W; k = (uint16_t)(k + stride)) {
-                lea_buffer_maxpool[0] = *get_q15_param(data, (size_t)(i * H * W + j     * W + k    ));
-                lea_buffer_maxpool[1] = *get_q15_param(data, (size_t)(i * H * W + j     * W + (k+1)));
-                lea_buffer_maxpool[2] = *get_q15_param(data, (size_t)(i * H * W + (j+1) * W + k    ));
-                lea_buffer_maxpool[3] = *get_q15_param(data, (size_t)(i * H * W + (j+1) * W + (k+1)));
+    for (uint16_t i = 0; i < H; i = (uint16_t)(i + stride)) {
+        for (uint16_t j = 0; j < W; j = (uint16_t)(j + stride)) {
+            for (uint16_t k = 0; k < channel; k++) {
+                lea_buffer_maxpool[0] = *get_q15_param(data, (size_t)(i     * W * channel + j     * channel + k));
+                lea_buffer_maxpool[1] = *get_q15_param(data, (size_t)((i+1) * W * channel + j     * channel + k));
+                lea_buffer_maxpool[2] = *get_q15_param(data, (size_t)(i     * W * channel + (j+1) * channel + k));
+                lea_buffer_maxpool[3] = *get_q15_param(data, (size_t)((i+1) * W * channel + (j+1) * channel + k));
                 msp_status status = msp_max_q15(&params, lea_buffer_maxpool, &max_val, &index);
                 msp_checkStatus(status);
-                *get_q15_param(output, (size_t)(i * H * W + j * W + k)) = max_val;
+                *get_q15_param(output, (size_t)((i/stride) * W * channel + (j/stride) * channel + k)) = max_val;
             }
         }
     }

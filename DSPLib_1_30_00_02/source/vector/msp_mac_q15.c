@@ -159,7 +159,7 @@ msp_status msp_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const
     while (length--) {
         /* Multiply srcA and srcB and accumulate to the result. */
         int64_t v = *result + (int64_t)*srcA++ * (int64_t)*srcB++;
-        my_printf("v=%ld" NEWLINE, v);
+        //my_printf("v=%ld" NEWLINE, v);
         if (v > INT32_MAX || v < INT32_MIN) {
             msp_mac_q15_overflow_counter++;
         }
