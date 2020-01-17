@@ -70,7 +70,6 @@ for params in g.initializer:
     assert parameters[names[params.name]] is None
     parameters[names[params.name]] = params
 
-
 def to_bytes(i, size=16):
     if size == 16:
         return struct.pack('h', i)
@@ -83,9 +82,6 @@ def to_bytes(i, size=16):
 
 
 def nchw2nhwc(arr, dims):
-    if True:
-        return arr, dims
-
     N, C, H, W = dims
     ret = [0] * (N * C * H * W)
     for n in range(N):
@@ -137,9 +133,9 @@ for params in parameters:
         model_bin += to_bytes(bitwidth_and_flags_for_parameters(16))  # bitwidth_and_flags
         # extend_dims
         model_bin += to_bytes(1)
-        model_bin += to_bytes(1)
         model_bin += to_bytes(dimX)
         model_bin += to_bytes(dimY)
+        model_bin += to_bytes(1)
     else:
         assert len(params.dims) <= 4
         reordered_dims = params.dims

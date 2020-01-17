@@ -1,6 +1,6 @@
 #pragma once
 
-#define MY_NDEBUG
+//#define MY_NDEBUG
 #ifndef MY_NDEBUG
 #define DUMP_PARAMS
 #endif
@@ -77,6 +77,17 @@ extern uint8_t intermediate_values[NUM_SLOTS][INTERMEDIATE_VALUES_SIZE];
 /* MSP430 SDK already defines MIN, which means minutes */
 #define MIN_VAL(x, y) ((x) < (y) ? (x) : (y))
 
+/* Better to not use macros
+ * https://stackoverflow.com/a/3437484/3786245
+ */
+static inline int int_min(int a, int b) {
+    return a < b ? a : b;
+}
+
+static inline int int_max(int a, int b) {
+    return a > b ? a : b;
+}
+
 #define ERROR_OCCURRED() for (;;) { __no_operation(); }
 
 /**********************************
@@ -126,7 +137,10 @@ int64_t get_int64_param(ParameterInfo *param, size_t i);
 int16_t node_input(Node *node, size_t i);
 void node_input_mark(Node *node, size_t i);
 uint8_t node_input_marked(Node *node, size_t i);
-int16_t iq31_to_q15(int32_t *iq31_val_ptr);
+static inline int16_t iq31_to_q15(int32_t val) {
+    return (int16_t)(val >> 16);
+}
+
 #if !defined(MY_NDEBUG) && defined(DUMP_PARAMS)
 void dump_params(ParameterInfo *cur_param);
 #else
@@ -134,10 +148,29 @@ void dump_params(ParameterInfo *cur_param);
 #endif
 
 #ifdef DUMP_PARAMS
+
+static inline void print_q15(int16_t val) {
+#ifdef __MSP430__
+    my_printf("%d ", val);
+#else
+    // 2^15
+    my_printf("% f ", val / 32768.0);
+#endif
+}
+
+static inline void print_iq31(int32_t val) {
+#ifdef __MSP430__
+    my_printf("%l ", val); // see print2uart() in Tools/myuart.c
+#else
+    // 2^31
+    my_printf("% f ", val / 2147483648.0);
+#endif
+}
+
 static inline void dump_matrix(int16_t *mat, size_t len) {
     for (size_t j = 0; j < len; j++) {
-        my_printf("%d ", mat[j]);
-        if (j && (j % 16 == 0)) {
+        print_q15(mat[j]);
+        if (j && (j % 16 == 15)) {
             my_printf(NEWLINE);
         }
     }

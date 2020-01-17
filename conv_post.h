@@ -1,3 +1,4 @@
+{
 #ifdef DUMP_PARAMS
     if (dump_conv_params) {
         my_printf("uxIndex=%d ", uxIndex);
@@ -9,24 +10,31 @@
         dump_matrix(lea_buffer.conv.input[uxIndex], mac_params[uxIndex].length);
         my_printf("filter" NEWLINE);
         dump_matrix(lea_buffer.conv.filter[uxIndex], mac_params[uxIndex].length);
-# ifdef __MSP430__
-        my_printf("iq31_mac_result=%l" NEWLINE, lea_buffer.conv.iq31_mac_result[uxIndex]);
-# else
-        my_printf("iq31_mac_result=%d" NEWLINE, lea_buffer.conv.iq31_mac_result[uxIndex]);
-# endif
+
+        my_printf("iq31_mac_result=");
+        print_iq31(lea_buffer.conv.iq31_mac_result[uxIndex]);
+        my_printf(NEWLINE);
     }
 #endif
 
-    if (truncated[uxIndex]) {
-        uint16_t last_idx = (uint16_t)(kH * kW - 1);
-        lea_buffer.conv.iq31_mac_result[uxIndex] += (*get_q15_param(conv_params->conv_input, last_idx)) * (*get_q15_param(conv_params->conv_filter, last_idx)) * 2;
-    }
+    int16_t q15_mac_result = iq31_to_q15(lea_buffer.conv.iq31_mac_result[uxIndex]);
+    q15_mac_result = (int16_t)(q15_mac_result + *get_q15_param(conv_params->bias, conv_params->conv_idx));
 
-    {
-        int16_t q15_mac_result = iq31_to_q15(&lea_buffer.conv.iq31_mac_result[uxIndex]);
-        q15_mac_result = (int16_t)(q15_mac_result + *get_q15_param(conv_params->bias, conv_params->conv_idx));
-
-        int16_t *output_data = get_q15_param(conv_params->output, 0);
-        output_data[conv_params->conv_idx * H * W + conv_params->output_h * W + conv_params->output_w] = q15_mac_result;
+#ifdef DUMP_PARAMS
+    if (dump_conv_params) {
+        my_printf("after adding bias OFM value=");
+        print_q15(q15_mac_result);
+        my_printf(NEWLINE);
     }
+#endif
+
+    int16_t *output_data = get_q15_param(conv_params->output, 0);
+    size_t offset = (size_t)(conv_params->output_h * W * OUTPUT_CHANNEL + conv_params->output_w * OUTPUT_CHANNEL + conv_params->conv_idx);
+#ifdef DUMP_PARAMS
+    if (dump_conv_params) {
+        my_printf("offset of output_data=%ld" NEWLINE, offset);
+    }
+#endif
+    output_data[offset] = q15_mac_result;
+}
 

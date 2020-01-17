@@ -1,12 +1,6 @@
 CPPFLAGS = -I .
 DEBUG = 0
-CFLAGS = -std=c99 -Wall -Wextra -Wstrict-prototypes -Wconversion -Wshadow
-ifeq ($(DEBUG),1)
-    CFLAGS += -g -O0
-else
-    CFLAGS += -O3
-    CPPFLAGS += -DNDEBUG
-endif
+CFLAGS = -std=c99 -Wall -Wextra -Wstrict-prototypes -Wconversion -Wshadow -MMD -g -O0
 
 DSPLIB_SRC_PATH = ../../DSPLib_1_30_00_02/source
 
@@ -20,6 +14,13 @@ DSPLIB_OBJS = \
 
 UNAME_S := $(shell uname -s)
 
+OBJS = ops.o op_handlers.o common.o data.o
+ifeq ($(UNAME_S),Linux)
+    OBJS += plat-linux.o
+endif
+# http://wen00072.github.io/blog/2014/03/06/makefile-header-file-dependency-issues/
+DEPS = $(patsubst %.o, %.d, $(OBJS))
+
 MODEL := $(DATA_PATH)/models/mnist/model_optimized.onnx
 IMAGE := $(DATA_PATH)/example3.png
 DATA_FILES = data.c data.h ops.c ops.py ops.h inputs.bin model.bin parameters.bin
@@ -31,12 +32,8 @@ data_files: $(DATA_FILES)
 ops.py ops.c ops.h: gen_ops.py
 	python $<
 
-intermittent-cnn: $(DSPLIB_OBJS) ops.o op_handlers.o common.o data.o
+intermittent-cnn: $(DSPLIB_OBJS) $(OBJS)
 intermittent-cnn: CPPFLAGS += -isystem ../../DSPLib_1_30_00_02/include -I fake-msp430sdk
-
-ifeq ($(UNAME_S),Linux)
-    intermittent-cnn: plat-linux.o
-endif
 
 data.c data.h: bin2c.py model.bin
 	python bin2c.py
@@ -46,5 +43,7 @@ inputs.bin model.bin parameters.bin: transform.py ops.py
 
 clean:
 	rm -rf intermittent-cnn $(DSPLIB_OBJS) *.o __pycache__ $(DATA_FILES)
+
+-include $(DEPS)
 
 .PHONY: all clean data_files
