@@ -44,6 +44,14 @@
     int8_t field_size = (int8_t)((kH - 1) / 2);
 
     /* copy input data, row by row */
+
+    msp_fill_q15_params fill_params = {
+        .length = (uint16_t)((kH * kW * CHANNEL+1)/2*2),
+        .value = 0,
+    };
+    msp_status status = msp_fill_q15(&fill_params, lea_buffer.conv.input[uxIndex]);
+    msp_checkStatus(status);
+
     input_addr = arr_input_addr[uxIndex] = get_q15_param(
         conv_params->conv_input,
         (size_t)(CHANNEL * (
@@ -51,8 +59,8 @@
                 (conv_params->output_w)
         )));
 
-    int16_t h_start = (int16_t)int_max(-field_size,  -conv_params->output_h),
-            h_end   = (int16_t)int_min( field_size, H-conv_params->output_h);
+    int16_t h_start = (int16_t)int_max(-field_size,    -conv_params->output_h),
+            h_end   = (int16_t)int_min( field_size, H-1-conv_params->output_h);
 #ifdef DUMP_PARAMS
     if (dump_conv_params) {
         my_printf("h_start=%d ", h_start);
@@ -60,8 +68,8 @@
     }
 #endif
     for (int16_t h = h_start; h <= h_end; h++) {
-        int16_t w_start = (int16_t)int_max(-field_size,  -conv_params->output_w),
-                w_end   = (int16_t)int_min( field_size, W-conv_params->output_w);
+        int16_t w_start = (int16_t)int_max(-field_size,    -conv_params->output_w),
+                w_end   = (int16_t)int_min( field_size, W-1-conv_params->output_w);
         size_t size = (size_t)((w_end-w_start+1) * CHANNEL); // in WORD
         int16_t *src = input_addr + (h * W + w_start) * CHANNEL;
 #ifdef DUMP_PARAMS
