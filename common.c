@@ -43,21 +43,41 @@ int64_t get_int64_param(ParameterInfo *param, size_t i) {
 }
 
 #if !defined(MY_NDEBUG) && defined(DUMP_PARAMS)
+// dump in NCHW format
 void dump_params(ParameterInfo *cur_param) {
-    my_printf("offset=%d len=%d" NEWLINE, cur_param->params_offset, cur_param->params_len);
+    uint16_t N, H, W, CHANNEL;
+    if (cur_param->dims[2] && cur_param->dims[3]) {
+        // tensor
+        N = cur_param->dims[0];
+        H = cur_param->dims[1];
+        W = cur_param->dims[2];
+        CHANNEL = cur_param->dims[3];
+    } else {
+        // matrix
+        N = CHANNEL = 1;
+        H = cur_param->dims[0];
+        W = cur_param->dims[1];
+    }
     uint16_t bitwidth = get_param_bitwidth(cur_param);
-    for (uint32_t k = 0; k < cur_param->params_len / (bitwidth / 8); k++) {
-        if (k && (k % 16 == 0)) {
+    for (uint16_t i = 0; i < N; i++) {
+        for (uint16_t j = 0; j < CHANNEL; j++) {
+            for (uint16_t k = 0; k < H; k++) {
+                for (uint16_t l = 0; l < W; l++) {
+                    // internal format is NHWC
+                    size_t offset = (size_t)(i * H * W * CHANNEL + k * W * CHANNEL + l * CHANNEL + j);
+                    if (bitwidth == 16) {
+                        print_q15(*get_q15_param(cur_param, offset));
+                    } else if (bitwidth == 32) {
+                        print_iq31(*get_iq31_param(cur_param, offset));
+                    } else if (bitwidth == 64) {
+                        my_printf("%ld ", get_int64_param(cur_param, offset));
+                    }
+                }
+                my_printf(NEWLINE);
+            }
             my_printf(NEWLINE);
         }
-        if (bitwidth == 16) {
-            print_q15(*get_q15_param(cur_param, k));
-        } else if (bitwidth == 32) {
-            print_iq31(*get_iq31_param(cur_param, k));
-        } else if (bitwidth == 64) {
-            my_printf("%ld ", get_int64_param(cur_param, k));
-        }
+        my_printf(NEWLINE);
     }
-    my_printf(NEWLINE);
 }
 #endif

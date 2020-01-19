@@ -149,12 +149,14 @@ void dump_params(ParameterInfo *cur_param);
 
 #ifdef DUMP_PARAMS
 
+#define SCALE 16
+
 static inline void print_q15(int16_t val) {
 #ifdef __MSP430__
     my_printf("%d ", val);
 #else
     // 2^15
-    my_printf("% f ", val / 32768.0);
+    my_printf("% f ", SCALE * val / 32768.0);
 #endif
 }
 
@@ -163,7 +165,7 @@ static inline void print_iq31(int32_t val) {
     my_printf("%l ", val); // see print2uart() in Tools/myuart.c
 #else
     // 2^31
-    my_printf("% f ", val / 2147483648.0);
+    my_printf("% f ", SCALE * val / 2147483648.0);
 #endif
 }
 
