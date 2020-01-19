@@ -276,19 +276,8 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
 
 #ifdef DUMP_PARAMS
     if (dump_conv_params) {
-        my_printf("handle_conv raw output (NHWC)" NEWLINE);
+        my_printf("handle_conv output" NEWLINE);
         dump_params(output);
-        my_printf("handle_conv output in NCHW format" NEWLINE);
-        for (uint8_t i = 0; i < input_N; i++) {
-            for (uint8_t j = 0; j < H; j++) {
-                for (uint8_t k = 0; k < W; k++) {
-                    // internal format is NHWC
-                    print_q15(*get_q15_param(output, (size_t)(j * W * input_N + k * input_N + i)));
-                }
-                my_printf(NEWLINE);
-            }
-            my_printf(NEWLINE);
-        }
     }
 #endif
 
@@ -297,13 +286,12 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     return ret;
 }
 
-uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output) {
+uint8_t handle_maxpool(const uint16_t stride, ParameterInfo *input[], ParameterInfo *output) {
 #ifndef MY_NDEBUG
     my_printf("MaxPool!" NEWLINE);
 #endif
 
-    /* XXX: add flags; assume stripe=2, no padding for now */
-    const uint16_t stride = 2; // for less type conversions
+    /* XXX: add flags; assume no padding for now */
     ParameterInfo *data = input[0];
 
 #ifdef DUMP_PARAMS
@@ -318,24 +306,37 @@ uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output) {
     output->dims[1] = H / stride;
     output->dims[2] = W / stride;
     output->dims[3] = channel;
-    msp_max_q15_params params = { .length = 4 };
-    int16_t max_val;
-    uint16_t index;
-#define lea_buffer_maxpool lea_buffer.general.A
-    for (uint16_t i = 0; i < H; i = (uint16_t)(i + stride)) {
-        for (uint16_t j = 0; j < W; j = (uint16_t)(j + stride)) {
-            for (uint16_t k = 0; k < channel; k++) {
-                lea_buffer_maxpool[0] = *get_q15_param(data, (size_t)(i     * W * channel + j     * channel + k));
-                lea_buffer_maxpool[1] = *get_q15_param(data, (size_t)((i+1) * W * channel + j     * channel + k));
-                lea_buffer_maxpool[2] = *get_q15_param(data, (size_t)(i     * W * channel + (j+1) * channel + k));
-                lea_buffer_maxpool[3] = *get_q15_param(data, (size_t)((i+1) * W * channel + (j+1) * channel + k));
-                msp_status status = msp_max_q15(&params, lea_buffer_maxpool, &max_val, &index);
-                msp_checkStatus(status);
-                *get_q15_param(output, (size_t)((i/stride) * W * channel + (j/stride) * channel + k)) = max_val;
+    for (uint16_t c = 0; c < channel; c++) {
+        for (uint16_t h = 0; h < H; h = (uint16_t)(h + stride)) {
+            for (uint16_t w = 0; w < W; w = (uint16_t)(w + stride)) {
+#ifdef DUMP_PARAMS
+                my_printf("h=%d ", h);
+                my_printf("w=%d ", w);
+                my_printf("c=%d" NEWLINE, c);
+#endif
+                int16_t max_val = INT16_MIN;
+                for (uint16_t sH = 0; sH < stride; sH++) {
+                    for (uint16_t sW = 0; sW < stride; sW++) {
+                        int16_t val = *get_q15_param(data, (size_t)((h+sH) * W * channel + (w+sW) * channel + c));
+#ifdef DUMP_PARAMS
+                        print_q15(val);
+#endif
+                        // XXX: use LEA?
+                        if (val > max_val) {
+                            max_val = val;
+                        }
+                    }
+                }
+                size_t offset = (size_t)((h/stride) * (W/stride) * channel + (w/stride) * channel + c);
+#ifdef DUMP_PARAMS
+                my_printf("max=");
+                print_q15(max_val);
+                my_printf(NEWLINE "offset=%d" NEWLINE, (uint16_t)offset);
+#endif
+                *get_q15_param(output, offset) = max_val;
             }
         }
     }
-#undef lea_buffer_maxpool
 
 #ifdef DUMP_PARAMS
     my_printf("handle_maxpool output" NEWLINE);
@@ -343,6 +344,15 @@ uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output) {
 #endif
 
     return 0;
+}
+
+// XXX: there should be a better way to encode the stride
+uint8_t handle_maxpool_2(ParameterInfo *input[], ParameterInfo *output) {
+    return handle_maxpool(2, input, output);
+}
+
+uint8_t handle_maxpool_3(ParameterInfo *input[], ParameterInfo *output) {
+    return handle_maxpool(3, input, output);
 }
 
 uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output) {

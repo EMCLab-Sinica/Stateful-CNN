@@ -15,6 +15,10 @@ Indexing policy:
     len(g.input)~ : other (hidden) nodes
 """
 
+# XXX: Heuristics for scaling: only scale biases and the input
+# Keep this in sync with common.h
+SCALE = 16
+
 
 def _Q15(num):
     """Transform a floating point number to TI's fixed point _q15 format"""
@@ -58,9 +62,14 @@ for idx, n in enumerate(g.node):
 
 pprint.pprint(names)
 
-model = [
-    ([names[i] for i in n.input], n.op_type)
-    for n in g.node]
+model = []
+for n in g.node:
+    if n.op_type == 'MaxPool':
+        stride = next(attr.ints[0] for attr in n.attribute if attr.name == 'strides')
+        op_type = f'MaxPool_{stride}'
+    else:
+        op_type = n.op_type
+    model.append(([names[i] for i in n.input], op_type))
 parameters = [None for _ in range(n_input)]
 
 for params in g.initializer:
@@ -128,7 +137,7 @@ for params in parameters:
         model_bin += to_bytes(dimX * dimY * 2, size=32)  # A _q15 is 16-bit
         for i in range(im.shape[0]):
             for j in range(im.shape[1]):
-                parameters_bin.write(to_bytes(_Q15(im[i, j])))
+                parameters_bin.write(to_bytes(_Q15(im[i, j] / SCALE)))
                 parameters_bin_offset += 2
         model_bin += to_bytes(bitwidth_and_flags_for_parameters(16))  # bitwidth_and_flags
         # extend_dims
@@ -156,7 +165,10 @@ for params in parameters:
             else:
                 float_data_reordered = float_data
             for param in float_data_reordered:
-                parameters_bin.write(to_bytes(_Q15(param)))
+                if len(params.dims) != 4:  # most likely biases
+                    parameters_bin.write(to_bytes(_Q15(param / SCALE)))
+                else:
+                    parameters_bin.write(to_bytes(_Q15(param)))
                 parameters_bin_offset += 2
             model_bin += to_bytes(bitwidth_and_flags_for_parameters(16))  # bitwidth_and_flags
         elif params.data_type == onnx.TensorProto.INT64:
