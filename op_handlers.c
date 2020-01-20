@@ -179,7 +179,9 @@ static void convTask(unsigned short uxIndex) {
     #include "conv_post.h"
 }
 
+#ifndef __MSP430__
 extern uint32_t msp_mac_q15_overflow_counter;
+#endif
 
 uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1], *bias = input[2];
@@ -281,7 +283,9 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     }
 #endif
 
+#ifndef __MSP430__
     my_printf("msp_mac_q15_overflow_counter=%d" NEWLINE, msp_mac_q15_overflow_counter);
+#endif
 
     return ret;
 }
@@ -507,6 +511,36 @@ uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output) {
     for (uint8_t i = 0; i < 4 && i < shape->dims[0]; i++) {
         output->dims[i] = (uint16_t)get_int64_param(shape, i);
     }
+#define lea_buffer_reshape lea_buffer.general.A
+    /*
+     * XXX: Here is an heuristic - no conv nodes after reshape, so remapping
+     * NHWC back to NCHW.
+     * */
+    if (get_param_slot_id(data) != FLAG_SLOTS) {
+        // data are intermediate values
+        int16_t *output_addr = get_q15_param(output, 0);
+        my_memcpy(lea_buffer_reshape, output_addr, output->params_len);
+        uint16_t NUM = data->dims[0], H = data->dims[1],
+                 W = data->dims[2], CHANNEL = data->dims[3];
+        for (uint16_t n = 0; n < NUM; n++) {
+            for (uint16_t c = 0; c < CHANNEL; c++) {
+                for (uint16_t h = 0; h < H; h++) {
+                    for (uint16_t w = 0; w < W; w++) {
+                        uint16_t old_idx = n * CHANNEL * H * W + c * H * W       + h * W       + w,
+                                 new_idx = n * H * W * CHANNEL + h * W * CHANNEL + w * CHANNEL + c;
+                        output_addr[new_idx] = lea_buffer_reshape[old_idx];
+                    }
+                }
+            }
+        }
+    }
+#undef lea_buffer_reshape
+
+#ifdef DUMP_PARAMS
+    my_printf("handle_reshape output" NEWLINE);
+    dump_params(output);
+#endif
+
     return 0;
 }
 
