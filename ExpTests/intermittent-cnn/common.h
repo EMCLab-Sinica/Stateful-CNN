@@ -1,6 +1,6 @@
 #pragma once
 
-//#define MY_NDEBUG
+#define MY_NDEBUG
 #ifndef MY_NDEBUG
 #define DUMP_PARAMS
 #endif
@@ -147,8 +147,6 @@ void dump_params(ParameterInfo *cur_param);
 #define dump_params(cur_param)
 #endif
 
-#ifdef DUMP_PARAMS
-
 #define SCALE 16
 
 static inline void print_q15(int16_t val) {
@@ -178,9 +176,6 @@ static inline void dump_matrix(int16_t *mat, size_t len) {
     }
     my_printf(NEWLINE);
 }
-#else
-#define dump_matrix(mat, len)
-#endif
 
 /**********************************
  *       Operation handlers       *

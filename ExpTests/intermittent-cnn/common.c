@@ -45,21 +45,21 @@ int64_t get_int64_param(ParameterInfo *param, size_t i) {
 #if !defined(MY_NDEBUG) && defined(DUMP_PARAMS)
 // dump in NCHW format
 void dump_params(ParameterInfo *cur_param) {
-    uint16_t N, H, W, CHANNEL;
+    uint16_t NUM, H, W, CHANNEL;
     if (cur_param->dims[2] && cur_param->dims[3]) {
         // tensor
-        N = cur_param->dims[0];
+        NUM = cur_param->dims[0];
         H = cur_param->dims[1];
         W = cur_param->dims[2];
         CHANNEL = cur_param->dims[3];
     } else {
         // matrix
-        N = CHANNEL = 1;
+        NUM = CHANNEL = 1;
         H = cur_param->dims[0];
         W = cur_param->dims[1];
     }
     uint16_t bitwidth = get_param_bitwidth(cur_param);
-    for (uint16_t i = 0; i < N; i++) {
+    for (uint16_t i = 0; i < NUM; i++) {
         for (uint16_t j = 0; j < CHANNEL; j++) {
             for (uint16_t k = 0; k < H; k++) {
                 for (uint16_t l = 0; l < W; l++) {
