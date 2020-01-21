@@ -206,7 +206,7 @@ int run_model(void) {
 
     /* XXX: is the last node always the output node? */
     ParameterInfo *output_node = &(parameter_info[model->nodes_len + model->n_input - 1]);
-#ifndef __MSP430__
+#if !defined(__MSP430__) && !defined(DUMP_INTEGERS)
     for (uint16_t i = 0; i < output_node->dims[1]; i++) {
         print_q15(*get_q15_param(output_node, i));
     }

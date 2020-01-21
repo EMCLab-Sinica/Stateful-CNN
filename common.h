@@ -1,11 +1,13 @@
 #pragma once
 
-//#define MY_NDEBUG
+#define MY_NDEBUG
 #ifndef MY_NDEBUG
 #define DUMP_PARAMS
-//#define DUMP_CONV_PARAMS
-#define DUMP_INTEGERS
+#define DUMP_CONV_PARAMS
+#define DUMP_RELU_PARAMS
+#define DUMP_MAXPOOL_PARAMS
 #endif
+#define DUMP_INTEGERS
 
 #include <stddef.h> /* size_t, see https://stackoverflow.com/a/26413264 */
 #include <stdint.h>
