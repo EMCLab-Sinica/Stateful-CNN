@@ -101,7 +101,8 @@ void print2uart(char* format,...)
 {
     char *traverse;
     int i;
-    unsigned long l;
+    long l;
+    unsigned long ul;
     char *s;
 
     //Module 1: Initializing Myprintf's arguments
@@ -128,14 +129,18 @@ void print2uart(char* format,...)
                 i = va_arg(arg,int);        //Fetch char argument
                 EUSCI_A_UART_transmitData(EUSCI_A0_BASE, (uint8_t)i);
                 break;
-            case 'l' :
-                l = va_arg(arg,unsigned long);        //Fetch Decimal/Integer argument
+            case 'L' :
+                l = va_arg(arg,long);        //Fetch Decimal/Integer argument
                 if(l<0)
                 {
                     l = -l;
                     EUSCI_A_UART_transmitData(EUSCI_A0_BASE, (uint8_t)'-');
                 }
                 print2uart(convertl(l,10));
+                break;
+            case 'l' :
+                ul = va_arg(arg,unsigned long);        //Fetch Decimal/Integer argument
+                print2uart(convertl(ul,10));
                 break;
             case 'd' :
                 i = va_arg(arg,int);        //Fetch Decimal/Integer argument
