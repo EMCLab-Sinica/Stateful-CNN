@@ -6,21 +6,27 @@ UNAME_S := $(shell uname -s)
 
 DSPLIB_SRC_PATH = ../../DSPLib_1_30_00_02/source
 
-OBJS = \
-    $(DSPLIB_SRC_PATH)/matrix/msp_matrix_mpy_q15.o \
-    $(DSPLIB_SRC_PATH)/vector/msp_add_q15.o \
-    $(DSPLIB_SRC_PATH)/vector/msp_mac_q15.o \
-    $(DSPLIB_SRC_PATH)/vector/msp_max_q15.o \
-    $(DSPLIB_SRC_PATH)/utility/msp_fill_q15.o \
-    fake-msp430sdk/msp430.o \
-    ops.o \
-    op_handlers.o \
-    common.o \
-    data.o
+SRCS = \
+    $(DSPLIB_SRC_PATH)/matrix/msp_matrix_mpy_q15.c \
+    $(DSPLIB_SRC_PATH)/vector/msp_add_q15.c \
+    $(DSPLIB_SRC_PATH)/vector/msp_mac_q15.c \
+    $(DSPLIB_SRC_PATH)/vector/msp_max_q15.c \
+    $(DSPLIB_SRC_PATH)/utility/msp_fill_q15.c \
+    fake-msp430sdk/msp430.c \
+    intermittent-cnn.c \
+    ops.c \
+    op_handlers.c \
+    common.c \
+    data.c
 
 ifeq ($(UNAME_S),Linux)
-    OBJS += plat-linux.o
+    SRCS += plat-linux.c
 endif
+
+# https://stackoverflow.com/a/15360191/3786245
+vpath %.c $(sort $(dir $(SRCS)))
+
+OBJS = $(addprefix out/,$(patsubst %.c, %.o, $(notdir $(SRCS))))
 # http://wen00072.github.io/blog/2014/03/06/makefile-header-file-dependency-issues/
 DEPS = $(patsubst %.o, %.d, $(OBJS))
 
@@ -28,15 +34,19 @@ MODEL := $(DATA_PATH)/models/mnist/model_optimized.onnx
 IMAGE := $(DATA_PATH)/example3.png
 DATA_FILES = data.c data.h ops.c ops.py ops.h inputs.bin model.bin parameters.bin
 
-all: intermittent-cnn
+all: out/intermittent-cnn
 
-data_files: $(DATA_FILES)
+$(OBJS): $(DATA_FILES)
+$(OBJS): out/%.o: %.c
+	mkdir -p out && $(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
 
 ops.py ops.c ops.h: gen_ops.py
 	python $<
 
-intermittent-cnn: $(OBJS)
-intermittent-cnn: CPPFLAGS += -isystem ../../DSPLib_1_30_00_02/include -I fake-msp430sdk
+out/intermittent-cnn: $(OBJS)
+	$(CC) $^ -o $@
+
+out/intermittent-cnn: CPPFLAGS += -isystem ../../DSPLib_1_30_00_02/include -I fake-msp430sdk
 
 data.c data.h: bin2c.py model.bin
 	python bin2c.py
@@ -45,8 +55,8 @@ inputs.bin model.bin parameters.bin: transform.py ops.py
 	python transform.py $(MODEL) $(IMAGE)
 
 clean:
-	rm -rf intermittent-cnn $(OBJS) $(DEPS) __pycache__ $(DATA_FILES)
+	rm -rvf intermittent-cnn out __pycache__ $(DATA_FILES)
 
 -include $(DEPS)
 
-.PHONY: all clean data_files
+.PHONY: all clean
