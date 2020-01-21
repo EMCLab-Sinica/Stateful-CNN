@@ -1,4 +1,4 @@
-/intermittent-cnn
+/out
 *.bin
 ops.*
 data.*
