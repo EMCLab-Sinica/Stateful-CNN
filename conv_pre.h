@@ -59,25 +59,27 @@
                 (conv_params->output_w)
         )));
 
-    int16_t h_start = (int16_t)int_max(-field_size,    -conv_params->output_h),
-            h_end   = (int16_t)int_min( field_size, H-1-conv_params->output_h);
-#ifdef DUMP_PARAMS
-    if (dump_conv_params) {
-        my_printf("h_start=%d ", h_start);
-        my_printf("h_end=%d" NEWLINE, h_end);
-    }
+    /* int32_t instead of int16_t as TI's compiler cannot handle negative
+     * offsets correctly. The expression `input_addr + (int16_t)(-2)` is
+     * compiled as:
+     * 1. -2 is represented as 0x00FFFE (general registers are 24-bit long).
+     *    Assume this value is stored in R11.
+     * 2. RLAM.A #1,R11  # multiply by 2 to transform the offset for int16_t
+     *    to the difference of addresses.
+     * In step 2, R11 becomes 0x01FFFC, while it should be -4, or 0x00FFFC,
+     * and thus the resultant address is offset by 0x10000.
+     */
+    int32_t h_start = int16_max(-field_size,    -conv_params->output_h),
+            h_end   = int16_min( field_size, H-1-conv_params->output_h);
+#ifdef DUMP_CONV_PARAMS
+    my_printf("h_start=%d ", h_start);
+    my_printf("h_end=%d" NEWLINE, h_end);
 #endif
-    for (int16_t h = h_start; h <= h_end; h++) {
-        int16_t w_start = (int16_t)int_max(-field_size,    -conv_params->output_w),
-                w_end   = (int16_t)int_min( field_size, W-1-conv_params->output_w);
+    for (int32_t h = h_start; h <= h_end; h++) {
+        int32_t w_start = int16_max(-field_size,    -conv_params->output_w),
+                w_end   = int16_min( field_size, W-1-conv_params->output_w);
         size_t size = (size_t)((w_end-w_start+1) * CHANNEL); // in WORD
         int16_t *src = input_addr + (h * W + w_start) * CHANNEL;
-#ifdef DUMP_PARAMS
-        if (dump_conv_params && conv_params->output_h == 0 && conv_params->output_w == 0) {
-            dump_matrix(src, size);
-        }
-#endif
-        /* TODO: handle padding */
         my_memcpy(lea_buffer.conv.input[uxIndex] + ((h + field_size) * kW + (w_start + field_size)) * CHANNEL,  // dest
                   src, // src
                   size * sizeof(uint16_t));  // size

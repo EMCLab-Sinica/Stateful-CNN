@@ -10,7 +10,7 @@
 #include <FreeRTOS.h>
 #include <croutine.h>
 #include "Tools/my_timer.h"
-#define USE_DMA 1
+#define USE_DMA 0
 #else
 #define USE_DMA 0
 #endif
@@ -22,7 +22,6 @@
 #define configCONV_STACK_SIZE 100
 #define NUM_TASKS 2
 #define USE_CONCURRENT_CONV_BY_DEFAULT 0
-#define DUMP_CONV_PARAMS_BY_DEFAULT 1
 
 #ifdef __MSP430__
 #pragma DATA_SECTION(lea_buffer, ".leaRAM")
@@ -90,7 +89,6 @@ static msp_mac_q15_params mac_params[NUM_TASKS];
 static uint8_t truncated[NUM_TASKS];
 
 uint8_t use_concurrent_conv = USE_CONCURRENT_CONV_BY_DEFAULT;
-uint8_t dump_conv_params = DUMP_CONV_PARAMS_BY_DEFAULT;
 
 #if __MSP430__
 static uint32_t idleCounter = 0;
@@ -189,7 +187,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     my_printf("Conv!" NEWLINE);
 #endif
 
-    // use_concurrent_conv and dump_conv_params can be configured for different
+    // use_concurrent_conv can be configured for different
     // convolution neurons here.
 
 #ifdef __MSP430__
@@ -276,11 +274,9 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     my_printf("idle for %l cycles" NEWLINE, idleCounter);
 #endif
 
-#ifdef DUMP_PARAMS
-    if (dump_conv_params) {
-        my_printf("handle_conv output" NEWLINE);
-        dump_params(output);
-    }
+#ifdef DUMP__CONV_PARAMS
+    my_printf("handle_conv output" NEWLINE);
+    dump_params(output);
 #endif
 
 #ifndef __MSP430__
@@ -516,7 +512,8 @@ uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output) {
      * XXX: Here is an heuristic - no conv nodes after reshape, so remapping
      * NHWC back to NCHW.
      * */
-    if (get_param_slot_id(data) != FLAG_SLOTS) {
+    uint8_t do_nhwc2nchw = get_param_slot_id(data) != FLAG_SLOTS;
+    if (do_nhwc2nchw) {
         // data are intermediate values
         int16_t *output_addr = get_q15_param(output, 0);
         my_memcpy(lea_buffer_reshape, output_addr, output->params_len);
@@ -537,8 +534,10 @@ uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output) {
 #undef lea_buffer_reshape
 
 #ifdef DUMP_PARAMS
-    my_printf("handle_reshape output" NEWLINE);
-    dump_params(output);
+    if (do_nhwc2nchw) {
+        my_printf("handle_reshape output" NEWLINE);
+        dump_params(output);
+    }
 #endif
 
     return 0;

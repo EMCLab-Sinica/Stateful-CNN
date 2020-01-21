@@ -1,8 +1,10 @@
 #pragma once
 
-#define MY_NDEBUG
+//#define MY_NDEBUG
 #ifndef MY_NDEBUG
 #define DUMP_PARAMS
+//#define DUMP_CONV_PARAMS
+#define DUMP_INTEGERS
 #endif
 
 #include <stddef.h> /* size_t, see https://stackoverflow.com/a/26413264 */
@@ -11,6 +13,7 @@
 
 #ifdef __linux__
 #include <stdio.h>
+#include <inttypes.h>
 #elif defined(__MSP430__)
 #include <Tools/myuart.h>
 #endif
@@ -80,11 +83,11 @@ extern uint8_t intermediate_values[NUM_SLOTS][INTERMEDIATE_VALUES_SIZE];
 /* Better to not use macros
  * https://stackoverflow.com/a/3437484/3786245
  */
-static inline int int_min(int a, int b) {
+static inline int16_t int16_min(int16_t a, int16_t b) {
     return a < b ? a : b;
 }
 
-static inline int int_max(int a, int b) {
+static inline int16_t int16_max(int16_t a, int16_t b) {
     return a > b ? a : b;
 }
 
@@ -150,7 +153,7 @@ void dump_params(ParameterInfo *cur_param);
 #define SCALE 16
 
 static inline void print_q15(int16_t val) {
-#ifdef __MSP430__
+#if defined(__MSP430__) || defined(DUMP_INTEGERS)
     my_printf("%d ", val);
 #else
     // 2^15
@@ -159,8 +162,10 @@ static inline void print_q15(int16_t val) {
 }
 
 static inline void print_iq31(int32_t val) {
-#ifdef __MSP430__
-    my_printf("%l ", val); // see print2uart() in Tools/myuart.c
+#if defined(__MSP430__)
+    my_printf("%L ", val); // see print2uart() in Tools/myuart.c
+#elif defined(DUMP_INTEGERS)
+    my_printf("%" PRId32 " ", val);
 #else
     // 2^31
     my_printf("% f ", SCALE * val / 2147483648.0);
