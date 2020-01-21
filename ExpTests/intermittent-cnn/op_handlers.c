@@ -294,7 +294,7 @@ uint8_t handle_maxpool(const uint16_t stride, ParameterInfo *input[], ParameterI
     /* XXX: add flags; assume no padding for now */
     ParameterInfo *data = input[0];
 
-#ifdef DUMP_PARAMS
+#ifdef DUMP_MAXPOOL_PARAMS
     my_printf("handle_maxpool input" NEWLINE);
     dump_params(data);
 #endif
@@ -309,7 +309,7 @@ uint8_t handle_maxpool(const uint16_t stride, ParameterInfo *input[], ParameterI
     for (uint16_t c = 0; c < channel; c++) {
         for (uint16_t h = 0; h < H; h = (uint16_t)(h + stride)) {
             for (uint16_t w = 0; w < W; w = (uint16_t)(w + stride)) {
-#ifdef DUMP_PARAMS
+#ifdef DUMP_MAXPOOL_PARAMS
                 my_printf("h=%d ", h);
                 my_printf("w=%d ", w);
                 my_printf("c=%d" NEWLINE, c);
@@ -318,7 +318,7 @@ uint8_t handle_maxpool(const uint16_t stride, ParameterInfo *input[], ParameterI
                 for (uint16_t sH = 0; sH < stride; sH++) {
                     for (uint16_t sW = 0; sW < stride; sW++) {
                         int16_t val = *get_q15_param(data, (size_t)((h+sH) * W * channel + (w+sW) * channel + c));
-#ifdef DUMP_PARAMS
+#ifdef DUMP_MAXPOOL_PARAMS
                         print_q15(val);
 #endif
                         // XXX: use LEA?
@@ -328,7 +328,7 @@ uint8_t handle_maxpool(const uint16_t stride, ParameterInfo *input[], ParameterI
                     }
                 }
                 size_t offset = (size_t)((h/stride) * (W/stride) * channel + (w/stride) * channel + c);
-#ifdef DUMP_PARAMS
+#ifdef DUMP_MAXPOOL_PARAMS
                 my_printf("max=");
                 print_q15(max_val);
                 my_printf(NEWLINE "offset=%d" NEWLINE, (uint16_t)offset);
@@ -338,7 +338,7 @@ uint8_t handle_maxpool(const uint16_t stride, ParameterInfo *input[], ParameterI
         }
     }
 
-#ifdef DUMP_PARAMS
+#ifdef DUMP_MAXPOOL_PARAMS
     my_printf("handle_maxpool output" NEWLINE);
     dump_params(output);
 #endif
@@ -486,8 +486,8 @@ uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output) {
             my_printf("Error: unsupported bitwidth for ReLu." NEWLINE);
         }
     }
-#ifdef DUMP_PARAMS
-    //dump_params(output);
+#ifdef DUMP_RELU_PARAMS
+    dump_params(output);
 #endif
     return 0;
 }
