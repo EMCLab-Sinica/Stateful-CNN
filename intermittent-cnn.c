@@ -19,6 +19,11 @@ static void dump_model(void) {
         my_printf("(");
         for (j = 0; j < cur_node->inputs_len; j++) {
             my_printf("%d", node_input(cur_node, j));
+            if (node_input_marked(cur_node, j)) {
+                my_printf("M");
+            } else {
+                my_printf("U");
+            }
             if (j != cur_node->inputs_len - 1) {
                 my_printf(", ");
             }
@@ -111,7 +116,7 @@ static uint8_t handle_cur_group(void) {
     return 0;
 }
 
-int run_model(void) {
+int run_model(uint8_t *ansptr) {
     model = (Model*)model_data;
     inputs = (uint16_t*)inputs_data;
     parameters = (uint16_t*)parameters_data;
@@ -163,7 +168,7 @@ int run_model(void) {
 
         if (!grp_index) {
             my_printf("Error: unable to establish a group." NEWLINE);
-            return 1;
+            ERROR_OCCURRED();
         }
 
         if (grp_index < 16) {
@@ -206,16 +211,40 @@ int run_model(void) {
 
     /* XXX: is the last node always the output node? */
     ParameterInfo *output_node = &(parameter_info[model->nodes_len + model->n_input - 1]);
-#if !defined(__MSP430__) && !defined(DUMP_INTEGERS)
-    for (uint16_t i = 0; i < output_node->dims[1]; i++) {
-        print_q15(*get_q15_param(output_node, i));
-    }
-    my_printf(NEWLINE);
+#ifdef MY_NDEBUG
+    if (!ansptr) {
 #endif
-    for (uint16_t i = 0; i < output_node->dims[1]; i++) {
-        my_printf("%d ", *get_q15_param(output_node, i));
+#if !defined(__MSP430__) && !defined(DUMP_INTEGERS)
+        for (uint16_t i = 0; i < output_node->dims[1]; i++) {
+            print_q15(*get_q15_param(output_node, i));
+        }
+        my_printf(NEWLINE);
+#endif
+        for (uint16_t i = 0; i < output_node->dims[1]; i++) {
+            my_printf("%d ", *get_q15_param(output_node, i));
+        }
+        my_printf(NEWLINE);
+#ifdef MY_NDEBUG
+    } else
+#endif
+    {
+        int16_t max = INT16_MIN;
+        for (uint16_t i = 0; i < output_node->dims[1]; i++) {
+            int16_t val = *get_q15_param(output_node, i);
+            if (val > max) {
+                *ansptr = (uint8_t)i;
+                max = val;
+            }
+        }
     }
-    my_printf(NEWLINE);
 
     return 0;
+}
+
+void reset_model() {
+    for (uint16_t i = 0; i < model->nodes_len; i++) {
+        Node *cur_node = &(nodes[i]);
+        node_input_unmark_all(cur_node);
+        cur_node->scheduled = 0;
+    }
 }

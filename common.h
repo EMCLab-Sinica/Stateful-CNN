@@ -141,6 +141,7 @@ int32_t* get_iq31_param(ParameterInfo *param, size_t i);
 int64_t get_int64_param(ParameterInfo *param, size_t i);
 int16_t node_input(Node *node, size_t i);
 void node_input_mark(Node *node, size_t i);
+void node_input_unmark_all(Node *node);
 uint8_t node_input_marked(Node *node, size_t i);
 static inline int16_t iq31_to_q15(int32_t val) {
     return (int16_t)(val >> 16);

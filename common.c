@@ -25,6 +25,13 @@ void node_input_mark(Node *node, size_t i) {
     *ptr |= 1;
 }
 
+void node_input_unmark_all(Node *node) {
+    for (uint16_t i = 0; i < node->inputs_len; i++) {
+        int16_t *ptr = node_input_ptr(node, i);
+        *ptr &= ~1;
+    }
+}
+
 uint8_t node_input_marked(Node *node, size_t i) {
     int16_t *ptr = node_input_ptr(node, i);
     return *ptr & 0x1;

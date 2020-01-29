@@ -1,3 +1,6 @@
 #pragma once
 
-int run_model(void);
+#include <stdint.h>
+
+int run_model(uint8_t *ansptr);
+void reset_model(void);
