@@ -178,6 +178,7 @@ static void convTask(unsigned short uxIndex) {
 }
 
 #ifndef __MSP430__
+// defined in DSPLib_1_30_00_02/source/vector/msp_mac_q15.c
 extern uint32_t msp_mac_q15_overflow_counter;
 #endif
 
@@ -185,6 +186,11 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1], *bias = input[2];
 #ifndef MY_NDEBUG
     my_printf("Conv!" NEWLINE);
+#endif
+
+
+#ifndef __MSP430__
+    msp_mac_q15_overflow_counter = 0;
 #endif
 
     // use_concurrent_conv can be configured for different

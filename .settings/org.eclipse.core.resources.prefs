@@ -52,6 +52,8 @@ encoding//Large_Data/ExpTests/intermittent-cnn/DSPLib_1_30_00_02/source/vector/s
 encoding//Large_Data/ExpTests/intermittent-cnn/DSPLib_1_30_00_02/source/vector/subdir_vars.mk=UTF-8
 encoding//Large_Data/ExpTests/intermittent-cnn/fake-msp430sdk/subdir_rules.mk=UTF-8
 encoding//Large_Data/ExpTests/intermittent-cnn/fake-msp430sdk/subdir_vars.mk=UTF-8
+encoding//Large_Data/ExpTests/intermittent-cnn/out/subdir_rules.mk=UTF-8
+encoding//Large_Data/ExpTests/intermittent-cnn/out/subdir_vars.mk=UTF-8
 encoding//Large_Data/ExpTests/intermittent-cnn/subdir_rules.mk=UTF-8
 encoding//Large_Data/ExpTests/intermittent-cnn/subdir_vars.mk=UTF-8
 encoding//Large_Data/ExpTests/subdir_rules.mk=UTF-8
