@@ -29,17 +29,23 @@
     }
 
     /* copy filter data */
-    /* TODO: cache it */
-    filter_addr = arr_filter_addr[uxIndex] = get_q15_param(
-        conv_params->conv_filter,
-        (size_t)(conv_params->conv_idx * CHANNEL * kH * kW));
-    my_memcpy(lea_buffer.conv.filter[uxIndex],
-              filter_addr,
-              buffer_size);
-    if (truncated) {
-        // dummy value
-        lea_buffer.conv.filter[uxIndex][buffer_size] = 0;
+#ifdef CACHED_FILTERS
+    if (cached_filter_index[uxIndex] != conv_params->conv_idx) {
+#endif
+        filter_addr = arr_filter_addr[uxIndex] = get_q15_param(
+            conv_params->conv_filter,
+            (size_t)(conv_params->conv_idx * CHANNEL * kH * kW));
+        my_memcpy(lea_buffer.conv.filter[uxIndex],
+                  filter_addr,
+                  buffer_size);
+        if (truncated) {
+            // dummy value
+            lea_buffer.conv.filter[uxIndex][buffer_size] = 0;
+        }
+        cached_filter_index[uxIndex] = conv_params->conv_idx;
+#ifdef CACHED_FILTERS
     }
+#endif
 
     int8_t field_size = (int8_t)((kH - 1) / 2);
 

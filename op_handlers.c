@@ -22,6 +22,7 @@
 #define configCONV_STACK_SIZE 100
 #define NUM_TASKS 2
 #define USE_CONCURRENT_CONV_BY_DEFAULT 0
+#define CACHED_FILTERS
 
 #ifdef __MSP430__
 #pragma DATA_SECTION(lea_buffer, ".leaRAM")
@@ -44,6 +45,8 @@ union {
         int16_t temp[64];
     } general;
 } lea_buffer;
+
+int8_t cached_filter_index[NUM_TASKS];
 
 uint16_t counters[10];
 uint8_t counter_idx = 0;
@@ -244,6 +247,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
         conv_params->conv_filter = conv_filter;
         conv_params->bias = bias;
         conv_params->output = output;
+        cached_filter_index[idx] = -1;
     }
 
     for (uint16_t conv_idx = 0; conv_idx < input_N; conv_idx++) {
