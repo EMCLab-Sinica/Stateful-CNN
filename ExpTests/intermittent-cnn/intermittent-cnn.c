@@ -211,9 +211,7 @@ int run_model(uint8_t *ansptr) {
 
     /* XXX: is the last node always the output node? */
     ParameterInfo *output_node = &(parameter_info[model->nodes_len + model->n_input - 1]);
-#ifdef MY_NDEBUG
     if (!ansptr) {
-#endif
 #if !defined(__MSP430__) && !defined(DUMP_INTEGERS)
         for (uint16_t i = 0; i < output_node->dims[1]; i++) {
             print_q15(*get_q15_param(output_node, i));
@@ -224,10 +222,7 @@ int run_model(uint8_t *ansptr) {
             my_printf("%d ", *get_q15_param(output_node, i));
         }
         my_printf(NEWLINE);
-#ifdef MY_NDEBUG
-    } else
-#endif
-    {
+    } else {
         int16_t max = INT16_MIN;
         for (uint16_t i = 0; i < output_node->dims[1]; i++) {
             int16_t val = *get_q15_param(output_node, i);
