@@ -1,6 +1,6 @@
 CPPFLAGS = -I .
 DEBUG = 0
-CFLAGS = -std=c99 -Wall -Wextra -Wstrict-prototypes -Wconversion -Wshadow -MMD -g -O0
+CFLAGS = -std=c99 -Wall -Wextra -Wstrict-prototypes -Wshadow -MMD -g -O0
 
 UNAME_S := $(shell uname -s)
 
