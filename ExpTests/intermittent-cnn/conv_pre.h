@@ -20,7 +20,7 @@
     uint8_t truncated = (mac_params[uxIndex].length != CHANNEL * kH * kW);
     if (truncated) {
         // 1 for the truncated value, another dummy
-        mac_params[uxIndex].length = (uint16_t)(mac_params[uxIndex].length + 2);
+        mac_params[uxIndex].length += 2;
     }
     buffer_size = (uint16_t)(sizeof(uint16_t) * mac_params[uxIndex].length);
     if (buffer_size > sizeof(lea_buffer.conv.filter[uxIndex])) {
@@ -75,13 +75,16 @@
     my_printf("h_start=%d ", h_start);
     my_printf("h_end=%d" NEWLINE, h_end);
 #endif
+    int32_t w_start = int16_max(-field_size,    -conv_params->output_w),
+            w_end   = int16_min( field_size, W-1-conv_params->output_w);
+    int16_t *src = input_addr + (h_start * W + w_start) * CHANNEL,
+            *dest = lea_buffer.conv.input[uxIndex] + ((h_start + field_size) * kW + (w_start + field_size)) * CHANNEL;
+    int8_t src_offset = W * CHANNEL,
+           dest_offset = kW * CHANNEL;
+    size_t size = (size_t)((w_end-w_start+1) * CHANNEL * sizeof(uint16_t)); // in bytes
     for (int32_t h = h_start; h <= h_end; h++) {
-        int32_t w_start = int16_max(-field_size,    -conv_params->output_w),
-                w_end   = int16_min( field_size, W-1-conv_params->output_w);
-        size_t size = (size_t)((w_end-w_start+1) * CHANNEL); // in WORD
-        int16_t *src = input_addr + (h * W + w_start) * CHANNEL;
-        my_memcpy(lea_buffer.conv.input[uxIndex] + ((h + field_size) * kW + (w_start + field_size)) * CHANNEL,  // dest
-                  src, // src
-                  size * sizeof(uint16_t));  // size
+        my_memcpy(dest, src, size);
+        src += src_offset;
+        dest += dest_offset;
     }
 }
