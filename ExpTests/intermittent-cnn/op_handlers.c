@@ -86,7 +86,6 @@ static void my_memcpy(void* dest, const void* src, size_t n) {
 static uint16_t arrH[NUM_TASKS], arrW[NUM_TASKS], arrkH[NUM_TASKS], arrkW[NUM_TASKS], arrCHANNEL[NUM_TASKS], arrOUTPUT_CHANNEL[NUM_TASKS];
 static int16_t *arr_filter_addr[NUM_TASKS], *arr_input_addr[NUM_TASKS];
 static msp_mac_q15_params mac_params[NUM_TASKS];
-static uint8_t truncated[NUM_TASKS];
 
 uint8_t use_concurrent_conv = USE_CONCURRENT_CONV_BY_DEFAULT;
 

@@ -17,8 +17,8 @@
 
     /* MSP430 LEA requires length to be even */
     mac_params[uxIndex].length = (uint16_t)(CHANNEL * kH * kW / 2 * 2);
-    truncated[uxIndex] = (mac_params[uxIndex].length != CHANNEL * kH * kW);
-    if (truncated[uxIndex]) {
+    uint8_t truncated = (mac_params[uxIndex].length != CHANNEL * kH * kW);
+    if (truncated) {
         // 1 for the truncated value, another dummy
         mac_params[uxIndex].length = (uint16_t)(mac_params[uxIndex].length + 2);
     }
@@ -36,7 +36,7 @@
     my_memcpy(lea_buffer.conv.filter[uxIndex],
               filter_addr,
               buffer_size);
-    if (truncated[uxIndex]) {
+    if (truncated) {
         // dummy value
         lea_buffer.conv.filter[uxIndex][buffer_size] = 0;
     }
