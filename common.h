@@ -16,6 +16,7 @@
 #ifdef __linux__
 #include <stdio.h>
 #include <inttypes.h>
+#include <signal.h>
 #elif defined(__MSP430__)
 #include <Tools/myuart.h>
 #endif
@@ -93,7 +94,11 @@ static inline int16_t int16_max(int16_t a, int16_t b) {
     return a > b ? a : b;
 }
 
+#ifdef __MSP430__
 #define ERROR_OCCURRED() for (;;) { __no_operation(); }
+#else
+#define ERROR_OCCURRED() do { raise(SIGINT); } while (0);
+#endif
 
 /**********************************
  *       Helpers for nodes        *
