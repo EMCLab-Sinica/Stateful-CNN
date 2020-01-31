@@ -23,6 +23,8 @@
 #define NUM_TASKS 2
 #define USE_CONCURRENT_CONV_BY_DEFAULT 0
 #define CACHED_FILTERS
+#define CACHED_INPUTS
+#define INPUTS_LEN 512
 
 #ifdef __MSP430__
 #pragma DATA_SECTION(lea_buffer, ".leaRAM")
@@ -30,7 +32,7 @@
 union {
     // for conv
     struct {
-        int16_t input[NUM_TASKS][256];
+        int16_t input[NUM_TASKS][INPUTS_LEN];
         int16_t filter[NUM_TASKS][256];
         int32_t iq31_mac_result[NUM_TASKS];
 #ifdef __MSP430__
@@ -47,6 +49,10 @@ union {
 } lea_buffer;
 
 int8_t cached_filter_index[NUM_TASKS];
+#ifdef CACHED_INPUTS
+int16_t *input_buffer_addr[NUM_TASKS];
+int8_t input_buffer_w[NUM_TASKS];
+#endif
 
 uint16_t counters[10];
 uint8_t counter_idx = 0;
@@ -87,7 +93,6 @@ static void my_memcpy(void* dest, const void* src, size_t n) {
 }
 
 static uint16_t arrH[NUM_TASKS], arrW[NUM_TASKS], arrkH[NUM_TASKS], arrkW[NUM_TASKS], arrCHANNEL[NUM_TASKS], arrOUTPUT_CHANNEL[NUM_TASKS];
-static int16_t *arr_filter_addr[NUM_TASKS], *arr_input_addr[NUM_TASKS];
 static msp_mac_q15_params mac_params[NUM_TASKS];
 
 uint8_t use_concurrent_conv = USE_CONCURRENT_CONV_BY_DEFAULT;
@@ -125,7 +130,11 @@ static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
     leaParams->vectorSize = mac_params[uxIndex].length;
 
     /* Load source arguments to LEA. */
+#ifdef CACHED_INPUTS
+    LEAPMS0 = MSP_LEA_CONVERT_ADDRESS(input_buffer_addr[uxIndex]);
+#else
     LEAPMS0 = MSP_LEA_CONVERT_ADDRESS(lea_buffer.conv.input[uxIndex]);
+#endif
     LEAPMS1 = MSP_LEA_CONVERT_ADDRESS(leaParams);
 
     // modified from DSPLib_1_30_00_02/include/DSPLib_lea.h
@@ -172,7 +181,12 @@ static void convTask(unsigned short uxIndex) {
     #include "conv_pre.h"
 
     msp_status status = msp_mac_q15(&mac_params[uxIndex],
-                                    lea_buffer.conv.input[uxIndex], lea_buffer.conv.filter[uxIndex],
+#ifdef CACHED_INPUTS
+                                    input_buffer_addr[uxIndex],
+#else
+                                    lea_buffer.conv.input[uxIndex],
+#endif
+                                    lea_buffer.conv.filter[uxIndex],
                                     &lea_buffer.conv.iq31_mac_result[uxIndex]);
     msp_checkStatus(status);
 
@@ -248,17 +262,21 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
         conv_params->bias = bias;
         conv_params->output = output;
         cached_filter_index[idx] = -1;
+#ifdef CACHED_INPUTS
+        input_buffer_addr[idx] = NULL;
+        input_buffer_w[idx] = -1;
+#endif
     }
 
     for (uint16_t conv_idx = 0; conv_idx < input_N; conv_idx++) {
         //my_printf("conv_idx = %d" NEWLINE, conv_idx);
-        for (uint16_t output_h = 0; output_h < H; output_h++) {
-            for (uint16_t output_w = 0; output_w < W; output_w = (uint16_t)(output_w + NUM_TASKS)) {
+        for (uint16_t output_w = 0; output_w < W; output_w += NUM_TASKS) {
+            for (uint16_t output_h = 0; output_h < H; output_h++) {
                 for (uint8_t idx = 0; idx < NUM_TASKS; idx++) {
                     ConvTaskParams *conv_params = &arr_conv_params[idx];
                     conv_params->conv_idx = conv_idx;
                     conv_params->output_h = output_h;
-                    conv_params->output_w = (uint16_t)(output_w + idx);
+                    conv_params->output_w = output_w + idx;
                 }
                 for (uint8_t idx = 0; idx < NUM_TASKS; idx++) {
 #ifdef __MSP430__

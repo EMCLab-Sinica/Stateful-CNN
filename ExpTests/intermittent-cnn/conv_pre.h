@@ -32,7 +32,7 @@
 #ifdef CACHED_FILTERS
     if (cached_filter_index[uxIndex] != conv_params->conv_idx) {
 #endif
-        filter_addr = arr_filter_addr[uxIndex] = get_q15_param(
+        filter_addr = get_q15_param(
             conv_params->conv_filter,
             (size_t)(conv_params->conv_idx * CHANNEL * kH * kW));
         my_memcpy(lea_buffer.conv.filter[uxIndex],
@@ -40,7 +40,7 @@
                   buffer_size);
         if (truncated) {
             // dummy value
-            lea_buffer.conv.filter[uxIndex][buffer_size] = 0;
+            lea_buffer.conv.filter[uxIndex][buffer_size / sizeof(int16_t) - 1] = 0;
         }
         cached_filter_index[uxIndex] = conv_params->conv_idx;
 #ifdef CACHED_FILTERS
@@ -51,14 +51,7 @@
 
     /* copy input data, row by row */
 
-    msp_fill_q15_params fill_params = {
-        .length = (uint16_t)((kH * kW * CHANNEL+1)/2*2),
-        .value = 0,
-    };
-    msp_status status = msp_fill_q15(&fill_params, lea_buffer.conv.input[uxIndex]);
-    msp_checkStatus(status);
-
-    input_addr = arr_input_addr[uxIndex] = get_q15_param(
+    input_addr = get_q15_param(
         conv_params->conv_input,
         (size_t)(CHANNEL * (
                 (conv_params->output_h) * W +
@@ -75,22 +68,66 @@
      * In step 2, R11 becomes 0x01FFFC, while it should be -4, or 0x00FFFC,
      * and thus the resultant address is offset by 0x10000.
      */
-    int32_t h_start = int16_max(-field_size,    -conv_params->output_h),
-            h_end   = int16_min( field_size, H-1-conv_params->output_h);
+    int32_t w_start = int16_max(-field_size,    -conv_params->output_w),
+            w_end   = int16_min( field_size, W-1-conv_params->output_w);
+    int16_t *src = NULL,
+            *dest,
+            *dest_initial = lea_buffer.conv.input[uxIndex];
+    int16_t src_offset = W * CHANNEL,
+            dest_offset = kW * CHANNEL;
+    uint8_t input_buffer_reinitialized = 1;
+#ifndef CACHED_INPUTS
+    dest = dest_initial;
+#else
+    dest = input_buffer_addr[uxIndex];
+    if (dest && dest + kH * dest_offset < dest_initial + INPUTS_LEN
+             && input_buffer_w[uxIndex] == conv_params->output_w) {
+        input_buffer_reinitialized = 0;
+    }
+#endif
+
+    int32_t h_start,
+            h_end = int16_min(field_size, H-1-conv_params->output_h);
+    if (input_buffer_reinitialized) {
+        msp_fill_q15_params fill_params = {
+#ifdef CACHED_INPUTS
+            .length = INPUTS_LEN,
+#else
+            .length = (uint16_t)((kH * kW * CHANNEL+1)/2*2),
+#endif
+            .value = 0,
+        };
+        msp_status status = msp_fill_q15(&fill_params, lea_buffer.conv.input[uxIndex]);
+        msp_checkStatus(status);
+
+#ifdef CACHED_INPUTS
+        dest = input_buffer_addr[uxIndex] = dest_initial;
+        input_buffer_w[uxIndex] = conv_params->output_w;
+#endif
+
+        h_start = int16_max(-field_size, -conv_params->output_h);
+    } else {
+        h_start = field_size;
+    }
+
+    dest += ((h_start + field_size) * kW + (w_start + field_size)) * CHANNEL;
+
 #ifdef DUMP_CONV_PARAMS
     my_printf("h_start=%d ", h_start);
     my_printf("h_end=%d" NEWLINE, h_end);
 #endif
-    int32_t w_start = int16_max(-field_size,    -conv_params->output_w),
-            w_end   = int16_min( field_size, W-1-conv_params->output_w);
-    int16_t *src = input_addr + (h_start * W + w_start) * CHANNEL,
-            *dest = lea_buffer.conv.input[uxIndex] + ((h_start + field_size) * kW + (w_start + field_size)) * CHANNEL;
-    int8_t src_offset = W * CHANNEL,
-           dest_offset = kW * CHANNEL;
+
     size_t size = (size_t)((w_end-w_start+1) * CHANNEL * sizeof(uint16_t)); // in bytes
-    for (int32_t h = h_start; h <= h_end; h++) {
-        my_memcpy(dest, src, size);
-        src += src_offset;
-        dest += dest_offset;
+    if (h_start <= h_end) {
+        src = input_addr + (h_start * W + w_start) * CHANNEL;
+#if defined(CACHED_INPUTS) && defined(DUMP_CONV_PARAMS)
+        my_printf("Copying row to lea_buffer.conv.input[%d] + %d" NEWLINE,
+                  uxIndex, (int)(dest - lea_buffer.conv.input[uxIndex]));
+#endif
+        for (int32_t h = h_start; h <= h_end; h++) {
+            my_memcpy(dest, src, size);
+            src += src_offset;
+            dest += dest_offset;
+        }
     }
 }
