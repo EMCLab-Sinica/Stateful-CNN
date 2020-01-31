@@ -44,7 +44,11 @@
 
 #ifdef CACHED_INPUTS
     /* XXX: assume stride=1 and offset-by-1-row in two consecutive tasks */
-    input_buffer_addr[uxIndex] += kW * CHANNEL;
+    int16_t dest_offset = kW * CHANNEL;
+    input_buffer_addr[uxIndex] += dest_offset;
+    if (dest_offset % 2) {
+        input_buffer_addr[uxIndex]++;
+    }
 #endif
 }
 

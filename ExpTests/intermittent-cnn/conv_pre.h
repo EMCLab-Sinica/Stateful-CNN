@@ -15,12 +15,23 @@
     CHANNEL = arrCHANNEL[uxIndex];
     OUTPUT_CHANNEL = arrOUTPUT_CHANNEL[uxIndex];
 
+    int16_t dest_offset = kW * CHANNEL;
+
     /* MSP430 LEA requires length to be even */
     mac_params[uxIndex].length = (uint16_t)(CHANNEL * kH * kW / 2 * 2);
     uint8_t truncated = (mac_params[uxIndex].length != CHANNEL * kH * kW);
     if (truncated) {
+#ifdef CACHED_INPUTS
+        // when CHANNEL * kH * kW is odd, CHANNEL * kW (dest_offset) is
+        // also odd, so dummy values are needed between slices to make
+        // addresses even.
+        // a dummy value for each slice (kW * CHANNEL q15 values)
+        mac_params[uxIndex].length += kH + 1;
+        dest_offset++;
+#else
         // 1 for the truncated value, another dummy
         mac_params[uxIndex].length += 2;
+#endif
     }
     buffer_size = (uint16_t)(sizeof(uint16_t) * mac_params[uxIndex].length);
     if (buffer_size > sizeof(lea_buffer.conv.filter[uxIndex])) {
@@ -35,15 +46,28 @@
         filter_addr = get_q15_param(
             conv_params->conv_filter,
             (size_t)(conv_params->conv_idx * CHANNEL * kH * kW));
-        my_memcpy(lea_buffer.conv.filter[uxIndex],
-                  filter_addr,
-                  buffer_size);
+#ifdef CACHED_INPUTS
         if (truncated) {
-            // dummy value
-            lea_buffer.conv.filter[uxIndex][buffer_size / sizeof(int16_t) - 1] = 0;
+            int16_t *filter_buffer_addr = lea_buffer.conv.filter[uxIndex];
+            for (uint16_t h = 0; h < kH; h++) {
+                memcpy(filter_buffer_addr, filter_addr, kW * CHANNEL * sizeof(int16_t));
+                filter_buffer_addr += dest_offset;
+                filter_addr += kW * CHANNEL;
+            }
+        } else {
+#endif
+            my_memcpy(lea_buffer.conv.filter[uxIndex],
+                      filter_addr,
+                      buffer_size);
+            if (truncated) {
+                // dummy value
+                lea_buffer.conv.filter[uxIndex][buffer_size / sizeof(int16_t) - 1] = 0;
+            }
+#ifdef CACHED_INPUTS
         }
-        cached_filter_index[uxIndex] = conv_params->conv_idx;
+#endif
 #ifdef CACHED_FILTERS
+        cached_filter_index[uxIndex] = conv_params->conv_idx;
     }
 #endif
 
@@ -73,8 +97,7 @@
     int16_t *src = NULL,
             *dest,
             *dest_initial = lea_buffer.conv.input[uxIndex];
-    int16_t src_offset = W * CHANNEL,
-            dest_offset = kW * CHANNEL;
+    int16_t src_offset = W * CHANNEL;
     uint8_t input_buffer_reinitialized = 1;
 #ifndef CACHED_INPUTS
     dest = dest_initial;
@@ -110,7 +133,7 @@
         h_start = field_size;
     }
 
-    dest += ((h_start + field_size) * kW + (w_start + field_size)) * CHANNEL;
+    dest += (h_start + field_size) * dest_offset + (w_start + field_size) * CHANNEL;
 
 #ifdef DUMP_CONV_PARAMS
     my_printf("h_start=%d ", h_start);

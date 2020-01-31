@@ -21,7 +21,7 @@
 
 #define configCONV_STACK_SIZE 100
 #define NUM_TASKS 2
-#define USE_CONCURRENT_CONV_BY_DEFAULT 0
+#define USE_CONCURRENT_CONV_BY_DEFAULT 1
 #define CACHED_FILTERS
 #define CACHED_INPUTS
 #define INPUTS_LEN 512
@@ -48,7 +48,9 @@ union {
     } general;
 } lea_buffer;
 
+#ifdef CACHED_FILTERS
 int8_t cached_filter_index[NUM_TASKS];
+#endif
 #ifdef CACHED_INPUTS
 int16_t *input_buffer_addr[NUM_TASKS];
 int8_t input_buffer_w[NUM_TASKS];
@@ -261,7 +263,9 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
         conv_params->conv_filter = conv_filter;
         conv_params->bias = bias;
         conv_params->output = output;
+#ifdef CACHED_FILTERS
         cached_filter_index[idx] = -1;
+#endif
 #ifdef CACHED_INPUTS
         input_buffer_addr[idx] = NULL;
         input_buffer_w[idx] = -1;
