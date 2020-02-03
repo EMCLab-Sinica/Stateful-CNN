@@ -15,7 +15,7 @@
     dump_matrix(lea_buffer.conv.input[uxIndex], mac_params[uxIndex].length);
 #endif
     my_printf("filter" NEWLINE);
-    dump_matrix(lea_buffer.conv.filter[uxIndex], mac_params[uxIndex].length);
+    dump_matrix(lea_buffer.conv.filter, mac_params[uxIndex].length);
 
     my_printf("iq31_mac_result=");
     print_iq31(lea_buffer.conv.iq31_mac_result[uxIndex]);

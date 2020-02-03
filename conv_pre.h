@@ -34,21 +34,21 @@
 #endif
     }
     buffer_size = (uint16_t)(sizeof(uint16_t) * mac_params[uxIndex].length);
-    if (buffer_size > sizeof(lea_buffer.conv.filter[uxIndex])) {
+    if (buffer_size > sizeof(lea_buffer.conv.filter)) {
         my_printf("Error: buffer too small." NEWLINE);
         ERROR_OCCURRED();
     }
 
     /* copy filter data */
 #ifdef CACHED_FILTERS
-    if (cached_filter_index[uxIndex] != conv_params->conv_idx) {
+    if (cached_filter_index != conv_params->conv_idx) {
 #endif
         filter_addr = get_q15_param(
             conv_params->conv_filter,
             (size_t)(conv_params->conv_idx * CHANNEL * kH * kW));
 #ifdef CACHED_INPUTS
         if (truncated) {
-            int16_t *filter_buffer_addr = lea_buffer.conv.filter[uxIndex];
+            int16_t *filter_buffer_addr = lea_buffer.conv.filter;
             for (uint16_t h = 0; h < kH; h++) {
                 memcpy(filter_buffer_addr, filter_addr, kW * CHANNEL * sizeof(int16_t));
                 filter_buffer_addr += dest_offset;
@@ -56,18 +56,18 @@
             }
         } else {
 #endif
-            my_memcpy(lea_buffer.conv.filter[uxIndex],
+            my_memcpy(lea_buffer.conv.filter,
                       filter_addr,
                       buffer_size);
             if (truncated) {
                 // dummy value
-                lea_buffer.conv.filter[uxIndex][buffer_size / sizeof(int16_t) - 1] = 0;
+                lea_buffer.conv.filter[buffer_size / sizeof(int16_t) - 1] = 0;
             }
 #ifdef CACHED_INPUTS
         }
 #endif
 #ifdef CACHED_FILTERS
-        cached_filter_index[uxIndex] = conv_params->conv_idx;
+        cached_filter_index = conv_params->conv_idx;
     }
 #endif
 
@@ -112,6 +112,9 @@
     int32_t h_start,
             h_end = int16_min(field_size, H-1-conv_params->output_h);
     if (input_buffer_reinitialized) {
+#ifdef DUMP_CONV_PARAMS
+        my_printf("Reinitialize input buffer" NEWLINE);
+#endif
         msp_fill_q15_params fill_params = {
 #ifdef CACHED_INPUTS
             .length = INPUTS_LEN,
