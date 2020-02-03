@@ -24,7 +24,7 @@
 #define USE_CONCURRENT_CONV_BY_DEFAULT 1
 #define CACHED_FILTERS
 #define CACHED_INPUTS
-#define INPUTS_LEN 512
+#define INPUTS_LEN 760
 
 #ifdef __MSP430__
 #pragma DATA_SECTION(lea_buffer, ".leaRAM")
@@ -33,7 +33,7 @@ union {
     // for conv
     struct {
         int16_t input[NUM_TASKS][INPUTS_LEN];
-        int16_t filter[NUM_TASKS][256];
+        int16_t filter[200];
         int32_t iq31_mac_result[NUM_TASKS];
 #ifdef __MSP430__
         MSP_LEA_MAC_PARAMS params[NUM_TASKS];
@@ -49,7 +49,7 @@ union {
 } lea_buffer;
 
 #ifdef CACHED_FILTERS
-int8_t cached_filter_index[NUM_TASKS];
+int8_t cached_filter_index;
 #endif
 #ifdef CACHED_INPUTS
 int16_t *input_buffer_addr[NUM_TASKS];
@@ -127,7 +127,7 @@ static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
     leaParams = lea_buffer.conv.params + uxIndex;
 
     /* Set MSP_LEA_MAC_PARAMS structure. */
-    leaParams->input2 = MSP_LEA_CONVERT_ADDRESS(lea_buffer.conv.filter[uxIndex]);
+    leaParams->input2 = MSP_LEA_CONVERT_ADDRESS(lea_buffer.conv.filter);
     leaParams->output = MSP_LEA_CONVERT_ADDRESS(&lea_buffer.conv.iq31_mac_result[uxIndex]);
     leaParams->vectorSize = mac_params[uxIndex].length;
 
@@ -188,7 +188,7 @@ static void convTask(unsigned short uxIndex) {
 #else
                                     lea_buffer.conv.input[uxIndex],
 #endif
-                                    lea_buffer.conv.filter[uxIndex],
+                                    lea_buffer.conv.filter,
                                     &lea_buffer.conv.iq31_mac_result[uxIndex]);
     msp_checkStatus(status);
 
@@ -263,14 +263,14 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
         conv_params->conv_filter = conv_filter;
         conv_params->bias = bias;
         conv_params->output = output;
-#ifdef CACHED_FILTERS
-        cached_filter_index[idx] = -1;
-#endif
 #ifdef CACHED_INPUTS
         input_buffer_addr[idx] = NULL;
         input_buffer_w[idx] = -1;
 #endif
     }
+#ifdef CACHED_FILTERS
+    cached_filter_index = -1;
+#endif
 
     for (uint16_t conv_idx = 0; conv_idx < input_N; conv_idx++) {
         //my_printf("conv_idx = %d" NEWLINE, conv_idx);
