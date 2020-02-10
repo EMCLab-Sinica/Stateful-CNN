@@ -4,6 +4,17 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <DSPLib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/mman.h>
+
+#define NVM_SIZE NUM_SLOTS * INTERMEDIATE_VALUES_SIZE
+
+/* data on NVM, made persistent via mmap() with a file */
+uint8_t *intermediate_values;
+uint8_t *task_flags;
 
 void run_tests(char *filename) {
     uint8_t label, predicted;
@@ -50,12 +61,28 @@ void run_tests(char *filename) {
 }
 
 int main(int argc, char* argv[]) {
+    int nvm_fd, ret = 0;
+    uint8_t *nvm;
+
+    nvm_fd = open("nvm.bin", O_RDWR);
+    nvm = mmap(NULL, NVM_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, nvm_fd, 0);
+    if (nvm == MAP_FAILED) {
+        perror("mmap() failed");
+        goto exit;
+    }
+    intermediate_values = nvm;
+    task_flags = nvm + NUM_SLOTS * INTERMEDIATE_VALUES_SIZE;
+
     if (argc >= 3) {
         printf("Usage: %s [test filename]\n", argv[0]);
-        return 1;
+        ret = 1;
     } else if (argc == 2) {
         run_tests(argv[1]);
     } else {
-        return run_model(NULL);
+        ret = run_model(NULL);
     }
+
+exit:
+    close(nvm_fd);
+    return ret;
 }

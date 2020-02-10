@@ -24,6 +24,9 @@
 #define NUM_SLOTS 2
 #define FLAG_SLOTS 0b11
 #define FLAG_SLOTS_WIDTH 2
+#define SCALE 16
+#define INTERMEDIATE_VALUES_SIZE 65536
+#define TASK_FLAGS_SIZE 1024
 
 /**********************************
  *        Data structures         *
@@ -60,14 +63,13 @@ typedef struct __attribute__((__packed__)) {
 /**********************************
  *          Global data           *
  **********************************/
-#define INTERMEDIATE_VALUES_SIZE 65536
 extern Model *model;
 extern Node *nodes;
 extern ParameterInfo *parameter_info;
 extern uint16_t *inputs;
 extern uint16_t *parameters;
 // similar to double buffering
-extern uint8_t intermediate_values[NUM_SLOTS][INTERMEDIATE_VALUES_SIZE];
+extern uint8_t *intermediate_values;
 
 /**********************************
  *          Miscellaneous         *
@@ -127,7 +129,7 @@ static inline uint16_t get_next_slot(ParameterInfo *param) {
 static inline uint8_t* get_param_base_pointer(ParameterInfo *param) {
     uint16_t slot_id = get_param_slot_id(param);
     if (slot_id != FLAG_SLOTS) {
-        return &(intermediate_values[slot_id][0]);
+        return intermediate_values + slot_id * INTERMEDIATE_VALUES_SIZE;
     } else {
         return (uint8_t*)parameters;
     }
@@ -158,7 +160,6 @@ void dump_params(ParameterInfo *cur_param);
 #define dump_params(cur_param)
 #endif
 
-#define SCALE 16
 
 static inline void print_q15(int16_t val) {
 #if defined(__MSP430__) || defined(DUMP_INTEGERS)
