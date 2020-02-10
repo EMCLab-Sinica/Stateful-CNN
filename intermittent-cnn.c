@@ -74,7 +74,7 @@ static uint8_t handle_cur_group(void) {
             /* use uint32_t here to avoid overflow */
             intermediate_values_offset + output->params_len
         );
-        if (new_intermediate_values_offset >= 65536) {
+        if (new_intermediate_values_offset >= INTERMEDIATE_VALUES_SIZE) {
             /* TODO: reuse the ring buffer */
             my_printf("Error: too many immediate values" NEWLINE);
         }
@@ -120,8 +120,6 @@ int run_model(uint8_t *ansptr) {
     model = (Model*)model_data;
     inputs = (uint16_t*)inputs_data;
     parameters = (uint16_t*)parameters_data;
-
-    memset(intermediate_values, 0, sizeof(intermediate_values));
 
     nodes = (Node*)(model + 1);
     parameter_info = (ParameterInfo*)(nodes + model->nodes_len);
