@@ -10,7 +10,7 @@
 #include <FreeRTOS.h>
 #include <croutine.h>
 #include "Tools/my_timer.h"
-#define USE_DMA 0
+#define USE_DMA 1
 #else
 #define USE_DMA 0
 #endif
