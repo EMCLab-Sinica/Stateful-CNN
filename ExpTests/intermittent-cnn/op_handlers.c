@@ -17,7 +17,8 @@
 
 #include "ops.h"
 #include "op_handlers.h"
-#include "common.h" // for MY_NDEBUG
+#include "common.h"
+#include "debug.h"
 
 #define configCONV_STACK_SIZE 100
 #define NUM_TASKS 2
@@ -203,10 +204,7 @@ extern uint32_t msp_mac_q15_overflow_counter;
 
 uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1], *bias = input[2];
-#ifndef MY_NDEBUG
-    my_printf("Conv!" NEWLINE);
-#endif
-
+    my_printf_debug("Conv!" NEWLINE);
 
 #ifndef __MSP430__
     msp_mac_q15_overflow_counter = 0;
@@ -226,7 +224,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
         if (!task_created) {
             for (uint8_t idx = 0; idx < NUM_TASKS; idx++) {
                 if (xCoRoutineCreate(convTaskConcurrent, 0, idx) != pdPASS) {
-                    my_printf("Failed to create co-routines." NEWLINE);
+                    my_printf("Error: failed to create co-routines." NEWLINE);
                     ERROR_OCCURRED();
                 }
             }
@@ -275,7 +273,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
 #endif
 
     for (uint16_t conv_idx = 0; conv_idx < input_N; conv_idx++) {
-        //my_printf("conv_idx = %d" NEWLINE, conv_idx);
+        //my_printf_debug("conv_idx = %d" NEWLINE, conv_idx);
         for (uint16_t output_w = 0; output_w < W; output_w++) {
             for (uint16_t output_h = 0; output_h < H; output_h += NUM_TASKS) {
                 for (uint8_t idx = 0; idx < NUM_TASKS; idx++) {
@@ -307,10 +305,8 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     my_printf("idle for %l cycles" NEWLINE, idleCounter);
 #endif
 
-#ifdef DUMP__CONV_PARAMS
-    my_printf("handle_conv output" NEWLINE);
+    my_printf_debug("handle_conv output" NEWLINE);
     dump_params(output);
-#endif
 
 #ifndef __MSP430__
     my_printf("msp_mac_q15_overflow_counter=%d" NEWLINE, msp_mac_q15_overflow_counter);
@@ -320,17 +316,13 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
 }
 
 uint8_t handle_maxpool(const uint16_t stride, ParameterInfo *input[], ParameterInfo *output) {
-#ifndef MY_NDEBUG
-    my_printf("MaxPool!" NEWLINE);
-#endif
+    my_printf_debug("MaxPool!" NEWLINE);
 
     /* XXX: add flags; assume no padding for now */
     ParameterInfo *data = input[0];
 
-#ifdef DUMP_MAXPOOL_PARAMS
-    my_printf("handle_maxpool input" NEWLINE);
+    my_printf_debug("handle_maxpool input" NEWLINE);
     dump_params(data);
-#endif
 
     const uint16_t channel = data->dims[3], H = data->dims[1], W = data->dims[2];
     output->params_len = data->params_len / (uint16_t)(stride * stride);
@@ -342,18 +334,15 @@ uint8_t handle_maxpool(const uint16_t stride, ParameterInfo *input[], ParameterI
     for (uint16_t c = 0; c < channel; c++) {
         for (uint16_t h = 0; h < H; h = (uint16_t)(h + stride)) {
             for (uint16_t w = 0; w < W; w = (uint16_t)(w + stride)) {
-#ifdef DUMP_MAXPOOL_PARAMS
-                my_printf("h=%d ", h);
-                my_printf("w=%d ", w);
-                my_printf("c=%d" NEWLINE, c);
-#endif
+                my_printf_debug("h=%d ", h);
+                my_printf_debug("w=%d ", w);
+                my_printf_debug("c=%d" NEWLINE, c);
+
                 int16_t max_val = INT16_MIN;
                 for (uint16_t sH = 0; sH < stride; sH++) {
                     for (uint16_t sW = 0; sW < stride; sW++) {
                         int16_t val = *get_q15_param(data, (size_t)((h+sH) * W * channel + (w+sW) * channel + c));
-#ifdef DUMP_MAXPOOL_PARAMS
-                        print_q15(val);
-#endif
+                        print_q15_debug(val);
                         // XXX: use LEA?
                         if (val > max_val) {
                             max_val = val;
@@ -361,20 +350,16 @@ uint8_t handle_maxpool(const uint16_t stride, ParameterInfo *input[], ParameterI
                     }
                 }
                 size_t offset = (size_t)((h/stride) * (W/stride) * channel + (w/stride) * channel + c);
-#ifdef DUMP_MAXPOOL_PARAMS
-                my_printf("max=");
-                print_q15(max_val);
-                my_printf(NEWLINE "offset=%d" NEWLINE, (uint16_t)offset);
-#endif
+                my_printf_debug("max=");
+                print_q15_debug(max_val);
+                my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)offset);
                 *get_q15_param(output, offset) = max_val;
             }
         }
     }
 
-#ifdef DUMP_MAXPOOL_PARAMS
-    my_printf("handle_maxpool output" NEWLINE);
+    my_printf_debug("handle_maxpool output" NEWLINE);
     dump_params(output);
-#endif
 
     return 0;
 }
@@ -390,9 +375,8 @@ uint8_t handle_maxpool_3(ParameterInfo *input[], ParameterInfo *output) {
 
 uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output) {
     /* Add: Y = X + W */
-#ifndef MY_NDEBUG
-    my_printf("Add!" NEWLINE);
-#endif
+    my_printf_debug("Add!" NEWLINE);
+
     if (get_param_bitwidth(input[0]) != 16 || get_param_bitwidth(input[1]) != 16) {
         my_printf("Error: unsupported bitwidth" NEWLINE);
         return 1;
@@ -418,18 +402,12 @@ uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output) {
 uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
     ParameterInfo *A = input[0], *B = input[1];
 
-#ifndef MY_NDEBUG
-
-# ifdef DUMP_PARAMS
-    my_printf("handle_matmul inputs" NEWLINE);
+    my_printf_debug("handle_matmul inputs" NEWLINE);
     // dump_params(A);
-    my_printf("B" NEWLINE);
+    my_printf_debug("B" NEWLINE);
     dump_params(B);
-# endif
-
-    my_printf("MatMul! A: (%dx%d), B: (%dx%d)" NEWLINE,
+    my_printf_debug("MatMul! A: (%dx%d), B: (%dx%d)" NEWLINE,
               A->dims[0], A->dims[1], B->dims[0], B->dims[1]);
-#endif
 
     uint16_t output_len = (uint16_t)(A->dims[0] * B->dims[1]);
     output->dims[0] = A->dims[0];
@@ -466,12 +444,10 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
 
         my_memcpy(lea_buffer.general.B, get_q15_param(B, (uint16_t)(i * B->dims[1])), (uint16_t)(current_width * B->dims[1] * sizeof(uint16_t)));
 
-#ifdef DUMP_PARAMS
-        my_printf("strip for A" NEWLINE);
+        my_printf_debug("strip for A" NEWLINE);
         dump_matrix(lea_buffer.general.A + A->dims[0] * i, (size_t)(A->dims[0] * current_width));
-        my_printf("B" NEWLINE);
+        my_printf_debug("B" NEWLINE);
         dump_matrix(lea_buffer.general.B, (size_t)(current_width * B->dims[1]));
-#endif
 
         status = msp_matrix_mpy_q15(
             &params,
@@ -480,10 +456,8 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
             lea_buffer.general.temp);
         msp_checkStatus(status);
 
-#ifdef DUMP_PARAMS
-        my_printf("temp" NEWLINE);
+        my_printf_debug("temp" NEWLINE);
         dump_matrix(lea_buffer.general.temp, (size_t)(A->dims[0] * B->dims[1]));
-#endif
 
         msp_add_q15_params params2 = { .length = output_len };
         status = msp_add_q15(&params2, lea_buffer_matmul, lea_buffer.general.temp, lea_buffer_matmul);
@@ -493,18 +467,15 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
 
 #undef lea_buffer_matmul
 
-#ifdef DUMP_PARAMS
-    my_printf("handle_matmul output" NEWLINE);
+    my_printf_debug("handle_matmul output" NEWLINE);
     dump_params(output);
-#endif
 
     return 0;
 }
 
 uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output) {
-#ifndef MY_NDEBUG
-    my_printf("ReLu!" NEWLINE);
-#endif
+    my_printf_debug("ReLu!" NEWLINE);
+
     ParameterInfo *X = input[0];
     memcpy(output, X, sizeof(ParameterInfo));
     /* XXX: use LEA? */
@@ -519,16 +490,13 @@ uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output) {
             my_printf("Error: unsupported bitwidth for ReLu." NEWLINE);
         }
     }
-#ifdef DUMP_RELU_PARAMS
     dump_params(output);
-#endif
     return 0;
 }
 
 uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output) {
-#ifndef MY_NDEBUG
-    my_printf("Reshape!" NEWLINE);
-#endif
+    my_printf_debug("Reshape!" NEWLINE);
+
     ParameterInfo *data = input[0], *shape = input[1];
     output->params_offset = data->params_offset;
     output->params_len = data->params_len;
@@ -566,20 +534,17 @@ uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output) {
     }
 #undef lea_buffer_reshape
 
-#ifdef DUMP_PARAMS
     if (do_nhwc2nchw) {
-        my_printf("handle_reshape output" NEWLINE);
+        my_printf_debug("handle_reshape output" NEWLINE);
         dump_params(output);
     }
-#endif
 
     return 0;
 }
 
 uint8_t handle_squeeze(ParameterInfo *input[], ParameterInfo *output) {
-#ifndef MY_NDEBUG
-    my_printf("Squeeze!" NEWLINE);
-#endif
+    my_printf_debug("Squeeze!" NEWLINE);
+
     ParameterInfo *data = input[0];
     /* XXX: add flags; assume squeeze all one-size axes */
     output->params_offset = data->params_offset;

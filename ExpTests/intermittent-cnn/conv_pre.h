@@ -112,9 +112,8 @@
     int32_t h_start,
             h_end = int16_min(field_size, H-1-conv_params->output_h);
     if (input_buffer_reinitialized) {
-#ifdef DUMP_CONV_PARAMS
-        my_printf("Reinitialize input buffer" NEWLINE);
-#endif
+        my_printf_debug("Reinitialize input buffer" NEWLINE);
+
         msp_fill_q15_params fill_params = {
 #ifdef CACHED_INPUTS
             .length = INPUTS_LEN,
@@ -143,17 +142,15 @@
 
     dest += (h_start + field_size) * dest_offset + (w_start + field_size) * CHANNEL;
 
-#ifdef DUMP_CONV_PARAMS
-    my_printf("h_start=%d ", h_start);
-    my_printf("h_end=%d" NEWLINE, h_end);
-#endif
+    my_printf_debug("h_start=%d ", h_start);
+    my_printf_debug("h_end=%d" NEWLINE, h_end);
 
     size_t size = (size_t)((w_end-w_start+1) * CHANNEL * sizeof(uint16_t)); // in bytes
     if (h_start <= h_end) {
         src = input_addr + (h_start * W + w_start) * CHANNEL;
-#if defined(CACHED_INPUTS) && defined(DUMP_CONV_PARAMS)
-        my_printf("Copying row to lea_buffer.conv.input + %d" NEWLINE,
-                  (int)(dest - lea_buffer.conv.input));
+#ifdef CACHED_INPUTS
+        my_printf_debug("Copying row to lea_buffer.conv.input + %d" NEWLINE,
+                        (int)(dest - lea_buffer.conv.input));
 #endif
         for (int32_t h = h_start; h <= h_end; h++) {
             my_memcpy(dest, src, size);

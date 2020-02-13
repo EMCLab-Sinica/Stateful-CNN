@@ -6,50 +6,25 @@
 #include "common.h"
 #include "data.h"
 #include "ops.h"
+#include "debug.h"
 
 static uint16_t cur_group[16] = { 0 };
 static uint8_t grp_index = 0;
 static uint16_t group_last_item;
 
-static void dump_model(void) {
-#ifndef MY_NDEBUG
-    uint16_t i, j;
-    for (i = 0; i < model->nodes_len; i++) {
-        Node *cur_node = &(nodes[i]);
-        my_printf("(");
-        for (j = 0; j < cur_node->inputs_len; j++) {
-            my_printf("%d", node_input(cur_node, j));
-            if (node_input_marked(cur_node, j)) {
-                my_printf("M");
-            } else {
-                my_printf("U");
-            }
-            if (j != cur_node->inputs_len - 1) {
-                my_printf(", ");
-            }
-        }
-        my_printf(") ");
-    }
-    my_printf(NEWLINE);
-#endif
-}
-
 static uint8_t handle_cur_group(void) {
     uint16_t intermediate_values_offset = 0;
 
-#ifndef MY_NDEBUG
-    my_printf("Current group: ");
-#endif
+    my_printf_debug("Current group: ");
+
     for (uint8_t i = 0; i < grp_index; i++) {
         uint16_t cur_node_id = cur_group[i];
-#ifndef MY_NDEBUG
-        my_printf("%d ", cur_node_id);
-#endif
+        my_printf_debug("%d ", cur_node_id);
+
         /* schedule it */
         Node *cur_node = &(nodes[cur_node_id]);
-#ifndef MY_NDEBUG
-        my_printf("op_type = %d" NEWLINE, cur_node->op_type);
-#endif
+        my_printf_debug("op_type = %d" NEWLINE, cur_node->op_type);
+
         int16_t input_id[3];
         ParameterInfo *input[3];
         if (cur_node->inputs_len != expected_inputs_len[cur_node->op_type]) {
@@ -58,9 +33,7 @@ static uint8_t handle_cur_group(void) {
         }
         for (uint16_t j = 0; j < cur_node->inputs_len; j++) {
             input_id[j] = node_input(cur_node, j);
-#ifndef MY_NDEBUG
-            my_printf("input_id[%d] = %d ", j, input_id[j]);
-#endif
+            my_printf_debug("input_id[%d] = %d ", j, input_id[j]);
             input[j] = &(parameter_info[input_id[j]]);
             // dump_params(input[j]);
         }
@@ -84,21 +57,15 @@ static uint8_t handle_cur_group(void) {
         }
         intermediate_values_offset = (uint16_t)new_intermediate_values_offset;
 
-#ifndef MY_NDEBUG
-        my_printf("output dims: ");
-#endif
+        my_printf_debug("output dims: ");
         uint8_t has_dims = 0;
         for (uint8_t j = 0; j < 4; j++) {
             if (output->dims[j]) {
                 has_dims = 1;
-#ifndef MY_NDEBUG
-                my_printf("%d, ", output->dims[j]);
-#endif
+                my_printf_debug("%d, ", output->dims[j]);
             }
         }
-#ifndef MY_NDEBUG
-        my_printf(NEWLINE);
-#endif
+        my_printf_debug(NEWLINE);
         if (!has_dims) {
             my_printf("Error: missing dims." NEWLINE);
             return 1;
@@ -110,9 +77,7 @@ static uint8_t handle_cur_group(void) {
 
         cur_node->scheduled = 1;
     }
-#ifndef MY_NDEBUG
-    my_printf(" - %d element(s)." NEWLINE, grp_index);
-#endif
+    my_printf_debug(" - %d element(s)." NEWLINE, grp_index);
     return 0;
 }
 
@@ -124,9 +89,7 @@ int run_model(uint8_t *ansptr) {
     nodes = (Node*)(model + 1);
     parameter_info = (ParameterInfo*)(nodes + model->nodes_len);
 
-#ifndef MY_NDEBUG
-    my_printf("model->n_input = %d" NEWLINE, model->n_input);
-#endif
+    my_printf_debug("model->n_input = %d" NEWLINE, model->n_input);
 
     /* initialize - the first node must have no inputs as
      * ONNX already sort nodes topologically */
@@ -151,9 +114,7 @@ int run_model(uint8_t *ansptr) {
                 }
             }
             if (no_inputs) {
-#ifndef MY_NDEBUG
-                my_printf("Node %d has no inputs." NEWLINE, i);
-#endif
+                my_printf_debug("Node %d has no inputs." NEWLINE, i);
                 cur_group[grp_index] = i;
                 grp_index++;
                 /* https://stackoverflow.com/a/47417220 */
