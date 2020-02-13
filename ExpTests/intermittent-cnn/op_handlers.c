@@ -1,12 +1,9 @@
 // disable debug code in DSPLib
 //#define MSP_DISABLE_DIAGNOSTICS
 
-#include <string.h>
-
 #include <DSPLib.h>
 
 #ifdef __MSP430__
-#include <driverlib.h>
 #include <FreeRTOS.h>
 #include <croutine.h>
 #include "Tools/my_timer.h"
@@ -17,6 +14,7 @@
 #include "op_handlers.h"
 #include "common.h"
 #include "debug.h"
+#include "my_memcpy.h"
 
 #define configCONV_STACK_SIZE 100
 #define NUM_TASKS 2
@@ -69,29 +67,6 @@ typedef struct ConvTaskParams {
 } ConvTaskParams;
 
 static ConvTaskParams arr_conv_params[NUM_TASKS];
-
-#ifdef __MSP430__
-#define MY_DMA_CHANNEL DMA_CHANNEL_0
-static DMA_initParam dma_params = {
-    .channelSelect = MY_DMA_CHANNEL,
-    .transferModeSelect = DMA_TRANSFER_BLOCK,
-};
-#endif
-
-static void my_memcpy(void* dest, const void* src, size_t n) {
-#ifndef __MSP430__
-    memcpy(dest, src, n);
-#else
-    DMA_init(&dma_params);
-    DMA_setSrcAddress(MY_DMA_CHANNEL, (uint32_t)(src), DMA_DIRECTION_INCREMENT);
-    DMA_setDstAddress(MY_DMA_CHANNEL, (uint32_t)(dest), DMA_DIRECTION_INCREMENT);
-    /* transfer size is in words (2 bytes) */
-    DMA_setTransferSize(MY_DMA_CHANNEL, (n) >> 1);
-    // DMA_enableInterrupt(MY_DMA_CHANNEL);
-    DMA_enableTransfers(MY_DMA_CHANNEL);
-    DMA_startTransfer(MY_DMA_CHANNEL);
-#endif
-}
 
 static uint16_t arrH[NUM_TASKS], arrW[NUM_TASKS], arrkH[NUM_TASKS], arrkW[NUM_TASKS], arrCHANNEL[NUM_TASKS], arrOUTPUT_CHANNEL[NUM_TASKS];
 static msp_mac_q15_params mac_params[NUM_TASKS];
@@ -467,7 +442,7 @@ uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output) {
     my_printf_debug("ReLu!" NEWLINE);
 
     ParameterInfo *X = input[0];
-    memcpy(output, X, sizeof(ParameterInfo));
+    my_memcpy(output, X, sizeof(ParameterInfo));
     /* XXX: use LEA? */
     uint16_t bitwidth = get_param_bitwidth(X);
     for (uint32_t i = 0; i < X->params_len / (bitwidth / 8); i++) {
@@ -549,25 +524,3 @@ uint8_t handle_squeeze(ParameterInfo *input[], ParameterInfo *output) {
     }
     return 0;
 }
-
-#ifdef __MSP430__
-
-#pragma vector=DMA_VECTOR
-__interrupt void DMA_ISR(void)
-{
-    switch(__even_in_range(DMAIV,16))
-    {
-        case 0: break;
-        case 2: break; // DMA0IFG = DMA Channel 0
-        case 4: break; // DMA1IFG = DMA Channel 1
-        case 6: break; // DMA2IFG = DMA Channel 2
-        case 8: break; // DMA3IFG = DMA Channel 3
-        case 10: break; // DMA4IFG = DMA Channel 4
-        case 12: break; // DMA5IFG = DMA Channel 5
-        case 14: break; // DMA6IFG = DMA Channel 6
-        case 16: break; // DMA7IFG = DMA Channel 7
-        default: break;
-    }
-}
-
-#endif
