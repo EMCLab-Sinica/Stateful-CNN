@@ -32,7 +32,7 @@
 union {
     // for conv
     struct {
-        int16_t input[NUM_TASKS][INPUTS_LEN];
+        int16_t input[INPUTS_LEN];
         int16_t filter[200];
         int32_t iq31_mac_result[NUM_TASKS];
 #ifdef __MSP430__
@@ -53,7 +53,8 @@ int8_t cached_filter_index;
 #endif
 #ifdef CACHED_INPUTS
 int16_t *input_buffer_addr[NUM_TASKS];
-int8_t input_buffer_w[NUM_TASKS];
+int16_t *next_input_buffer_addr;
+int8_t input_buffer_w;
 #endif
 
 uint16_t counters[10];
@@ -135,7 +136,7 @@ static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
 #ifdef CACHED_INPUTS
     LEAPMS0 = MSP_LEA_CONVERT_ADDRESS(input_buffer_addr[uxIndex]);
 #else
-    LEAPMS0 = MSP_LEA_CONVERT_ADDRESS(lea_buffer.conv.input[uxIndex]);
+    LEAPMS0 = MSP_LEA_CONVERT_ADDRESS(lea_buffer.conv.input);
 #endif
     LEAPMS1 = MSP_LEA_CONVERT_ADDRESS(leaParams);
 
@@ -186,7 +187,7 @@ static void convTask(unsigned short uxIndex) {
 #ifdef CACHED_INPUTS
                                     input_buffer_addr[uxIndex],
 #else
-                                    lea_buffer.conv.input[uxIndex],
+                                    lea_buffer.conv.input,
 #endif
                                     lea_buffer.conv.filter,
                                     &lea_buffer.conv.iq31_mac_result[uxIndex]);
@@ -265,7 +266,8 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
         conv_params->output = output;
 #ifdef CACHED_INPUTS
         input_buffer_addr[idx] = NULL;
-        input_buffer_w[idx] = -1;
+        next_input_buffer_addr = NULL;
+        input_buffer_w = -1;
 #endif
     }
 #ifdef CACHED_FILTERS
@@ -274,13 +276,13 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
 
     for (uint16_t conv_idx = 0; conv_idx < input_N; conv_idx++) {
         //my_printf("conv_idx = %d" NEWLINE, conv_idx);
-        for (uint16_t output_w = 0; output_w < W; output_w += NUM_TASKS) {
-            for (uint16_t output_h = 0; output_h < H; output_h++) {
+        for (uint16_t output_w = 0; output_w < W; output_w++) {
+            for (uint16_t output_h = 0; output_h < H; output_h += NUM_TASKS) {
                 for (uint8_t idx = 0; idx < NUM_TASKS; idx++) {
                     ConvTaskParams *conv_params = &arr_conv_params[idx];
                     conv_params->conv_idx = conv_idx;
-                    conv_params->output_h = output_h;
-                    conv_params->output_w = output_w + idx;
+                    conv_params->output_h = output_h + idx;
+                    conv_params->output_w = output_w;
                 }
                 for (uint8_t idx = 0; idx < NUM_TASKS; idx++) {
 #ifdef __MSP430__

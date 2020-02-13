@@ -32,11 +32,12 @@ DEPS = $(patsubst %.o, %.d, $(OBJS))
 
 MODEL := $(DATA_PATH)/models/mnist/model_optimized.onnx
 IMAGE := $(DATA_PATH)/example3.png
-DATA_FILES = data.c data.h ops.c ops.py ops.h inputs.bin model.bin parameters.bin nvm.bin
+INPUT_DATA_FILES = data.c data.h ops.c ops.py ops.h inputs.bin model.bin parameters.bin
+DATA_FILES = $(INPUT_DATA_FILES) nvm.bin
 
 all: out/intermittent-cnn
 
-$(OBJS): $(DATA_FILES)
+$(OBJS): $(INPUT_DATA_FILES)
 $(OBJS): out/%.o: %.c
 	mkdir -p out && $(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
 
