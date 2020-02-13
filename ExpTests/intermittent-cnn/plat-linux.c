@@ -45,7 +45,7 @@ void run_tests(char *filename) {
             ((int16_t*)parameters_data)[i] = _Q15(1.0 * j / 256 / SCALE);
         }
         fscanf(test_file, "\n");
-        printf("Test %d\n", total);
+        my_printf_debug("Test %d\n", total);
         run_model(&predicted);
         total++;
         if (label == predicted) {
@@ -54,7 +54,7 @@ void run_tests(char *filename) {
         my_printf_debug("%d %d\n", label, predicted);
         reset_model();
     }
-    printf("correct=%d total=%d rate=%f\n", correct, total, 1.0*correct/total);
+    my_printf("correct=%d total=%d rate=%f\n", correct, total, 1.0*correct/total);
     fclose(test_file);
 }
 

@@ -1,11 +1,27 @@
+#include <stdint.h>
+#include <stddef.h>
+
 #define MY_NDEBUG
 #define DUMP_INTEGERS
 
+#if defined(__linux__)
+#  include <stdio.h>
+#  include <inttypes.h> // for PRId32
+#  define my_printf printf
+#  define NEWLINE "\n"
+#elif defined(__MSP430__)
+#  define PRId32 "L" // see print2uart() in Tools/myuart.c
+#  define my_printf print2uart
+#  define NEWLINE "\r\n"
+#endif
+
+void print_q15(int16_t val);
+void print_iq31(int32_t val);
+
 #ifndef MY_NDEBUG
 
-#include "common.h"
-
-void dump_params(ParameterInfo *cur_param);
+struct _ParameterInfo;
+void dump_params(struct _ParameterInfo *cur_param);
 void dump_matrix(int16_t *mat, size_t len);
 void dump_model(void);
 #define print_q15_debug print_q15

@@ -224,7 +224,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
         if (!task_created) {
             for (uint8_t idx = 0; idx < NUM_TASKS; idx++) {
                 if (xCoRoutineCreate(convTaskConcurrent, 0, idx) != pdPASS) {
-                    my_printf("Error: failed to create co-routines." NEWLINE);
+                    // failed to create co-routines
                     ERROR_OCCURRED();
                 }
             }
@@ -234,8 +234,8 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
 #endif
 
     if (get_param_bitwidth(conv_input) != 16 || get_param_bitwidth(conv_filter) != 16) {
-        my_printf("Error: incorrect bitwidth." NEWLINE);
-        return 1;
+        // incorrect bitwidth
+        ERROR_OCCURRED();
     }
     /* original: input: N x C x H x W, filter: M x C x kW x kW
      * remapped: input: N x H x W x C, filter: M x kH x kW x C */
@@ -378,8 +378,8 @@ uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output) {
     my_printf_debug("Add!" NEWLINE);
 
     if (get_param_bitwidth(input[0]) != 16 || get_param_bitwidth(input[1]) != 16) {
-        my_printf("Error: unsupported bitwidth" NEWLINE);
-        return 1;
+        // unsupported bitwidth
+        ERROR_OCCURRED();
     }
     ParameterInfo *A = input[0], *B = input[1];
     output->params_len = input[0]->params_len;
@@ -416,8 +416,8 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
     output->bitwidth_and_flags = 16 << FLAG_SLOTS_WIDTH | get_next_slot(A);
 
     if (A->dims[0] * A->dims[1] > 256) {
-        my_printf("Matrix A too large!" NEWLINE);
-        return 1;
+        // Matrix A too large!
+        ERROR_OCCURRED();
     }
 
     /* Seems TI's debugger does not like alias of pointers :/ */
@@ -487,7 +487,8 @@ uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output) {
                 *ptr = 0;
             }
         } else {
-            my_printf("Error: unsupported bitwidth for ReLu." NEWLINE);
+            // unsupported bitwidth for ReLu
+            ERROR_OCCURRED();
         }
     }
     dump_params(output);
@@ -502,8 +503,8 @@ uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output) {
     output->params_len = data->params_len;
     output->bitwidth_and_flags = data->bitwidth_and_flags;
     if (get_param_bitwidth(shape) != 64) {
-        my_printf("Error: unsupported shape format." NEWLINE);
-        return 1;
+        // unsupported shape format
+        ERROR_OCCURRED();
     }
     for (uint8_t i = 0; i < 4 && i < shape->dims[0]; i++) {
         output->dims[i] = (uint16_t)get_int64_param(shape, i);

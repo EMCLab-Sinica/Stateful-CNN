@@ -28,7 +28,7 @@ static uint8_t handle_cur_group(void) {
         int16_t input_id[3];
         ParameterInfo *input[3];
         if (cur_node->inputs_len != expected_inputs_len[cur_node->op_type]) {
-            my_printf("Error: unexpected input length." NEWLINE);
+            // unexpected input length
             ERROR_OCCURRED();
         }
         for (uint16_t j = 0; j < cur_node->inputs_len; j++) {
@@ -49,7 +49,8 @@ static uint8_t handle_cur_group(void) {
         );
         if (new_intermediate_values_offset >= INTERMEDIATE_VALUES_SIZE) {
             /* TODO: reuse the ring buffer */
-            my_printf("Error: too many immediate values" NEWLINE);
+            // too many immediate values
+            ERROR_OCCURRED();
         }
         uint8_t ret = handlers[cur_node->op_type](input, output);
         if (ret != 0) {
@@ -67,12 +68,12 @@ static uint8_t handle_cur_group(void) {
         }
         my_printf_debug(NEWLINE);
         if (!has_dims) {
-            my_printf("Error: missing dims." NEWLINE);
-            return 1;
+            // missing dims
+            ERROR_OCCURRED();
         }
         if (get_param_bitwidth(output) == 0) {
-            my_printf("Error: invalid bitwidth." NEWLINE);
-            return 1;
+            // invalid bitwidth
+            ERROR_OCCURRED();
         }
 
         cur_node->scheduled = 1;
@@ -126,7 +127,7 @@ int run_model(uint8_t *ansptr) {
         }
 
         if (!grp_index) {
-            my_printf("Error: unable to establish a group." NEWLINE);
+            // unable to establish a group
             ERROR_OCCURRED();
         }
 
