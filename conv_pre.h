@@ -50,7 +50,7 @@
         if (truncated) {
             int16_t *filter_buffer_addr = lea_buffer.conv.filter;
             for (uint16_t h = 0; h < kH; h++) {
-                memcpy(filter_buffer_addr, filter_addr, kW * CHANNEL * sizeof(int16_t));
+                my_memcpy(filter_buffer_addr, filter_addr, kW * CHANNEL * sizeof(int16_t));
                 filter_buffer_addr += dest_offset;
                 filter_addr += kW * CHANNEL;
             }
