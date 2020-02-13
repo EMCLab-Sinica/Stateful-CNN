@@ -30,7 +30,7 @@ typedef struct {
 } Node;
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
-typedef struct __attribute__((__packed__)) {
+typedef struct __attribute__((__packed__)) _ParameterInfo {
     uint32_t params_offset;
     uint32_t params_len;  /* in bytes */
     /* Known bitwidth values:
@@ -65,13 +65,6 @@ extern uint8_t *intermediate_values;
 /**********************************
  *          Miscellaneous         *
  **********************************/
-#if defined(__linux__)
-#  define my_printf printf
-#  define NEWLINE "\n"
-#elif defined(__MSP430__)
-#  define my_printf print2uart
-#  define NEWLINE "\r\n"
-#endif
 
 /* MSP430 SDK already defines MIN, which means minutes */
 #define MIN_VAL(x, y) ((x) < (y) ? (x) : (y))
@@ -128,7 +121,7 @@ static inline uint8_t* get_param_base_pointer(ParameterInfo *param) {
 
 static inline int16_t* get_q15_param(ParameterInfo *param, size_t i) {
     if (get_param_bitwidth(param) != 16) {
-        my_printf("Error: incorrect param passed to %s" NEWLINE, __func__);
+        // incorrect param passed
         ERROR_OCCURRED();
     }
     return (int16_t*)(get_param_base_pointer(param) + param->params_offset) + i;
@@ -143,26 +136,6 @@ void node_input_unmark_all(Node *node);
 uint8_t node_input_marked(Node *node, size_t i);
 static inline int16_t iq31_to_q15(int32_t val) {
     return (int16_t)(val >> 16);
-}
-
-static inline void print_q15(int16_t val) {
-#if defined(__MSP430__) || defined(DUMP_INTEGERS)
-    my_printf("%d ", val);
-#else
-    // 2^15
-    my_printf("% f ", SCALE * val / 32768.0);
-#endif
-}
-
-static inline void print_iq31(int32_t val) {
-#if defined(__MSP430__)
-    my_printf("%L ", val); // see print2uart() in Tools/myuart.c
-#elif defined(DUMP_INTEGERS)
-    my_printf("%" PRId32 " ", val);
-#else
-    // 2^31
-    my_printf("% f ", SCALE * val / 2147483648.0);
-#endif
 }
 
 /**********************************

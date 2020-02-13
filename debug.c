@@ -1,8 +1,27 @@
 #include "debug.h"
+#include "common.h"
+
+void print_q15(int16_t val) {
+#if defined(__MSP430__) || defined(DUMP_INTEGERS)
+    my_printf("%d ", val);
+#else
+    // 2^15
+    my_printf("% f ", SCALE * val / 32768.0);
+#endif
+}
+
+void print_iq31(int32_t val) {
+#if defined(__MSP430__) || defined(DUMP_INTEGERS)
+    my_printf("%" PRId32 " ", val);
+#else
+    // 2^31
+    my_printf("% f ", SCALE * val / 2147483648.0);
+#endif
+}
 
 #ifndef MY_NDEBUG
 // dump in NCHW format
-void dump_params(ParameterInfo *cur_param) {
+void dump_params(struct _ParameterInfo *cur_param) {
     uint16_t NUM, H, W, CHANNEL;
     if (cur_param->dims[2] && cur_param->dims[3]) {
         // tensor
@@ -26,16 +45,16 @@ void dump_params(ParameterInfo *cur_param) {
                     if (bitwidth == 16) {
                         print_q15_debug(*get_q15_param(cur_param, offset));
                     } else if (bitwidth == 32) {
-                        print_iq31(*get_iq31_param(cur_param, offset));
+                        print_iq31_debug(*get_iq31_param(cur_param, offset));
                     } else if (bitwidth == 64) {
-                        my_printf("%ld ", get_int64_param(cur_param, offset));
+                        my_printf_debug("%ld ", get_int64_param(cur_param, offset));
                     }
                 }
-                my_printf(NEWLINE);
+                my_printf_debug(NEWLINE);
             }
-            my_printf(NEWLINE);
+            my_printf_debug(NEWLINE);
         }
-        my_printf(NEWLINE);
+        my_printf_debug(NEWLINE);
     }
 }
 
@@ -43,10 +62,10 @@ void dump_matrix(int16_t *mat, size_t len) {
     for (size_t j = 0; j < len; j++) {
         print_q15_debug(mat[j]);
         if (j && (j % 16 == 15)) {
-            my_printf(NEWLINE);
+            my_printf_debug(NEWLINE);
         }
     }
-    my_printf(NEWLINE);
+    my_printf_debug(NEWLINE);
 }
 
 void dump_model(void) {
