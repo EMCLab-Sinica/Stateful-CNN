@@ -6,16 +6,6 @@ ParameterInfo *parameter_info;
 uint16_t *inputs;
 uint16_t *parameters;
 
-/* on FRAM */
-#ifdef __MSP430__
-#pragma NOINIT(_intermediate_values)
-static uint8_t _intermediate_values[NUM_SLOTS * INTERMEDIATE_VALUES_SIZE];
-uint8_t *intermediate_values = _intermediate_values;
-#pragma NOINIT(_task_flags)
-static uint8_t _task_flags[TASK_FLAGS_SIZE];
-uint8_t *task_flags = _task_flags;
-#endif
-
 static int16_t* node_input_ptr(Node *node, size_t i) {
     return (int16_t*)((uint8_t*)inputs + node->inputs_offset) + i;
 }
