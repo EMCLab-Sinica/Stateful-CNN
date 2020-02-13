@@ -8,8 +8,6 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <signal.h>
-#elif defined(__MSP430__)
-#include <Tools/myuart.h>
 #endif
 
 #define NUM_SLOTS 2
