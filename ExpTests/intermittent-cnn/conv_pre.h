@@ -96,15 +96,15 @@
             w_end   = int16_min( field_size, W-1-conv_params->output_w);
     int16_t *src = NULL,
             *dest,
-            *dest_initial = lea_buffer.conv.input[uxIndex];
+            *dest_initial = lea_buffer.conv.input;
     int16_t src_offset = W * CHANNEL;
     uint8_t input_buffer_reinitialized = 1;
 #ifndef CACHED_INPUTS
     dest = dest_initial;
 #else
-    dest = input_buffer_addr[uxIndex];
+    dest = input_buffer_addr[uxIndex] = next_input_buffer_addr;
     if (dest && dest + kH * dest_offset < dest_initial + INPUTS_LEN
-             && input_buffer_w[uxIndex] == conv_params->output_w) {
+             && input_buffer_w == conv_params->output_w) {
         input_buffer_reinitialized = 0;
     }
 #endif
@@ -123,18 +123,23 @@
 #endif
             .value = 0,
         };
-        msp_status status = msp_fill_q15(&fill_params, lea_buffer.conv.input[uxIndex]);
+        msp_status status = msp_fill_q15(&fill_params, lea_buffer.conv.input);
         msp_checkStatus(status);
 
 #ifdef CACHED_INPUTS
-        dest = input_buffer_addr[uxIndex] = dest_initial;
-        input_buffer_w[uxIndex] = conv_params->output_w;
+        dest = input_buffer_addr[uxIndex] = next_input_buffer_addr = dest_initial;
+        input_buffer_w = conv_params->output_w;
 #endif
 
         h_start = int16_max(-field_size, -conv_params->output_h);
     } else {
         h_start = field_size;
     }
+
+#ifdef CACHED_INPUTS
+    /* XXX: assume stride=1 */
+    next_input_buffer_addr += dest_offset; // dest_offset already calibrated for truncation
+#endif
 
     dest += (h_start + field_size) * dest_offset + (w_start + field_size) * CHANNEL;
 
@@ -147,8 +152,8 @@
     if (h_start <= h_end) {
         src = input_addr + (h_start * W + w_start) * CHANNEL;
 #if defined(CACHED_INPUTS) && defined(DUMP_CONV_PARAMS)
-        my_printf("Copying row to lea_buffer.conv.input[%d] + %d" NEWLINE,
-                  uxIndex, (int)(dest - lea_buffer.conv.input[uxIndex]));
+        my_printf("Copying row to lea_buffer.conv.input + %d" NEWLINE,
+                  (int)(dest - lea_buffer.conv.input));
 #endif
         for (int32_t h = h_start; h <= h_end; h++) {
             my_memcpy(dest, src, size);
