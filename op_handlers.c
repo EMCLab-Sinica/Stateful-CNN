@@ -10,9 +10,7 @@
 #include <FreeRTOS.h>
 #include <croutine.h>
 #include "Tools/my_timer.h"
-#define USE_DMA 1
-#else
-#define USE_DMA 0
+#define USE_CONCURRENT_CONV
 #endif
 
 #include "ops.h"
@@ -22,7 +20,6 @@
 
 #define configCONV_STACK_SIZE 100
 #define NUM_TASKS 2
-#define USE_CONCURRENT_CONV_BY_DEFAULT 1
 #define CACHED_FILTERS
 #define CACHED_INPUTS
 #define INPUTS_LEN 760
@@ -73,7 +70,7 @@ typedef struct ConvTaskParams {
 
 static ConvTaskParams arr_conv_params[NUM_TASKS];
 
-#if USE_DMA
+#ifdef __MSP430__
 #define MY_DMA_CHANNEL DMA_CHANNEL_0
 static DMA_initParam dma_params = {
     .channelSelect = MY_DMA_CHANNEL,
@@ -82,7 +79,7 @@ static DMA_initParam dma_params = {
 #endif
 
 static void my_memcpy(void* dest, const void* src, size_t n) {
-#if !USE_DMA
+#ifndef __MSP430__
     memcpy(dest, src, n);
 #else
     DMA_init(&dma_params);
@@ -99,9 +96,7 @@ static void my_memcpy(void* dest, const void* src, size_t n) {
 static uint16_t arrH[NUM_TASKS], arrW[NUM_TASKS], arrkH[NUM_TASKS], arrkW[NUM_TASKS], arrCHANNEL[NUM_TASKS], arrOUTPUT_CHANNEL[NUM_TASKS];
 static msp_mac_q15_params mac_params[NUM_TASKS];
 
-uint8_t use_concurrent_conv = USE_CONCURRENT_CONV_BY_DEFAULT;
-
-#if __MSP430__
+#ifdef USE_CONCURRENT_CONV
 static uint32_t idleCounter = 0;
 
 static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
@@ -177,7 +172,8 @@ static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
 
     crEND();
 }
-#endif
+
+#else
 
 static void convTask(unsigned short uxIndex) {
     #include "conv_prologue.h"
@@ -197,6 +193,8 @@ static void convTask(unsigned short uxIndex) {
     #include "conv_post.h"
 }
 
+#endif
+
 #ifndef __MSP430__
 // defined in DSPLib_1_30_00_02/source/vector/msp_mac_q15.c
 extern uint32_t msp_mac_q15_overflow_counter;
@@ -210,26 +208,21 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     msp_mac_q15_overflow_counter = 0;
 #endif
 
-    // use_concurrent_conv can be configured for different
-    // convolution neurons here.
+#ifdef USE_CONCURRENT_CONV
+    msp_lea_init();
 
-#ifdef __MSP430__
-    if (use_concurrent_conv) {
-        msp_lea_init();
+    msp_lea_ifg = 1; // dummy
 
-        msp_lea_ifg = 1; // dummy
+    static bool task_created = false;
 
-        static bool task_created = false;
-
-        if (!task_created) {
-            for (uint8_t idx = 0; idx < NUM_TASKS; idx++) {
-                if (xCoRoutineCreate(convTaskConcurrent, 0, idx) != pdPASS) {
-                    // failed to create co-routines
-                    ERROR_OCCURRED();
-                }
+    if (!task_created) {
+        for (uint8_t idx = 0; idx < NUM_TASKS; idx++) {
+            if (xCoRoutineCreate(convTaskConcurrent, 0, idx) != pdPASS) {
+                // failed to create co-routines
+                ERROR_OCCURRED();
             }
-            task_created = true;
         }
+        task_created = true;
     }
 #endif
 
@@ -283,17 +276,14 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
                     conv_params->output_w = output_w;
                 }
                 for (uint8_t idx = 0; idx < NUM_TASKS; idx++) {
-#ifdef __MSP430__
-                    if (use_concurrent_conv) {
-                        /* each co-routine runs as two parts:
-                         * before and after LEA operations */
-                        vCoRoutineSchedule();
-                        vCoRoutineSchedule();
-                    } else
+#ifdef USE_CONCURRENT_CONV
+                    /* each co-routine runs as two parts:
+                     * before and after LEA operations */
+                    vCoRoutineSchedule();
+                    vCoRoutineSchedule();
+#else
+                    convTask(idx);
 #endif
-                    {
-                        convTask(idx);
-                    }
                 }
             }
         }
