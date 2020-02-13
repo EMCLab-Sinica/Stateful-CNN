@@ -75,6 +75,7 @@
 #endif
 
 #include "list.h"
+#include "task.h"
 
 #ifdef __cplusplus
 extern "C" {
