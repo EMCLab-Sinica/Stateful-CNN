@@ -207,7 +207,6 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     }
     /* original: input: N x C x H x W, filter: M x C x kW x kW
      * remapped: input: N x H x W x C, filter: M x kH x kW x C */
-    /* TODO: really use remapped dimensions */
     const uint16_t H = conv_input->dims[1], W = conv_input->dims[2],
                    input_N = conv_filter->dims[0];
     /* XXX: add flags; assume auto_pad=SAME_UPPER, stride=(1, 1), dilation=(1, 1) for now */
