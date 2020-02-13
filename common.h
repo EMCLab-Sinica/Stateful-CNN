@@ -1,14 +1,5 @@
 #pragma once
 
-#define MY_NDEBUG
-#ifndef MY_NDEBUG
-#define DUMP_PARAMS
-#define DUMP_CONV_PARAMS
-#define DUMP_RELU_PARAMS
-#define DUMP_MAXPOOL_PARAMS
-#endif
-#define DUMP_INTEGERS
-
 #include <stddef.h> /* size_t, see https://stackoverflow.com/a/26413264 */
 #include <stdint.h>
 #include <msp430.h> /* __no_operation() */
@@ -154,13 +145,6 @@ static inline int16_t iq31_to_q15(int32_t val) {
     return (int16_t)(val >> 16);
 }
 
-#if !defined(MY_NDEBUG) && defined(DUMP_PARAMS)
-void dump_params(ParameterInfo *cur_param);
-#else
-#define dump_params(cur_param)
-#endif
-
-
 static inline void print_q15(int16_t val) {
 #if defined(__MSP430__) || defined(DUMP_INTEGERS)
     my_printf("%d ", val);
@@ -179,16 +163,6 @@ static inline void print_iq31(int32_t val) {
     // 2^31
     my_printf("% f ", SCALE * val / 2147483648.0);
 #endif
-}
-
-static inline void dump_matrix(int16_t *mat, size_t len) {
-    for (size_t j = 0; j < len; j++) {
-        print_q15(mat[j]);
-        if (j && (j % 16 == 15)) {
-            my_printf(NEWLINE);
-        }
-    }
-    my_printf(NEWLINE);
 }
 
 /**********************************

@@ -17,7 +17,8 @@ SRCS = \
     ops.c \
     op_handlers.c \
     common.c \
-    data.c
+    data.c \
+    debug.c
 
 ifeq ($(UNAME_S),Linux)
     SRCS += plat-linux.c

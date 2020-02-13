@@ -1,6 +1,7 @@
 #include "intermittent-cnn.h"
 #include "data.h"
 #include "common.h"
+#include "debug.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <DSPLib.h>
@@ -50,9 +51,7 @@ void run_tests(char *filename) {
         if (label == predicted) {
             correct++;
         }
-#ifndef MY_NDEBUG
-        printf("%d %d\n", label, predicted);
-#endif
+        my_printf_debug("%d %d\n", label, predicted);
         reset_model();
     }
     printf("correct=%d total=%d rate=%f\n", correct, total, 1.0*correct/total);
