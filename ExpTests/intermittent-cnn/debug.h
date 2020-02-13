@@ -7,10 +7,12 @@
 #if defined(__linux__)
 #  include <stdio.h>
 #  include <inttypes.h> // for PRId32
+#  define PRIsize_t "zu"
 #  define my_printf printf
 #  define NEWLINE "\n"
 #elif defined(__MSP430__)
 #  define PRId32 "L" // see print2uart() in Tools/myuart.c
+#  define PRIsize_t "l"
 #  define my_printf print2uart
 #  define NEWLINE "\r\n"
 #endif

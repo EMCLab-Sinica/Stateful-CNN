@@ -31,10 +31,6 @@
 
     int16_t *output_data = get_q15_param(conv_params->output, 0);
     size_t offset = (size_t)(conv_params->output_h * W * OUTPUT_CHANNEL + conv_params->output_w * OUTPUT_CHANNEL + conv_params->conv_idx);
-#ifdef __MSP430__
-    my_printf_debug("offset of output_data=%l" NEWLINE, offset);
-#else
-    my_printf_debug("offset of output_data=%ld" NEWLINE, offset);
-#endif
+    my_printf_debug("offset of output_data=%" PRIsize_t NEWLINE, offset);
     output_data[offset] = q15_mac_result;
 }
