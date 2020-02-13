@@ -10,11 +10,10 @@
 #include <unistd.h>
 #include <sys/mman.h>
 
-#define NVM_SIZE NUM_SLOTS * INTERMEDIATE_VALUES_SIZE
+#define NVM_SIZE 256*1024
 
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *intermediate_values;
-uint8_t *task_flags;
 
 void run_tests(char *filename) {
     uint8_t label, predicted;
@@ -71,7 +70,6 @@ int main(int argc, char* argv[]) {
         goto exit;
     }
     intermediate_values = nvm;
-    task_flags = nvm + NUM_SLOTS * INTERMEDIATE_VALUES_SIZE;
 
     if (argc >= 3) {
         printf("Usage: %s [test filename]\n", argv[0]);
