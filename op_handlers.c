@@ -20,23 +20,10 @@
 #define CACHED_FILTERS
 #define CACHED_INPUTS
 #define INPUTS_LEN 760
+#define LEA_BUFFER_SIZE 1024
 
 DSPLIB_DATA(lea_buffer, 4)
-union {
-    // for conv
-    struct {
-        int16_t input[INPUTS_LEN];
-        int16_t filter[200];
-        int32_t iq31_mac_result[NUM_TASKS];
-    } conv;
-    // for others
-    struct {
-        int16_t A[256];
-        int16_t B[256];
-        int16_t arrC[256]; // the term C is reserved for MSP430 :/
-        int16_t temp[64];
-    } general;
-} lea_buffer;
+int16_t lea_buffer[LEA_BUFFER_SIZE];
 
 #ifdef USE_CONCURRENT_CONV
 /* internal structure for msp_mac_q15() */
@@ -45,7 +32,7 @@ MSP_LEA_MAC_PARAMS msp_mac_params[NUM_TASKS];
 #endif
 
 #ifdef CACHED_FILTERS
-int8_t cached_filter_index;
+#define NUM_FILTERS 16
 #endif
 #ifdef CACHED_INPUTS
 int16_t *input_buffer_addr[NUM_TASKS];
@@ -70,6 +57,11 @@ static ConvTaskParams arr_conv_params[NUM_TASKS];
 
 static uint16_t arrH[NUM_TASKS], arrW[NUM_TASKS], arrkH[NUM_TASKS], arrkW[NUM_TASKS], arrCHANNEL[NUM_TASKS], arrOUTPUT_CHANNEL[NUM_TASKS];
 static msp_mac_q15_params mac_params[NUM_TASKS];
+static int16_t *filter_buffer_addr[NUM_FILTERS];
+
+static inline int32_t *buffer_iq31_mac_results(uint8_t uxIndex) {
+    return (int32_t*)(lea_buffer + 1024) - (uxIndex + 1);
+}
 
 #ifdef USE_CONCURRENT_CONV
 static uint32_t idleCounter = 0;
@@ -99,15 +91,15 @@ static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
     leaParams = msp_mac_params + uxIndex;
 
     /* Set MSP_LEA_MAC_PARAMS structure. */
-    leaParams->input2 = MSP_LEA_CONVERT_ADDRESS(lea_buffer.conv.filter);
-    leaParams->output = MSP_LEA_CONVERT_ADDRESS(&lea_buffer.conv.iq31_mac_result[uxIndex]);
+    leaParams->input2 = MSP_LEA_CONVERT_ADDRESS(filter_buffer_addr[conv_params->conv_idx]);
+    leaParams->output = MSP_LEA_CONVERT_ADDRESS(buffer_iq31_mac_results(uxIndex));
     leaParams->vectorSize = mac_params[uxIndex].length;
 
     /* Load source arguments to LEA. */
 #ifdef CACHED_INPUTS
     LEAPMS0 = MSP_LEA_CONVERT_ADDRESS(input_buffer_addr[uxIndex]);
 #else
-    LEAPMS0 = MSP_LEA_CONVERT_ADDRESS(lea_buffer.conv.input);
+    LEAPMS0 = MSP_LEA_CONVERT_ADDRESS(lea_buffer);
 #endif
     LEAPMS1 = MSP_LEA_CONVERT_ADDRESS(leaParams);
 
@@ -159,10 +151,10 @@ static void convTask(unsigned short uxIndex) {
 #ifdef CACHED_INPUTS
                                     input_buffer_addr[uxIndex],
 #else
-                                    lea_buffer.conv.input,
+                                    lea_buffer,
 #endif
-                                    lea_buffer.conv.filter,
-                                    &lea_buffer.conv.iq31_mac_result[uxIndex]);
+                                    filter_buffer_addr[conv_params->conv_idx],
+                                    buffer_iq31_mac_results(uxIndex));
     msp_checkStatus(status);
 
     #include "conv_post.h"
@@ -230,9 +222,10 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
         input_buffer_w = -1;
 #endif
     }
-#ifdef CACHED_FILTERS
-    cached_filter_index = -1;
-#endif
+
+    for (uint8_t idx = 0; idx < NUM_FILTERS; idx++) {
+        filter_buffer_addr[idx] = NULL;
+    }
 
     for (uint16_t conv_idx = 0; conv_idx < input_N; conv_idx++) {
         //my_printf_debug("conv_idx = %d" NEWLINE, conv_idx);
@@ -346,12 +339,14 @@ uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output) {
 
     msp_add_q15_params params = { .length = A->dims[1] };
 
-    my_memcpy(lea_buffer.general.A, get_q15_param(A, 0), output->params_len);
-    my_memcpy(lea_buffer.general.B, get_q15_param(B, 0), output->params_len);
-    msp_status status = msp_add_q15(&params, lea_buffer.general.A, lea_buffer.general.B, lea_buffer.general.A);
+    int16_t *buffer_a = lea_buffer,
+            *buffer_b = lea_buffer + output->params_len / sizeof(int16_t);
+    my_memcpy(buffer_a, get_q15_param(A, 0), output->params_len);
+    my_memcpy(buffer_b, get_q15_param(B, 0), output->params_len);
+    msp_status status = msp_add_q15(&params, buffer_a, buffer_b, buffer_a);
     msp_checkStatus(status);
 
-    my_memcpy(get_q15_param(output, 0), lea_buffer.general.A, output->params_len);
+    my_memcpy(get_q15_param(output, 0), buffer_a, output->params_len);
 
     return 0;
 }
@@ -377,17 +372,19 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
         ERROR_OCCURRED();
     }
 
-    /* Seems TI's debugger does not like alias of pointers :/ */
-#define lea_buffer_matmul lea_buffer.general.arrC
+    int16_t *buffer_a = lea_buffer,
+            *buffer_temp = buffer_a + A->dims[0] * A->dims[1],
+            *buffer_matmul = buffer_temp + A->dims[0] * B->dims[1],
+            *buffer_b = buffer_matmul + A->dims[0] * B->dims[1];
 
     msp_fill_q15_params fill_params = {
         .length = 256,
         .value = 0,
     };
-    msp_status status = msp_fill_q15(&fill_params, lea_buffer_matmul);
+    msp_status status = msp_fill_q15(&fill_params, buffer_matmul);
     msp_checkStatus(status);
 
-    my_memcpy(lea_buffer.general.A, get_q15_param(A, 0), (uint16_t)(A->dims[0] * A->dims[1] * sizeof(uint16_t)));
+    my_memcpy(buffer_a, get_q15_param(A, 0), (uint16_t)(A->dims[0] * A->dims[1] * sizeof(uint16_t)));
 
     /* LEA wants addresses to be 4-aligned */
     uint16_t step = (uint16_t)((256 / B->dims[1]) / 4 * 4);
@@ -399,30 +396,28 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
         params.srcBRows = current_width;
         params.srcBCols = B->dims[1];
 
-        my_memcpy(lea_buffer.general.B, get_q15_param(B, (uint16_t)(i * B->dims[1])), (uint16_t)(current_width * B->dims[1] * sizeof(uint16_t)));
+        my_memcpy(buffer_b, get_q15_param(B, (uint16_t)(i * B->dims[1])), (uint16_t)(current_width * B->dims[1] * sizeof(uint16_t)));
 
         my_printf_debug("strip for A" NEWLINE);
-        dump_matrix(lea_buffer.general.A + A->dims[0] * i, (size_t)(A->dims[0] * current_width));
+        dump_matrix(buffer_a + A->dims[0] * i, (size_t)(A->dims[0] * current_width));
         my_printf_debug("B" NEWLINE);
-        dump_matrix(lea_buffer.general.B, (size_t)(current_width * B->dims[1]));
+        dump_matrix(buffer_b, (size_t)(current_width * B->dims[1]));
 
         status = msp_matrix_mpy_q15(
             &params,
-            lea_buffer.general.A + A->dims[0] * i,
-            lea_buffer.general.B,
-            lea_buffer.general.temp);
+            buffer_a + A->dims[0] * i,
+            buffer_b,
+            buffer_temp);
         msp_checkStatus(status);
 
         my_printf_debug("temp" NEWLINE);
-        dump_matrix(lea_buffer.general.temp, (size_t)(A->dims[0] * B->dims[1]));
+        dump_matrix(buffer_temp, (size_t)(A->dims[0] * B->dims[1]));
 
         msp_add_q15_params params2 = { .length = output_len };
-        status = msp_add_q15(&params2, lea_buffer_matmul, lea_buffer.general.temp, lea_buffer_matmul);
+        status = msp_add_q15(&params2, buffer_matmul, buffer_temp, buffer_matmul);
         msp_checkStatus(status);
     }
-    my_memcpy(get_q15_param(output, 0), lea_buffer_matmul, output->params_len);
-
-#undef lea_buffer_matmul
+    my_memcpy(get_q15_param(output, 0), buffer_matmul, output->params_len);
 
     my_printf_debug("handle_matmul output" NEWLINE);
     dump_params(output);
@@ -466,7 +461,7 @@ uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output) {
     for (uint8_t i = 0; i < 4 && i < shape->dims[0]; i++) {
         output->dims[i] = (uint16_t)get_int64_param(shape, i);
     }
-#define lea_buffer_reshape lea_buffer.general.A
+#define lea_buffer_reshape lea_buffer
     /*
      * XXX: Here is an heuristic - no conv nodes after reshape, so remapping
      * NHWC back to NCHW.
