@@ -5,15 +5,9 @@
     my_printf_debug("output_h=%d ", conv_params->output_h);
     my_printf_debug("output_w=%d" NEWLINE, conv_params->output_w);
 
-#ifdef CACHED_INPUTS
     my_printf_debug("input_buffer_addr = lea_buffer + %d" NEWLINE, (int)(input_buffer_addr[uxIndex] - lea_buffer));
-#endif
     my_printf_debug("input" NEWLINE);
-#ifdef CACHED_INPUTS
     dump_matrix(input_buffer_addr[uxIndex], mac_params[uxIndex].length);
-#else
-    dump_matrix(lea_buffer, mac_params[uxIndex].length);
-#endif
     my_printf_debug("filter" NEWLINE);
     dump_matrix(filter_buffer_addr[conv_params->conv_idx], mac_params[uxIndex].length);
 

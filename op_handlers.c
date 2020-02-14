@@ -17,8 +17,6 @@
 
 #define configCONV_STACK_SIZE 100
 #define NUM_TASKS 2
-#define CACHED_FILTERS
-#define CACHED_INPUTS
 #define INPUTS_LEN 760
 #define LEA_BUFFER_SIZE 1024
 
@@ -31,14 +29,10 @@ DSPLIB_DATA(msp_mac_params, 4)
 MSP_LEA_MAC_PARAMS msp_mac_params[NUM_TASKS];
 #endif
 
-#ifdef CACHED_FILTERS
 #define NUM_FILTERS 16
-#endif
-#ifdef CACHED_INPUTS
 int16_t *input_buffer_addr[NUM_TASKS];
 int16_t *next_input_buffer_addr;
 int8_t input_buffer_w;
-#endif
 
 uint16_t counters[10];
 uint8_t counter_idx = 0;
@@ -96,11 +90,7 @@ static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
     leaParams->vectorSize = mac_params[uxIndex].length;
 
     /* Load source arguments to LEA. */
-#ifdef CACHED_INPUTS
     LEAPMS0 = MSP_LEA_CONVERT_ADDRESS(input_buffer_addr[uxIndex]);
-#else
-    LEAPMS0 = MSP_LEA_CONVERT_ADDRESS(lea_buffer);
-#endif
     LEAPMS1 = MSP_LEA_CONVERT_ADDRESS(leaParams);
 
     // modified from DSPLib_1_30_00_02/include/DSPLib_lea.h
@@ -148,11 +138,7 @@ static void convTask(unsigned short uxIndex) {
     #include "conv_pre.h"
 
     msp_status status = msp_mac_q15(&mac_params[uxIndex],
-#ifdef CACHED_INPUTS
                                     input_buffer_addr[uxIndex],
-#else
-                                    lea_buffer,
-#endif
                                     filter_buffer_addr[conv_params->conv_idx],
                                     buffer_iq31_mac_results(uxIndex));
     msp_checkStatus(status);
@@ -216,11 +202,9 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
         conv_params->conv_filter = conv_filter;
         conv_params->bias = bias;
         conv_params->output = output;
-#ifdef CACHED_INPUTS
         input_buffer_addr[idx] = NULL;
         next_input_buffer_addr = NULL;
         input_buffer_w = -1;
-#endif
     }
 
     for (uint8_t idx = 0; idx < NUM_FILTERS; idx++) {
