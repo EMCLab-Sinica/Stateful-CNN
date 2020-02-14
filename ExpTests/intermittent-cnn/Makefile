@@ -36,7 +36,7 @@ IMAGE := $(DATA_PATH)/example3.png
 INPUT_DATA_FILES = data.c data.h ops.c ops.py ops.h inputs.bin model.bin parameters.bin
 DATA_FILES = $(INPUT_DATA_FILES) nvm.bin
 
-all: out/intermittent-cnn
+all: out/intermittent-cnn nvm.bin
 
 $(OBJS): $(INPUT_DATA_FILES)
 $(OBJS): out/%.o: %.c
