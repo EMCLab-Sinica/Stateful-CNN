@@ -21,38 +21,23 @@
     mac_params[uxIndex].length = (uint16_t)(CHANNEL * kH * kW / 2 * 2);
     uint8_t truncated = (mac_params[uxIndex].length != CHANNEL * kH * kW);
     if (truncated) {
-#ifdef CACHED_INPUTS
         // when CHANNEL * kH * kW is odd, CHANNEL * kW (dest_offset) is
         // also odd, so dummy values are needed between slices to make
         // addresses even.
         // a dummy value for each slice (kW * CHANNEL q15 values)
         mac_params[uxIndex].length += kH + 1;
         dest_offset++;
-#else
-        // 1 for the truncated value, another dummy
-        mac_params[uxIndex].length += 2;
-#endif
     }
     buffer_size = sizeof(int16_t) * mac_params[uxIndex].length;
 
     /* copy filter data */
-#ifdef CACHED_FILTERS
     if (!filter_buffer_addr[conv_params->conv_idx]) {
-#endif
         filter_addr = get_q15_param(
             conv_params->conv_filter,
             (size_t)(conv_params->conv_idx * CHANNEL * kH * kW));
         int16_t filter_offset = kH * dest_offset;
-#ifndef CACHED_INPUTS
-        // for the case truncated+CACHED_INPUTS, offset for dummy values
-        // are already handled in dest_offset
-        if (truncated) {
-            filter_offset++;
-        }
-#endif
         filter_buffer_addr[conv_params->conv_idx] = (int16_t*)buffer_iq31_mac_results(NUM_TASKS - 1) - filter_offset;
 
-#ifdef CACHED_INPUTS
         if (truncated) {
             int16_t *current_filter_buffer_addr = filter_buffer_addr[conv_params->conv_idx];
             for (uint16_t h = 0; h < kH; h++) {
@@ -61,7 +46,6 @@
                 filter_addr += kW * CHANNEL;
             }
         } else {
-#endif
             my_memcpy(filter_buffer_addr[conv_params->conv_idx],
                       filter_addr,
                       buffer_size);
@@ -69,12 +53,8 @@
                 // dummy value
                 filter_buffer_addr[conv_params->conv_idx][buffer_size / sizeof(int16_t) - 1] = 0;
             }
-#ifdef CACHED_INPUTS
         }
-#endif
-#ifdef CACHED_FILTERS
     }
-#endif
 
     int8_t field_size = (int8_t)((kH - 1) / 2);
 
@@ -103,15 +83,11 @@
             *dest;
     int16_t src_offset = W * CHANNEL;
     uint8_t input_buffer_reinitialized = 1;
-#ifndef CACHED_INPUTS
-    dest = lea_buffer;
-#else
     dest = input_buffer_addr[uxIndex] = next_input_buffer_addr;
     if (dest && dest + kH * dest_offset < lea_buffer + INPUTS_LEN
              && input_buffer_w == conv_params->output_w) {
         input_buffer_reinitialized = 0;
     }
-#endif
 
     int32_t h_start,
             h_end = int16_min(field_size, H-1-conv_params->output_h);
@@ -119,30 +95,22 @@
         my_printf_debug("Reinitialize input buffer" NEWLINE);
 
         msp_fill_q15_params fill_params = {
-#ifdef CACHED_INPUTS
             .length = INPUTS_LEN,
-#else
-            .length = (uint16_t)((kH * kW * CHANNEL+1)/2*2),
-#endif
             .value = 0,
         };
         msp_status status = msp_fill_q15(&fill_params, lea_buffer);
         msp_checkStatus(status);
 
-#ifdef CACHED_INPUTS
         dest = input_buffer_addr[uxIndex] = next_input_buffer_addr = lea_buffer;
         input_buffer_w = conv_params->output_w;
-#endif
 
         h_start = int16_max(-field_size, -conv_params->output_h);
     } else {
         h_start = field_size;
     }
 
-#ifdef CACHED_INPUTS
     /* XXX: assume stride=1 */
     next_input_buffer_addr += dest_offset; // dest_offset already calibrated for truncation
-#endif
 
     dest += (h_start + field_size) * dest_offset + (w_start + field_size) * CHANNEL;
 
@@ -152,10 +120,8 @@
     size_t size = (size_t)((w_end-w_start+1) * CHANNEL * sizeof(uint16_t)); // in bytes
     if (h_start <= h_end) {
         src = input_addr + (h_start * W + w_start) * CHANNEL;
-#ifdef CACHED_INPUTS
         my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                         (int)(dest - lea_buffer));
-#endif
         for (int32_t h = h_start; h <= h_end; h++) {
             my_memcpy(dest, src, size);
             src += src_offset;
