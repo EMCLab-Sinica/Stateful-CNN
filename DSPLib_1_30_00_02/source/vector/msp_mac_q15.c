@@ -33,6 +33,8 @@
 #include "DSPLib.h"
 #include "common.h"
 
+uint32_t msp_mac_q15_overflow_counter = 0;
+
 #if defined(MSP_USE_LEA)
 
 msp_status msp_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const _q15 *srcB, _iq31 *result)
@@ -108,8 +110,6 @@ msp_status msp_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const
 }
 
 #else //MSP_USE_LEA    
-
-uint32_t msp_mac_q15_overflow_counter = 0;
 
 msp_status msp_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const _q15 *srcB, _iq31 *result)
 {

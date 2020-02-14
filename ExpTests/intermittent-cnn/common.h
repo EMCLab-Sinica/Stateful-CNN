@@ -2,13 +2,7 @@
 
 #include <stddef.h> /* size_t, see https://stackoverflow.com/a/26413264 */
 #include <stdint.h>
-#include <msp430.h> /* __no_operation() */
-
-#ifdef __linux__
-#include <stdio.h>
-#include <inttypes.h>
-#include <signal.h>
-#endif
+#include "platform.h"
 
 #define NUM_SLOTS 2
 #define FLAG_SLOTS 0b11
@@ -77,12 +71,6 @@ static inline int16_t int16_min(int16_t a, int16_t b) {
 static inline int16_t int16_max(int16_t a, int16_t b) {
     return a > b ? a : b;
 }
-
-#ifdef __MSP430__
-#define ERROR_OCCURRED() for (;;) { __no_operation(); }
-#else
-#define ERROR_OCCURRED() do { raise(SIGINT); } while (0);
-#endif
 
 /**********************************
  *       Helpers for nodes        *

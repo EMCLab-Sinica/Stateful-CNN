@@ -6,7 +6,6 @@
 #ifdef __MSP430__
 #include <FreeRTOS.h>
 #include <croutine.h>
-#include "Tools/my_timer.h"
 #define USE_CONCURRENT_CONV
 #endif
 
@@ -14,7 +13,7 @@
 #include "op_handlers.h"
 #include "common.h"
 #include "debug.h"
-#include "my_memcpy.h"
+#include "platform.h"
 
 #define configCONV_STACK_SIZE 100
 #define NUM_TASKS 2
@@ -22,18 +21,13 @@
 #define CACHED_INPUTS
 #define INPUTS_LEN 760
 
-#ifdef __MSP430__
-#pragma DATA_SECTION(lea_buffer, ".leaRAM")
-#endif
+DSPLIB_DATA(lea_buffer, 4)
 union {
     // for conv
     struct {
         int16_t input[INPUTS_LEN];
         int16_t filter[200];
         int32_t iq31_mac_result[NUM_TASKS];
-#ifdef __MSP430__
-        MSP_LEA_MAC_PARAMS params[NUM_TASKS];
-#endif
     } conv;
     // for others
     struct {
@@ -43,6 +37,12 @@ union {
         int16_t temp[64];
     } general;
 } lea_buffer;
+
+#ifdef USE_CONCURRENT_CONV
+/* internal structure for msp_mac_q15() */
+DSPLIB_DATA(msp_mac_params, 4)
+MSP_LEA_MAC_PARAMS msp_mac_params[NUM_TASKS];
+#endif
 
 #ifdef CACHED_FILTERS
 int8_t cached_filter_index;
@@ -96,7 +96,7 @@ static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
     /* modified from DSPLib_1_30_00_02/source/vector/msp_mac_q15.c */
     // different tasks need different buffers for LEA params, or the program
     // counter goes to strange places (e.g., 0x18)
-    leaParams = lea_buffer.conv.params + uxIndex;
+    leaParams = msp_mac_params + uxIndex;
 
     /* Set MSP_LEA_MAC_PARAMS structure. */
     leaParams->input2 = MSP_LEA_CONVERT_ADDRESS(lea_buffer.conv.filter);
@@ -170,18 +170,14 @@ static void convTask(unsigned short uxIndex) {
 
 #endif
 
-#ifndef __MSP430__
 // defined in DSPLib_1_30_00_02/source/vector/msp_mac_q15.c
 extern uint32_t msp_mac_q15_overflow_counter;
-#endif
 
 uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1], *bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 
-#ifndef __MSP430__
     msp_mac_q15_overflow_counter = 0;
-#endif
 
 #ifdef USE_CONCURRENT_CONV
     msp_lea_init();
@@ -219,10 +215,9 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
 
     uint8_t ret = 0;
 
-#ifdef __MSP430__
     uint32_t start, end;
-    start = getTickCounter();
-#endif
+    start = getElapsedMilliseconds();
+
     for (uint8_t idx = 0; idx < NUM_TASKS; idx++) {
         ConvTaskParams *conv_params = &arr_conv_params[idx];
         conv_params->conv_input = conv_input;
@@ -262,19 +257,17 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
             }
         }
     }
-#ifdef __MSP430__
-    end = getTickCounter();
+    end = getElapsedMilliseconds();
     counters[counter_idx] = end - start;
     counter_idx++;
+#ifdef USE_CONCURRENT_CONV
     my_printf("idle for %l cycles" NEWLINE, idleCounter);
 #endif
 
     my_printf_debug("handle_conv output" NEWLINE);
     dump_params(output);
 
-#ifndef __MSP430__
     my_printf("msp_mac_q15_overflow_counter=%d" NEWLINE, msp_mac_q15_overflow_counter);
-#endif
 
     return ret;
 }

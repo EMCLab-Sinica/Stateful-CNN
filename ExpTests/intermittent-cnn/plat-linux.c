@@ -2,14 +2,17 @@
 #include "data.h"
 #include "common.h"
 #include "debug.h"
+#include "platform.h"
+#include <DSPLib.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <DSPLib.h>
-#include <sys/types.h>
-#include <sys/stat.h>
+#include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/time.h>
 
 #define NVM_SIZE 256*1024
 
@@ -82,4 +85,15 @@ int main(int argc, char* argv[]) {
 exit:
     close(nvm_fd);
     return ret;
+}
+
+uint32_t getElapsedMilliseconds() {
+    struct timeval tv;
+    gettimeofday(&tv, 0);
+    return tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
+
+void my_memcpy(void* dest, const void* src, size_t n) {
+    memcpy(dest, src, n);
 }
