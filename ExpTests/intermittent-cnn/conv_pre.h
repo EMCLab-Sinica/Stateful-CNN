@@ -33,41 +33,46 @@
         mac_params[uxIndex].length += 2;
 #endif
     }
-    buffer_size = (uint16_t)(sizeof(uint16_t) * mac_params[uxIndex].length);
-    if (buffer_size > sizeof(lea_buffer.conv.filter)) {
-        my_printf("Error: buffer too small." NEWLINE);
-        ERROR_OCCURRED();
-    }
+    buffer_size = sizeof(int16_t) * mac_params[uxIndex].length;
 
     /* copy filter data */
 #ifdef CACHED_FILTERS
-    if (cached_filter_index != conv_params->conv_idx) {
+    if (!filter_buffer_addr[conv_params->conv_idx]) {
 #endif
         filter_addr = get_q15_param(
             conv_params->conv_filter,
             (size_t)(conv_params->conv_idx * CHANNEL * kH * kW));
+        int16_t filter_offset = kH * dest_offset;
+#ifndef CACHED_INPUTS
+        // for the case truncated+CACHED_INPUTS, offset for dummy values
+        // are already handled in dest_offset
+        if (truncated) {
+            filter_offset++;
+        }
+#endif
+        filter_buffer_addr[conv_params->conv_idx] = (int16_t*)buffer_iq31_mac_results(NUM_TASKS - 1) - filter_offset;
+
 #ifdef CACHED_INPUTS
         if (truncated) {
-            int16_t *filter_buffer_addr = lea_buffer.conv.filter;
+            int16_t *current_filter_buffer_addr = filter_buffer_addr[conv_params->conv_idx];
             for (uint16_t h = 0; h < kH; h++) {
-                my_memcpy(filter_buffer_addr, filter_addr, kW * CHANNEL * sizeof(int16_t));
-                filter_buffer_addr += dest_offset;
+                my_memcpy(current_filter_buffer_addr, filter_addr, kW * CHANNEL * sizeof(int16_t));
+                current_filter_buffer_addr += dest_offset;
                 filter_addr += kW * CHANNEL;
             }
         } else {
 #endif
-            my_memcpy(lea_buffer.conv.filter,
+            my_memcpy(filter_buffer_addr[conv_params->conv_idx],
                       filter_addr,
                       buffer_size);
             if (truncated) {
                 // dummy value
-                lea_buffer.conv.filter[buffer_size / sizeof(int16_t) - 1] = 0;
+                filter_buffer_addr[conv_params->conv_idx][buffer_size / sizeof(int16_t) - 1] = 0;
             }
 #ifdef CACHED_INPUTS
         }
 #endif
 #ifdef CACHED_FILTERS
-        cached_filter_index = conv_params->conv_idx;
     }
 #endif
 
@@ -95,15 +100,14 @@
     int32_t w_start = int16_max(-field_size,    -conv_params->output_w),
             w_end   = int16_min( field_size, W-1-conv_params->output_w);
     int16_t *src = NULL,
-            *dest,
-            *dest_initial = lea_buffer.conv.input;
+            *dest;
     int16_t src_offset = W * CHANNEL;
     uint8_t input_buffer_reinitialized = 1;
 #ifndef CACHED_INPUTS
-    dest = dest_initial;
+    dest = lea_buffer;
 #else
     dest = input_buffer_addr[uxIndex] = next_input_buffer_addr;
-    if (dest && dest + kH * dest_offset < dest_initial + INPUTS_LEN
+    if (dest && dest + kH * dest_offset < lea_buffer + INPUTS_LEN
              && input_buffer_w == conv_params->output_w) {
         input_buffer_reinitialized = 0;
     }
@@ -122,11 +126,11 @@
 #endif
             .value = 0,
         };
-        msp_status status = msp_fill_q15(&fill_params, lea_buffer.conv.input);
+        msp_status status = msp_fill_q15(&fill_params, lea_buffer);
         msp_checkStatus(status);
 
 #ifdef CACHED_INPUTS
-        dest = input_buffer_addr[uxIndex] = next_input_buffer_addr = dest_initial;
+        dest = input_buffer_addr[uxIndex] = next_input_buffer_addr = lea_buffer;
         input_buffer_w = conv_params->output_w;
 #endif
 
@@ -149,8 +153,8 @@
     if (h_start <= h_end) {
         src = input_addr + (h_start * W + w_start) * CHANNEL;
 #ifdef CACHED_INPUTS
-        my_printf_debug("Copying row to lea_buffer.conv.input + %d" NEWLINE,
-                        (int)(dest - lea_buffer.conv.input));
+        my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
+                        (int)(dest - lea_buffer));
 #endif
         for (int32_t h = h_start; h <= h_end; h++) {
             my_memcpy(dest, src, size);

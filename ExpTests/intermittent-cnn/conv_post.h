@@ -6,23 +6,23 @@
     my_printf_debug("output_w=%d" NEWLINE, conv_params->output_w);
 
 #ifdef CACHED_INPUTS
-    my_printf_debug("input_buffer_addr = lea_buffer.conv.input + %d" NEWLINE, (int)(input_buffer_addr[uxIndex] - lea_buffer.conv.input));
+    my_printf_debug("input_buffer_addr = lea_buffer + %d" NEWLINE, (int)(input_buffer_addr[uxIndex] - lea_buffer));
 #endif
     my_printf_debug("input" NEWLINE);
 #ifdef CACHED_INPUTS
     dump_matrix(input_buffer_addr[uxIndex], mac_params[uxIndex].length);
 #else
-    dump_matrix(lea_buffer.conv.input, mac_params[uxIndex].length);
+    dump_matrix(lea_buffer, mac_params[uxIndex].length);
 #endif
     my_printf_debug("filter" NEWLINE);
-    dump_matrix(lea_buffer.conv.filter, mac_params[uxIndex].length);
+    dump_matrix(filter_buffer_addr[conv_params->conv_idx], mac_params[uxIndex].length);
 
     my_printf_debug("iq31_mac_result=");
-    print_iq31_debug(lea_buffer.conv.iq31_mac_result[uxIndex]);
+    print_iq31_debug(*buffer_iq31_mac_results(uxIndex));
     my_printf_debug(NEWLINE);
     /* END dump data */
 
-    int16_t q15_mac_result = iq31_to_q15(lea_buffer.conv.iq31_mac_result[uxIndex]);
+    int16_t q15_mac_result = iq31_to_q15(*buffer_iq31_mac_results(uxIndex));
     q15_mac_result += *get_q15_param(conv_params->bias, conv_params->conv_idx);
 
     my_printf_debug("after adding bias OFM value=");
