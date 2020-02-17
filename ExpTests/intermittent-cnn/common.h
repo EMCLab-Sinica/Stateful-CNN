@@ -9,7 +9,6 @@
 #define FLAG_SLOTS_WIDTH 2
 #define SCALE 16
 #define INTERMEDIATE_VALUES_SIZE 65536
-#define TASK_FLAGS_SIZE 1024
 
 /**********************************
  *        Data structures         *
