@@ -19,6 +19,8 @@
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *intermediate_values;
 
+static uint32_t copied_size = 0;
+
 void run_tests(char *filename) {
     uint8_t label, predicted;
     FILE *test_file = fopen(filename, "r");
@@ -84,6 +86,7 @@ int main(int argc, char* argv[]) {
 
 exit:
     close(nvm_fd);
+    my_printf("Copied size: %" PRId32 NEWLINE, copied_size);
     return ret;
 }
 
@@ -95,5 +98,6 @@ uint32_t getElapsedMilliseconds() {
 
 
 void my_memcpy(void* dest, const void* src, size_t n) {
+    copied_size += n;
     memcpy(dest, src, n);
 }
