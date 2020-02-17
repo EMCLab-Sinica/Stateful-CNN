@@ -14,10 +14,9 @@
 
 #define configCONV_STACK_SIZE 100
 #define NUM_TASKS 2
-#define INPUTS_LEN 760
 
 // TODO: make this adjustable on runtime
-#define FILTER_LIMIT 7
+#define FILTER_LIMIT 4
 
 #ifdef USE_CONCURRENT_CONV
 /* internal structure for msp_mac_q15() */
@@ -47,6 +46,7 @@ static uint16_t arrH[NUM_TASKS], arrW[NUM_TASKS], arrkH[NUM_TASKS], arrkW[NUM_TA
 static msp_mac_q15_params mac_params[NUM_TASKS];
 static int16_t *filter_buffer_addr[NUM_FILTERS];  // filter index -> address
 static int8_t cached_filter_idx[NUM_FILTERS];  // filter buffer id (0~FILTER_LIMIT-1) -> filter index
+static int8_t filter_buffer_id;
 static uint8_t next_scheduled_task_idx = 0;
 static uint8_t pending_filters[NUM_FILTERS];
 static uint8_t pending_filter_idx = 0;
@@ -245,6 +245,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
         filter_buffer_addr[idx] = NULL;
         cached_filter_idx[idx] = -1;
     }
+    filter_buffer_id = 0;
 
     for (uint16_t output_w = 0; output_w < W; output_w++) {
         for (uint16_t output_h = 0; output_h < H; output_h++) {
