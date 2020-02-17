@@ -1,3 +1,6 @@
+// TODO: multiple filter buffers
+#define FILTER_BUFFER_ID 0
+
 {
     conv_params = &arr_conv_params[uxIndex];
 
@@ -36,7 +39,7 @@
             conv_params->conv_filter,
             (size_t)(conv_params->conv_idx * CHANNEL * kH * kW));
         int16_t filter_offset = kH * dest_offset;
-        filter_buffer_addr[conv_params->conv_idx] = (int16_t*)buffer_iq31_mac_results(NUM_TASKS - 1) - filter_offset;
+        filter_buffer_addr[conv_params->conv_idx] = (int16_t*)buffer_iq31_mac_results(NUM_TASKS - 1) - filter_offset * (FILTER_BUFFER_ID + 1);
 
         if (truncated) {
             int16_t *current_filter_buffer_addr = filter_buffer_addr[conv_params->conv_idx];
@@ -54,78 +57,91 @@
                 filter_buffer_addr[conv_params->conv_idx][buffer_size / sizeof(int16_t) - 1] = 0;
             }
         }
-    }
-
-    int8_t field_size = (int8_t)((kH - 1) / 2);
-
-    /* copy input data, row by row */
-
-    input_addr = get_q15_param(
-        conv_params->conv_input,
-        (size_t)(CHANNEL * (
-                (conv_params->output_h) * W +
-                (conv_params->output_w)
-        )));
-
-    /* int32_t instead of int16_t as TI's compiler cannot handle negative
-     * offsets correctly. The expression `input_addr + (int16_t)(-2)` is
-     * compiled as:
-     * 1. -2 is represented as 0x00FFFE (general registers are 24-bit long).
-     *    Assume this value is stored in R11.
-     * 2. RLAM.A #1,R11  # multiply by 2 to transform the offset for int16_t
-     *    to the difference of addresses.
-     * In step 2, R11 becomes 0x01FFFC, while it should be -4, or 0x00FFFC,
-     * and thus the resultant address is offset by 0x10000.
-     */
-    int32_t w_start = int16_max(-field_size,    -conv_params->output_w),
-            w_end   = int16_min( field_size, W-1-conv_params->output_w);
-    int16_t *src = NULL,
-            *dest;
-    int16_t src_offset = W * CHANNEL;
-    uint8_t input_buffer_reinitialized = 1;
-    dest = input_buffer_addr[uxIndex] = next_input_buffer_addr;
-    if (dest && dest + kH * dest_offset < lea_buffer + INPUTS_LEN
-             && input_buffer_w == conv_params->output_w) {
-        input_buffer_reinitialized = 0;
-    }
-
-    int32_t h_start,
-            h_end = int16_min(field_size, H-1-conv_params->output_h);
-    if (input_buffer_reinitialized) {
-        my_printf_debug("Reinitialize input buffer" NEWLINE);
-
-        msp_fill_q15_params fill_params = {
-            .length = INPUTS_LEN,
-            .value = 0,
-        };
-        msp_status status = msp_fill_q15(&fill_params, lea_buffer);
-        msp_checkStatus(status);
-
-        dest = input_buffer_addr[uxIndex] = next_input_buffer_addr = lea_buffer;
-        input_buffer_w = conv_params->output_w;
-
-        h_start = int16_max(-field_size, -conv_params->output_h);
-    } else {
-        h_start = field_size;
-    }
-
-    /* XXX: assume stride=1 */
-    next_input_buffer_addr += dest_offset; // dest_offset already calibrated for truncation
-
-    dest += (h_start + field_size) * dest_offset + (w_start + field_size) * CHANNEL;
-
-    my_printf_debug("h_start=%d ", h_start);
-    my_printf_debug("h_end=%d" NEWLINE, h_end);
-
-    size_t size = (size_t)((w_end-w_start+1) * CHANNEL * sizeof(uint16_t)); // in bytes
-    if (h_start <= h_end) {
-        src = input_addr + (h_start * W + w_start) * CHANNEL;
-        my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
-                        (int)(dest - lea_buffer));
-        for (int32_t h = h_start; h <= h_end; h++) {
-            my_memcpy(dest, src, size);
-            src += src_offset;
-            dest += dest_offset;
+        if (cached_filter_idx[FILTER_BUFFER_ID] >= 0) {
+            filter_buffer_addr[cached_filter_idx[FILTER_BUFFER_ID]] = NULL;
         }
+        cached_filter_idx[FILTER_BUFFER_ID] = conv_params->conv_idx;
+    }
+
+    if (input_buffer_h != conv_params->output_h || input_buffer_w != conv_params->output_w) {
+        int8_t field_size = (int8_t)((kH - 1) / 2);
+
+        /* copy input data, row by row */
+
+        input_addr = get_q15_param(
+            conv_params->conv_input,
+            (size_t)(CHANNEL * (
+                    (conv_params->output_h) * W +
+                    (conv_params->output_w)
+            )));
+
+        /* int32_t instead of int16_t as TI's compiler cannot handle negative
+         * offsets correctly. The expression `input_addr + (int16_t)(-2)` is
+         * compiled as:
+         * 1. -2 is represented as 0x00FFFE (general registers are 24-bit long).
+         *    Assume this value is stored in R11.
+         * 2. RLAM.A #1,R11  # multiply by 2 to transform the offset for int16_t
+         *    to the difference of addresses.
+         * In step 2, R11 becomes 0x01FFFC, while it should be -4, or 0x00FFFC,
+         * and thus the resultant address is offset by 0x10000.
+         */
+        int32_t w_start = int16_max(-field_size,    -conv_params->output_w),
+                w_end   = int16_min( field_size, W-1-conv_params->output_w);
+        int16_t *src = NULL,
+                *dest;
+        int16_t src_offset = W * CHANNEL;
+        uint8_t input_buffer_reinitialized = 1;
+        dest = input_buffer_addr[uxIndex] = next_input_buffer_addr;
+        if (dest && dest + kH * dest_offset < lea_buffer + INPUTS_LEN
+                 && input_buffer_w == conv_params->output_w) {
+            input_buffer_reinitialized = 0;
+        }
+
+        int32_t h_start,
+                h_end = int16_min(field_size, H-1-conv_params->output_h);
+        if (input_buffer_reinitialized) {
+            my_printf_debug("Reinitialize input buffer" NEWLINE);
+
+            msp_fill_q15_params fill_params = {
+                .length = INPUTS_LEN,
+                .value = 0,
+            };
+            msp_status status = msp_fill_q15(&fill_params, lea_buffer);
+            msp_checkStatus(status);
+
+            dest = input_buffer_addr[uxIndex] = next_input_buffer_addr = lea_buffer;
+            input_buffer_w = conv_params->output_w;
+
+            h_start = int16_max(-field_size, -conv_params->output_h);
+        } else {
+            h_start = field_size;
+        }
+
+        dest += (h_start + field_size) * dest_offset + (w_start + field_size) * CHANNEL;
+
+        my_printf_debug("h_start=%d ", h_start);
+        my_printf_debug("h_end=%d" NEWLINE, h_end);
+
+        size_t size = (size_t)((w_end-w_start+1) * CHANNEL * sizeof(uint16_t)); // in bytes
+        if (h_start <= h_end) {
+            src = input_addr + (h_start * W + w_start) * CHANNEL;
+            my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
+                            (int)(dest - lea_buffer));
+            for (int32_t h = h_start; h <= h_end; h++) {
+                my_memcpy(dest, src, size);
+                src += src_offset;
+                dest += dest_offset;
+            }
+        }
+
+        input_buffer_h = conv_params->output_h;
+    } else {
+        input_buffer_addr[uxIndex] = next_input_buffer_addr;
+    }
+
+    if (conv_params->last_filter) {
+        /* XXX: assume stride=1 */
+        next_input_buffer_addr += dest_offset; // dest_offset already calibrated for truncation
+        my_printf_debug("Increment next_input_buffer_addr" NEWLINE);
     }
 }
