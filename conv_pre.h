@@ -1,6 +1,3 @@
-// TODO: multiple filter buffers
-#define FILTER_BUFFER_ID 0
-
 {
     conv_params = &arr_conv_params[uxIndex];
 
@@ -39,7 +36,7 @@
             conv_params->conv_filter,
             (size_t)(conv_params->conv_idx * CHANNEL * kH * kW));
         int16_t filter_offset = kH * dest_offset;
-        filter_buffer_addr[conv_params->conv_idx] = (int16_t*)buffer_iq31_mac_results(NUM_TASKS - 1) - filter_offset * (FILTER_BUFFER_ID + 1);
+        filter_buffer_addr[conv_params->conv_idx] = (int16_t*)buffer_iq31_mac_results(NUM_TASKS - 1) - filter_offset * (filter_buffer_id + 1);
 
         if (truncated) {
             int16_t *current_filter_buffer_addr = filter_buffer_addr[conv_params->conv_idx];
@@ -57,10 +54,14 @@
                 filter_buffer_addr[conv_params->conv_idx][buffer_size / sizeof(int16_t) - 1] = 0;
             }
         }
-        if (cached_filter_idx[FILTER_BUFFER_ID] >= 0) {
-            filter_buffer_addr[cached_filter_idx[FILTER_BUFFER_ID]] = NULL;
+        if (cached_filter_idx[filter_buffer_id] >= 0) {
+            filter_buffer_addr[cached_filter_idx[filter_buffer_id]] = NULL;
         }
-        cached_filter_idx[FILTER_BUFFER_ID] = conv_params->conv_idx;
+        cached_filter_idx[filter_buffer_id] = conv_params->conv_idx;
+        filter_buffer_id++;
+        if (filter_buffer_id == FILTER_LIMIT) {
+            filter_buffer_id = 0;
+        }
     }
 
     if (input_buffer_h != conv_params->output_h || input_buffer_w != conv_params->output_w) {
@@ -91,8 +92,9 @@
                 *dest;
         int16_t src_offset = W * CHANNEL;
         uint8_t input_buffer_reinitialized = 1;
+        uint16_t inputs_len = 1024 - 4 - FILTER_LIMIT * kH * dest_offset;
         dest = input_buffer_addr[uxIndex] = next_input_buffer_addr;
-        if (dest && dest + kH * dest_offset < lea_buffer + INPUTS_LEN
+        if (dest && dest + kH * dest_offset < lea_buffer + inputs_len
                  && input_buffer_w == conv_params->output_w) {
             input_buffer_reinitialized = 0;
         }
@@ -103,7 +105,7 @@
             my_printf_debug("Reinitialize input buffer" NEWLINE);
 
             msp_fill_q15_params fill_params = {
-                .length = INPUTS_LEN,
+                .length = inputs_len,
                 .value = 0,
             };
             msp_status status = msp_fill_q15(&fill_params, lea_buffer);
