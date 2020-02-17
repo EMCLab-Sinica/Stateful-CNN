@@ -16,6 +16,7 @@ SRCS = \
     intermittent-cnn.c \
     ops.c \
     op_handlers.c \
+    conv.c \
     common.c \
     data.c \
     debug.c
