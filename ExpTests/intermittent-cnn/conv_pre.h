@@ -30,6 +30,8 @@
     }
     buffer_size = sizeof(int16_t) * mac_params[uxIndex].length;
 
+    uint8_t filter_limit = MIN_VAL(NUM_FILTERS, (LEA_BUFFER_SIZE - 4 - dest_offset * (kH + TILE_H - 1)) / (dest_offset * kH));
+
     /* copy filter data */
     if (!filter_buffer_addr[conv_params->conv_idx]) {
         filter_addr = get_q15_param(
@@ -59,12 +61,12 @@
         }
         cached_filter_idx[filter_buffer_id] = conv_params->conv_idx;
         filter_buffer_id++;
-        if (filter_buffer_id == FILTER_LIMIT) {
+        if (filter_buffer_id == filter_limit) {
             filter_buffer_id = 0;
         }
     }
 
-    if (input_buffer_h != conv_params->output_h || input_buffer_w != conv_params->output_w) {
+    if (conv_params->first_filter) {
         int8_t field_size = (int8_t)((kH - 1) / 2);
 
         /* copy input data, row by row */
@@ -91,17 +93,17 @@
         int16_t *src = NULL,
                 *dest;
         int16_t src_offset = W * CHANNEL;
-        uint8_t input_buffer_reinitialized = 1;
-        uint16_t inputs_len = 1024 - 4 - FILTER_LIMIT * kH * dest_offset;
-        dest = input_buffer_addr[uxIndex] = next_input_buffer_addr;
-        if (dest && dest + kH * dest_offset < lea_buffer + inputs_len
-                 && input_buffer_w == conv_params->output_w) {
-            input_buffer_reinitialized = 0;
+        uint16_t inputs_len = LEA_BUFFER_SIZE - 4 - filter_limit * kH * dest_offset;
+        if (!conv_params->output_h_offset) {
+            next_input_buffer_addr = lea_buffer;
         }
+
+        dest = input_buffer_addr[uxIndex] = next_input_buffer_addr;
 
         int32_t h_start,
                 h_end = int16_min(field_size, H-1-conv_params->output_h);
-        if (input_buffer_reinitialized) {
+
+        if (!conv_params->output_h_offset) {
             my_printf_debug("Reinitialize input buffer" NEWLINE);
 
             msp_fill_q15_params fill_params = {
@@ -110,9 +112,6 @@
             };
             msp_status status = msp_fill_q15(&fill_params, lea_buffer);
             msp_checkStatus(status);
-
-            dest = input_buffer_addr[uxIndex] = next_input_buffer_addr = lea_buffer;
-            input_buffer_w = conv_params->output_w;
 
             h_start = int16_max(-field_size, -conv_params->output_h);
         } else {
@@ -135,15 +134,18 @@
                 dest += dest_offset;
             }
         }
-
-        input_buffer_h = conv_params->output_h;
-    } else {
+    } else{
+        if (!conv_params->output_h_offset) {
+            next_input_buffer_addr = lea_buffer;
+        }
         input_buffer_addr[uxIndex] = next_input_buffer_addr;
     }
 
-    if (conv_params->last_filter) {
-        /* XXX: assume stride=1 */
-        next_input_buffer_addr += dest_offset; // dest_offset already calibrated for truncation
-        my_printf_debug("Increment next_input_buffer_addr" NEWLINE);
+    /* XXX: assume stride=1 */
+    next_input_buffer_addr += dest_offset; // dest_offset already calibrated for truncation
+    my_printf_debug("Increment next_input_buffer_addr" NEWLINE);
+    my_printf_debug("next_input_buffer_addr = lea_buffer + %d" NEWLINE, (int)(next_input_buffer_addr - lea_buffer));
+    if (next_input_buffer_addr > lea_buffer + LEA_BUFFER_SIZE) {
+        ERROR_OCCURRED();
     }
 }

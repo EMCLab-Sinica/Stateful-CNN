@@ -9,14 +9,15 @@
 #ifdef __MSP430__
 #include <FreeRTOS.h>
 #include <croutine.h>
-#define USE_CONCURRENT_CONV
+//#define USE_CONCURRENT_CONV
 #endif
 
 #define configCONV_STACK_SIZE 100
 #define NUM_TASKS 2
 
-// TODO: make this adjustable on runtime
-#define FILTER_LIMIT 4
+// TODO: make these adjustable on runtime
+#define TILE_W 1
+#define TILE_H 7
 
 #ifdef USE_CONCURRENT_CONV
 /* internal structure for msp_mac_q15() */
@@ -27,7 +28,6 @@ MSP_LEA_MAC_PARAMS msp_mac_params[NUM_TASKS];
 #define NUM_FILTERS 16
 int16_t *input_buffer_addr[NUM_TASKS];
 int16_t *next_input_buffer_addr;
-int8_t input_buffer_h, input_buffer_w;
 
 typedef struct ConvTaskParams {
     ParameterInfo *conv_input;
@@ -37,7 +37,8 @@ typedef struct ConvTaskParams {
     uint16_t conv_idx;
     uint16_t output_h;
     uint16_t output_w;
-    uint8_t last_filter;
+    uint8_t first_filter;
+    uint8_t output_h_offset;
 } ConvTaskParams;
 
 static ConvTaskParams arr_conv_params[NUM_TASKS];
@@ -45,14 +46,14 @@ static ConvTaskParams arr_conv_params[NUM_TASKS];
 static uint16_t arrH[NUM_TASKS], arrW[NUM_TASKS], arrkH[NUM_TASKS], arrkW[NUM_TASKS], arrCHANNEL[NUM_TASKS], arrOUTPUT_CHANNEL[NUM_TASKS];
 static msp_mac_q15_params mac_params[NUM_TASKS];
 static int16_t *filter_buffer_addr[NUM_FILTERS];  // filter index -> address
-static int8_t cached_filter_idx[NUM_FILTERS];  // filter buffer id (0~FILTER_LIMIT-1) -> filter index
+static int8_t cached_filter_idx[NUM_FILTERS];  // filter buffer id (0~filter_limit-1) -> filter index
 static int8_t filter_buffer_id;
 static uint8_t next_scheduled_task_idx = 0;
 static uint8_t pending_filters[NUM_FILTERS];
 static uint8_t pending_filter_idx = 0;
 
 static inline int32_t *buffer_iq31_mac_results(uint8_t uxIndex) {
-    return (int32_t*)(lea_buffer + 1024) - (uxIndex + 1);
+    return (int32_t*)(lea_buffer + LEA_BUFFER_SIZE) - (uxIndex + 1);
 }
 
 #ifdef USE_CONCURRENT_CONV
@@ -149,37 +150,45 @@ static void convTask(unsigned short uxIndex) {
 // defined in DSPLib_1_30_00_02/source/vector/msp_mac_q15.c
 extern uint32_t msp_mac_q15_overflow_counter;
 
-static inline void schedule_task(uint16_t idx, uint16_t output_h, uint16_t output_w, uint8_t last_filter) {
-    ConvTaskParams *conv_params = &arr_conv_params[next_scheduled_task_idx];
-    conv_params->conv_idx = idx;
-    conv_params->output_h = output_h;
-    conv_params->output_w = output_w;
-    conv_params->last_filter = last_filter;
+static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint8_t first_filter) {
+    for (uint8_t i = 0; i < tile_w; i++) {
+        for (uint8_t j = 0; j < tile_h; j++) {
+            ConvTaskParams *conv_params = &arr_conv_params[next_scheduled_task_idx];
+            conv_params->conv_idx = idx;
+            conv_params->output_h = output_h + j;
+            conv_params->output_w = output_w + i;
+            conv_params->first_filter = first_filter;
+            conv_params->output_h_offset = j;
 #ifdef USE_CONCURRENT_CONV
-    /* each co-routine runs as two parts:
-     * before and after LEA operations */
-    vCoRoutineSchedule();
-    vCoRoutineSchedule();
+            /* each co-routine runs as two parts:
+             * before and after LEA operations */
+            vCoRoutineSchedule();
+            vCoRoutineSchedule();
 #else
-    convTask(next_scheduled_task_idx);
+            convTask(next_scheduled_task_idx);
 #endif
-    next_scheduled_task_idx++;
-    if (next_scheduled_task_idx == NUM_TASKS) {
-        next_scheduled_task_idx = 0;
+            next_scheduled_task_idx++;
+            if (next_scheduled_task_idx == NUM_TASKS) {
+                next_scheduled_task_idx = 0;
+            }
+        }
     }
 }
 
-static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, uint16_t output_w) {
+static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w) {
+    uint8_t first_filter = 1;
     for (uint8_t idx = 0; idx < n_conv; idx++) {
         if (filter_buffer_addr[idx]) {
-            schedule_task(idx, output_h, output_w, !pending_filter_idx && (idx == n_conv - 1));
+            schedule_tile(idx, output_h, output_w, tile_h, tile_w, first_filter);
+            first_filter = 0;
         } else {
             pending_filters[pending_filter_idx] = idx;
             pending_filter_idx++;
         }
     }
     for (uint8_t idx = 0; idx < pending_filter_idx; idx++) {
-        schedule_task(pending_filters[idx], output_h, output_w, idx == pending_filter_idx - 1);
+        schedule_tile(pending_filters[idx], output_h, output_w, tile_h, tile_w, first_filter);
+        first_filter = 0;
     }
     pending_filter_idx = 0;
 }
@@ -237,8 +246,6 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
         conv_params->output = output;
         input_buffer_addr[idx] = NULL;
         next_input_buffer_addr = NULL;
-        input_buffer_h = -1;
-        input_buffer_w = -1;
     }
 
     for (uint8_t idx = 0; idx < NUM_FILTERS; idx++) {
@@ -247,9 +254,9 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     }
     filter_buffer_id = 0;
 
-    for (uint16_t output_w = 0; output_w < W; output_w++) {
-        for (uint16_t output_h = 0; output_h < H; output_h++) {
-            handle_conv_inner_loop(input_N, output_h, output_w);
+    for (uint16_t output_w = 0; output_w < W; output_w += TILE_W) {
+        for (uint16_t output_h = 0; output_h < H; output_h += TILE_H) {
+            handle_conv_inner_loop(input_N, output_h, output_w, TILE_H, TILE_W);
         }
     }
 

@@ -8,7 +8,7 @@
     my_printf_debug("input_buffer_addr = lea_buffer + %d" NEWLINE, (int)(input_buffer_addr[uxIndex] - lea_buffer));
     my_printf_debug("input" NEWLINE);
     dump_matrix(input_buffer_addr[uxIndex], mac_params[uxIndex].length);
-    my_printf_debug("filter_buffer_addr = lea_buffer + 1024 - %d" NEWLINE, (int)(lea_buffer + 1024 - filter_buffer_addr[conv_params->conv_idx]));
+    my_printf_debug("filter_buffer_addr = lea_buffer + LEA_BUFFER_SIZE - %d" NEWLINE, (int)(lea_buffer + LEA_BUFFER_SIZE - filter_buffer_addr[conv_params->conv_idx]));
     my_printf_debug("filter" NEWLINE);
     dump_matrix(filter_buffer_addr[conv_params->conv_idx], mac_params[uxIndex].length);
 
