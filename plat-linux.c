@@ -99,5 +99,7 @@ uint32_t getElapsedMilliseconds() {
 
 void my_memcpy(void* dest, const void* src, size_t n) {
     copied_size += n;
+    my_printf_debug(__func__);
+    my_printf_debug(" copied %d bytes" NEWLINE, (int)n);
     memcpy(dest, src, n);
 }
