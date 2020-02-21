@@ -9,7 +9,7 @@
 #ifdef __MSP430__
 #include <FreeRTOS.h>
 #include <croutine.h>
-//#define USE_CONCURRENT_CONV
+#define USE_CONCURRENT_CONV
 #endif
 
 #define configCONV_STACK_SIZE 100
@@ -150,26 +150,35 @@ static void convTask(unsigned short uxIndex) {
 // defined in DSPLib_1_30_00_02/source/vector/msp_mac_q15.c
 extern uint32_t msp_mac_q15_overflow_counter;
 
+static inline void increment_task_idx(void) {
+    next_scheduled_task_idx++;
+    if (next_scheduled_task_idx == NUM_TASKS) {
+        next_scheduled_task_idx = 0;
+    }
+}
+
 static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint8_t first_filter) {
     for (uint8_t i = 0; i < tile_w; i++) {
-        for (uint8_t j = 0; j < tile_h; j++) {
-            ConvTaskParams *conv_params = &arr_conv_params[next_scheduled_task_idx];
-            conv_params->conv_idx = idx;
-            conv_params->output_h = output_h + j;
-            conv_params->output_w = output_w + i;
-            conv_params->first_filter = first_filter;
-            conv_params->output_h_offset = j;
+        for (uint8_t j = 0; j < tile_h; j += NUM_TASKS) {
+            for (uint8_t k = 0; k < NUM_TASKS; k++) {
+                ConvTaskParams *conv_params = &arr_conv_params[next_scheduled_task_idx];
+                conv_params->conv_idx = idx;
+                conv_params->output_h = output_h + j + k;
+                conv_params->output_w = output_w + i;
+                conv_params->first_filter = first_filter;
+                conv_params->output_h_offset = j + k;
+                increment_task_idx();
+            }
+            for (uint8_t k = 0; k < NUM_TASKS; k++) {
 #ifdef USE_CONCURRENT_CONV
-            /* each co-routine runs as two parts:
-             * before and after LEA operations */
-            vCoRoutineSchedule();
-            vCoRoutineSchedule();
+                /* each co-routine runs as two parts:
+                 * before and after LEA operations */
+                vCoRoutineSchedule();
+                vCoRoutineSchedule();
 #else
-            convTask(next_scheduled_task_idx);
+                convTask(next_scheduled_task_idx);
+                increment_task_idx();
 #endif
-            next_scheduled_task_idx++;
-            if (next_scheduled_task_idx == NUM_TASKS) {
-                next_scheduled_task_idx = 0;
             }
         }
     }
