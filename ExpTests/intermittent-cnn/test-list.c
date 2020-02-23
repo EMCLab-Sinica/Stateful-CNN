@@ -4,7 +4,7 @@
 
 static const size_t LIST_SIZE = 5;
 
-int main() {
+int main(void) {
     List_t list;
     ListItem_t items[LIST_SIZE];
     int values[LIST_SIZE];

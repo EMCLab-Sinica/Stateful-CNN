@@ -31,7 +31,6 @@
  * --/COPYRIGHT--*/
 
 #include "DSPLib.h"
-#include "common.h"
 
 uint32_t msp_mac_q15_overflow_counter = 0;
 

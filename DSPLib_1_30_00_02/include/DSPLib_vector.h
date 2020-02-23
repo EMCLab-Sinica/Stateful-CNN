@@ -1840,6 +1840,9 @@ extern msp_status msp_cmplx_shift_iq31(const msp_cmplx_shift_iq31_params *params
                                        const _iq31 *src,
                                        _iq31 *dst);
 
+// defined in source/vector/msp_mac_q15.c
+extern uint32_t msp_mac_q15_overflow_counter;
+
 //*****************************************************************************
 //
 // Mark the end of the C bindings section for C++ compilers.
