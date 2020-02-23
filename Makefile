@@ -3,7 +3,7 @@ IMAGE := $(DATA_PATH)/example3.png
 INPUT_DATA_FILES = data.c data.h ops.c ops.py ops.h inputs.bin model.bin parameters.bin
 DATA_FILES = $(INPUT_DATA_FILES) nvm.bin
 
-all: $(DATA_FILES)
+all: out nvm.bin
 
 ops.py ops.c ops.h: gen_ops.py
 	python $<
@@ -20,4 +20,7 @@ nvm.bin:
 clean:
 	rm -rvf __pycache__ $(DATA_FILES)
 
-.PHONY: all clean
+out: $(INPUT_DATA_FILES)
+	mkdir -p out && cd out && cmake .. && make
+
+.PHONY: all out clean
