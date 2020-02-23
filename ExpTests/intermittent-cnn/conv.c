@@ -17,7 +17,6 @@
 
 // TODO: make these adjustable on runtime
 #define TILE_W 1
-#define TILE_H 7
 
 #ifdef USE_CONCURRENT_CONV
 /* internal structure for msp_mac_q15() */
@@ -30,6 +29,7 @@ int16_t *input_buffer_addr[NUM_TASKS];
 int16_t *next_input_buffer_addr;
 
 #define CONV_TASK_FLAG_FIRST_FILTER 1
+// XXX: any way to achieve concurrency without skipping?
 #define CONV_TASK_FLAG_NOOP 2
 typedef struct ConvTaskParams {
     ParameterInfo *conv_input;
@@ -41,6 +41,7 @@ typedef struct ConvTaskParams {
     uint16_t output_w;
     uint8_t flags;
     uint8_t output_h_offset;
+    uint8_t tile_h;
 } ConvTaskParams;
 
 static ConvTaskParams arr_conv_params[NUM_TASKS];
@@ -176,6 +177,7 @@ static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t outpu
                     conv_params->output_w = output_w + i;
                     conv_params->flags = (first_filter ? CONV_TASK_FLAG_FIRST_FILTER : 0);
                     conv_params->output_h_offset = j + k;
+                    conv_params->tile_h = tile_h;
                 } else {
                     conv_params->flags = CONV_TASK_FLAG_NOOP;
                 }
@@ -275,9 +277,16 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     }
     filter_buffer_id = 0;
 
+    uint8_t tile_h;
+    if (H == 14) {
+        tile_h = 7;
+    } else if (H == 28) {
+        tile_h = 28;
+    }
+
     for (uint16_t output_w = 0; output_w < W; output_w += TILE_W) {
-        for (uint16_t output_h = 0; output_h < H; output_h += TILE_H) {
-            handle_conv_inner_loop(input_N, output_h, output_w, TILE_H, TILE_W);
+        for (uint16_t output_h = 0; output_h < H; output_h += tile_h) {
+            handle_conv_inner_loop(input_N, output_h, output_w, tile_h, TILE_W);
         }
     }
 

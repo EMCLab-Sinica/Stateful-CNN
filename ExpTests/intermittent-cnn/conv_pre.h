@@ -28,7 +28,7 @@
     }
     buffer_size = sizeof(int16_t) * mac_params[uxIndex].length;
 
-    uint8_t filter_limit = MIN_VAL(OUTPUT_CHANNEL, (LEA_BUFFER_SIZE - 4 - dest_offset * (kH + TILE_H - 1)) / (dest_offset * kH));
+    uint8_t filter_limit = MIN_VAL(OUTPUT_CHANNEL, (LEA_BUFFER_SIZE - 4 - dest_offset * (kH + conv_params->tile_h - 1)) / (dest_offset * kH));
 
     /* copy filter data */
     if (!filter_buffer_addr[conv_params->conv_idx]) {
