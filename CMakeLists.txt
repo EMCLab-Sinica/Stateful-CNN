@@ -52,7 +52,6 @@ add_executable(intermittent-cnn
     op_handlers.c
     conv.c
     common.c
-    data.c
     debug.c
     plat-linux.c
 )

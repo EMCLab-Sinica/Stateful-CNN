@@ -1,5 +1,4 @@
 #include "intermittent-cnn.h"
-#include "data.h"
 #include "common.h"
 #include "debug.h"
 #include "platform.h"
@@ -18,6 +17,7 @@
 
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *intermediate_values;
+uint8_t *inputs_data, *parameters_data, *model_data;
 
 static uint32_t copied_size = 0;
 
@@ -74,6 +74,10 @@ int main(int argc, char* argv[]) {
         goto exit;
     }
     intermediate_values = nvm;
+    // Keep the order consistent with `outputs` in transform.py
+    inputs_data = nvm + NUM_SLOTS * INTERMEDIATE_VALUES_SIZE;
+    parameters_data = inputs_data + INPUTS_DATA_LEN;
+    model_data = parameters_data + PARAMETERS_DATA_LEN;
 
     if (argc >= 3) {
         printf("Usage: %s [test filename]\n", argv[0]);
