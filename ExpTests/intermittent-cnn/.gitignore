@@ -1,4 +1,4 @@
 /out
-*.bin
+nvm.bin
 ops.*
 data.*

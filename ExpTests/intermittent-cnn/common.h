@@ -2,13 +2,11 @@
 
 #include <stddef.h> /* size_t, see https://stackoverflow.com/a/26413264 */
 #include <stdint.h>
+#include "data.h"
 #include "platform.h"
 
-#define NUM_SLOTS 2
 #define FLAG_SLOTS 0b11
 #define FLAG_SLOTS_WIDTH 2
-#define SCALE 16
-#define INTERMEDIATE_VALUES_SIZE 65536
 
 /**********************************
  *        Data structures         *
