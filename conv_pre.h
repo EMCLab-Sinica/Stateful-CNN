@@ -1,6 +1,4 @@
 {
-    conv_params = &arr_conv_params[uxIndex];
-
     arrH[uxIndex] = conv_params->conv_input->dims[1];
     arrW[uxIndex] = conv_params->conv_input->dims[2];
     arrkH[uxIndex] = conv_params->conv_filter->dims[1];
@@ -66,7 +64,7 @@
         }
     }
 
-    if (conv_params->first_filter) {
+    if (conv_params->flags & CONV_TASK_FLAG_FIRST_FILTER) {
         int8_t field_size = (int8_t)((kH - 1) / 2);
 
         /* copy input data, row by row */

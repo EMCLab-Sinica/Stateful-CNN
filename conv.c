@@ -29,6 +29,8 @@ MSP_LEA_MAC_PARAMS msp_mac_params[NUM_TASKS];
 int16_t *input_buffer_addr[NUM_TASKS];
 int16_t *next_input_buffer_addr;
 
+#define CONV_TASK_FLAG_FIRST_FILTER 1
+#define CONV_TASK_FLAG_NOOP 2
 typedef struct ConvTaskParams {
     ParameterInfo *conv_input;
     ParameterInfo *conv_filter;
@@ -37,7 +39,7 @@ typedef struct ConvTaskParams {
     uint16_t conv_idx;
     uint16_t output_h;
     uint16_t output_w;
-    uint8_t first_filter;
+    uint8_t flags;
     uint8_t output_h_offset;
 } ConvTaskParams;
 
@@ -70,6 +72,11 @@ static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
     crSTART(xHandle);
 
     for (;;) {
+
+    if (conv_params->flags & CONV_TASK_FLAG_NOOP) {
+        crDELAY(xHandle, 0);
+        continue;
+    }
 
     #include "conv_pre.h"
 
@@ -134,6 +141,10 @@ static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
 static void convTask(unsigned short uxIndex) {
     #include "conv_prologue.h"
 
+    if (conv_params->flags & CONV_TASK_FLAG_NOOP) {
+        return;
+    }
+
     #include "conv_pre.h"
 
     msp_status status = msp_mac_q15(&mac_params[uxIndex],
@@ -157,18 +168,20 @@ static inline void increment_task_idx(void) {
 static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint8_t first_filter) {
     for (uint8_t i = 0; i < tile_w; i++) {
         for (uint8_t j = 0; j < tile_h; j += NUM_TASKS) {
-            uint8_t k = 0, original_next_scheduled_task_idx = next_scheduled_task_idx;
-            for (; k < NUM_TASKS && j + k < tile_h; k++) {
+            for (uint8_t k = 0; k < NUM_TASKS; k++) {
                 ConvTaskParams *conv_params = &arr_conv_params[next_scheduled_task_idx];
-                conv_params->conv_idx = idx;
-                conv_params->output_h = output_h + j + k;
-                conv_params->output_w = output_w + i;
-                conv_params->first_filter = first_filter;
-                conv_params->output_h_offset = j + k;
+                if (j + k < tile_h) {
+                    conv_params->conv_idx = idx;
+                    conv_params->output_h = output_h + j + k;
+                    conv_params->output_w = output_w + i;
+                    conv_params->flags = (first_filter ? CONV_TASK_FLAG_FIRST_FILTER : 0);
+                    conv_params->output_h_offset = j + k;
+                } else {
+                    conv_params->flags = CONV_TASK_FLAG_NOOP;
+                }
                 increment_task_idx();
             }
-            next_scheduled_task_idx = original_next_scheduled_task_idx;
-            for (uint8_t k2 = 0; k2 < k; k2++) {
+            for (uint8_t k = 0; k < NUM_TASKS; k++) {
 #ifdef USE_CONCURRENT_CONV
                 /* each co-routine runs as two parts:
                  * before and after LEA operations */
