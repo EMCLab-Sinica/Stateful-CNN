@@ -72,6 +72,7 @@ void dump_model(void) {
     uint16_t i, j;
     for (i = 0; i < model->nodes_len; i++) {
         Node *cur_node = &(nodes[i]);
+        my_printf_debug(cur_node->scheduled ? "scheduled     " : "not scheduled ");
         my_printf_debug("(");
         for (j = 0; j < cur_node->inputs_len; j++) {
             my_printf_debug("%d", node_input(cur_node, j));
@@ -84,9 +85,8 @@ void dump_model(void) {
                 my_printf_debug(", ");
             }
         }
-        my_printf_debug(") ");
+        my_printf_debug(")" NEWLINE);
     }
-    my_printf_debug(NEWLINE);
 }
 
 #endif
