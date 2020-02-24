@@ -92,10 +92,7 @@ int run_model(uint8_t *ansptr) {
 
     my_printf_debug("model->n_input = %d" NEWLINE, model->n_input);
 
-    /* initialize - the first node must have no inputs as
-     * ONNX already sort nodes topologically */
-    cur_group[0] = 0;
-    grp_index = 1;
+    grp_index = 0;
 
     dump_model();
 
