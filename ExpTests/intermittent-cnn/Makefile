@@ -1,3 +1,4 @@
+DATA_PATH := ../../../intermittent-cnn
 MODEL := $(DATA_PATH)/models/mnist/model_optimized.onnx
 IMAGE := $(DATA_PATH)/example3.png
 INPUT_DATA_FILES = data.c data.h ops.c ops.py ops.h
