@@ -57,7 +57,6 @@ void run_tests(char *filename) {
             correct++;
         }
         my_printf_debug("%d %d\n", label, predicted);
-        reset_model();
     }
     my_printf("correct=%d total=%d rate=%f\n", correct, total, 1.0*correct/total);
     fclose(test_file);

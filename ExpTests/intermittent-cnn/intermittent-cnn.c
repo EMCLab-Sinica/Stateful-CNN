@@ -187,13 +187,13 @@ int run_model(uint8_t *ansptr) {
         }
     }
 
-    return 0;
-}
-
-void reset_model() {
+    // reset model
     for (uint16_t i = 0; i < model->nodes_len; i++) {
         Node *cur_node = &(nodes[i]);
         node_input_unmark_all(cur_node);
         cur_node->scheduled = 0;
     }
+    counter_idx = 0;
+
+    return 0;
 }
