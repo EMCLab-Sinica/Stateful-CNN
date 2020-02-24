@@ -36,12 +36,14 @@ typedef struct ConvTaskParams {
     ParameterInfo *conv_filter;
     ParameterInfo *bias;
     ParameterInfo *output;
+    // Keep the order of the following 3 fields consistent with OpExtraData.conv
     uint16_t conv_idx;
     uint16_t output_h;
     uint16_t output_w;
     uint8_t flags;
     uint8_t output_h_offset;
     uint8_t tile_h;
+    OpExtraData *extra_data;
 } ConvTaskParams;
 
 static ConvTaskParams arr_conv_params[NUM_TASKS];
@@ -166,9 +168,10 @@ static inline void increment_task_idx(void) {
     }
 }
 
-static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint8_t first_filter) {
-    for (uint8_t i = 0; i < tile_w; i++) {
-        for (uint8_t j = 0; j < tile_h; j += NUM_TASKS) {
+static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint8_t first_filter, uint16_t H, uint16_t W) {
+    for (uint8_t i = 0; i < MIN_VAL(tile_w, W - output_w); i++) {
+        for (uint8_t j = 0; j < MIN_VAL(tile_h, H - output_h); j += NUM_TASKS) {
+            arr_conv_params[0].extra_data->output_h_offset = j;
             for (uint8_t k = 0; k < NUM_TASKS; k++) {
                 ConvTaskParams *conv_params = &arr_conv_params[next_scheduled_task_idx];
                 if (j + k < tile_h) {
@@ -198,11 +201,11 @@ static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t outpu
     }
 }
 
-static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w) {
+static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint16_t H, uint16_t W) {
     uint8_t first_filter = 1;
     for (uint8_t idx = 0; idx < n_conv; idx++) {
         if (filter_buffer_addr[idx]) {
-            schedule_tile(idx, output_h, output_w, tile_h, tile_w, first_filter);
+            schedule_tile(idx, output_h, output_w, tile_h, tile_w, first_filter, H, W);
             first_filter = 0;
         } else {
             pending_filters[pending_filter_idx] = idx;
@@ -210,13 +213,13 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
         }
     }
     for (uint8_t idx = 0; idx < pending_filter_idx; idx++) {
-        schedule_tile(pending_filters[idx], output_h, output_w, tile_h, tile_w, first_filter);
+        schedule_tile(pending_filters[idx], output_h, output_w, tile_h, tile_w, first_filter, H, W);
         first_filter = 0;
     }
     pending_filter_idx = 0;
 }
 
-uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
+uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1], *bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 
@@ -267,8 +270,14 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
         conv_params->conv_filter = conv_filter;
         conv_params->bias = bias;
         conv_params->output = output;
+        conv_params->extra_data = extra_data;
         input_buffer_addr[idx] = NULL;
         next_input_buffer_addr = NULL;
+    }
+
+    if (!extra_data->running) {
+        extra_data->conv_idx = extra_data->output_h = extra_data->output_h_offset = extra_data->output_w = 0;
+        extra_data->running = 1;
     }
 
     for (uint8_t idx = 0; idx < NUM_FILTERS; idx++) {
@@ -284,9 +293,16 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
         tile_h = 28;
     }
 
-    for (uint16_t output_w = 0; output_w < W; output_w += TILE_W) {
-        for (uint16_t output_h = 0; output_h < H; output_h += tile_h) {
-            handle_conv_inner_loop(input_N, output_h, output_w, tile_h, TILE_W);
+    uint16_t starting_w = extra_data->output_w,
+             starting_h = extra_data->output_h;
+    if (starting_w >= W || starting_h >= H) {
+        ERROR_OCCURRED();
+    }
+    for (uint16_t output_w = starting_w; output_w < W; output_w += TILE_W) {
+        extra_data->output_w = output_w;
+        for (uint16_t output_h = starting_h; output_h < H; output_h += tile_h) {
+            extra_data->output_h = output_h;
+            handle_conv_inner_loop(input_N, output_h, output_w, tile_h, TILE_W, H, W);
         }
     }
 
@@ -301,6 +317,8 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output) {
     dump_params(output);
 
     my_printf("msp_mac_q15_overflow_counter=%d" NEWLINE, msp_mac_q15_overflow_counter);
+
+    extra_data->running = 0;
 
     return ret;
 }

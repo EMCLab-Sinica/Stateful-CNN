@@ -52,7 +52,7 @@ static uint8_t handle_cur_group(void) {
             // too many immediate values
             ERROR_OCCURRED();
         }
-        uint8_t ret = handlers[cur_node->op_type](input, output);
+        uint8_t ret = handlers[cur_node->op_type](input, output, &model->extra_data);
         if (ret != 0) {
             return 1;
         }

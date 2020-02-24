@@ -11,7 +11,9 @@ int16_t lea_buffer[LEA_BUFFER_SIZE];
 uint16_t counters[10];
 uint8_t counter_idx = 0;
 
-uint8_t handle_maxpool(const uint16_t stride, ParameterInfo *input[], ParameterInfo *output) {
+uint8_t handle_maxpool(const uint16_t stride, ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data) {
+    UNUSED(extra_data);
+
     my_printf_debug("MaxPool!" NEWLINE);
 
     /* XXX: add flags; assume no padding for now */
@@ -61,15 +63,17 @@ uint8_t handle_maxpool(const uint16_t stride, ParameterInfo *input[], ParameterI
 }
 
 // XXX: there should be a better way to encode the stride
-uint8_t handle_maxpool_2(ParameterInfo *input[], ParameterInfo *output) {
-    return handle_maxpool(2, input, output);
+uint8_t handle_maxpool_2(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data) {
+    return handle_maxpool(2, input, output, extra_data);
 }
 
-uint8_t handle_maxpool_3(ParameterInfo *input[], ParameterInfo *output) {
-    return handle_maxpool(3, input, output);
+uint8_t handle_maxpool_3(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data) {
+    return handle_maxpool(3, input, output, extra_data);
 }
 
-uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output) {
+uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data) {
+    UNUSED(extra_data);
+
     /* Add: Y = X + W */
     my_printf_debug("Add!" NEWLINE);
 
@@ -97,7 +101,9 @@ uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output) {
     return 0;
 }
 
-uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
+uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data) {
+    UNUSED(extra_data);
+
     ParameterInfo *A = input[0], *B = input[1];
 
     my_printf_debug("handle_matmul inputs" NEWLINE);
@@ -171,7 +177,9 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output) {
     return 0;
 }
 
-uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output) {
+uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data) {
+    UNUSED(extra_data);
+
     my_printf_debug("ReLu!" NEWLINE);
 
     ParameterInfo *X = input[0];
@@ -193,7 +201,9 @@ uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output) {
     return 0;
 }
 
-uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output) {
+uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data) {
+    UNUSED(extra_data);
+
     my_printf_debug("Reshape!" NEWLINE);
 
     ParameterInfo *data = input[0], *shape = input[1];
@@ -239,7 +249,9 @@ uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output) {
     return 0;
 }
 
-uint8_t handle_squeeze(ParameterInfo *input[], ParameterInfo *output) {
+uint8_t handle_squeeze(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data) {
+    UNUSED(extra_data);
+
     my_printf_debug("Squeeze!" NEWLINE);
 
     ParameterInfo *data = input[0];
