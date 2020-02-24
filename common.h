@@ -35,9 +35,22 @@ typedef struct __attribute__((__packed__)) _ParameterInfo {
     uint16_t dims[4];
 } ParameterInfo;
 
+typedef union {
+    struct {
+        // XXX: support interleaved conv nodes
+        uint16_t conv_idx;
+        uint16_t output_h;
+        uint16_t output_h_offset;
+        uint16_t output_w;
+        uint16_t running;
+    };
+    uint8_t dummy[16]; // to make the size of this sturcture constant
+} OpExtraData;
+
 typedef struct __attribute__((__packed__)) {
     uint16_t nodes_len;
     uint16_t n_input;
+    OpExtraData extra_data;
 } Model;
 
 /**********************************
@@ -68,6 +81,8 @@ static inline int16_t int16_min(int16_t a, int16_t b) {
 static inline int16_t int16_max(int16_t a, int16_t b) {
     return a > b ? a : b;
 }
+
+#define UNUSED(x) (void)(x)
 
 /**********************************
  *       Helpers for nodes        *
@@ -124,6 +139,6 @@ static inline int16_t iq31_to_q15(int32_t val) {
 /**********************************
  *       Operation handlers       *
  **********************************/
-typedef uint8_t (*handler)(ParameterInfo *input[], ParameterInfo *output);
+typedef uint8_t (*handler)(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data);
 extern uint8_t expected_inputs_len[];
 extern handler handlers[];

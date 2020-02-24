@@ -113,6 +113,7 @@ outputs = {
 
 outputs['model'].write(to_bytes(len(model)))
 outputs['model'].write(to_bytes(n_input))
+outputs['model'].write(b'\0' * 16)  # Node.extra_data
 parameters_bin_offset = 0
 for inputs, op_type in model:
     outputs['model'].write(to_bytes(len(inputs)))

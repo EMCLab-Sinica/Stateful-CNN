@@ -20,6 +20,7 @@ uint8_t *intermediate_values;
 uint8_t *inputs_data, *parameters_data, *model_data;
 
 static uint32_t copied_size = 0;
+static uint32_t memcpy_delay_us = 0;
 
 void run_tests(char *filename) {
     uint8_t label, predicted;
@@ -102,6 +103,9 @@ uint32_t getElapsedMilliseconds() {
 
 void my_memcpy(void* dest, const void* src, size_t n) {
     copied_size += n;
+    if (memcpy_delay_us) {
+        usleep(memcpy_delay_us);
+    }
     my_printf_debug(__func__);
     my_printf_debug(" copied %d bytes" NEWLINE, (int)n);
     memcpy(dest, src, n);

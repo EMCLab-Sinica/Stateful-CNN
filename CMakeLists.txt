@@ -4,6 +4,8 @@ project(intermittent-cnn)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wstrict-prototypes -Wshadow -g -O0")
+# XXX: for packed struct Model. Is it possible to turn on this warning?
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-address-of-packed-member")
 
 set(TOPDIR ${CMAKE_CURRENT_SOURCE_DIR}/../../)
 set(FREERTOS_DIR ${TOPDIR}/FreeRTOS_Source)
