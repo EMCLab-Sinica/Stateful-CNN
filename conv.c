@@ -24,7 +24,6 @@ DSPLIB_DATA(msp_mac_params, 4)
 MSP_LEA_MAC_PARAMS msp_mac_params[NUM_TASKS];
 #endif
 
-#define NUM_FILTERS 16
 int16_t *input_buffer_addr[NUM_TASKS];
 int16_t *next_input_buffer_addr;
 
@@ -41,7 +40,7 @@ typedef struct ConvTaskParams {
     uint16_t output_h;
     uint16_t output_w;
     uint8_t flags;
-    uint8_t output_h_offset;
+    uint8_t do_reinitialize_input;
     uint8_t tile_h;
     OpExtraData *extra_data;
 } ConvTaskParams;
@@ -169,9 +168,11 @@ static inline void increment_task_idx(void) {
 }
 
 static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint8_t first_filter, uint16_t H, uint16_t W) {
+    OpExtraData *extra_data = arr_conv_params[0].extra_data;
+    uint8_t cur_output_h_offset = first_filter ? extra_data->output_h_offset : 0;
     for (uint8_t i = 0; i < MIN_VAL(tile_w, W - output_w); i++) {
-        for (uint8_t j = 0; j < MIN_VAL(tile_h, H - output_h); j += NUM_TASKS) {
-            arr_conv_params[0].extra_data->output_h_offset = j;
+        for (uint8_t j = cur_output_h_offset; j < MIN_VAL(tile_h, H - output_h); j += NUM_TASKS) {
+            extra_data->output_h_offset = j;
             for (uint8_t k = 0; k < NUM_TASKS; k++) {
                 ConvTaskParams *conv_params = &arr_conv_params[next_scheduled_task_idx];
                 if (j + k < tile_h) {
@@ -179,7 +180,7 @@ static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t outpu
                     conv_params->output_h = output_h + j + k;
                     conv_params->output_w = output_w + i;
                     conv_params->flags = (first_filter ? CONV_TASK_FLAG_FIRST_FILTER : 0);
-                    conv_params->output_h_offset = j + k;
+                    conv_params->do_reinitialize_input = (j + k == cur_output_h_offset);
                     conv_params->tile_h = tile_h;
                 } else {
                     conv_params->flags = CONV_TASK_FLAG_NOOP;
@@ -199,13 +200,19 @@ static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t outpu
             }
         }
     }
+    extra_data->output_h_offset = 0;
 }
 
 static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint16_t H, uint16_t W) {
     uint8_t first_filter = 1;
+    OpExtraData *extra_data = arr_conv_params[0].extra_data;
     for (uint8_t idx = 0; idx < n_conv; idx++) {
+        if (extra_data->processed_filters[idx]) {
+            continue;
+        }
         if (filter_buffer_addr[idx]) {
             schedule_tile(idx, output_h, output_w, tile_h, tile_w, first_filter, H, W);
+            extra_data->processed_filters[idx] = 1;
             first_filter = 0;
         } else {
             pending_filters[pending_filter_idx] = idx;
@@ -213,10 +220,15 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
         }
     }
     for (uint8_t idx = 0; idx < pending_filter_idx; idx++) {
-        schedule_tile(pending_filters[idx], output_h, output_w, tile_h, tile_w, first_filter, H, W);
+        uint8_t filter_idx = pending_filters[idx];
+        schedule_tile(filter_idx, output_h, output_w, tile_h, tile_w, first_filter, H, W);
+        extra_data->processed_filters[filter_idx] = 1;
         first_filter = 0;
     }
     pending_filter_idx = 0;
+    for (uint8_t idx = 0; idx < n_conv; idx++) {
+        extra_data->processed_filters[idx] = 0;
+    }
 }
 
 uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data) {

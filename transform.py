@@ -113,7 +113,7 @@ outputs = {
 
 outputs['model'].write(to_bytes(len(model)))
 outputs['model'].write(to_bytes(n_input))
-outputs['model'].write(b'\0' * 16)  # Node.extra_data
+outputs['model'].write(b'\0' * 128)  # Model.extra_data
 parameters_bin_offset = 0
 for inputs, op_type in model:
     outputs['model'].write(to_bytes(len(inputs)))
@@ -225,7 +225,7 @@ for var_name, data_obj in outputs.items():
     data = data_obj.read()
     output_h += f'''
 extern GLOBAL_CONST uint8_t *{var_name};
-#define {var_name.upper()}_LEN {len(data)};
+#define {var_name.upper()}_LEN {len(data)}
 '''
     output_c += f'''
 #pragma NOINIT(_{var_name})
@@ -240,8 +240,7 @@ with open('data.c', 'w') as f, open('data.h', 'w') as g:
     g.write(output_h)
 
 with open('nvm.bin', 'wb') as f:
-    f.seek(256 * 1024 - 1)
-    f.write(b'\0')
+    f.write(256 * 1024 * b'\0')
     f.seek(NUM_SLOTS * INTERMEDIATE_VALUES_SIZE)
     for data_obj in outputs.values():
         data_obj.seek(0)

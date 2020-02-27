@@ -96,7 +96,7 @@ int run_model(uint8_t *ansptr) {
 
     dump_model();
 
-    uint16_t next_node_idx = 1;
+    uint16_t next_node_idx = 0;
     while (next_node_idx < model->nodes_len) {
         for (uint16_t i = next_node_idx; i < model->nodes_len; i++) {
             Node *cur_node = &(nodes[i]);
