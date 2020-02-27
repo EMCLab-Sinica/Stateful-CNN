@@ -12,6 +12,9 @@ static uint16_t cur_group[16] = { 0 };
 static uint8_t grp_index = 0;
 static uint16_t group_last_item;
 
+static uint16_t counters[64];
+static uint8_t counter_idx = 0;
+
 static uint8_t handle_cur_group(void) {
     uint16_t intermediate_values_offset = 0;
 
@@ -52,7 +55,16 @@ static uint8_t handle_cur_group(void) {
             // too many immediate values
             ERROR_OCCURRED();
         }
+
+        uint32_t start, end;
+        start = getElapsedMilliseconds();
+
         uint8_t ret = handlers[cur_node->op_type](input, output, &model->extra_data);
+
+        end = getElapsedMilliseconds();
+        counters[counter_idx] = end - start;
+        counter_idx++;
+
         if (ret != 0) {
             return 1;
         }

@@ -273,9 +273,6 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
 
     uint8_t ret = 0;
 
-    uint32_t start, end;
-    start = getElapsedMilliseconds();
-
     for (uint8_t idx = 0; idx < NUM_TASKS; idx++) {
         ConvTaskParams *conv_params = &arr_conv_params[idx];
         conv_params->conv_input = conv_input;
@@ -318,9 +315,6 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
         }
     }
 
-    end = getElapsedMilliseconds();
-    counters[counter_idx] = end - start;
-    counter_idx++;
 #ifdef USE_CONCURRENT_CONV
     my_printf("idle for %l cycles" NEWLINE, idleCounter);
 #endif
