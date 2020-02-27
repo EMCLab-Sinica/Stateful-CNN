@@ -7,6 +7,7 @@
 
 #define FLAG_SLOTS 0b11
 #define FLAG_SLOTS_WIDTH 2
+#define NUM_FILTERS 16
 
 /**********************************
  *        Data structures         *
@@ -43,8 +44,9 @@ typedef union {
         uint16_t output_h_offset;
         uint16_t output_w;
         uint16_t running;
+        uint16_t processed_filters[NUM_FILTERS];
     };
-    uint8_t dummy[16]; // to make the size of this sturcture constant
+    uint8_t dummy[128]; // to make the size of this sturcture constant
 } OpExtraData;
 
 typedef struct __attribute__((__packed__)) {

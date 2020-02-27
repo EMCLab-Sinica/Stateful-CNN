@@ -19,7 +19,7 @@
 uint8_t *intermediate_values;
 uint8_t *inputs_data, *parameters_data, *model_data;
 
-static uint32_t copied_size = 0;
+uint32_t *copied_size;
 static uint32_t memcpy_delay_us = 0;
 
 void run_tests(char *filename) {
@@ -78,6 +78,7 @@ int main(int argc, char* argv[]) {
     inputs_data = nvm + NUM_SLOTS * INTERMEDIATE_VALUES_SIZE;
     parameters_data = inputs_data + INPUTS_DATA_LEN;
     model_data = parameters_data + PARAMETERS_DATA_LEN;
+    copied_size = (uint32_t*)(model_data + MODEL_DATA_LEN);
 
     if (argc >= 3) {
         printf("Usage: %s [test filename]\n", argv[0]);
@@ -90,7 +91,8 @@ int main(int argc, char* argv[]) {
 
 exit:
     close(nvm_fd);
-    my_printf("Copied size: %" PRId32 NEWLINE, copied_size);
+    my_printf("Copied size: %" PRId32 NEWLINE, *copied_size);
+    *copied_size = 0;
     return ret;
 }
 
@@ -102,11 +104,15 @@ uint32_t getElapsedMilliseconds() {
 
 
 void my_memcpy(void* dest, const void* src, size_t n) {
-    copied_size += n;
+    *copied_size += n;
     if (memcpy_delay_us) {
         usleep(memcpy_delay_us);
     }
     my_printf_debug(__func__);
     my_printf_debug(" copied %d bytes" NEWLINE, (int)n);
     memcpy(dest, src, n);
+}
+
+void plat_reset_model(void) {
+    *copied_size = 0;
 }

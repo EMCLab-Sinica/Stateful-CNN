@@ -92,7 +92,7 @@
                 *dest;
         int16_t src_offset = W * CHANNEL;
         uint16_t inputs_len = LEA_BUFFER_SIZE - 4 - filter_limit * kH * dest_offset;
-        if (!conv_params->output_h_offset) {
+        if (conv_params->do_reinitialize_input) {
             next_input_buffer_addr = lea_buffer;
         }
 
@@ -101,7 +101,7 @@
         int32_t h_start,
                 h_end = int16_min(field_size, H-1-conv_params->output_h);
 
-        if (!conv_params->output_h_offset) {
+        if (conv_params->do_reinitialize_input) {
             my_printf_debug("Reinitialize input buffer" NEWLINE);
 
             msp_fill_q15_params fill_params = {
@@ -133,7 +133,7 @@
             }
         }
     } else{
-        if (!conv_params->output_h_offset) {
+        if (conv_params->do_reinitialize_input) {
             next_input_buffer_addr = lea_buffer;
         }
         input_buffer_addr[uxIndex] = next_input_buffer_addr;
