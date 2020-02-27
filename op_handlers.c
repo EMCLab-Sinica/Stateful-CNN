@@ -8,9 +8,6 @@
 DSPLIB_DATA(lea_buffer, 4)
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
-uint16_t counters[10];
-uint8_t counter_idx = 0;
-
 uint8_t handle_maxpool(const uint16_t stride, ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data) {
     UNUSED(extra_data);
 
