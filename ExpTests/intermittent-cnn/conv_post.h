@@ -24,6 +24,10 @@
     print_q15_debug(q15_mac_result);
     my_printf_debug(NEWLINE);
 
+    if ((conv_params->flags >> 8) & CONV_ACTIVATIONS_RELU) {
+        q15_mac_result = MAX_VAL(q15_mac_result, 0);
+    }
+
     int16_t *output_data = get_q15_param(conv_params->output, 0);
     size_t offset = (size_t)(conv_params->output_h * W * OUTPUT_CHANNEL + conv_params->output_w * OUTPUT_CHANNEL + conv_params->conv_idx);
     my_printf_debug("offset of output_data=%" PRIsize_t NEWLINE, offset);

@@ -5,6 +5,7 @@
 #include "common.h"
 #include "debug.h"
 #include "op_handlers.h"
+#include "ops.h"
 
 #ifdef __MSP430__
 #include <FreeRTOS.h>
@@ -39,7 +40,7 @@ typedef struct ConvTaskParams {
     uint16_t conv_idx;
     uint16_t output_h;
     uint16_t output_w;
-    uint8_t flags;
+    uint16_t flags;
     uint8_t do_reinitialize_input;
     uint8_t tile_h;
     OpExtraData *extra_data;
@@ -175,15 +176,16 @@ static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t outpu
             extra_data->output_h_offset = j;
             for (uint8_t k = 0; k < NUM_TASKS; k++) {
                 ConvTaskParams *conv_params = &arr_conv_params[next_scheduled_task_idx];
+                conv_params->flags &= 0xff00;
                 if (j + k < tile_h) {
                     conv_params->conv_idx = idx;
                     conv_params->output_h = output_h + j + k;
                     conv_params->output_w = output_w + i;
-                    conv_params->flags = (first_filter ? CONV_TASK_FLAG_FIRST_FILTER : 0);
+                    conv_params->flags |= (first_filter ? CONV_TASK_FLAG_FIRST_FILTER : 0);
                     conv_params->do_reinitialize_input = (j + k == cur_output_h_offset);
                     conv_params->tile_h = tile_h;
                 } else {
-                    conv_params->flags = CONV_TASK_FLAG_NOOP;
+                    conv_params->flags |= CONV_TASK_FLAG_NOOP;
                 }
                 increment_task_idx();
             }
@@ -231,7 +233,7 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
     }
 }
 
-uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data) {
+uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1], *bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 
@@ -280,6 +282,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
         conv_params->bias = bias;
         conv_params->output = output;
         conv_params->extra_data = extra_data;
+        conv_params->flags = flags << 8;
         input_buffer_addr[idx] = NULL;
         next_input_buffer_addr = NULL;
     }
