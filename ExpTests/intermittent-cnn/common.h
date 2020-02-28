@@ -53,6 +53,7 @@ typedef union {
 typedef struct __attribute__((__packed__)) {
     uint16_t nodes_len;
     uint16_t n_input;
+    uint16_t running;
     OpExtraData extra_data;
 } Model;
 
