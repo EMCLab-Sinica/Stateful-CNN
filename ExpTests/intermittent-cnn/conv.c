@@ -319,13 +319,13 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
     }
 
 #ifdef USE_CONCURRENT_CONV
-    my_printf("idle for %l cycles" NEWLINE, idleCounter);
+    my_printf_debug("idle for %l cycles" NEWLINE, idleCounter);
 #endif
 
     my_printf_debug("handle_conv output" NEWLINE);
     dump_params(output);
 
-    my_printf("msp_mac_q15_overflow_counter=%d" NEWLINE, msp_mac_q15_overflow_counter);
+    my_printf_debug("msp_mac_q15_overflow_counter=%d" NEWLINE, msp_mac_q15_overflow_counter);
 
     extra_data->running = 0;
 
