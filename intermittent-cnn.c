@@ -88,6 +88,9 @@ static uint8_t handle_cur_group(void) {
             ERROR_OCCURRED();
         }
 
+        if (cur_node_id == model->nodes_len - 1) {
+            model->running = 0;
+        }
         cur_node->scheduled = 1;
     }
     my_printf_debug(" - %d element(s)." NEWLINE, grp_index);
@@ -105,6 +108,17 @@ int run_model(uint8_t *ansptr) {
     my_printf_debug("model->n_input = %d" NEWLINE, model->n_input);
 
     grp_index = 0;
+
+    if (!model->running) {
+        // reset model
+        for (uint16_t i = 0; i < model->nodes_len; i++) {
+            Node *cur_node = &(nodes[i]);
+            node_input_unmark_all(cur_node);
+            cur_node->scheduled = 0;
+        }
+        counter_idx = 0;
+        model->running = 1;
+    }
 
     dump_model();
 
@@ -195,14 +209,6 @@ int run_model(uint8_t *ansptr) {
             }
         }
     }
-
-    // reset model
-    for (uint16_t i = 0; i < model->nodes_len; i++) {
-        Node *cur_node = &(nodes[i]);
-        node_input_unmark_all(cur_node);
-        cur_node->scheduled = 0;
-    }
-    counter_idx = 0;
 
     return 0;
 }
