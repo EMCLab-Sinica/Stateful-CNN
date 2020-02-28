@@ -10,7 +10,8 @@
 #ifdef __MSP430__
 #include <FreeRTOS.h>
 #include <croutine.h>
-#define USE_CONCURRENT_CONV
+// TODO: fix performance of concurrent execution
+//#define USE_CONCURRENT_CONV
 #endif
 
 #define configCONV_STACK_SIZE 100
