@@ -16,6 +16,7 @@ typedef struct {
     uint16_t inputs_len;
     uint16_t inputs_offset;
     uint16_t op_type;
+    uint16_t flags;
     uint16_t scheduled;  /* 16 bits for aligned memory */
 } Node;
 
@@ -72,6 +73,7 @@ extern uint8_t *intermediate_values;
 
 /* MSP430 SDK already defines MIN, which means minutes */
 #define MIN_VAL(x, y) ((x) < (y) ? (x) : (y))
+#define MAX_VAL(x, y) ((x) > (y) ? (x) : (y))
 
 /* Better to not use macros
  * https://stackoverflow.com/a/3437484/3786245
@@ -141,6 +143,6 @@ static inline int16_t iq31_to_q15(int32_t val) {
 /**********************************
  *       Operation handlers       *
  **********************************/
-typedef uint8_t (*handler)(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data);
+typedef uint8_t (*handler)(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags);
 extern uint8_t expected_inputs_len[];
 extern handler handlers[];

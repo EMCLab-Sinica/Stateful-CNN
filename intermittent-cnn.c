@@ -59,7 +59,7 @@ static uint8_t handle_cur_group(void) {
         uint32_t start, end;
         start = getElapsedMilliseconds();
 
-        uint8_t ret = handlers[cur_node->op_type](input, output, &model->extra_data);
+        uint8_t ret = handlers[cur_node->op_type](input, output, &model->extra_data, cur_node->flags);
 
         end = getElapsedMilliseconds();
         counters[counter_idx] = end - start;

@@ -40,10 +40,23 @@ def _Q15(num):
     return int(num * 2 ** 15)
 
 
+class Node:
+    def __init__(self, orig_node: onnx.NodeProto, flags: int = 0):
+        self.orig_node = orig_node
+        self.flags = flags
+
+    def __getattr__(self, name):
+        return getattr(self.orig_node, name)
+
+
+def get_prev_node(n):
+    return nodes[names[n.input[0]] - n_input]
+
 onnx_model = onnx.load(sys.argv[1])
 g = onnx_model.graph
 names = {}
 n_input = len(g.input)
+nodes = [Node(n) for n in g.node]
 print("n_input = {}".format(n_input))
 
 conv_param_names = set()
@@ -51,7 +64,7 @@ conv_param_names = set()
 for idx, inp in enumerate(g.input):
     names[inp.name] = idx
 
-for idx, n in enumerate(g.node):
+for idx, n in enumerate(nodes):
     if n.op_type == 'Dropout':
         output = n.output[:1]  # we don't care the second output `mask`
     else:
@@ -60,18 +73,23 @@ for idx, n in enumerate(g.node):
     if n.op_type == 'Conv':
         for inp in n.input:
             conv_param_names.add(inp)
+    if n.op_type == 'Relu':
+        input_node = get_prev_node(n)
+        if input_node.op_type == 'Conv':
+            input_node.flags = ops.CONV_ACTIVATIONS_RELU
+        n.flags = ops.RELU_MERGED
     names[output[0]] = idx + n_input
 
 pprint.pprint(names)
 
 model = []
-for n in g.node:
+for n in nodes:
     if n.op_type == 'MaxPool':
         stride = next(attr.ints[0] for attr in n.attribute if attr.name == 'strides')
         op_type = f'MaxPool_{stride}'
     else:
         op_type = n.op_type
-    model.append(([names[i] for i in n.input], op_type))
+    model.append(([names[i] for i in n.input], op_type, n.flags))
 parameters = [None for _ in range(n_input)]
 
 for params in g.initializer:
@@ -115,13 +133,15 @@ outputs['model'].write(to_bytes(len(model)))
 outputs['model'].write(to_bytes(n_input))
 outputs['model'].write(b'\0' * 128)  # Model.extra_data
 parameters_bin_offset = 0
-for inputs, op_type in model:
+for inputs, op_type, flags in model:
     outputs['model'].write(to_bytes(len(inputs)))
     outputs['model'].write(to_bytes(outputs['inputs'].tell()))  # Node.inputs_offset
     for inp in inputs:
         # the lowest bit is used as a flag in topological sort
         outputs['inputs'].write(to_bytes(inp * 2))
     outputs['model'].write(to_bytes(ops.ops[op_type]))
+    print(f'flags: {flags}')
+    outputs['model'].write(to_bytes(flags))
     outputs['model'].write(to_bytes(0))  # Node.scheduled
 
 def bitwidth_and_flags_for_parameters(bitwidth):
@@ -194,7 +214,7 @@ for params in parameters:
             outputs['model'].write(to_bytes(0))
 
 # Placeholder for ParameterInfo of intermediate values
-for idx, n in enumerate(g.node):
+for idx, n in enumerate(nodes):
     outputs['model'].write(to_bytes(0, size=32))  # params_offset
     outputs['model'].write(to_bytes(0, size=32))  # params_len
     outputs['model'].write(to_bytes(0))  # bitwidth_and_flags
