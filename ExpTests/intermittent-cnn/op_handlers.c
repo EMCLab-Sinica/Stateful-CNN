@@ -8,11 +8,12 @@
 DSPLIB_DATA(lea_buffer, 4)
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
-uint8_t handle_maxpool(const uint16_t stride, ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags) {
+uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags) {
     UNUSED(extra_data);
-    UNUSED(flags);
 
     my_printf_debug("MaxPool!" NEWLINE);
+
+    uint16_t stride = flags;
 
     /* XXX: add flags; assume no padding for now */
     ParameterInfo *data = input[0];
@@ -58,15 +59,6 @@ uint8_t handle_maxpool(const uint16_t stride, ParameterInfo *input[], ParameterI
     dump_params(output);
 
     return 0;
-}
-
-// XXX: there should be a better way to encode the stride
-uint8_t handle_maxpool_2(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags) {
-    return handle_maxpool(2, input, output, extra_data, flags);
-}
-
-uint8_t handle_maxpool_3(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags) {
-    return handle_maxpool(3, input, output, extra_data, flags);
 }
 
 uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags) {

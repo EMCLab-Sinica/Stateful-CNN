@@ -78,18 +78,16 @@ for idx, n in enumerate(nodes):
         if input_node.op_type == 'Conv':
             input_node.flags = ops.CONV_ACTIVATIONS_RELU
         n.flags = ops.RELU_MERGED
+    if n.op_type == 'MaxPool':
+        stride = next(attr.ints[0] for attr in n.attribute if attr.name == 'strides')
+        n.flags = stride
     names[output[0]] = idx + n_input
 
 pprint.pprint(names)
 
 model = []
 for n in nodes:
-    if n.op_type == 'MaxPool':
-        stride = next(attr.ints[0] for attr in n.attribute if attr.name == 'strides')
-        op_type = f'MaxPool_{stride}'
-    else:
-        op_type = n.op_type
-    model.append(([names[i] for i in n.input], op_type, n.flags))
+    model.append(([names[i] for i in n.input], n.op_type, n.flags))
 parameters = [None for _ in range(n_input)]
 
 for params in g.initializer:
