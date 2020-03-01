@@ -176,6 +176,13 @@ static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t outpu
     extra_data->current_filter = idx;
     uint8_t cur_output_h_offset = processed_filters ? 0 : extra_data->output_h_offset;
     my_printf_debug("cur_output_h_offset = %d" NEWLINE, cur_output_h_offset);
+    for (uint8_t k = 0; k < NUM_TASKS; k++) {
+        ConvTaskParams *conv_params = arr_conv_params + k;
+        conv_params->conv_idx = idx;
+        conv_params->starting_output_h = output_h + old_output_h_offset;
+        conv_params->starting_output_h_offset = cur_output_h_offset;
+        conv_params->tile_h = tile_h;
+    }
     for (uint8_t i = 0; i < MIN_VAL(tile_w, W - output_w); i++) {
         for (uint8_t j = cur_output_h_offset; j < MIN_VAL(tile_h, H - output_h); j += NUM_TASKS) {
             extra_data->output_h_offset = j;
@@ -183,15 +190,11 @@ static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t outpu
                 ConvTaskParams *conv_params = &arr_conv_params[next_scheduled_task_idx];
                 conv_params->flags &= 0xff00;
                 if (j + k < tile_h) {
-                    conv_params->conv_idx = idx;
                     conv_params->output_h = output_h + j + k;
                     conv_params->output_w = output_w + i;
                     conv_params->flags |= processed_filters * CONV_TASK_FLAG_PROCESSED_FILTERS_BASE;
                     my_printf_debug("j+k = %d" NEWLINE, j+k);
                     conv_params->do_reinitialize_input = (j + k == cur_output_h_offset);
-                    conv_params->starting_output_h = output_h + old_output_h_offset;
-                    conv_params->starting_output_h_offset = cur_output_h_offset;
-                    conv_params->tile_h = tile_h;
                 } else {
                     conv_params->flags |= CONV_TASK_FLAG_NOOP;
                 }
