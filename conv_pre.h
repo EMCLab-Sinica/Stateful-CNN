@@ -30,6 +30,8 @@
 
     uint8_t filter_limit = MIN_VAL(OUTPUT_CHANNEL, (LEA_BUFFER_SIZE - 4 - dest_offset * (kH + conv_params->tile_h - 1)) / (dest_offset * kH));
 
+    my_printf_debug("filter_limit: %d" NEWLINE, filter_limit);
+
     /* copy filter data */
     if (!filter_buffer_addr[conv_params->conv_idx]) {
         filter_addr = get_q15_param(
@@ -64,7 +66,11 @@
         }
     }
 
-    if (conv_params->flags & CONV_TASK_FLAG_FIRST_FILTER) {
+    uint8_t scheduled_filters = (conv_params->flags & 0x00ff) >> 1;
+    my_printf_debug("scheduled_filters = %d" NEWLINE, scheduled_filters);
+    my_printf_debug("conv_params->output_h = %d" NEWLINE, conv_params->output_h);
+    my_printf_debug("conv_params->starting_output_h = %d" NEWLINE, conv_params->starting_output_h);
+    if (scheduled_filters == 0 || (scheduled_filters == 1 && conv_params->output_h < conv_params->starting_output_h)) {
         int8_t field_size = (int8_t)((kH - 1) / 2);
 
         /* copy input data, row by row */
@@ -93,7 +99,7 @@
         int16_t src_offset = W * CHANNEL;
         uint16_t inputs_len = LEA_BUFFER_SIZE - 4 - filter_limit * kH * dest_offset;
         if (conv_params->do_reinitialize_input) {
-            next_input_buffer_addr = lea_buffer;
+            next_input_buffer_addr = lea_buffer + conv_params->starting_output_h_offset * dest_offset;
         }
 
         dest = input_buffer_addr[uxIndex] = next_input_buffer_addr;
@@ -104,12 +110,14 @@
         if (conv_params->do_reinitialize_input) {
             my_printf_debug("Reinitialize input buffer" NEWLINE);
 
-            msp_fill_q15_params fill_params = {
-                .length = inputs_len,
-                .value = 0,
-            };
-            msp_status status = msp_fill_q15(&fill_params, lea_buffer);
-            msp_checkStatus(status);
+            if (scheduled_filters == 0) {
+                msp_fill_q15_params fill_params = {
+                    .length = inputs_len,
+                    .value = 0,
+                };
+                msp_status status = msp_fill_q15(&fill_params, lea_buffer);
+                msp_checkStatus(status);
+            }
 
             h_start = int16_max(-field_size, -conv_params->output_h);
         } else {

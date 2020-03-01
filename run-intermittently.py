@@ -1,17 +1,14 @@
-from subprocess import Popen, PIPE, TimeoutExpired
+from subprocess import Popen, TimeoutExpired
 import signal
-import sys
 
 def main():
     while True:
-        with Popen(['./out/intermittent-cnn'], stdout=PIPE) as proc:
+        with Popen(['./out/intermittent-cnn']) as proc:
             try:
-                proc.wait(timeout=0.5)
+                proc.wait(timeout=0.001)
             except TimeoutExpired:
                 proc.send_signal(signal.SIGINT)
-            current = proc.stdout.read()
-            sys.stdout.buffer.write(current)
-            if b'Copied size' in current:
+            if proc.returncode == 0:
                 break
 
 

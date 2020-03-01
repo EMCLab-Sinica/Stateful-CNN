@@ -29,9 +29,9 @@ MSP_LEA_MAC_PARAMS msp_mac_params[NUM_TASKS];
 int16_t *input_buffer_addr[NUM_TASKS];
 int16_t *next_input_buffer_addr;
 
-#define CONV_TASK_FLAG_FIRST_FILTER 1
+#define CONV_TASK_FLAG_PROCESSED_FILTERS_BASE 2
 // XXX: any way to achieve concurrency without skipping?
-#define CONV_TASK_FLAG_NOOP 2
+#define CONV_TASK_FLAG_NOOP 1
 typedef struct ConvTaskParams {
     ParameterInfo *conv_input;
     ParameterInfo *conv_filter;
@@ -44,6 +44,8 @@ typedef struct ConvTaskParams {
     uint16_t flags;
     uint8_t do_reinitialize_input;
     uint8_t tile_h;
+    uint16_t starting_output_h;
+    uint16_t starting_output_h_offset;
     OpExtraData *extra_data;
 } ConvTaskParams;
 
@@ -169,9 +171,11 @@ static inline void increment_task_idx(void) {
     }
 }
 
-static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint8_t first_filter, uint16_t H, uint16_t W) {
+static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint8_t processed_filters, uint16_t H, uint16_t W, uint16_t old_output_h_offset) {
     OpExtraData *extra_data = arr_conv_params[0].extra_data;
-    uint8_t cur_output_h_offset = first_filter ? extra_data->output_h_offset : 0;
+    extra_data->current_filter = idx;
+    uint8_t cur_output_h_offset = processed_filters ? 0 : extra_data->output_h_offset;
+    my_printf_debug("cur_output_h_offset = %d" NEWLINE, cur_output_h_offset);
     for (uint8_t i = 0; i < MIN_VAL(tile_w, W - output_w); i++) {
         for (uint8_t j = cur_output_h_offset; j < MIN_VAL(tile_h, H - output_h); j += NUM_TASKS) {
             extra_data->output_h_offset = j;
@@ -182,8 +186,11 @@ static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t outpu
                     conv_params->conv_idx = idx;
                     conv_params->output_h = output_h + j + k;
                     conv_params->output_w = output_w + i;
-                    conv_params->flags |= (first_filter ? CONV_TASK_FLAG_FIRST_FILTER : 0);
+                    conv_params->flags |= processed_filters * CONV_TASK_FLAG_PROCESSED_FILTERS_BASE;
+                    my_printf_debug("j+k = %d" NEWLINE, j+k);
                     conv_params->do_reinitialize_input = (j + k == cur_output_h_offset);
+                    conv_params->starting_output_h = output_h + old_output_h_offset;
+                    conv_params->starting_output_h_offset = cur_output_h_offset;
                     conv_params->tile_h = tile_h;
                 } else {
                     conv_params->flags |= CONV_TASK_FLAG_NOOP;
@@ -204,29 +211,36 @@ static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t outpu
         }
     }
     extra_data->output_h_offset = 0;
+    extra_data->processed_filters[idx] = 1;
 }
 
 static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint16_t H, uint16_t W) {
-    uint8_t first_filter = 1;
+    uint8_t scheduled_filters = 0;
     OpExtraData *extra_data = arr_conv_params[0].extra_data;
+    uint16_t old_output_h_offset = extra_data->output_h_offset;
+    if (extra_data->current_filter) {
+        schedule_tile(extra_data->current_filter, output_h, output_w, tile_h, tile_w, scheduled_filters, H, W, old_output_h_offset);
+        scheduled_filters++;
+    }
     for (uint8_t idx = 0; idx < n_conv; idx++) {
         if (extra_data->processed_filters[idx]) {
+            my_printf_debug("Skipping processed filter %d" NEWLINE, idx);
             continue;
         }
         if (filter_buffer_addr[idx]) {
-            schedule_tile(idx, output_h, output_w, tile_h, tile_w, first_filter, H, W);
-            extra_data->processed_filters[idx] = 1;
-            first_filter = 0;
+            schedule_tile(idx, output_h, output_w, tile_h, tile_w, scheduled_filters, H, W, old_output_h_offset);
+            scheduled_filters++;
         } else {
+            my_printf_debug("Filter %d is not cached, append it to the pending list" NEWLINE, idx);
             pending_filters[pending_filter_idx] = idx;
             pending_filter_idx++;
         }
     }
     for (uint8_t idx = 0; idx < pending_filter_idx; idx++) {
         uint8_t filter_idx = pending_filters[idx];
-        schedule_tile(filter_idx, output_h, output_w, tile_h, tile_w, first_filter, H, W);
-        extra_data->processed_filters[filter_idx] = 1;
-        first_filter = 0;
+        schedule_tile(filter_idx, output_h, output_w, tile_h, tile_w, scheduled_filters, H, W, old_output_h_offset);
+        my_printf_debug("Mark filter %d as processed" NEWLINE, filter_idx);
+        scheduled_filters++;
     }
     pending_filter_idx = 0;
     for (uint8_t idx = 0; idx < n_conv; idx++) {
@@ -288,9 +302,13 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
         next_input_buffer_addr = NULL;
     }
 
-    if (!extra_data->running) {
+    if (!extra_data->conv_running) {
         extra_data->conv_idx = extra_data->output_h = extra_data->output_h_offset = extra_data->output_w = 0;
-        extra_data->running = 1;
+        for (uint8_t idx = 0; idx < NUM_FILTERS; idx++) {
+            extra_data->processed_filters[idx] = 0;
+        }
+        extra_data->current_filter = 0;
+        extra_data->conv_running = 1;
     }
 
     for (uint8_t idx = 0; idx < NUM_FILTERS; idx++) {
@@ -313,7 +331,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
     }
     for (uint16_t output_w = starting_w; output_w < W; output_w += TILE_W) {
         extra_data->output_w = output_w;
-        for (uint16_t output_h = starting_h; output_h < H; output_h += tile_h) {
+        for (uint16_t output_h = (output_w == starting_w ? starting_h : 0); output_h < H; output_h += tile_h) {
             extra_data->output_h = output_h;
             handle_conv_inner_loop(input_N, output_h, output_w, tile_h, TILE_W, H, W);
         }
@@ -328,7 +346,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
 
     my_printf_debug("msp_mac_q15_overflow_counter=%d" NEWLINE, msp_mac_q15_overflow_counter);
 
-    extra_data->running = 0;
+    extra_data->conv_running = 0;
 
     return ret;
 }

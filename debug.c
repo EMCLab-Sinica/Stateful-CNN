@@ -2,8 +2,10 @@
 #include "common.h"
 
 void print_q15(int16_t val) {
-#if defined(__MSP430__) || defined(DUMP_INTEGERS)
+#if defined(__MSP430__)
     my_printf("%d ", val);
+#elif defined(DUMP_INTEGERS)
+    my_printf("% 6d ", val);
 #else
     // 2^15
     my_printf("% f ", SCALE * val / 32768.0);
@@ -37,7 +39,9 @@ void dump_params(struct _ParameterInfo *cur_param) {
     }
     uint16_t bitwidth = get_param_bitwidth(cur_param);
     for (uint16_t i = 0; i < NUM; i++) {
+        my_printf_debug("Matrix %d" NEWLINE, i);
         for (uint16_t j = 0; j < CHANNEL; j++) {
+            my_printf_debug("Channel %d" NEWLINE, j);
             for (uint16_t k = 0; k < H; k++) {
                 for (uint16_t l = 0; l < W; l++) {
                     // internal format is NHWC
