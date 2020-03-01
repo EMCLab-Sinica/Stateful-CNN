@@ -9,8 +9,6 @@ DSPLIB_DATA(lea_buffer, 4)
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
 uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags) {
-    UNUSED(extra_data);
-
     my_printf_debug("MaxPool!" NEWLINE);
 
     uint16_t stride = flags;
@@ -28,9 +26,22 @@ uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output, OpExtraDat
     output->dims[1] = H / stride;
     output->dims[2] = W / stride;
     output->dims[3] = channel;
-    for (uint16_t c = 0; c < channel; c++) {
-        for (uint16_t h = 0; h < H; h = (uint16_t)(h + stride)) {
-            for (uint16_t w = 0; w < W; w = (uint16_t)(w + stride)) {
+
+    if (!extra_data->maxpool_running) {
+        extra_data->next_c = extra_data->next_h = extra_data->next_w = 0;
+        extra_data->maxpool_running = 1;
+    }
+
+    uint16_t starting_c = extra_data->next_c,
+             starting_h = extra_data->next_h,
+             starting_w = extra_data->next_w;
+
+    for (uint16_t c = starting_c; c < channel; c++) {
+        extra_data->next_c = c;
+        for (uint16_t h = (c == starting_c ? starting_h : 0); h < H; h = (uint16_t)(h + stride)) {
+            extra_data->next_h = h;
+            for (uint16_t w = (c == starting_c && h == starting_h ? starting_w : 0); w < W; w = (uint16_t)(w + stride)) {
+                extra_data->next_w = w;
                 my_printf_debug("h=%d ", h);
                 my_printf_debug("w=%d ", w);
                 my_printf_debug("c=%d" NEWLINE, c);
@@ -57,6 +68,8 @@ uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output, OpExtraDat
 
     my_printf_debug("handle_maxpool output" NEWLINE);
     dump_params(output);
+
+    extra_data->maxpool_running = 0;
 
     return 0;
 }

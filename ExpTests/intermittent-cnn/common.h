@@ -38,14 +38,22 @@ typedef struct __attribute__((__packed__)) _ParameterInfo {
 } ParameterInfo;
 
 typedef union {
+    /* all XXX_running fields should be at the same offset */
     struct {
         // XXX: support interleaved conv nodes
+        uint16_t conv_running;
         uint16_t conv_idx;
         uint16_t output_h;
         uint16_t output_h_offset;
         uint16_t output_w;
-        uint16_t running;
         uint16_t processed_filters[NUM_FILTERS];
+        uint16_t current_filter;
+    };
+    struct {
+        uint16_t maxpool_running;
+        uint16_t next_c;
+        uint16_t next_h;
+        uint16_t next_w;
     };
     uint8_t dummy[128]; // to make the size of this sturcture constant
 } OpExtraData;
