@@ -75,6 +75,10 @@ extern uint16_t *inputs;
 extern uint16_t *parameters;
 // similar to double buffering
 extern uint8_t *intermediate_values;
+extern uint16_t *counters;
+extern uint8_t *counter_idx;
+#define COUNTERS_LEN 64
+
 
 /**********************************
  *          Miscellaneous         *

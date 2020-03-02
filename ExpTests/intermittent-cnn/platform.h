@@ -8,5 +8,4 @@
 #  include "plat-linux.h"
 #endif
 
-uint32_t getElapsedMilliseconds(void);
 void my_memcpy(void* dest, const void* src, size_t n);

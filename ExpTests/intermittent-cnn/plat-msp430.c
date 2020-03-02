@@ -1,19 +1,22 @@
 #include <driverlib.h>
 #include <stdint.h>
-#include "Tools/my_timer.h"
+#include "FreeRTOSConfig.h"
 #include "common.h"
 #include "platform.h"
+
 /* on FRAM */
 
 #pragma NOINIT(_intermediate_values)
 static uint8_t _intermediate_values[NUM_SLOTS * INTERMEDIATE_VALUES_SIZE];
 uint8_t *intermediate_values = _intermediate_values;
 
-uint32_t getElapsedMilliseconds() {
-    // one tick is configured as roughly 1 millisecond
-    // See vApplicationSetupTimerInterrupt() in main.h and FreeRTOSConfig.h
-    return getTickCounter();
-}
+#pragma NOINIT(_counters)
+static uint16_t _counters[COUNTERS_LEN];
+uint16_t *counters = _counters;
+
+#pragma NOINIT(_counter_idx)
+static uint8_t _counter_idx;
+uint8_t *counter_idx = &_counter_idx;
 
 #define MY_DMA_CHANNEL DMA_CHANNEL_0
 static DMA_initParam dma_params = {
@@ -48,4 +51,12 @@ __interrupt void DMA_ISR(void)
         case 16: break; // DMA7IFG = DMA Channel 7
         default: break;
     }
+}
+
+#pragma vector=configTICK_VECTOR
+__interrupt void vTimerHandler( void )
+{
+    // one tick is configured as roughly 1 millisecond
+    // See vApplicationSetupTimerInterrupt() in main.h and FreeRTOSConfig.h
+    counters[*counter_idx]++;
 }

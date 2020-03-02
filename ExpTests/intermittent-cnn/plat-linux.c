@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -18,6 +19,8 @@
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *intermediate_values;
 uint8_t *inputs_data, *parameters_data, *model_data;
+uint16_t *counters;
+uint8_t *counter_idx;
 
 uint32_t *copied_size;
 static uint32_t memcpy_delay_us = 0;
@@ -63,9 +66,21 @@ void run_tests(char *filename) {
     fclose(test_file);
 }
 
+void sig_handler(int sig_no) {
+    if (sig_no == SIGALRM) {
+        counters[*counter_idx]++;
+    }
+}
+
 int main(int argc, char* argv[]) {
     int nvm_fd, ret = 0;
     uint8_t *nvm;
+
+    struct itimerval interval;
+    interval.it_value.tv_sec = interval.it_interval.tv_sec = 0;
+    interval.it_value.tv_usec = interval.it_interval.tv_usec = 1000;
+    setitimer(ITIMER_REAL, &interval, NULL);
+    signal(SIGALRM, sig_handler);
 
     nvm_fd = open("nvm.bin", O_RDWR);
     nvm = mmap(NULL, NVM_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, nvm_fd, 0);
@@ -79,6 +94,8 @@ int main(int argc, char* argv[]) {
     parameters_data = inputs_data + INPUTS_DATA_LEN;
     model_data = parameters_data + PARAMETERS_DATA_LEN;
     copied_size = (uint32_t*)(model_data + MODEL_DATA_LEN);
+    counters = (uint16_t*)(copied_size + 1);
+    counter_idx = (uint8_t*)(counters + COUNTERS_LEN);
 
     if (argc >= 3) {
         printf("Usage: %s [test filename]\n", argv[0]);
@@ -95,13 +112,6 @@ exit:
     *copied_size = 0;
     return ret;
 }
-
-uint32_t getElapsedMilliseconds() {
-    struct timeval tv;
-    gettimeofday(&tv, 0);
-    return tv.tv_sec * 1000 + tv.tv_usec / 1000;
-}
-
 
 void my_memcpy(void* dest, const void* src, size_t n) {
     *copied_size += n;
