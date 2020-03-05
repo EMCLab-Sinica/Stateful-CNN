@@ -62,6 +62,7 @@ typedef struct __attribute__((__packed__)) {
     uint16_t nodes_len;
     uint16_t n_input;
     uint16_t running;
+    uint16_t run_counter;
     OpExtraData extra_data;
 } Model;
 
@@ -76,6 +77,7 @@ extern uint16_t *parameters;
 // similar to double buffering
 extern uint8_t *intermediate_values;
 extern uint16_t *counters;
+extern uint16_t *power_counters;
 extern uint8_t *counter_idx;
 #define COUNTERS_LEN 64
 

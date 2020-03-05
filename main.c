@@ -47,6 +47,10 @@ int main( void )
     /* Configure the hardware ready to run the demo. */
     prvSetupHardware();
 
+    vApplicationSetupTimerInterrupt();
+    IntermittentCNNTest();
+
+    /*
 	if(firstTime != 1){
 	    capID = -1;
 	    tempID = -1;
@@ -57,12 +61,11 @@ int main( void )
 	    for(i = 0; i < NUMTASK;i++)
 	        information[i] = 0;
         //main_DBtest();
-        vApplicationSetupTimerInterrupt();
-        IntermittentCNNTest();
 	}
 	else{
 	    failureRecovery();
 	}
+    */
 	return 0;
 }
 
