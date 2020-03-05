@@ -14,6 +14,10 @@ uint8_t *intermediate_values = _intermediate_values;
 static uint16_t _counters[COUNTERS_LEN];
 uint16_t *counters = _counters;
 
+#pragma NOINIT(_power_counters)
+static uint16_t _power_counters[COUNTERS_LEN];
+uint16_t *power_counters = _power_counters;
+
 #pragma NOINIT(_counter_idx)
 static uint8_t _counter_idx;
 uint8_t *counter_idx = &_counter_idx;

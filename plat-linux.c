@@ -20,6 +20,7 @@
 uint8_t *intermediate_values;
 uint8_t *inputs_data, *parameters_data, *model_data;
 uint16_t *counters;
+uint16_t *power_counters;
 uint8_t *counter_idx;
 
 uint32_t *copied_size;
@@ -95,7 +96,8 @@ int main(int argc, char* argv[]) {
     model_data = parameters_data + PARAMETERS_DATA_LEN;
     copied_size = (uint32_t*)(model_data + MODEL_DATA_LEN);
     counters = (uint16_t*)(copied_size + 1);
-    counter_idx = (uint8_t*)(counters + COUNTERS_LEN);
+    power_counters = counters + COUNTERS_LEN;
+    counter_idx = (uint8_t*)(power_counters + COUNTERS_LEN);
 
     if (argc >= 3) {
         printf("Usage: %s [test filename]\n", argv[0]);
@@ -103,7 +105,9 @@ int main(int argc, char* argv[]) {
     } else if (argc == 2) {
         run_tests(argv[1]);
     } else {
+        init_pointers();
         ret = run_model(NULL);
+        print_results();
     }
 
 exit:

@@ -85,6 +85,7 @@ static uint8_t handle_cur_group(void) {
 
         if (cur_node_id == model->nodes_len - 1) {
             model->running = 0;
+            model->run_counter++;
         }
         cur_node->scheduled = 1;
     }
@@ -92,7 +93,7 @@ static uint8_t handle_cur_group(void) {
     return 0;
 }
 
-int run_model(uint8_t *ansptr) {
+void init_pointers(void) {
     model = (Model*)model_data;
     inputs = (uint16_t*)inputs_data;
     parameters = (uint16_t*)parameters_data;
@@ -101,7 +102,9 @@ int run_model(uint8_t *ansptr) {
     parameter_info = (ParameterInfo*)(nodes + model->nodes_len);
 
     my_printf_debug("model->n_input = %d" NEWLINE, model->n_input);
+}
 
+int run_model(uint8_t *ansptr) {
     grp_index = 0;
 
     if (!model->running) {
@@ -114,6 +117,8 @@ int run_model(uint8_t *ansptr) {
         *counter_idx = 0;
         model->running = 1;
     }
+
+    power_counters[*counter_idx]++;
 
     dump_model();
 
@@ -183,18 +188,9 @@ int run_model(uint8_t *ansptr) {
         dump_model();
     }
 
-    for (uint8_t i = 0; i < *counter_idx; i++) {
-        my_printf("%d ticks" NEWLINE, counters[i]);
-    }
-
     /* XXX: is the last node always the output node? */
     ParameterInfo *output_node = &(parameter_info[model->nodes_len + model->n_input - 1]);
-    if (!ansptr) {
-        for (uint16_t i = 0; i < output_node->dims[1]; i++) {
-            print_q15(*get_q15_param(output_node, i));
-        }
-        my_printf(NEWLINE);
-    } else {
+    if (ansptr) {
         int16_t max = INT16_MIN;
         for (uint16_t i = 0; i < output_node->dims[1]; i++) {
             int16_t val = *get_q15_param(output_node, i);
@@ -206,4 +202,23 @@ int run_model(uint8_t *ansptr) {
     }
 
     return 0;
+}
+
+void print_results(void) {
+    ParameterInfo *output_node = &(parameter_info[model->nodes_len + model->n_input - 1]);
+    for (uint16_t i = 0; i < output_node->dims[1]; i++) {
+        print_q15(*get_q15_param(output_node, i));
+    }
+    my_printf(NEWLINE);
+
+    my_printf("ticks: ");
+    for (uint8_t i = 0; i < *counter_idx; i++) {
+        my_printf("%d ", counters[i]);
+    }
+    my_printf(NEWLINE "power counters: ");
+    for (uint8_t i = 0; i < *counter_idx; i++) {
+        my_printf("%d ", power_counters[i]);
+    }
+    my_printf(NEWLINE "run_counter: %d", model->run_counter);
+    my_printf(NEWLINE);
 }
