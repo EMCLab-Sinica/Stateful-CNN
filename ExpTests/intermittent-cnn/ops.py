@@ -1,0 +1,10 @@
+ops = {}
+ops["Add"] = 0
+ops["Conv"] = 1
+ops["MatMul"] = 2
+ops["MaxPool"] = 3
+ops["Relu"] = 4
+ops["Reshape"] = 5
+ops["Squeeze"] = 6
+CONV_ACTIVATIONS_RELU = 1
+RELU_MERGED = 1
