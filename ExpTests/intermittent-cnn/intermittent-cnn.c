@@ -104,7 +104,7 @@ void init_pointers(void) {
     my_printf_debug("model->n_input = %d" NEWLINE, model->n_input);
 }
 
-int run_model(uint8_t *ansptr) {
+int run_model(int8_t *ansptr) {
     grp_index = 0;
 
     if (!model->running) {

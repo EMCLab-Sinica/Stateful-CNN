@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 2.10)
 project(intermittent-cnn)
 
 set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wstrict-prototypes -Wshadow -g -O0")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wstrict-prototypes -Wshadow -O3")
 # XXX: for packed struct Model. Is it possible to turn on this warning?
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-address-of-packed-member")
 

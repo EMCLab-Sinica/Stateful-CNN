@@ -50,8 +50,17 @@ typedef struct ConvTaskParams {
 } ConvTaskParams;
 
 static ConvTaskParams arr_conv_params[NUM_TASKS];
+static struct {
+    uint16_t dest_offset;
+    uint8_t filter_limit;
+    uint8_t truncated;
+    uint16_t OUTPUT_CHANNEL;
+    uint16_t W_by_OUTPUT_CHANNEL;
+} global_conv_params;
 
-static uint16_t arrH[NUM_TASKS], arrW[NUM_TASKS], arrkH[NUM_TASKS], arrkW[NUM_TASKS], arrCHANNEL[NUM_TASKS], arrOUTPUT_CHANNEL[NUM_TASKS];
+#ifdef USE_CONCURRENT_CONV
+static uint16_t arrH[NUM_TASKS], arrW[NUM_TASKS], arrkH[NUM_TASKS], arrkW[NUM_TASKS], arrCHANNEL[NUM_TASKS];
+#endif
 static msp_mac_q15_params mac_params[NUM_TASKS];
 static int16_t *filter_buffer_addr[NUM_FILTERS];  // filter index -> address
 static int8_t cached_filter_idx[NUM_FILTERS];  // filter buffer id (0~filter_limit-1) -> filter index
@@ -131,7 +140,6 @@ static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
     kH = arrkH[uxIndex];
     kW = arrkW[uxIndex];
     CHANNEL = arrCHANNEL[uxIndex];
-    OUTPUT_CHANNEL = arrOUTPUT_CHANNEL[uxIndex];
 
     #include "conv_post.h"
 
@@ -320,12 +328,41 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
     }
     filter_buffer_id = 0;
 
-    uint8_t tile_h;
+    uint8_t tile_h = 1; // fallback value
     if (H == 14) {
-        tile_h = 7;
+        tile_h = 6;
     } else if (H == 28) {
         tile_h = 28;
     }
+
+    uint16_t kH = conv_filter->dims[1],
+             kW = conv_filter->dims[2],
+             CHANNEL = conv_filter->dims[3];
+    global_conv_params.dest_offset = kW * CHANNEL;
+    global_conv_params.OUTPUT_CHANNEL = conv_filter->dims[0];
+    global_conv_params.W_by_OUTPUT_CHANNEL = W * global_conv_params.OUTPUT_CHANNEL;
+
+    /* MSP430 LEA requires length to be even */
+    mac_params[0].length = (uint16_t)(CHANNEL * kH * kW / 2 * 2);
+    global_conv_params.truncated = (mac_params[0].length != CHANNEL * kH * kW);
+    if (global_conv_params.truncated) {
+        // when CHANNEL * kH * kW is odd, CHANNEL * kW (dest_offset) is
+        // also odd, so dummy values are needed between slices to make
+        // addresses even.
+        // a dummy value for each slice (kW * CHANNEL q15 values)
+        mac_params[0].length += kH + 1;
+        global_conv_params.dest_offset++;
+    }
+    for (uint8_t idx = 1; idx < NUM_TASKS; idx++) {
+        mac_params[idx].length = mac_params[0].length;
+    }
+
+    global_conv_params.filter_limit = MIN_VAL(
+        conv_filter->dims[0],
+        (LEA_BUFFER_SIZE - 4 - global_conv_params.dest_offset * (kH + tile_h - 1)) / (global_conv_params.dest_offset * kH)
+    );
+
+    my_printf_debug("filter_limit: %d" NEWLINE, global_conv_params.filter_limit);
 
     uint16_t starting_w = extra_data->output_w,
              starting_h = extra_data->output_h;

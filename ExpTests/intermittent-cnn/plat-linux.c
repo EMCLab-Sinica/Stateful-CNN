@@ -27,7 +27,7 @@ uint32_t *copied_size;
 static uint32_t memcpy_delay_us = 0;
 
 void run_tests(char *filename) {
-    uint8_t label, predicted;
+    int8_t label = -1, predicted = -1;
     FILE *test_file = fopen(filename, "r");
     uint32_t correct = 0, total = 0;
     while (!feof(test_file)) {

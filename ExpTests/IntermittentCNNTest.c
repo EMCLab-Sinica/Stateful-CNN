@@ -9,6 +9,8 @@ static uint32_t delay_counter;
 #pragma DATA_SECTION(myFirstTime, ".map")
 static uint8_t myFirstTime;
 
+#define DELAY_START_SECONDS 0
+
 void IntermittentCNNTest() {
     init_pointers();
 
@@ -23,7 +25,7 @@ void IntermittentCNNTest() {
         myFirstTime = 1;
     }
 
-    while (delay_counter < 10) {
+    while (delay_counter < DELAY_START_SECONDS) {
         my_printf("%d" NEWLINE, delay_counter);
         delay_counter++;
         __delay_cycles(16E6);

@@ -29,7 +29,7 @@
     }
 
     int16_t *output_data = get_q15_param(conv_params->output, 0);
-    size_t offset = (size_t)(conv_params->output_h * W * OUTPUT_CHANNEL + conv_params->output_w * OUTPUT_CHANNEL + conv_params->conv_idx);
+    size_t offset = (size_t)(conv_params->output_h * global_conv_params.W_by_OUTPUT_CHANNEL + conv_params->output_w * global_conv_params.OUTPUT_CHANNEL + conv_params->conv_idx);
     my_printf_debug("offset of output_data=%" PRIsize_t NEWLINE, offset);
     output_data[offset] = q15_mac_result;
 }
