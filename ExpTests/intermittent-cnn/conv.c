@@ -32,8 +32,6 @@ typedef struct ConvTaskParams {
     uint16_t flags;
     uint8_t do_reinitialize_input;
     uint8_t tile_h;
-    uint16_t starting_output_h;
-    uint16_t starting_output_h_offset;
     OpExtraData *extra_data;
 } ConvTaskParams;
 
@@ -102,8 +100,7 @@ static void convTask(void) {
     uint8_t scheduled_filters = (conv_params.flags & 0x00ff) >> 1;
     my_printf_debug("scheduled_filters = %d" NEWLINE, scheduled_filters);
     my_printf_debug("conv_params.output_h = %d" NEWLINE, conv_params.output_h);
-    my_printf_debug("conv_params.starting_output_h = %d" NEWLINE, conv_params.starting_output_h);
-    if (scheduled_filters == 0 || (scheduled_filters == 1 && conv_params.output_h < conv_params.starting_output_h)) {
+    if (scheduled_filters == 0) {
         kH = conv_params.conv_filter->dims[1];
         W = conv_params.conv_input->dims[2];
         CHANNEL = conv_params.conv_filter->dims[3];
@@ -135,7 +132,7 @@ static void convTask(void) {
         int16_t src_offset = W * CHANNEL;
         uint16_t inputs_len = LEA_BUFFER_SIZE - 4 - global_conv_params.filter_limit * kH * global_conv_params.dest_offset;
         if (conv_params.do_reinitialize_input) {
-            next_input_buffer_addr = lea_buffer + conv_params.starting_output_h_offset * global_conv_params.dest_offset;
+            next_input_buffer_addr = lea_buffer;
         }
 
         dest = input_buffer_addr = next_input_buffer_addr;
@@ -232,37 +229,30 @@ static void convTask(void) {
     output_data[offset] = q15_mac_result;
 }
 
-static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint8_t processed_filters, uint16_t H, uint16_t W, uint16_t old_output_h_offset) {
+static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint8_t processed_filters, uint16_t H, uint16_t W) {
     OpExtraData *extra_data = conv_params.extra_data;
     extra_data->current_filter = idx;
-    uint8_t cur_output_h_offset = processed_filters ? 0 : extra_data->output_h_offset;
-    my_printf_debug("cur_output_h_offset = %d" NEWLINE, cur_output_h_offset);
     conv_params.conv_idx = idx;
-    conv_params.starting_output_h = output_h + old_output_h_offset;
-    conv_params.starting_output_h_offset = cur_output_h_offset;
     conv_params.tile_h = tile_h;
     for (uint8_t i = 0; i < MIN_VAL(tile_w, W - output_w); i++) {
-        for (uint8_t j = cur_output_h_offset; j < MIN_VAL(tile_h, H - output_h); j++) {
-            extra_data->output_h_offset = j;
+        for (uint8_t j = 0; j < MIN_VAL(tile_h, H - output_h); j++) {
             conv_params.flags &= 0xff00;
             conv_params.output_h = output_h + j;
             conv_params.output_w = output_w + i;
             conv_params.flags |= processed_filters * CONV_TASK_FLAG_PROCESSED_FILTERS_BASE;
             my_printf_debug("j = %d" NEWLINE, j);
-            conv_params.do_reinitialize_input = (j == cur_output_h_offset);
+            conv_params.do_reinitialize_input = (j == 0);
             convTask();
         }
     }
-    extra_data->output_h_offset = 0;
     extra_data->processed_filters[idx] = 1;
 }
 
 static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint16_t H, uint16_t W) {
     uint8_t scheduled_filters = 0;
     OpExtraData *extra_data = conv_params.extra_data;
-    uint16_t old_output_h_offset = extra_data->output_h_offset;
     if (extra_data->current_filter) {
-        schedule_tile(extra_data->current_filter, output_h, output_w, tile_h, tile_w, scheduled_filters, H, W, old_output_h_offset);
+        schedule_tile(extra_data->current_filter, output_h, output_w, tile_h, tile_w, scheduled_filters, H, W);
         scheduled_filters++;
     }
     for (uint8_t idx = 0; idx < n_conv; idx++) {
@@ -271,7 +261,7 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
             continue;
         }
         if (filter_buffer_addr[idx]) {
-            schedule_tile(idx, output_h, output_w, tile_h, tile_w, scheduled_filters, H, W, old_output_h_offset);
+            schedule_tile(idx, output_h, output_w, tile_h, tile_w, scheduled_filters, H, W);
             scheduled_filters++;
         } else {
             my_printf_debug("Filter %d is not cached, append it to the pending list" NEWLINE, idx);
@@ -281,7 +271,7 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
     }
     for (uint8_t idx = 0; idx < pending_filter_idx; idx++) {
         uint8_t filter_idx = pending_filters[idx];
-        schedule_tile(filter_idx, output_h, output_w, tile_h, tile_w, scheduled_filters, H, W, old_output_h_offset);
+        schedule_tile(filter_idx, output_h, output_w, tile_h, tile_w, scheduled_filters, H, W);
         my_printf_debug("Mark filter %d as processed" NEWLINE, filter_idx);
         scheduled_filters++;
     }
@@ -325,7 +315,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
     next_input_buffer_addr = NULL;
 
     if (!extra_data->conv_running) {
-        extra_data->conv_idx = extra_data->output_h = extra_data->output_h_offset = extra_data->output_w = 0;
+        extra_data->conv_idx = extra_data->output_h = extra_data->output_w = 0;
         for (uint8_t idx = 0; idx < NUM_FILTERS; idx++) {
             extra_data->processed_filters[idx] = 0;
         }

@@ -44,7 +44,6 @@ typedef union {
         uint16_t conv_running;
         uint16_t conv_idx;
         uint16_t output_h;
-        uint16_t output_h_offset;
         uint16_t output_w;
         uint16_t processed_filters[NUM_FILTERS];
         uint16_t current_filter;
