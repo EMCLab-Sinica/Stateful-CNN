@@ -9,29 +9,17 @@
 
 #ifdef __MSP430__
 #include <FreeRTOS.h>
-#include <croutine.h>
-// TODO: fix performance of concurrent execution
-//#define USE_CONCURRENT_CONV
 #endif
 
 #define configCONV_STACK_SIZE 100
-#define NUM_TASKS 2
 
 // TODO: make these adjustable on runtime
 #define TILE_W 1
 
-#ifdef USE_CONCURRENT_CONV
-/* internal structure for msp_mac_q15() */
-DSPLIB_DATA(msp_mac_params, 4)
-MSP_LEA_MAC_PARAMS msp_mac_params[NUM_TASKS];
-#endif
-
-int16_t *input_buffer_addr[NUM_TASKS];
+int16_t *input_buffer_addr;
 int16_t *next_input_buffer_addr;
 
 #define CONV_TASK_FLAG_PROCESSED_FILTERS_BASE 2
-// XXX: any way to achieve concurrency without skipping?
-#define CONV_TASK_FLAG_NOOP 1
 typedef struct ConvTaskParams {
     ParameterInfo *conv_input;
     ParameterInfo *conv_filter;
@@ -49,7 +37,7 @@ typedef struct ConvTaskParams {
     OpExtraData *extra_data;
 } ConvTaskParams;
 
-static ConvTaskParams arr_conv_params[NUM_TASKS];
+static ConvTaskParams conv_params;
 static struct {
     uint16_t dest_offset;
     uint8_t filter_limit;
@@ -58,167 +46,48 @@ static struct {
     uint16_t W_by_OUTPUT_CHANNEL;
 } global_conv_params;
 
-#ifdef USE_CONCURRENT_CONV
-static uint16_t arrH[NUM_TASKS], arrW[NUM_TASKS], arrkH[NUM_TASKS], arrkW[NUM_TASKS], arrCHANNEL[NUM_TASKS];
-#endif
-static msp_mac_q15_params mac_params[NUM_TASKS];
+static msp_mac_q15_params mac_params;
 static int16_t *filter_buffer_addr[NUM_FILTERS];  // filter index -> address
 static int8_t cached_filter_idx[NUM_FILTERS];  // filter buffer id (0~filter_limit-1) -> filter index
 static int8_t filter_buffer_id;
-static uint8_t next_scheduled_task_idx = 0;
 static uint8_t pending_filters[NUM_FILTERS];
 static uint8_t pending_filter_idx = 0;
 
-static inline int32_t *buffer_iq31_mac_results(uint8_t uxIndex) {
-    return (int32_t*)(lea_buffer + LEA_BUFFER_SIZE) - (uxIndex + 1);
-}
+int32_t *iq31_mac_results = (int32_t*)(lea_buffer + LEA_BUFFER_SIZE) - 1;
 
-#ifdef USE_CONCURRENT_CONV
-static uint32_t idleCounter = 0;
-
-static void convTaskConcurrent(CoRoutineHandle_t xHandle, UBaseType_t uxIndex) {
+static void convTask(void) {
     #include "conv_prologue.h"
-
-    MSP_LEA_MAC_PARAMS *leaParams;
-    //uint16_t interruptState;
-
-    __bis_SR_register(GIE);
-
-    crSTART(xHandle);
-
-    for (;;) {
-
-    if (conv_params->flags & CONV_TASK_FLAG_NOOP) {
-        crDELAY(xHandle, 0);
-        continue;
-    }
 
     #include "conv_pre.h"
 
-    /* XXX: need more co-routines? */
-    while(!msp_lea_ifg) {
-        idleCounter++;
-    }
-
-    /* modified from DSPLib_1_30_00_02/source/vector/msp_mac_q15.c */
-    // different tasks need different buffers for LEA params, or the program
-    // counter goes to strange places (e.g., 0x18)
-    leaParams = msp_mac_params + uxIndex;
-
-    /* Set MSP_LEA_MAC_PARAMS structure. */
-    leaParams->input2 = MSP_LEA_CONVERT_ADDRESS(filter_buffer_addr[conv_params->conv_idx]);
-    leaParams->output = MSP_LEA_CONVERT_ADDRESS(buffer_iq31_mac_results(uxIndex));
-    leaParams->vectorSize = mac_params[uxIndex].length;
-
-    /* Load source arguments to LEA. */
-    LEAPMS0 = MSP_LEA_CONVERT_ADDRESS(input_buffer_addr[uxIndex]);
-    LEAPMS1 = MSP_LEA_CONVERT_ADDRESS(leaParams);
-
-    // modified from DSPLib_1_30_00_02/include/DSPLib_lea.h
-
-    /* Save interrupt state and disable interrupts. */
-    //interruptState = __get_interrupt_state();
-    //__disable_interrupt();
-
-    /* Clear interrupt flag and invoke the command. */
-    msp_lea_ifg = 0;
-    /* Invoke the LEACMD__MAC command. */
-    LEAPMCB = LEACMD__MAC | LEAITFLG1;
-
-    /* Do not enter LPM0 so that CPU can do other work */
-    __bis_SR_register(GIE);
-
-    /* Restore original interrupt state. */
-    //__set_interrupt_state(interruptState);
-
-    crDELAY(xHandle, 0);
-
-    /* after context switch of co-routines, variables on stack are lost */
-    conv_params = &arr_conv_params[uxIndex];
-    H = arrH[uxIndex];
-    W = arrW[uxIndex];
-    kH = arrkH[uxIndex];
-    kW = arrkW[uxIndex];
-    CHANNEL = arrCHANNEL[uxIndex];
-
-    #include "conv_post.h"
-
-    crDELAY(xHandle, 0);
-
-    }
-
-    crEND();
-}
-
-#else
-
-static void convTask(unsigned short uxIndex) {
-    #include "conv_prologue.h"
-
-    if (conv_params->flags & CONV_TASK_FLAG_NOOP) {
-        return;
-    }
-
-    #include "conv_pre.h"
-
-    msp_status status = msp_mac_q15(&mac_params[uxIndex],
-                                    input_buffer_addr[uxIndex],
-                                    filter_buffer_addr[conv_params->conv_idx],
-                                    buffer_iq31_mac_results(uxIndex));
+    msp_status status = msp_mac_q15(&mac_params,
+                                    input_buffer_addr,
+                                    filter_buffer_addr[conv_params.conv_idx],
+                                    iq31_mac_results);
     msp_checkStatus(status);
 
     #include "conv_post.h"
 }
 
-#endif
-
-static inline void increment_task_idx(void) {
-    next_scheduled_task_idx++;
-    if (next_scheduled_task_idx == NUM_TASKS) {
-        next_scheduled_task_idx = 0;
-    }
-}
-
 static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint8_t processed_filters, uint16_t H, uint16_t W, uint16_t old_output_h_offset) {
-    OpExtraData *extra_data = arr_conv_params[0].extra_data;
+    OpExtraData *extra_data = conv_params.extra_data;
     extra_data->current_filter = idx;
     uint8_t cur_output_h_offset = processed_filters ? 0 : extra_data->output_h_offset;
     my_printf_debug("cur_output_h_offset = %d" NEWLINE, cur_output_h_offset);
-    for (uint8_t k = 0; k < NUM_TASKS; k++) {
-        ConvTaskParams *conv_params = arr_conv_params + k;
-        conv_params->conv_idx = idx;
-        conv_params->starting_output_h = output_h + old_output_h_offset;
-        conv_params->starting_output_h_offset = cur_output_h_offset;
-        conv_params->tile_h = tile_h;
-    }
+    conv_params.conv_idx = idx;
+    conv_params.starting_output_h = output_h + old_output_h_offset;
+    conv_params.starting_output_h_offset = cur_output_h_offset;
+    conv_params.tile_h = tile_h;
     for (uint8_t i = 0; i < MIN_VAL(tile_w, W - output_w); i++) {
-        for (uint8_t j = cur_output_h_offset; j < MIN_VAL(tile_h, H - output_h); j += NUM_TASKS) {
+        for (uint8_t j = cur_output_h_offset; j < MIN_VAL(tile_h, H - output_h); j++) {
             extra_data->output_h_offset = j;
-            for (uint8_t k = 0; k < NUM_TASKS; k++) {
-                ConvTaskParams *conv_params = &arr_conv_params[next_scheduled_task_idx];
-                conv_params->flags &= 0xff00;
-                if (j + k < tile_h) {
-                    conv_params->output_h = output_h + j + k;
-                    conv_params->output_w = output_w + i;
-                    conv_params->flags |= processed_filters * CONV_TASK_FLAG_PROCESSED_FILTERS_BASE;
-                    my_printf_debug("j+k = %d" NEWLINE, j+k);
-                    conv_params->do_reinitialize_input = (j + k == cur_output_h_offset);
-                } else {
-                    conv_params->flags |= CONV_TASK_FLAG_NOOP;
-                }
-                increment_task_idx();
-            }
-            for (uint8_t k = 0; k < NUM_TASKS; k++) {
-#ifdef USE_CONCURRENT_CONV
-                /* each co-routine runs as two parts:
-                 * before and after LEA operations */
-                vCoRoutineSchedule();
-                vCoRoutineSchedule();
-#else
-                convTask(next_scheduled_task_idx);
-                increment_task_idx();
-#endif
-            }
+            conv_params.flags &= 0xff00;
+            conv_params.output_h = output_h + j;
+            conv_params.output_w = output_w + i;
+            conv_params.flags |= processed_filters * CONV_TASK_FLAG_PROCESSED_FILTERS_BASE;
+            my_printf_debug("j = %d" NEWLINE, j);
+            conv_params.do_reinitialize_input = (j == cur_output_h_offset);
+            convTask();
         }
     }
     extra_data->output_h_offset = 0;
@@ -227,7 +96,7 @@ static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t outpu
 
 static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint16_t H, uint16_t W) {
     uint8_t scheduled_filters = 0;
-    OpExtraData *extra_data = arr_conv_params[0].extra_data;
+    OpExtraData *extra_data = conv_params.extra_data;
     uint16_t old_output_h_offset = extra_data->output_h_offset;
     if (extra_data->current_filter) {
         schedule_tile(extra_data->current_filter, output_h, output_w, tile_h, tile_w, scheduled_filters, H, W, old_output_h_offset);
@@ -265,24 +134,6 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
 
     msp_mac_q15_overflow_counter = 0;
 
-#ifdef USE_CONCURRENT_CONV
-    msp_lea_init();
-
-    msp_lea_ifg = 1; // dummy
-
-    static bool task_created = false;
-
-    if (!task_created) {
-        for (uint8_t idx = 0; idx < NUM_TASKS; idx++) {
-            if (xCoRoutineCreate(convTaskConcurrent, 0, idx) != pdPASS) {
-                // failed to create co-routines
-                ERROR_OCCURRED();
-            }
-        }
-        task_created = true;
-    }
-#endif
-
     if (get_param_bitwidth(conv_input) != 16 || get_param_bitwidth(conv_filter) != 16) {
         // incorrect bitwidth
         ERROR_OCCURRED();
@@ -301,17 +152,14 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
 
     uint8_t ret = 0;
 
-    for (uint8_t idx = 0; idx < NUM_TASKS; idx++) {
-        ConvTaskParams *conv_params = &arr_conv_params[idx];
-        conv_params->conv_input = conv_input;
-        conv_params->conv_filter = conv_filter;
-        conv_params->bias = bias;
-        conv_params->output = output;
-        conv_params->extra_data = extra_data;
-        conv_params->flags = flags << 8;
-        input_buffer_addr[idx] = NULL;
-        next_input_buffer_addr = NULL;
-    }
+    conv_params.conv_input = conv_input;
+    conv_params.conv_filter = conv_filter;
+    conv_params.bias = bias;
+    conv_params.output = output;
+    conv_params.extra_data = extra_data;
+    conv_params.flags = flags << 8;
+    input_buffer_addr = NULL;
+    next_input_buffer_addr = NULL;
 
     if (!extra_data->conv_running) {
         extra_data->conv_idx = extra_data->output_h = extra_data->output_h_offset = extra_data->output_w = 0;
@@ -343,18 +191,15 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
     global_conv_params.W_by_OUTPUT_CHANNEL = W * global_conv_params.OUTPUT_CHANNEL;
 
     /* MSP430 LEA requires length to be even */
-    mac_params[0].length = (uint16_t)(CHANNEL * kH * kW / 2 * 2);
-    global_conv_params.truncated = (mac_params[0].length != CHANNEL * kH * kW);
+    mac_params.length = (uint16_t)(CHANNEL * kH * kW / 2 * 2);
+    global_conv_params.truncated = (mac_params.length != CHANNEL * kH * kW);
     if (global_conv_params.truncated) {
         // when CHANNEL * kH * kW is odd, CHANNEL * kW (dest_offset) is
         // also odd, so dummy values are needed between slices to make
         // addresses even.
         // a dummy value for each slice (kW * CHANNEL q15 values)
-        mac_params[0].length += kH + 1;
+        mac_params.length += kH + 1;
         global_conv_params.dest_offset++;
-    }
-    for (uint8_t idx = 1; idx < NUM_TASKS; idx++) {
-        mac_params[idx].length = mac_params[0].length;
     }
 
     global_conv_params.filter_limit = MIN_VAL(
@@ -376,10 +221,6 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
             handle_conv_inner_loop(input_N, output_h, output_w, tile_h, TILE_W, H, W);
         }
     }
-
-#ifdef USE_CONCURRENT_CONV
-    my_printf_debug("idle for %l cycles" NEWLINE, idleCounter);
-#endif
 
     my_printf_debug("handle_conv output" NEWLINE);
     dump_params(output);
