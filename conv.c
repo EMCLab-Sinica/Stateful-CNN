@@ -55,9 +55,9 @@ int32_t *iq31_mac_results = (int32_t*)(lea_buffer + LEA_BUFFER_SIZE) - 1;
 
 static void convTask(void) {
     /* put var declarations first to make the compiler happy */
-    int16_t *input_addr, *filter_addr;
+    int16_t *filter_addr;
     /* Cannot use C as a variable name here as C is a macro on MSP430 :( */
-    uint16_t H, W, kH, kW, CHANNEL;
+    uint16_t kH, kW, CHANNEL;
 
     /* copy filter data */
     if (!filter_buffer_addr[conv_params.conv_idx]) {
@@ -97,89 +97,11 @@ static void convTask(void) {
         }
     }
 
-    uint8_t scheduled_filters = (conv_params.flags & 0x00ff) >> 1;
-    my_printf_debug("scheduled_filters = %d" NEWLINE, scheduled_filters);
     my_printf_debug("conv_params.output_h = %d" NEWLINE, conv_params.output_h);
-    if (scheduled_filters == 0) {
-        kH = conv_params.conv_filter->dims[1];
-        W = conv_params.conv_input->dims[2];
-        CHANNEL = conv_params.conv_filter->dims[3];
-        int8_t field_size = (int8_t)((kH - 1) / 2);
-
-        /* copy input data, row by row */
-
-        input_addr = get_q15_param(
-            conv_params.conv_input,
-            (size_t)(CHANNEL * (
-                    (conv_params.output_h) * W +
-                    (conv_params.output_w)
-            )));
-
-        /* int32_t instead of int16_t as TI's compiler cannot handle negative
-         * offsets correctly. The expression `input_addr + (int16_t)(-2)` is
-         * compiled as:
-         * 1. -2 is represented as 0x00FFFE (general registers are 24-bit long).
-         *    Assume this value is stored in R11.
-         * 2. RLAM.A #1,R11  # multiply by 2 to transform the offset for int16_t
-         *    to the difference of addresses.
-         * In step 2, R11 becomes 0x01FFFC, while it should be -4, or 0x00FFFC,
-         * and thus the resultant address is offset by 0x10000.
-         */
-        int32_t w_start = int16_max(-field_size,    -conv_params.output_w),
-                w_end   = int16_min( field_size, W-1-conv_params.output_w);
-        int16_t *src = NULL,
-                *dest;
-        int16_t src_offset = W * CHANNEL;
-        uint16_t inputs_len = LEA_BUFFER_SIZE - 4 - global_conv_params.filter_limit * kH * global_conv_params.dest_offset;
-        if (conv_params.do_reinitialize_input) {
-            next_input_buffer_addr = lea_buffer;
-        }
-
-        dest = input_buffer_addr = next_input_buffer_addr;
-
-        H = conv_params.conv_input->dims[1];
-        int32_t h_start,
-                h_end = int16_min(field_size, H-1-conv_params.output_h);
-
-        if (conv_params.do_reinitialize_input) {
-            my_printf_debug("Reinitialize input buffer" NEWLINE);
-
-            if (scheduled_filters == 0) {
-                msp_fill_q15_params fill_params = {
-                    .length = inputs_len,
-                    .value = 0,
-                };
-                msp_status status = msp_fill_q15(&fill_params, lea_buffer);
-                msp_checkStatus(status);
-            }
-
-            h_start = int16_max(-field_size, -conv_params.output_h);
-        } else {
-            h_start = field_size;
-        }
-
-        dest += (h_start + field_size) * global_conv_params.dest_offset + (w_start + field_size) * CHANNEL;
-
-        my_printf_debug("h_start=%d ", h_start);
-        my_printf_debug("h_end=%d" NEWLINE, h_end);
-
-        size_t size = (size_t)((w_end-w_start+1) * CHANNEL * sizeof(uint16_t)); // in bytes
-        if (h_start <= h_end) {
-            src = input_addr + (h_start * W + w_start) * CHANNEL;
-            my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
-                            (int)(dest - lea_buffer));
-            for (int32_t h = h_start; h <= h_end; h++) {
-                my_memcpy(dest, src, size);
-                src += src_offset;
-                dest += global_conv_params.dest_offset;
-            }
-        }
-    } else{
-        if (conv_params.do_reinitialize_input) {
-            next_input_buffer_addr = lea_buffer;
-        }
-        input_buffer_addr = next_input_buffer_addr;
+    if (conv_params.do_reinitialize_input) {
+        next_input_buffer_addr = lea_buffer;
     }
+    input_buffer_addr = next_input_buffer_addr;
 
     /* XXX: assume stride=1 */
     next_input_buffer_addr += global_conv_params.dest_offset; // dest_offset already calibrated for truncation
@@ -229,7 +151,7 @@ static void convTask(void) {
     output_data[offset] = q15_mac_result;
 }
 
-static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint8_t processed_filters, uint16_t H, uint16_t W) {
+static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint16_t H, uint16_t W) {
     OpExtraData *extra_data = conv_params.extra_data;
     extra_data->current_filter = idx;
     conv_params.conv_idx = idx;
@@ -239,7 +161,6 @@ static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t outpu
             conv_params.flags &= 0xff00;
             conv_params.output_h = output_h + j;
             conv_params.output_w = output_w + i;
-            conv_params.flags |= processed_filters * CONV_TASK_FLAG_PROCESSED_FILTERS_BASE;
             my_printf_debug("j = %d" NEWLINE, j);
             conv_params.do_reinitialize_input = (j == 0);
             convTask();
@@ -249,11 +170,68 @@ static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t outpu
 }
 
 static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint16_t H, uint16_t W) {
-    uint8_t scheduled_filters = 0;
     OpExtraData *extra_data = conv_params.extra_data;
+
+    uint16_t kH = conv_params.conv_filter->dims[1],
+             CHANNEL = conv_params.conv_filter->dims[3];
+    int8_t field_size = (int8_t)((kH - 1) / 2);
+
+    /* copy input data, row by row */
+
+    int16_t *input_addr = get_q15_param(
+        conv_params.conv_input,
+        CHANNEL * (output_h * W + output_w)
+    );
+
+    /* int32_t instead of int16_t as TI's compiler cannot handle negative
+     * offsets correctly. The expression `input_addr + (int16_t)(-2)` is
+     * compiled as:
+     * 1. -2 is represented as 0x00FFFE (general registers are 24-bit long).
+     *    Assume this value is stored in R11.
+     * 2. RLAM.A #1,R11  # multiply by 2 to transform the offset for int16_t
+     *    to the difference of addresses.
+     * In step 2, R11 becomes 0x01FFFC, while it should be -4, or 0x00FFFC,
+     * and thus the resultant address is offset by 0x10000.
+     */
+    int32_t w_start = int16_max(-field_size,    -output_w),
+            w_end   = int16_min( field_size, W-1-output_w);
+    int16_t *src = NULL,
+            *dest;
+    int16_t src_offset = W * CHANNEL;
+    uint16_t inputs_len = LEA_BUFFER_SIZE - 4 - global_conv_params.filter_limit * kH * global_conv_params.dest_offset;
+
+    dest = input_buffer_addr = next_input_buffer_addr = lea_buffer;
+
+    H = conv_params.conv_input->dims[1];
+    int32_t h_start = int16_max(      -field_size,    -output_h),
+            h_end =   int16_min(tile_h+field_size, H-1-output_h);
+
+    my_printf_debug("Reinitialize input buffer" NEWLINE);
+
+    msp_fill_q15_params fill_params = {
+        .length = inputs_len,
+        .value = 0,
+    };
+    msp_status status = msp_fill_q15(&fill_params, lea_buffer);
+    msp_checkStatus(status);
+
+    dest += (h_start + field_size) * global_conv_params.dest_offset + (w_start + field_size) * CHANNEL;
+
+    my_printf_debug("h_start=%d ", h_start);
+    my_printf_debug("h_end=%d" NEWLINE, h_end);
+
+    size_t size = (size_t)((w_end-w_start+1) * CHANNEL * sizeof(uint16_t)); // in bytes
+    src = input_addr + (h_start * W + w_start) * CHANNEL;
+    my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
+                    (int)(dest - lea_buffer));
+    for (int32_t h = h_start; h <= h_end; h++) {
+        my_memcpy(dest, src, size);
+        src += src_offset;
+        dest += global_conv_params.dest_offset;
+    }
+
     if (extra_data->current_filter) {
-        schedule_tile(extra_data->current_filter, output_h, output_w, tile_h, tile_w, scheduled_filters, H, W);
-        scheduled_filters++;
+        schedule_tile(extra_data->current_filter, output_h, output_w, tile_h, tile_w, H, W);
     }
     for (uint8_t idx = 0; idx < n_conv; idx++) {
         if (extra_data->processed_filters[idx]) {
@@ -261,8 +239,7 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
             continue;
         }
         if (filter_buffer_addr[idx]) {
-            schedule_tile(idx, output_h, output_w, tile_h, tile_w, scheduled_filters, H, W);
-            scheduled_filters++;
+            schedule_tile(idx, output_h, output_w, tile_h, tile_w, H, W);
         } else {
             my_printf_debug("Filter %d is not cached, append it to the pending list" NEWLINE, idx);
             pending_filters[pending_filter_idx] = idx;
@@ -271,9 +248,8 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
     }
     for (uint8_t idx = 0; idx < pending_filter_idx; idx++) {
         uint8_t filter_idx = pending_filters[idx];
-        schedule_tile(filter_idx, output_h, output_w, tile_h, tile_w, scheduled_filters, H, W);
+        schedule_tile(filter_idx, output_h, output_w, tile_h, tile_w, H, W);
         my_printf_debug("Mark filter %d as processed" NEWLINE, filter_idx);
-        scheduled_filters++;
     }
     pending_filter_idx = 0;
     for (uint8_t idx = 0; idx < n_conv; idx++) {
