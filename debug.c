@@ -72,6 +72,16 @@ void dump_matrix(int16_t *mat, size_t len) {
     my_printf_debug(NEWLINE);
 }
 
+void dump_matrix2(int16_t *mat, size_t rows, size_t cols) {
+    for (size_t j = 0; j < rows * cols; j++) {
+        print_q15_debug(mat[j]);
+        if ((j+1) % cols == 0) {
+            my_printf_debug(NEWLINE);
+        }
+    }
+    my_printf_debug(NEWLINE);
+}
+
 void dump_model(void) {
     uint16_t i, j;
     for (i = 0; i < model->nodes_len; i++) {
