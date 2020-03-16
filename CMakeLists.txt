@@ -35,6 +35,7 @@ add_library(dsplib
     ${DSPLIB_PATH}/source/vector/msp_add_q15.c
     ${DSPLIB_PATH}/source/vector/msp_mac_q15.c
     ${DSPLIB_PATH}/source/vector/msp_max_q15.c
+    ${DSPLIB_PATH}/source/utility/msp_interleave_q15.c
     ${DSPLIB_PATH}/source/utility/msp_fill_q15.c
 )
 target_include_directories(dsplib
