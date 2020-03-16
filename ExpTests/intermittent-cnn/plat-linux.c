@@ -77,12 +77,6 @@ int main(int argc, char* argv[]) {
     int nvm_fd, ret = 0;
     uint8_t *nvm;
 
-    struct itimerval interval;
-    interval.it_value.tv_sec = interval.it_interval.tv_sec = 0;
-    interval.it_value.tv_usec = interval.it_interval.tv_usec = 1000;
-    setitimer(ITIMER_REAL, &interval, NULL);
-    signal(SIGALRM, sig_handler);
-
     nvm_fd = open("nvm.bin", O_RDWR);
     nvm = mmap(NULL, NVM_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, nvm_fd, 0);
     if (nvm == MAP_FAILED) {
@@ -98,6 +92,12 @@ int main(int argc, char* argv[]) {
     counters = (uint16_t*)(copied_size + 1);
     power_counters = counters + COUNTERS_LEN;
     counter_idx = (uint8_t*)(power_counters + COUNTERS_LEN);
+
+    struct itimerval interval;
+    interval.it_value.tv_sec = interval.it_interval.tv_sec = 0;
+    interval.it_value.tv_usec = interval.it_interval.tv_usec = 1000;
+    setitimer(ITIMER_REAL, &interval, NULL);
+    signal(SIGALRM, sig_handler);
 
     if (argc >= 3) {
         printf("Usage: %s [test filename]\n", argv[0]);
