@@ -32,8 +32,6 @@
 
 #include "DSPLib.h"
 
-uint32_t msp_mac_q15_overflow_counter = 0;
-
 #if defined(MSP_USE_LEA)
 
 msp_status msp_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const _q15 *srcB, _iq31 *result)
@@ -157,25 +155,11 @@ msp_status msp_mac_q15(const msp_mac_q15_params *params, const _q15 *srcA, const
     /* Loop through all vector elements. */
     while (length--) {
         /* Multiply srcA and srcB and accumulate to the result. */
-        /* Scale result by 2 - mimic overflow behavior of LEA */
-        int64_t v = *result + (int64_t)*srcA++ * (int64_t)*srcB++ * 2;
-        uint8_t overflow = 0;
-        //my_printf("v=%ld" NEWLINE, v);
-        if (v > INT32_MAX) {
-            v = INT32_MAX;
-            overflow = 1;
-        }
-        if (v < INT32_MIN) {
-            v = INT32_MIN;
-            overflow = 1;
-        }
-        *result = (int32_t)v;
-        if (overflow) {
-            msp_mac_q15_overflow_counter++;
-            break;
-        }
+        *result += (int32_t)*srcA++ * (int32_t)*srcB++;
     }
     
+    /* Scale result by 2. */
+    *result <<= 1;
 #endif //__MSP430_HAS_MPY32__
 
     return MSP_SUCCESS;
