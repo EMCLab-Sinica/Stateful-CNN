@@ -99,13 +99,13 @@ int main(int argc, char* argv[]) {
     setitimer(ITIMER_REAL, &interval, NULL);
     signal(SIGALRM, sig_handler);
 
+    init_pointers();
     if (argc >= 3) {
         printf("Usage: %s [test filename]\n", argv[0]);
         ret = 1;
     } else if (argc == 2) {
         run_tests(argv[1]);
     } else {
-        init_pointers();
         ret = run_model(NULL);
         print_results();
     }
@@ -129,4 +129,8 @@ void my_memcpy(void* dest, const void* src, size_t n) {
 
 void plat_reset_model(void) {
     *copied_size = 0;
+}
+
+void setOutputValue(uint8_t value) {
+    my_printf("Output set to %d" NEWLINE, value);
 }

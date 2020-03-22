@@ -287,7 +287,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
     ParameterInfo *conv_input = input[0], *conv_filter = input[1], *bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 
-    msp_mac_q15_overflow_counter = 0;
+    setOutputValue(1);
 
     if (get_param_bitwidth(conv_input) != 16 || get_param_bitwidth(conv_filter) != 16) {
         // incorrect bitwidth
@@ -332,7 +332,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
 
     uint8_t tile_h = 1; // fallback value
     if (H == 14) {
-        tile_h = 8;
+        tile_h = 7;
     } else if (H == 28) {
         tile_h = 28;
     }
@@ -377,9 +377,9 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
     my_printf_debug("handle_conv output" NEWLINE);
     dump_params(output);
 
-    my_printf_debug("msp_mac_q15_overflow_counter=%d" NEWLINE, msp_mac_q15_overflow_counter);
-
     extra_data->conv_running = 0;
+
+    setOutputValue(0);
 
     return ret;
 }

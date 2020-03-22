@@ -148,6 +148,7 @@ int _system_pre_init( void )
  * port 5 interrupt service routine to handle s1 and s2 button press
  *
  */
+
 #pragma vector=PORT5_VECTOR
 __interrupt void Port_5(void)
 {
@@ -155,6 +156,7 @@ __interrupt void Port_5(void)
     GPIO_disableInterrupt(GPIO_PORT_P5, GPIO_PIN5);
 
     /* Button pushed, do something if you need to */
+    button_pushed();
 
     GPIO_enableInterrupt(GPIO_PORT_P5, GPIO_PIN6);
     GPIO_enableInterrupt(GPIO_PORT_P5, GPIO_PIN5);

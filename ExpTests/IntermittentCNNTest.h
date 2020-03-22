@@ -1,3 +1,4 @@
 #pragma once
 
-void IntermittentCNNTest();
+void IntermittentCNNTest(void);
+void button_pushed(void);

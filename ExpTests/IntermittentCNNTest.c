@@ -23,6 +23,7 @@ void IntermittentCNNTest() {
         }
 
         myFirstTime = 1;
+        model->run_counter = 0;
     }
 
     while (delay_counter < DELAY_START_SECONDS) {
@@ -39,4 +40,13 @@ void IntermittentCNNTest() {
         print_results();
         __delay_cycles(16E6);
     }
+}
+
+void button_pushed(void) {
+    static uint8_t push_counter = 0;
+    // XXX: somehow the ISR for button is triggered immediately after recovery
+    if (push_counter >= 1) {
+        myFirstTime = 0;
+    }
+    push_counter++;
 }
