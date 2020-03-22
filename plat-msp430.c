@@ -64,3 +64,12 @@ __interrupt void vTimerHandler( void )
     // See vApplicationSetupTimerInterrupt() in main.h and FreeRTOSConfig.h
     counters[*counter_idx]++;
 }
+
+void setOutputValue(uint8_t value)
+{
+    if (value) {
+        GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN3);
+    } else {
+        GPIO_setOutputLowOnPin(GPIO_PORT_P1, GPIO_PIN3);
+    }
+}
