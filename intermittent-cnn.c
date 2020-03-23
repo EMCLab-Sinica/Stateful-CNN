@@ -204,6 +204,10 @@ int run_model(int8_t *ansptr) {
     return 0;
 }
 
+int16_t mpy_outputs[1024];
+int16_t mpy_output_counter;
+extern int16_t mpy_conv_idx, mpy_output_h, mpy_output_w;
+
 void print_results(void) {
     ParameterInfo *output_node = &(parameter_info[model->nodes_len + model->n_input - 1]);
     for (uint16_t i = 0; i < output_node->dims[1]; i++) {
@@ -221,4 +225,9 @@ void print_results(void) {
     }
     my_printf(NEWLINE "run_counter: %d", model->run_counter);
     my_printf(NEWLINE);
+
+    my_printf("mpy_outputs %d, ", mpy_conv_idx);
+    my_printf("%d, ", mpy_output_h);
+    my_printf("%d" NEWLINE, mpy_output_w);
+    dump_matrix(mpy_outputs, 1024);
 }

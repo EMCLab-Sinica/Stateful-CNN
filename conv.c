@@ -54,6 +54,9 @@ static uint8_t pending_filter_idx = 0;
 
 int16_t *matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
 
+int16_t *mpy_dst = NULL;
+int16_t mpy_dst_len = 0, mpy_conv_idx = 0, mpy_output_h = 0, mpy_output_w = 0;
+
 static void convTask(uint8_t offset_h, uint8_t tile_h) {
     /* put var declarations first to make the compiler happy */
     int16_t *filter_addr;
@@ -113,6 +116,14 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     // srcBCols should really be even, though, so we process 2 filters at a time
     // http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/716353?MSP430FR5992-MSP-DSPLib-msp-matrix-mpy-q15
     matrix_mpy_params.srcARows = (tile_h - offset_h + kH - 1) / kH;
+
+    if (!mpy_dst && input_buffer_addr[0] && matrix_mpy_params.srcACols > 100) {
+        mpy_dst = matrix_mpy_results;
+        mpy_dst_len = matrix_mpy_params.srcARows * matrix_mpy_params.srcBCols;
+        mpy_conv_idx = conv_params.conv_idx;
+        mpy_output_h = conv_params.output_h + offset_h;
+        mpy_output_w = conv_params.output_w;
+    }
 
     msp_status status = msp_matrix_mpy_q15(
         &matrix_mpy_params,

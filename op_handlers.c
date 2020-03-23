@@ -156,9 +156,9 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output, OpExtraData
         my_memcpy(buffer_b, get_q15_param(B, (uint16_t)(i * B->dims[1])), (uint16_t)(current_width * B->dims[1] * sizeof(uint16_t)));
 
         my_printf_debug("strip for A" NEWLINE);
-        dump_matrix(buffer_a + A->dims[0] * i, (size_t)(A->dims[0] * current_width));
+        dump_matrix_debug(buffer_a + A->dims[0] * i, (size_t)(A->dims[0] * current_width));
         my_printf_debug("B" NEWLINE);
-        dump_matrix(buffer_b, (size_t)(current_width * B->dims[1]));
+        dump_matrix_debug(buffer_b, (size_t)(current_width * B->dims[1]));
 
         status = msp_matrix_mpy_q15(
             &params,
@@ -168,7 +168,7 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output, OpExtraData
         msp_checkStatus(status);
 
         my_printf_debug("temp" NEWLINE);
-        dump_matrix(buffer_temp, (size_t)(A->dims[0] * B->dims[1]));
+        dump_matrix_debug(buffer_temp, (size_t)(A->dims[0] * B->dims[1]));
 
         msp_add_q15_params params2 = { .length = output_len };
         status = msp_add_q15(&params2, buffer_matmul, buffer_temp, buffer_matmul);

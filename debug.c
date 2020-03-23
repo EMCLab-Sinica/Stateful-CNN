@@ -62,16 +62,19 @@ void dump_params(struct _ParameterInfo *cur_param) {
     }
 }
 
+#endif
+
 void dump_matrix(int16_t *mat, size_t len) {
     for (size_t j = 0; j < len; j++) {
-        print_q15_debug(mat[j]);
+        print_q15(mat[j]);
         if (j && (j % 16 == 15)) {
-            my_printf_debug(NEWLINE);
+            my_printf(NEWLINE);
         }
     }
-    my_printf_debug(NEWLINE);
+    my_printf(NEWLINE);
 }
 
+#ifndef MY_NDEBUG
 void dump_matrix2(int16_t *mat, size_t rows, size_t cols) {
     for (size_t j = 0; j < rows * cols; j++) {
         print_q15_debug(mat[j]);
