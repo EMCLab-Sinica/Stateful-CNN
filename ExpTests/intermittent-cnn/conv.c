@@ -15,7 +15,7 @@
 
 // TODO: make these adjustable on runtime
 #define TILE_W 1
-#define OUTPUT_LEN 20
+#define OUTPUT_LEN 50
 
 // to make the code clearer
 #define TEMP_FILTER_WIDTH 1
@@ -72,8 +72,7 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
         int16_t *filter_tmp = matrix_mpy_results - filter_offset; // before transpose
         filter_buffer_addr = matrix_mpy_results - filter_offset * (global_conv_params.filter_limit + TEMP_FILTER_WIDTH);
 
-        // 2 filters at a time
-        for (uint8_t idx = 0; idx < 2; idx++) {
+        for (uint8_t idx = 0; idx < global_conv_params.filter_limit; idx++) {
             filter_addr = get_q15_param(
                 conv_params.conv_filter,
                 (size_t)((conv_params.conv_idx + idx) * CHANNEL * kH * kW));
@@ -94,7 +93,7 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
 
             msp_interleave_q15_params params;
             params.length = matrix_mpy_params.srcBRows;
-            params.numChannels = 2;
+            params.numChannels = global_conv_params.filter_limit;
             params.channel = idx;
             msp_status status = msp_interleave_q15(
                 &params,
@@ -113,7 +112,7 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
 
     // XXX: LEA doc requires all matrix dimensions to be even, while LEA
     // appears to still give correct results when srcARows is odd
-    // srcBCols should really be even, though, so we process 2 filters at a time
+    // srcBCols should really be even, though
     // http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/716353?MSP430FR5992-MSP-DSPLib-msp-matrix-mpy-q15
     matrix_mpy_params.srcARows = (tile_h - offset_h + kH - 1) / kH;
 
@@ -152,10 +151,10 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
 
     // TODO: use LEA?
     int16_t *output_data = get_q15_param(conv_params.output, 0);
-    for (uint8_t idx2 = 0; idx2 < 2; idx2++) {
+    for (uint8_t idx2 = 0; idx2 < global_conv_params.filter_limit; idx2++) {
         int16_t bias_value = *get_q15_param(conv_params.bias, conv_params.conv_idx + idx2);
         for (uint8_t idx = 0; idx < matrix_mpy_params.srcARows; idx++) {
-            int16_t q15_mac_result = matrix_mpy_results[idx * 2 + idx2];
+            int16_t q15_mac_result = matrix_mpy_results[idx * global_conv_params.filter_limit + idx2];
             q15_mac_result += bias_value;
 
             my_printf_debug("after adding bias OFM value=");
@@ -172,14 +171,14 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     }
 }
 
-static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint16_t W) {
+static inline void schedule_tile(uint16_t idx, uint16_t n_conv, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint16_t W) {
     OpExtraData *extra_data = conv_params.extra_data;
     extra_data->current_filter = idx;
     conv_params.conv_idx = idx;
     conv_params.tile_h = tile_h;
     uint16_t kH = conv_params.conv_filter->dims[1];
     matrix_mpy_params.srcACols = matrix_mpy_params.srcBRows = kH * global_conv_params.dest_offset;
-    matrix_mpy_params.srcBCols = 2;
+    matrix_mpy_params.srcBCols = MIN_VAL(global_conv_params.filter_limit, n_conv - idx);
     for (uint8_t i = 0; i < MIN_VAL(tile_w, W - output_w); i++) {
         for (uint8_t j = 0; j < kH; j++) {
             conv_params.output_h = output_h;
@@ -187,8 +186,7 @@ static inline void schedule_tile(uint16_t idx, uint16_t output_h, uint16_t outpu
             convTask(j, tile_h);
         }
     }
-    // only record the even-numbered filter
-    // handle_conv_inner_loop schedules 2 filters at a time
+    // only record the starting number from `filter_limit` filters
     extra_data->processed_filters[idx] = 1;
 }
 
@@ -255,25 +253,24 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
     }
 
     if (extra_data->current_filter) {
-        schedule_tile(extra_data->current_filter, output_h, output_w, tile_h, tile_w, W);
+        schedule_tile(extra_data->current_filter, n_conv, output_h, output_w, tile_h, tile_w, W);
     }
-    // process 2 filters at a time as LEA requires matrix dimensions to be even
-    for (uint8_t idx = 0; idx < n_conv; idx += 2) {
+    for (uint8_t idx = 0; idx < n_conv; idx += global_conv_params.filter_limit) {
         if (extra_data->processed_filters[idx]) {
-            my_printf_debug("Skipping processed filter %d and %d" NEWLINE, idx, idx + 1);
+            my_printf_debug("Skipping processed filters starting from %d" NEWLINE, idx);
             continue;
         }
         if (cached_filter_idx == idx) {
-            schedule_tile(idx, output_h, output_w, tile_h, tile_w, W);
+            schedule_tile(idx, n_conv, output_h, output_w, tile_h, tile_w, W);
         } else {
-            my_printf_debug("Filter %d and %d are not cached, append them to the pending list" NEWLINE, idx, idx + 1);
+            my_printf_debug("Filters starting from %d are not cached, append them to the pending list" NEWLINE, idx);
             pending_filters[pending_filter_idx] = idx;
             pending_filter_idx++;
         }
     }
     for (uint8_t idx = 0; idx < pending_filter_idx; idx++) {
         uint8_t filter_idx = pending_filters[idx];
-        schedule_tile(filter_idx, output_h, output_w, tile_h, tile_w, W);
+        schedule_tile(filter_idx, n_conv, output_h, output_w, tile_h, tile_w, W);
         my_printf_debug("Mark filter %d as processed" NEWLINE, filter_idx);
     }
     pending_filter_idx = 0;
@@ -352,6 +349,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
 
     global_conv_params.filter_limit = MIN_VAL(
         conv_filter->dims[0],
+        // `/ 2 * 2` as LEA requires matrix dimensions to be even
         ((LEA_BUFFER_SIZE - OUTPUT_LEN - global_conv_params.dest_offset * (kH + tile_h - 1)) / (global_conv_params.dest_offset * kH) - TEMP_FILTER_WIDTH) / 2 * 2
     );
 
