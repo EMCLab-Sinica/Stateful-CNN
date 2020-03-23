@@ -17,6 +17,9 @@
 #define TILE_W 1
 #define OUTPUT_LEN 20
 
+// to make the code clearer
+#define TEMP_FILTER_WIDTH 1
+
 int16_t *input_buffer_addr;
 
 #define CONV_TASK_FLAG_PROCESSED_FILTERS_BASE 2
@@ -44,9 +47,8 @@ static struct {
 } global_conv_params;
 
 static msp_matrix_mpy_q15_params matrix_mpy_params;
-static int16_t *filter_buffer_addr[NUM_FILTERS];  // filter index -> address
-static int8_t cached_filter_idx[NUM_FILTERS];  // filter buffer id (0~filter_limit-1) -> filter index
-static int8_t filter_buffer_id;
+static int16_t *filter_buffer_addr;
+static int16_t cached_filter_idx;
 static uint8_t pending_filters[NUM_FILTERS];
 static uint8_t pending_filter_idx = 0;
 
@@ -60,59 +62,45 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     kH = conv_params.conv_filter->dims[1];
 
     /* copy filter data */
-    if (!filter_buffer_addr[conv_params.conv_idx]) {
+    if (cached_filter_idx != conv_params.conv_idx) {
         kW = conv_params.conv_filter->dims[2];
         CHANNEL = conv_params.conv_filter->dims[3];
-        filter_addr = get_q15_param(
-            conv_params.conv_filter,
-            (size_t)(conv_params.conv_idx * CHANNEL * kH * kW));
         int16_t filter_offset = kH * global_conv_params.dest_offset;
+        int16_t *filter_tmp = matrix_mpy_results - filter_offset; // before transpose
+        filter_buffer_addr = matrix_mpy_results - filter_offset * (global_conv_params.filter_limit + TEMP_FILTER_WIDTH);
+
         // 2 filters at a time
-        int16_t *filter_tmp = matrix_mpy_results - filter_offset * 2; // before transpose
-        filter_buffer_addr[conv_params.conv_idx] = matrix_mpy_results - filter_offset * (filter_buffer_id + 4);
-
-        if (global_conv_params.truncated) {
-            int16_t *current_filter_buffer_addr = filter_tmp;
-            // 2 filters at a time
-            for (uint16_t h = 0; h < 2 * kH; h++) {
-                my_memcpy(current_filter_buffer_addr, filter_addr, kW * CHANNEL * sizeof(int16_t));
-                current_filter_buffer_addr += global_conv_params.dest_offset;
-                filter_addr += kW * CHANNEL;
+        for (uint8_t idx = 0; idx < 2; idx++) {
+            filter_addr = get_q15_param(
+                conv_params.conv_filter,
+                (size_t)((conv_params.conv_idx + idx) * CHANNEL * kH * kW));
+            my_printf_debug("Copying filter %d" NEWLINE, conv_params.conv_idx + idx);
+            if (global_conv_params.truncated) {
+                int16_t *current_filter_buffer_addr = filter_tmp;
+                for (uint16_t h = 0; h < kH; h++) {
+                    my_memcpy(current_filter_buffer_addr, filter_addr, kW * CHANNEL * sizeof(int16_t));
+                    current_filter_buffer_addr += global_conv_params.dest_offset;
+                    filter_addr += kW * CHANNEL;
+                }
+            } else {
+                uint16_t buffer_size = sizeof(int16_t) * global_conv_params.dest_offset * kH;
+                my_memcpy(filter_tmp,
+                          filter_addr,
+                          buffer_size);
             }
-        } else {
-            // 2 filters at a time
-            uint16_t buffer_size = 2 * sizeof(int16_t) * global_conv_params.dest_offset * kH;
-            my_memcpy(filter_tmp,
-                      filter_addr,
-                      buffer_size);
-        }
 
-        msp_interleave_q15_params params;
-        params.length = matrix_mpy_params.srcBRows;
-        params.numChannels = 2;
-        params.channel = 0;
-        msp_status status = msp_interleave_q15(
-            &params,
-            filter_tmp, /* src */
-            filter_buffer_addr[conv_params.conv_idx]  /* dst */
-        );
-        msp_checkStatus(status);
-        params.channel = 1;
-        status = msp_interleave_q15(
-            &params,
-            filter_tmp + params.length, /* src */
-            filter_buffer_addr[conv_params.conv_idx]  /* dst */
-        );
-        msp_checkStatus(status);
-
-        if (cached_filter_idx[filter_buffer_id] >= 0) {
-            filter_buffer_addr[cached_filter_idx[filter_buffer_id]] = NULL;
+            msp_interleave_q15_params params;
+            params.length = matrix_mpy_params.srcBRows;
+            params.numChannels = 2;
+            params.channel = idx;
+            msp_status status = msp_interleave_q15(
+                &params,
+                filter_tmp, /* src */
+                filter_buffer_addr /* dst */
+            );
+            msp_checkStatus(status);
         }
-        cached_filter_idx[filter_buffer_id] = conv_params.conv_idx;
-        filter_buffer_id += 2;
-        if (filter_buffer_id >= global_conv_params.filter_limit) {
-            filter_buffer_id = 0;
-        }
+        cached_filter_idx = conv_params.conv_idx;
     }
 
     my_printf_debug("conv_params.output_h = %d" NEWLINE, conv_params.output_h + offset_h);
@@ -129,7 +117,7 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     msp_status status = msp_matrix_mpy_q15(
         &matrix_mpy_params,
         input_buffer_addr,
-        filter_buffer_addr[conv_params.conv_idx],
+        filter_buffer_addr,
         matrix_mpy_results
     );
     msp_checkStatus(status);
@@ -142,9 +130,9 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     my_printf_debug("input_buffer_addr = lea_buffer + %d" NEWLINE, (int)(input_buffer_addr - lea_buffer));
     my_printf_debug("input" NEWLINE);
     dump_matrix2(input_buffer_addr, matrix_mpy_params.srcARows, matrix_mpy_params.srcACols);
-    my_printf_debug("filter_buffer_addr = lea_buffer + LEA_BUFFER_SIZE - %d" NEWLINE, (int)(lea_buffer + LEA_BUFFER_SIZE - filter_buffer_addr[conv_params.conv_idx]));
+    my_printf_debug("filter_buffer_addr = lea_buffer + LEA_BUFFER_SIZE - %d" NEWLINE, (int)(lea_buffer + LEA_BUFFER_SIZE - filter_buffer_addr));
     my_printf_debug("filter" NEWLINE);
-    dump_matrix2(filter_buffer_addr[conv_params.conv_idx], matrix_mpy_params.srcBRows, matrix_mpy_params.srcBCols);
+    dump_matrix2(filter_buffer_addr, matrix_mpy_params.srcBRows, matrix_mpy_params.srcBCols);
 
     my_printf_debug("matrix_mpy_results" NEWLINE);
     dump_matrix2(matrix_mpy_results, matrix_mpy_params.srcARows, matrix_mpy_params.srcBCols);
@@ -223,13 +211,13 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
             *dest;
     int16_t src_offset = W * CHANNEL;
     // two additional filters for values before transpose
-    uint16_t inputs_len = LEA_BUFFER_SIZE - OUTPUT_LEN - (global_conv_params.filter_limit + 2) * kH * global_conv_params.dest_offset;
+    uint16_t inputs_len = LEA_BUFFER_SIZE - OUTPUT_LEN - (global_conv_params.filter_limit + TEMP_FILTER_WIDTH) * kH * global_conv_params.dest_offset;
 
     dest = lea_buffer;
 
     H = conv_params.conv_input->dims[1];
-    int32_t h_start = int16_max(      -field_size,    -output_h),
-            h_end =   int16_min(tile_h+field_size, H-1-output_h);
+    int32_t h_start = int16_max(        -field_size,    -output_h),
+            h_end =   int16_min(tile_h-1+field_size, H-1-output_h);
 
     my_printf_debug("Reinitialize input buffer" NEWLINE "inputs_len = %d" NEWLINE, inputs_len);
 
@@ -264,7 +252,7 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
             my_printf_debug("Skipping processed filter %d and %d" NEWLINE, idx, idx + 1);
             continue;
         }
-        if (filter_buffer_addr[idx]) {
+        if (cached_filter_idx == idx) {
             schedule_tile(idx, output_h, output_w, tile_h, tile_w, W);
         } else {
             my_printf_debug("Filter %d and %d are not cached, append them to the pending list" NEWLINE, idx, idx + 1);
@@ -324,11 +312,8 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
         extra_data->conv_running = 1;
     }
 
-    for (uint8_t idx = 0; idx < NUM_FILTERS; idx++) {
-        filter_buffer_addr[idx] = NULL;
-        cached_filter_idx[idx] = -1;
-    }
-    filter_buffer_id = 0;
+    filter_buffer_addr = NULL;
+    cached_filter_idx = -1;
 
     uint8_t tile_h = 1; // fallback value
     if (H == 14) {
@@ -356,7 +341,7 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
 
     global_conv_params.filter_limit = MIN_VAL(
         conv_filter->dims[0],
-        ((LEA_BUFFER_SIZE - OUTPUT_LEN - global_conv_params.dest_offset * (kH + tile_h - 1)) / (global_conv_params.dest_offset * kH) - 2) / 2 * 2
+        ((LEA_BUFFER_SIZE - OUTPUT_LEN - global_conv_params.dest_offset * (kH + tile_h - 1)) / (global_conv_params.dest_offset * kH) - TEMP_FILTER_WIDTH) / 2 * 2
     );
 
     my_printf_debug("filter_limit: %d" NEWLINE, global_conv_params.filter_limit);
