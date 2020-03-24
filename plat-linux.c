@@ -5,7 +5,6 @@
 #include <DSPLib.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <string.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
@@ -24,7 +23,6 @@ uint16_t *power_counters;
 uint8_t *counter_idx;
 
 uint32_t *copied_size;
-static uint32_t memcpy_delay_us = 0;
 
 void run_tests(char *filename) {
     int8_t label = -1, predicted = -1;
@@ -115,16 +113,6 @@ exit:
     my_printf("Copied size: %" PRId32 NEWLINE, *copied_size);
     *copied_size = 0;
     return ret;
-}
-
-void my_memcpy(void* dest, const void* src, size_t n) {
-    *copied_size += n;
-    if (memcpy_delay_us) {
-        usleep(memcpy_delay_us);
-    }
-    my_printf_debug(__func__);
-    my_printf_debug(" copied %d bytes" NEWLINE, (int)n);
-    memcpy(dest, src, n);
 }
 
 void plat_reset_model(void) {
