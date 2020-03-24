@@ -57,8 +57,6 @@ extern "C"
 
 #if defined(__MSP430_HAS_LEA__) && !defined(MSP_DISABLE_LEA)
 
-#include <stddef.h>
-
 #if __MSP430_HEADER_VERSION__ < 1192
 #error "DSPLib: Device header file is out of date, please upgrade to the \
 latest support package to use this version of DSPLib with LEA."
@@ -1150,23 +1148,7 @@ static inline void msp_lea_invokeCommand(uint16_t cmdId)
     while(!msp_lea_ifg);
 #else
     /* Enter LPM0 and wait for command complete interrupt to wake the device. */
-    //__bis_SR_register(GIE+LPM0_bits);
-    __bis_SR_register(GIE);
-    extern int16_t mpy_outputs[1024];
-    extern int16_t mpy_output_counter;
-    extern int16_t *mpy_dst;
-    extern int16_t mpy_dst_len;
-    void my_memcpy(void* dest, const void* src, size_t n);
-    while(!msp_lea_ifg) {
-        if (!mpy_dst) {
-            continue;
-        }
-        int16_t offset = mpy_output_counter * mpy_dst_len;
-        if (offset + mpy_dst_len < 1024) {
-            my_memcpy(mpy_outputs + offset, mpy_dst, mpy_dst_len * sizeof(int16_t));
-            mpy_output_counter++;
-        }
-    }
+    __bis_SR_register(GIE+LPM0_bits);
 #endif
 
     /* Restore original interrupt state. */
