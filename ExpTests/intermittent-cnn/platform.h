@@ -8,5 +8,4 @@
 #  include "plat-linux.h"
 #endif
 
-void my_memcpy(void* dest, const void* src, size_t n);
 void setOutputValue(uint8_t value);
