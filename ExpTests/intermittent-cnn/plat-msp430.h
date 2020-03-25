@@ -11,17 +11,16 @@
 #define MY_DMA_CHANNEL DMA_CHANNEL_0
 static DMA_initParam dma_params = {
     .channelSelect = MY_DMA_CHANNEL,
-    .transferModeSelect = DMA_TRANSFER_BLOCK,
 };
 
 static inline void my_memcpy(void* dest, const void* src, size_t n) {
-    DMA_init(&dma_params);
-    DMA_setSrcAddress(MY_DMA_CHANNEL, (uint32_t)(src), DMA_DIRECTION_INCREMENT);
-    DMA_setDstAddress(MY_DMA_CHANNEL, (uint32_t)(dest), DMA_DIRECTION_INCREMENT);
+    DMA_init(&dma_params); // XXX: DMA not working without this
+    DMA0SA = src;
+    DMA0DA = dest;
     /* transfer size is in words (2 bytes) */
-    DMA_setTransferSize(MY_DMA_CHANNEL, (n) >> 1);
+    DMA0SZ = n >> 1;
     // DMA_enableInterrupt(MY_DMA_CHANNEL);
-    DMA_enableTransfers(MY_DMA_CHANNEL);
-    DMA_startTransfer(MY_DMA_CHANNEL);
+    // _3 => increment
+    DMA0CTL |= DMAEN + DMASRCINCR_3 + DMADSTINCR_3 + DMA_TRANSFER_BLOCK;
+    DMA0CTL |= DMAREQ;
 }
-
