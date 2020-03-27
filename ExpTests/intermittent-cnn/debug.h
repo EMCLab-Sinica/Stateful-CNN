@@ -6,18 +6,24 @@
 #define MY_NDEBUG
 #define DUMP_INTEGERS
 
-#ifndef __MSP430__
-#  include <stdio.h>
-#  include <inttypes.h> // for PRId32
-#  define PRIsize_t "zu"
-#  define my_printf printf
-#  define NEWLINE "\n"
-#else
+#if defined(__MSP430__)
 #  include "Tools/myuart.h"
 #  define PRId32 "L" // see print2uart() in Tools/myuart.c
 #  define PRIsize_t "l"
 #  define my_printf print2uart
 #  define NEWLINE "\r\n"
+#elif defined(CY_TARGET_DEVICE)
+#  include <stdio.h>
+#  include <inttypes.h> // for PRId32
+#  define PRIsize_t "zu"
+#  define my_printf printf
+#  define NEWLINE "\r\n"
+#else
+#  include <stdio.h>
+#  include <inttypes.h> // for PRId32
+#  define PRIsize_t "zu"
+#  define my_printf printf
+#  define NEWLINE "\n"
 #endif
 
 void print_q15(int16_t val);
