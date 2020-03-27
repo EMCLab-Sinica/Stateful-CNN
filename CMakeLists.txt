@@ -8,17 +8,6 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wstrict-prototypes -Wshadow -
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-address-of-packed-member")
 
 set(TOPDIR ${CMAKE_CURRENT_SOURCE_DIR}/../../)
-set(FREERTOS_DIR ${TOPDIR}/FreeRTOS_Source)
-
-add_library(freertos
-    ${FREERTOS_DIR}/list.c
-)
-target_include_directories(freertos
-    SYSTEM PUBLIC
-        ${TOPDIR}
-        ${FREERTOS_DIR}/include
-        ${FREERTOS_DIR}/portable/GCC-Linux
-)
 
 set(DSPLIB_PATH ${TOPDIR}/DSPLib_1_30_00_02)
 
@@ -43,11 +32,6 @@ target_include_directories(dsplib
         ${DSPLIB_PATH}/include
 )
 target_link_libraries(dsplib fake-msp430sdk)
-
-add_executable(test-list
-    test-list.c
-)
-target_link_libraries(test-list freertos)
 
 add_executable(intermittent-cnn
     intermittent-cnn.c
