@@ -56,7 +56,30 @@ onnx_model = onnx.load(sys.argv[1])
 g = onnx_model.graph
 names = {}
 n_input = len(g.input)
-nodes = [Node(n) for n in g.node]
+
+# Remoe Squeeze nodes with constants as the input
+replaced_squeeze_map = {}
+for n in g.node:
+    if n.op_type != 'Squeeze':
+        continue
+    input_name = n.input[0]
+    for inp in g.initializer:
+        if input_name != inp.name:
+            continue
+        axes = next(attr.ints for attr in n.attribute if attr.name == 'axes')
+        new_dims = [dim for dim_idx, dim in enumerate(inp.dims) if dim_idx not in axes]
+        # Repeated fields cannot be assigned directly
+        # https://developers.google.com/protocol-buffers/docs/reference/python-generated#repeated-fields
+        inp.dims[:] = new_dims
+        replaced_squeeze_map[n.output[0]] = input_name
+        break
+
+new_nodes = [n for n in g.node if n.output[0] not in replaced_squeeze_map.keys()]
+for n in new_nodes:
+    for idx, inp in enumerate(n.input):
+        n.input[idx] = replaced_squeeze_map.get(inp, inp)
+
+nodes = [Node(n) for n in new_nodes]
 print("n_input = {}".format(n_input))
 
 conv_param_names = set()
@@ -71,7 +94,8 @@ for idx, n in enumerate(nodes):
         output = n.output
     assert len(output) == 1
     if n.op_type == 'Conv':
-        for inp in n.input:
+        # https://github.com/onnx/onnx/blob/master/docs/Operators.md#conv
+        for inp in n.input[:2]:
             conv_param_names.add(inp)
     if n.op_type == 'Relu':
         input_node = get_prev_node(n)
@@ -96,6 +120,8 @@ for params in g.initializer:
 
     assert parameters[names[params.name]] is None
     parameters[names[params.name]] = params
+
+pprint.pprint(model)
 
 def to_bytes(i, size=16):
     if size == 16:
