@@ -14,10 +14,10 @@
 #define INTERMEDIATE_VALUES_SIZE 65536
 
 extern GLOBAL_CONST uint8_t *inputs_data;
-#define INPUTS_DATA_LEN 40
+#define INPUTS_DATA_LEN 36
 
 extern GLOBAL_CONST uint8_t *parameters_data;
-#define PARAMETERS_DATA_LEN 13588
+#define PARAMETERS_DATA_LEN 13988
 
 extern GLOBAL_CONST uint8_t *model_data;
-#define MODEL_DATA_LEN 634
+#define MODEL_DATA_LEN 578

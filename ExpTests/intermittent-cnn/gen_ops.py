@@ -9,7 +9,7 @@ ops = {
 }
 
 other_flags = {
-    'CONV_ACTIVATIONS': ['RELU'],
+    'CONV': ['ACTIVATIONS_RELU', 'BIAS_MERGED'],
     'RELU': ['MERGED'],
 }
 
