@@ -58,13 +58,10 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     /* put var declarations first to make the compiler happy */
     int16_t *filter_addr;
     /* Cannot use C as a variable name here as C is a macro on MSP430 :( */
-    uint16_t kH, kW, CHANNEL;
-    kH = conv_params.conv_filter->dims[1];
+    uint16_t kH = conv_params.conv_filter->dims[1];
 
     /* copy filter data */
     if (cached_filter_idx != conv_params.conv_idx) {
-        kW = conv_params.conv_filter->dims[2];
-        CHANNEL = conv_params.conv_filter->dims[3];
         int16_t filter_offset = kH * global_conv_params.dest_offset;
         int16_t *filter_tmp = matrix_mpy_results - filter_offset; // before transpose
         filter_buffer_addr = matrix_mpy_results - filter_offset * (global_conv_params.filter_limit + TEMP_FILTER_WIDTH);
@@ -72,21 +69,12 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
         for (uint8_t idx = 0; idx < global_conv_params.filter_limit; idx++) {
             filter_addr = get_q15_param(
                 conv_params.conv_filter,
-                (size_t)((conv_params.conv_idx + idx) * CHANNEL * kH * kW));
+                (size_t)((conv_params.conv_idx + idx) * (global_conv_params.dest_offset * kH)));
             my_printf_debug("Copying filter %d" NEWLINE, conv_params.conv_idx + idx);
-            if (global_conv_params.truncated) {
-                int16_t *current_filter_buffer_addr = filter_tmp;
-                for (uint16_t h = 0; h < kH; h++) {
-                    my_memcpy(current_filter_buffer_addr, filter_addr, kW * CHANNEL * sizeof(int16_t));
-                    current_filter_buffer_addr += global_conv_params.dest_offset;
-                    filter_addr += kW * CHANNEL;
-                }
-            } else {
-                uint16_t buffer_size = sizeof(int16_t) * global_conv_params.dest_offset * kH;
-                my_memcpy(filter_tmp,
-                          filter_addr,
-                          buffer_size);
-            }
+            uint16_t buffer_size = sizeof(int16_t) * global_conv_params.dest_offset * kH;
+            my_memcpy(filter_tmp,
+                      filter_addr,
+                      buffer_size);
 
             msp_interleave_q15_params params;
             params.length = matrix_mpy_params.srcBRows;
@@ -140,7 +128,6 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
 
     // TODO: use LEA?
     int16_t *output_data = get_q15_param(conv_params.output, 0);
-    int16_t *bias_value_addr = get_q15_param(conv_params.bias, conv_params.conv_idx);
     int16_t *result_addr = matrix_mpy_results;
     size_t offset = (conv_params.output_h + offset_h) * global_conv_params.W_by_OUTPUT_CHANNEL + conv_params.output_w * global_conv_params.OUTPUT_CHANNEL + conv_params.conv_idx;
     // XXX: use DMA makes the whole loop slower as
@@ -150,16 +137,11 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
         for (uint8_t idx2 = 0; idx2 < global_conv_params.filter_limit; idx2++) {
             int16_t q15_mac_result = *result_addr;
             result_addr++;
-            q15_mac_result += *(bias_value_addr + idx2);
-
-            my_printf_debug("after adding bias OFM value=");
-            print_q15_debug(q15_mac_result);
-            my_printf_debug(NEWLINE);
 
             if (conv_params.flags & CONV_ACTIVATIONS_RELU) {
                 q15_mac_result = MAX_VAL(q15_mac_result, 0);
             }
-            my_printf_debug("offset of output_data=%" PRIsize_t NEWLINE, offset);
+            my_printf_debug("offset of output_data=%" PRIsize_t NEWLINE, offset + idx2);
             output_data[offset + idx2] = q15_mac_result;
         }
         offset += kH * global_conv_params.W_by_OUTPUT_CHANNEL;
@@ -174,6 +156,9 @@ static inline void schedule_tile(uint16_t idx, uint16_t n_conv, uint16_t output_
     uint16_t kH = conv_params.conv_filter->dims[1];
     matrix_mpy_params.srcACols = matrix_mpy_params.srcBRows = kH * global_conv_params.dest_offset;
     matrix_mpy_params.srcBCols = MIN_VAL(global_conv_params.filter_limit, n_conv - idx);
+    if ((matrix_mpy_params.srcACols & 1) || (matrix_mpy_params.srcBCols & 1)) {
+        ERROR_OCCURRED();
+    }
     for (uint8_t i = 0; i < MIN_VAL(tile_w, W - output_w); i++) {
         for (uint8_t j = 0; j < kH; j++) {
             conv_params.output_h = output_h;
@@ -245,6 +230,11 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
         my_memcpy(dest, src, size);
         src += src_offset;
         dest += global_conv_params.dest_offset;
+    }
+    if (conv_params.flags & CONV_BIAS_MERGED) {
+        for (uint8_t idx = 0; idx <= h_end - h_start + 2 * field_size; idx++) {
+            lea_buffer[(idx + 1) * global_conv_params.dest_offset - (global_conv_params.truncated ? 2 : 1)] = 32767; // 32767 is _Q15(1.0)
+        }
     }
 
     if (extra_data->current_filter) {
@@ -332,8 +322,11 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
     global_conv_params.OUTPUT_CHANNEL = conv_filter->dims[0];
     global_conv_params.W_by_OUTPUT_CHANNEL = W * global_conv_params.OUTPUT_CHANNEL;
 
+    if (conv_params.flags & CONV_BIAS_MERGED) {
+        global_conv_params.dest_offset++;
+    }
     /* MSP430 LEA requires length to be even */
-    global_conv_params.truncated = (CHANNEL * kH * kW / 2 * 2 != CHANNEL * kH * kW);
+    global_conv_params.truncated = (global_conv_params.dest_offset / 2 * 2 != global_conv_params.dest_offset);
     if (global_conv_params.truncated) {
         // when CHANNEL * kH * kW is odd, CHANNEL * kW (dest_offset) is
         // also odd, so dummy values are needed between slices to make

@@ -83,6 +83,7 @@ nodes = [Node(n) for n in new_nodes]
 print("n_input = {}".format(n_input))
 
 conv_param_names = set()
+bias_merge_map = {}  # filter -> bias
 
 for idx, inp in enumerate(g.input):
     names[inp.name] = idx
@@ -97,11 +98,16 @@ for idx, n in enumerate(nodes):
         # https://github.com/onnx/onnx/blob/master/docs/Operators.md#conv
         for inp in n.input[:2]:
             conv_param_names.add(inp)
+        if len(n.input) == 3:
+            filters = n.input[1]
+            biases = n.input[2]
+            bias_merge_map[filters] = biases
+            n.flags |= ops.CONV_BIAS_MERGED
     if n.op_type == 'Relu':
         input_node = get_prev_node(n)
         if input_node.op_type == 'Conv':
-            input_node.flags = ops.CONV_ACTIVATIONS_RELU
-        n.flags = ops.RELU_MERGED
+            input_node.flags |= ops.CONV_ACTIVATIONS_RELU
+        n.flags |= ops.RELU_MERGED
     if n.op_type == 'MaxPool':
         stride = next(attr.ints[0] for attr in n.attribute if attr.name == 'strides')
         n.flags = stride
@@ -213,10 +219,19 @@ for params in parameters:
             outputs['model'].write(to_bytes(data_len * 2, size=32))  # A _q15 is 16-bit
             if params.name in conv_param_names:
                 print(f'Reorder conv param {params.name}')
-                float_data_reordered, reordered_dims = nchw2nhwc(float_data, params.dims)
-            else:
-                float_data_reordered = float_data
-            for param in float_data_reordered:
+                float_data, reordered_dims = nchw2nhwc(float_data, params.dims)
+                if params.name in bias_merge_map.keys():
+                    bias_node_idx = names[bias_merge_map[params.name]]
+                    bias_node = parameters[bias_node_idx]
+                    filter_len = reordered_dims[2] * reordered_dims[3]
+                    float_data_augmented = []
+                    for idx in range(reordered_dims[0] * reordered_dims[1]):
+                        float_data_augmented.extend(float_data[idx*filter_len:(idx+1)*filter_len])
+                        float_data_augmented.append(bias_node.float_data[idx // reordered_dims[1]] / SCALE / reordered_dims[1])
+                        if filter_len & 1 == 0:
+                            float_data_augmented.append(0)
+                    float_data = float_data_augmented
+            for param in float_data:
                 if len(params.dims) != 4:  # most likely biases
                     outputs['parameters'].write(to_bytes(_Q15(param / SCALE)))
                 else:

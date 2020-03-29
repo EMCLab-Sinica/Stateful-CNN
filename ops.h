@@ -17,4 +17,5 @@ uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
 uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags);
 uint8_t handle_squeeze(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags);
 #define CONV_ACTIVATIONS_RELU 1
+#define CONV_BIAS_MERGED 2
 #define RELU_MERGED 1

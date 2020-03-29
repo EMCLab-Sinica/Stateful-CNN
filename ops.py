@@ -7,4 +7,5 @@ ops["Relu"] = 4
 ops["Reshape"] = 5
 ops["Squeeze"] = 6
 CONV_ACTIVATIONS_RELU = 1
+CONV_BIAS_MERGED = 2
 RELU_MERGED = 1

@@ -6,7 +6,7 @@
 #define ERROR_OCCURRED() for (;;) { __no_operation(); }
 // _Pragma() is a C99 feature
 // https://stackoverflow.com/a/3030312/3786245
-#define ON_NVM(var_name) _Pragma("DATA_SECTION(var_name, \".map\")")
+#define ON_NVM(var_name) _Pragma("DATA_SECTION(" var_name ", \".map\")")
 
 #define MY_DMA_CHANNEL DMA_CHANNEL_0
 static DMA_initParam dma_params = {
