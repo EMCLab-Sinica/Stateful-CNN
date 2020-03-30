@@ -53,7 +53,7 @@ static uint8_t handle_cur_group(void) {
             ERROR_OCCURRED();
         }
 
-        uint8_t ret = handlers[cur_node->op_type](input, output, &model->extra_data, cur_node->flags);
+        uint8_t ret = handlers[cur_node->op_type](input, output, cur_node->flags);
 
         (*counter_idx)++;
         if (*counter_idx >= COUNTERS_LEN) {

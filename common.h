@@ -37,32 +37,11 @@ typedef struct __attribute__((__packed__)) _ParameterInfo {
     uint16_t dims[4];
 } ParameterInfo;
 
-typedef union {
-    /* all XXX_running fields should be at the same offset */
-    struct {
-        // XXX: support interleaved conv nodes
-        uint16_t conv_running;
-        uint16_t conv_idx;
-        uint16_t output_h;
-        uint16_t output_w;
-        uint16_t processed_filters[NUM_FILTERS];
-        uint16_t current_filter;
-    };
-    struct {
-        uint16_t maxpool_running;
-        uint16_t next_c;
-        uint16_t next_h;
-        uint16_t next_w;
-    };
-    uint8_t dummy[128]; // to make the size of this sturcture constant
-} OpExtraData;
-
 typedef struct __attribute__((__packed__)) {
     uint16_t nodes_len;
     uint16_t n_input;
     uint16_t running;
     uint16_t run_counter;
-    OpExtraData extra_data;
 } Model;
 
 /**********************************
@@ -157,6 +136,6 @@ static inline int16_t iq31_to_q15(int32_t val) {
 /**********************************
  *       Operation handlers       *
  **********************************/
-typedef uint8_t (*handler)(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags);
+typedef uint8_t (*handler)(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
 extern uint8_t expected_inputs_len[];
 extern handler handlers[];

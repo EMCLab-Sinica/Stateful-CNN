@@ -9,11 +9,11 @@
 #define Relu 4
 #define Reshape 5
 #define Squeeze 6
-uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags);
-uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags);
-uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags);
-uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags);
-uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags);
-uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags);
-uint8_t handle_squeeze(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags);
+uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
+uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
+uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
+uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
+uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
+uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
+uint8_t handle_squeeze(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
 #define CONV_BIAS_MERGED 1

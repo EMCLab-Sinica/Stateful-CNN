@@ -28,13 +28,11 @@ typedef struct ConvTaskParams {
     ParameterInfo *conv_filter;
     ParameterInfo *bias;
     ParameterInfo *output;
-    // Keep the order of the following 3 fields consistent with OpExtraData.conv
     uint16_t conv_idx;
     uint16_t output_h;
     uint16_t output_w;
     uint16_t flags;
     uint8_t tile_h;
-    OpExtraData *extra_data;
 } ConvTaskParams;
 
 static ConvTaskParams conv_params;
@@ -139,8 +137,6 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
 }
 
 static inline void schedule_tile(uint16_t idx, uint16_t n_conv, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint16_t W) {
-    OpExtraData *extra_data = conv_params.extra_data;
-    extra_data->current_filter = idx;
     conv_params.conv_idx = idx;
     conv_params.tile_h = tile_h;
     uint16_t kH = conv_params.conv_filter->dims[1];
@@ -156,13 +152,9 @@ static inline void schedule_tile(uint16_t idx, uint16_t n_conv, uint16_t output_
             convTask(j, tile_h);
         }
     }
-    // only record the starting number from `filter_limit` filters
-    extra_data->processed_filters[idx] = 1;
 }
 
 static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, uint16_t output_w, uint8_t tile_h, uint8_t tile_w, uint16_t H, uint16_t W) {
-    OpExtraData *extra_data = conv_params.extra_data;
-
     uint16_t kH = conv_params.conv_filter->dims[1],
              CHANNEL = conv_params.conv_filter->dims[3];
     int8_t field_size = (int8_t)((kH - 1) / 2);
@@ -227,14 +219,7 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
         }
     }
 
-    if (extra_data->current_filter) {
-        schedule_tile(extra_data->current_filter, n_conv, output_h, output_w, tile_h, tile_w, W);
-    }
     for (uint8_t idx = 0; idx < n_conv; idx += global_conv_params.filter_limit) {
-        if (extra_data->processed_filters[idx]) {
-            my_printf_debug("Skipping processed filters starting from %d" NEWLINE, idx);
-            continue;
-        }
         if (cached_filter_idx == idx) {
             schedule_tile(idx, n_conv, output_h, output_w, tile_h, tile_w, W);
         } else {
@@ -249,12 +234,9 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
         my_printf_debug("Mark filter %d as processed" NEWLINE, filter_idx);
     }
     pending_filter_idx = 0;
-    for (uint8_t idx = 0; idx < n_conv; idx++) {
-        extra_data->processed_filters[idx] = 0;
-    }
 }
 
-uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags) {
+uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1], *bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 
@@ -282,18 +264,8 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
     conv_params.conv_filter = conv_filter;
     conv_params.bias = bias;
     conv_params.output = output;
-    conv_params.extra_data = extra_data;
     conv_params.flags = flags;
     input_buffer_addr = NULL;
-
-    if (!extra_data->conv_running) {
-        extra_data->conv_idx = extra_data->output_h = extra_data->output_w = 0;
-        for (uint8_t idx = 0; idx < NUM_FILTERS; idx++) {
-            extra_data->processed_filters[idx] = 0;
-        }
-        extra_data->current_filter = 0;
-        extra_data->conv_running = 1;
-    }
 
     filter_buffer_addr = NULL;
     cached_filter_idx = -1;
@@ -333,23 +305,14 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, OpExtraData *
 
     my_printf_debug("filter_limit: %d" NEWLINE, global_conv_params.filter_limit);
 
-    uint16_t starting_w = extra_data->output_w,
-             starting_h = extra_data->output_h;
-    if (starting_w >= W || starting_h >= H) {
-        ERROR_OCCURRED();
-    }
-    for (uint16_t output_w = starting_w; output_w < W; output_w += TILE_W) {
-        extra_data->output_w = output_w;
-        for (uint16_t output_h = (output_w == starting_w ? starting_h : 0); output_h < H; output_h += tile_h) {
-            extra_data->output_h = output_h;
+    for (uint16_t output_w = 0; output_w < W; output_w += TILE_W) {
+        for (uint16_t output_h = 0; output_h < H; output_h += tile_h) {
             handle_conv_inner_loop(input_N, output_h, output_w, tile_h, TILE_W, H, W);
         }
     }
 
     my_printf_debug("handle_conv output" NEWLINE);
     dump_params(output);
-
-    extra_data->conv_running = 0;
 
     setOutputValue(0);
 
