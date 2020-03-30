@@ -103,11 +103,6 @@ for idx, n in enumerate(nodes):
             biases = n.input[2]
             bias_merge_map[filters] = biases
             n.flags |= ops.CONV_BIAS_MERGED
-    if n.op_type == 'Relu':
-        input_node = get_prev_node(n)
-        if input_node.op_type == 'Conv':
-            input_node.flags |= ops.CONV_ACTIVATIONS_RELU
-        n.flags |= ops.RELU_MERGED
     if n.op_type == 'MaxPool':
         stride = next(attr.ints[0] for attr in n.attribute if attr.name == 'strides')
         n.flags = stride

@@ -126,25 +126,15 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     my_printf_debug(NEWLINE);
     /* END dump data */
 
-    // TODO: use LEA?
-    int16_t *output_data = get_q15_param(conv_params.output, 0);
+    int16_t *output_data = get_q15_param(conv_params.output, (conv_params.output_h + offset_h) * global_conv_params.W_by_OUTPUT_CHANNEL + conv_params.output_w * global_conv_params.OUTPUT_CHANNEL + conv_params.conv_idx);
     int16_t *result_addr = matrix_mpy_results;
-    size_t offset = (conv_params.output_h + offset_h) * global_conv_params.W_by_OUTPUT_CHANNEL + conv_params.output_w * global_conv_params.OUTPUT_CHANNEL + conv_params.conv_idx;
-    // XXX: use DMA makes the whole loop slower as
-    // 1. need to use pointers for updating matrix_mpy_results in place, and thus there are no longer register promotion for q15_mac_result
-    // 2. Calling DMA for a few numbers brings more overhead than benefits
+    // XXX: use DMA makes the whole loop slower as calling DMA for a few numbers brings more overhead than benefits
     for (uint8_t idx = 0; idx < matrix_mpy_params.srcARows; idx++) {
         for (uint8_t idx2 = 0; idx2 < global_conv_params.filter_limit; idx2++) {
-            int16_t q15_mac_result = *result_addr;
+            output_data[idx2] = *result_addr;
             result_addr++;
-
-            if (conv_params.flags & CONV_ACTIVATIONS_RELU) {
-                q15_mac_result = MAX_VAL(q15_mac_result, 0);
-            }
-            my_printf_debug("offset of output_data=%" PRIsize_t NEWLINE, offset + idx2);
-            output_data[offset + idx2] = q15_mac_result;
         }
-        offset += kH * global_conv_params.W_by_OUTPUT_CHANNEL;
+        output_data += kH * global_conv_params.W_by_OUTPUT_CHANNEL;
     }
 }
 

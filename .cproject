@@ -112,8 +112,9 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/Progress"/>
 						<entry excluding="ExpTests/intermittent-cnn/plat-psoc6.c|ExpTests/intermittent-cnn/out|FreeRTOS_Source/portable/Common/mpu_wrappers.c|ExpTests/intermittent-cnn/fake-msp430sdk|ExpTests/intermittent-cnn/plat-linux.c|FreeRTOS_Source/portable/MemMang/heap_4.c|FreeRTOS_Source/portable/MemMang/heap_5.c|FreeRTOS_Source/portable/MemMang/heap_3.c|FreeRTOS_Source/portable/MemMang/heap_2.c|lnk_msp430fr5969" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/Progress"/>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/test-list.dir"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
