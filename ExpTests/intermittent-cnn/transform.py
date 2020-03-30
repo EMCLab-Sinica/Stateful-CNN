@@ -158,7 +158,6 @@ outputs['model'].write(to_bytes(len(model)))
 outputs['model'].write(to_bytes(n_input))
 outputs['model'].write(to_bytes(0))  # Model.running
 outputs['model'].write(to_bytes(0))  # Model.run_counter
-outputs['model'].write(b'\0' * 128)  # Model.extra_data
 parameters_bin_offset = 0
 for inputs, op_type, flags in model:
     outputs['model'].write(to_bytes(len(inputs)))
