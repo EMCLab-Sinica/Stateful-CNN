@@ -186,28 +186,24 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output, OpExtraData
 
 uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output, OpExtraData *extra_data, uint16_t flags) {
     UNUSED(extra_data);
+    UNUSED(flags);
 
     my_printf_debug("ReLu!" NEWLINE);
 
     ParameterInfo *X = input[0];
     my_memcpy(output, X, sizeof(ParameterInfo));
 
-    if (flags & RELU_MERGED) {
-        my_printf_debug("... Skipped" NEWLINE);
-        return 0;
-    }
-
     /* XXX: use LEA? */
     uint16_t bitwidth = get_param_bitwidth(X);
-    for (uint32_t i = 0; i < X->params_len / (bitwidth / 8); i++) {
-        if (bitwidth == 16) {
-            int16_t *ptr = get_q15_param(X, i);
-            if (*ptr < 0) {
-                *ptr = 0;
-            }
-        } else {
-            // unsupported bitwidth for ReLu
-            ERROR_OCCURRED();
+    if (bitwidth != 16) {
+        // unsupported bitwidth for ReLu
+        ERROR_OCCURRED();
+    }
+    int16_t *data = get_q15_param(X, 0);
+    int16_t data_len = X->params_len / (bitwidth / 8);
+    for (uint16_t i = 0; i < data_len; i++) {
+        if (data[i] < 0) {
+            data[i] = 0;
         }
     }
     dump_params(output);

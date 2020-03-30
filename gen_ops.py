@@ -9,8 +9,7 @@ ops = {
 }
 
 other_flags = {
-    'CONV': ['ACTIVATIONS_RELU', 'BIAS_MERGED'],
-    'RELU': ['MERGED'],
+    'CONV': ['BIAS_MERGED'],
 }
 
 with open('ops.py', 'w') as f_py, open('ops.h', 'w') as f_h, open('ops.c', 'w') as f_c:
