@@ -104,6 +104,11 @@ int main(int argc, char* argv[]) {
     } else if (argc == 2) {
         run_tests(argv[1]);
     } else {
+#ifdef USE_ARM_CMSIS
+        my_printf("Use DSP from ARM CMSIS pack" NEWLINE);
+#else
+        my_printf("Use TI DSPLib" NEWLINE);
+#endif
         ret = run_model(NULL);
         print_results();
     }
