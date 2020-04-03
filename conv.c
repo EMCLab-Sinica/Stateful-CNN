@@ -2,6 +2,9 @@
 //#define MSP_DISABLE_DIAGNOSTICS
 
 #include <DSPLib.h>
+#ifdef USE_ARM_CMSIS
+#include <arm_math.h>
+#endif
 #include "common.h"
 #include "debug.h"
 #include "op_handlers.h"
@@ -18,7 +21,11 @@
 #define OUTPUT_LEN 50
 
 // to make the code clearer
+#ifndef USE_ARM_CMSIS
 #define TEMP_FILTER_WIDTH 1
+#else
+#define TEMP_FILTER_WIDTH 0
+#endif
 
 int16_t *input_buffer_addr;
 
@@ -61,15 +68,16 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     /* copy filter data */
     if (cached_filter_idx != conv_params.conv_idx) {
         int16_t filter_offset = kH * global_conv_params.dest_offset;
-        int16_t *filter_tmp = matrix_mpy_results - filter_offset; // before transpose
         filter_buffer_addr = matrix_mpy_results - filter_offset * (global_conv_params.filter_limit + TEMP_FILTER_WIDTH);
+#ifndef USE_ARM_CMSIS
+        int16_t *filter_tmp = matrix_mpy_results - filter_offset; // before transpose
 
         for (uint8_t idx = 0; idx < global_conv_params.filter_limit; idx++) {
             filter_addr = get_q15_param(
                 conv_params.conv_filter,
-                (size_t)((conv_params.conv_idx + idx) * (global_conv_params.dest_offset * kH)));
+                (conv_params.conv_idx + idx) * filter_offset);
             my_printf_debug("Copying filter %d" NEWLINE, conv_params.conv_idx + idx);
-            uint16_t buffer_size = sizeof(int16_t) * global_conv_params.dest_offset * kH;
+            uint16_t buffer_size = sizeof(int16_t) * filter_offset;
             my_memcpy(filter_tmp,
                       filter_addr,
                       buffer_size);
@@ -85,6 +93,13 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
             );
             msp_checkStatus(status);
         }
+#else
+        filter_addr = get_q15_param(
+            conv_params.conv_filter,
+            conv_params.conv_idx * filter_offset);
+        uint16_t buffer_size = sizeof(int16_t) * filter_offset * global_conv_params.filter_limit;
+        my_memcpy(filter_buffer_addr, filter_addr, buffer_size);
+#endif
         cached_filter_idx = conv_params.conv_idx;
     }
 
@@ -99,6 +114,7 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     // http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/716353?MSP430FR5992-MSP-DSPLib-msp-matrix-mpy-q15
     matrix_mpy_params.srcARows = (tile_h - offset_h + kH - 1) / kH;
 
+#ifndef USE_ARM_CMSIS
     msp_status status = msp_matrix_mpy_q15(
         &matrix_mpy_params,
         input_buffer_addr,
@@ -106,6 +122,16 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
         matrix_mpy_results
     );
     msp_checkStatus(status);
+#else
+    arm_matrix_instance_q15 A, B, C;
+    arm_mat_init_q15(&A, matrix_mpy_params.srcARows, matrix_mpy_params.srcACols, input_buffer_addr);
+    arm_mat_init_q15(&B, matrix_mpy_params.srcBRows, matrix_mpy_params.srcBCols, filter_buffer_addr);
+    arm_mat_init_q15(&C, matrix_mpy_params.srcARows, matrix_mpy_params.srcBCols, matrix_mpy_results);
+    arm_status status = arm_mat_mult_fast_q15(&A, &B, &C, NULL);
+    if (status != ARM_MATH_SUCCESS) {
+        ERROR_OCCURRED();
+    }
+#endif
 
     /* START dump data */
     my_printf_debug("conv_idx=%d ", conv_params.conv_idx);
