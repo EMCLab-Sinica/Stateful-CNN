@@ -10,6 +10,8 @@
 
 #define MEMCPY_DELAY_US 0
 
+#define LEA_BUFFER_SIZE 16384
+
 extern uint32_t *copied_size;
 
 static inline void my_memcpy(void* dest, const void* src, size_t n) {

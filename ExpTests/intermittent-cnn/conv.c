@@ -153,8 +153,9 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     int16_t *output_data = get_q15_param(conv_params.output, (conv_params.output_h + offset_h) * global_conv_params.W_by_OUTPUT_CHANNEL + conv_params.output_w * global_conv_params.OUTPUT_CHANNEL + conv_params.conv_idx);
     int16_t *result_addr = matrix_mpy_results;
     // XXX: use DMA makes the whole loop slower as calling DMA for a few numbers brings more overhead than benefits
+    uint8_t n_filters = MIN_VAL(global_conv_params.filter_limit, global_conv_params.OUTPUT_CHANNEL - conv_params.conv_idx);
     for (uint8_t idx = 0; idx < matrix_mpy_params.srcARows; idx++) {
-        for (uint8_t idx2 = 0; idx2 < global_conv_params.filter_limit; idx2++) {
+        for (uint8_t idx2 = 0; idx2 < n_filters; idx2++) {
             output_data[idx2] = *result_addr;
             result_addr++;
         }
@@ -208,7 +209,10 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
             *dest;
     int16_t src_offset = W * CHANNEL;
     // two additional filters for values before transpose
-    uint16_t inputs_len = LEA_BUFFER_SIZE - OUTPUT_LEN - (global_conv_params.filter_limit + TEMP_FILTER_WIDTH) * kH * global_conv_params.dest_offset;
+    uint16_t inputs_len = MIN_VAL(
+        LEA_BUFFER_SIZE - OUTPUT_LEN - (global_conv_params.filter_limit + TEMP_FILTER_WIDTH) * kH * global_conv_params.dest_offset,
+        (H + kH - 1) * global_conv_params.dest_offset
+    );
 
     dest = lea_buffer;
 
