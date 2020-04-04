@@ -9,9 +9,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wstrict-prototypes -Wshadow -
 # XXX: for packed struct Model. Is it possible to turn on this warning?
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-address-of-packed-member")
 
-set(TOPDIR ${CMAKE_CURRENT_SOURCE_DIR}/../../)
-
-set(DSPLIB_PATH ${TOPDIR}/DSPLib_1_30_00_02)
+set(DSPLIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/TI-DSPLib)
 set(ARM_CMSIS_DSP_PATH ${CMAKE_CURRENT_SOURCE_DIR}/ARM-CMSIS)
 
 add_library(fake-msp430sdk
@@ -25,8 +23,6 @@ target_include_directories(fake-msp430sdk
 add_library(dsplib
     ${DSPLIB_PATH}/source/matrix/msp_matrix_mpy_q15.c
     ${DSPLIB_PATH}/source/vector/msp_add_q15.c
-    ${DSPLIB_PATH}/source/vector/msp_mac_q15.c
-    ${DSPLIB_PATH}/source/vector/msp_max_q15.c
     ${DSPLIB_PATH}/source/utility/msp_interleave_q15.c
     ${DSPLIB_PATH}/source/utility/msp_fill_q15.c
 )
