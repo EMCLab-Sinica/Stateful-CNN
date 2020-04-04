@@ -7,8 +7,9 @@ ARM_CMSIS_PATH="$1"
 [ -n "$ARM_CMSIS_PATH" ] || exit 1
 
 rm -rv DSP Include
-mkdir -p Include DSP/Source/MatrixFunctions
+mkdir -p Include DSP/Source/{MatrixFunctions,SupportFunctions}
 cp -v "$ARM_CMSIS_PATH"/CMSIS/Include/cmsis_{compiler,gcc}.h Include/
 cp -rv "$ARM_CMSIS_PATH"/CMSIS/DSP/Include DSP/
 cp -v "$ARM_CMSIS_PATH"/CMSIS/DSP/Source/MatrixFunctions/{arm_mat_init_q15.c,arm_mat_mult_fast_q15.c} DSP/Source/MatrixFunctions
+cp -v "$ARM_CMSIS_PATH"/CMSIS/DSP/Source/SupportFunctions/arm_fill_q15.c DSP/Source/SupportFunctions
 patch -Np0 -i ./arm_mat_mult_fast_q15_skip_transpose.diff
