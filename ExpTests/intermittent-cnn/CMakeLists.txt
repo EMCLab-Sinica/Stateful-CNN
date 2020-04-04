@@ -35,6 +35,7 @@ target_link_libraries(dsplib fake-msp430sdk)
 add_library(arm_cmsis_dsp
     ${ARM_CMSIS_DSP_PATH}/DSP/Source/MatrixFunctions/arm_mat_init_q15.c
     ${ARM_CMSIS_DSP_PATH}/DSP/Source/MatrixFunctions/arm_mat_mult_fast_q15.c
+    ${ARM_CMSIS_DSP_PATH}/DSP/Source/SupportFunctions/arm_fill_q15.c
 )
 target_include_directories(arm_cmsis_dsp
     PUBLIC
