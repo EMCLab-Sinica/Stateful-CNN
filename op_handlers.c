@@ -27,6 +27,12 @@ uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t f
     output->dims[2] = W / stride;
     output->dims[3] = channel;
 
+    int16_t state_bit = model->state_bit;
+    if (state_bit) {
+        model->state_bit = 0;
+    } else {
+        model->state_bit = 1;
+    }
     int16_t *data_baseptr = get_q15_param(data, 0);
     for (uint16_t c = 0; c < channel; c++) {
         int16_t *output_ptr = get_q15_param(output, c);
@@ -40,6 +46,9 @@ uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t f
                 for (uint16_t sH = 0; sH < stride; sH++) {
                     for (uint16_t sW = 0; sW < stride; sW++) {
                         int16_t val = data_baseptr[(h+sH) * W * channel + (w+sW) * channel + c];
+                        if (state_bit) {
+                            val += 0x8000;
+                        }
                         print_q15_debug(val);
                         // XXX: use LEA?
                         if (val > max_val) {
@@ -50,6 +59,9 @@ uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t f
                 my_printf_debug("max=");
                 print_q15_debug(max_val);
                 my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - get_q15_param(output, 0)));
+                if (!state_bit) {
+                    max_val += 0x8000;
+                }
                 *output_ptr = max_val;
                 output_ptr += channel;
             }
@@ -184,9 +196,21 @@ uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
     }
     int16_t *data = get_q15_param(X, 0);
     int16_t data_len = X->params_len / (bitwidth / 8);
+    uint16_t state_bit = model->state_bit;
+    if (state_bit) {
+        model->state_bit = 0;
+    } else {
+        model->state_bit = 1;
+    }
     for (uint16_t i = 0; i < data_len; i++) {
+        if (state_bit) {
+            data[i] += 0x8000;
+        }
         if (data[i] < 0) {
             data[i] = 0;
+        }
+        if (!state_bit) {
+            data[i] += 0x8000;
         }
     }
     dump_params(output);

@@ -17,7 +17,7 @@ Indexing policy:
 """
 
 # XXX: Heuristics for scaling: only scale biases and the input
-SCALE = 20
+SCALE = 50
 NUM_SLOTS = 2
 INTERMEDIATE_VALUES_SIZE = 65536
 
@@ -158,6 +158,7 @@ outputs['model'].write(to_bytes(len(model)))
 outputs['model'].write(to_bytes(n_input))
 outputs['model'].write(to_bytes(0))  # Model.running
 outputs['model'].write(to_bytes(0))  # Model.run_counter
+outputs['model'].write(to_bytes(0))  # Model.state_bit
 parameters_bin_offset = 0
 for inputs, op_type, flags in model:
     outputs['model'].write(to_bytes(len(inputs)))
@@ -222,7 +223,8 @@ for params in parameters:
                     for idx in range(reordered_dims[0] * reordered_dims[1]):
                         float_data_augmented.extend(float_data[idx*filter_len:(idx+1)*filter_len])
                         float_data_augmented.append(bias_node.float_data[idx // reordered_dims[1]] / SCALE / reordered_dims[1])
-                        if filter_len & 1 == 0:
+                        float_data_augmented.append(-1)
+                        if filter_len & 1 == 1:
                             float_data_augmented.append(0)
                     float_data = float_data_augmented
             for param in float_data:

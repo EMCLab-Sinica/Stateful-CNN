@@ -42,6 +42,7 @@ typedef struct __attribute__((__packed__)) {
     uint16_t n_input;
     uint16_t running;
     uint16_t run_counter;
+    uint16_t state_bit;
 } Model;
 
 /**********************************
