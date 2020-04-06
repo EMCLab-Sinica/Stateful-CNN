@@ -143,7 +143,11 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     dump_matrix2(input_buffer_addr, matrix_mpy_params.srcARows, matrix_mpy_params.srcACols);
     my_printf_debug("filter_buffer_addr = lea_buffer + LEA_BUFFER_SIZE - %d" NEWLINE, (int)(lea_buffer + LEA_BUFFER_SIZE - filter_buffer_addr));
     my_printf_debug("filter" NEWLINE);
+#ifndef USE_ARM_CMSIS
     dump_matrix2(filter_buffer_addr, matrix_mpy_params.srcBRows, matrix_mpy_params.srcBCols);
+#else
+    dump_matrix2(filter_buffer_addr, matrix_mpy_params.srcBCols, matrix_mpy_params.srcBRows);
+#endif
 
     my_printf_debug("matrix_mpy_results" NEWLINE);
     dump_matrix2(matrix_mpy_results, matrix_mpy_params.srcARows, matrix_mpy_params.srcBCols);
