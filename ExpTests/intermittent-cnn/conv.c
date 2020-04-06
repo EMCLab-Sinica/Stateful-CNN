@@ -49,6 +49,7 @@ static struct {
     uint8_t truncated;
     uint16_t OUTPUT_CHANNEL;
     uint16_t W_by_OUTPUT_CHANNEL;
+    uint16_t state_bit;
 } global_conv_params;
 
 static msp_matrix_mpy_q15_params matrix_mpy_params;
@@ -64,10 +65,10 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     int16_t *filter_addr;
     /* Cannot use C as a variable name here as C is a macro on MSP430 :( */
     uint16_t kH = conv_params.conv_filter->dims[1];
+    int16_t filter_offset = kH * global_conv_params.dest_offset;
 
     /* copy filter data */
     if (cached_filter_idx != conv_params.conv_idx) {
-        int16_t filter_offset = kH * global_conv_params.dest_offset;
         filter_buffer_addr = matrix_mpy_results - filter_offset * (global_conv_params.filter_limit + TEMP_FILTER_WIDTH);
 #ifndef USE_ARM_CMSIS
         int16_t *filter_tmp = matrix_mpy_results - filter_offset; // before transpose
@@ -114,6 +115,14 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     // http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/716353?MSP430FR5992-MSP-DSPLib-msp-matrix-mpy-q15
     matrix_mpy_params.srcARows = (tile_h - offset_h + kH - 1) / kH;
 
+    if (!global_conv_params.state_bit) {
+        int16_t *indicator_addr = input_buffer_addr + filter_offset - (global_conv_params.truncated ? 2 : 1);
+        for (uint8_t i = 0; i < matrix_mpy_params.srcARows; i++) {
+            *indicator_addr = -32768;
+            indicator_addr += filter_offset;
+        }
+    }
+
 #ifndef USE_ARM_CMSIS
     msp_status status = msp_matrix_mpy_q15(
         &matrix_mpy_params,
@@ -154,12 +163,25 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     my_printf_debug(NEWLINE);
     /* END dump data */
 
+    if (!global_conv_params.state_bit) {
+        int16_t *indicator_addr = input_buffer_addr + filter_offset - (global_conv_params.truncated ? 2 : 1);
+        for (uint8_t i = 0; i < matrix_mpy_params.srcARows; i++) {
+            *indicator_addr = 0;
+            indicator_addr += filter_offset;
+        }
+    }
+
     int16_t *output_data = get_q15_param(conv_params.output, (conv_params.output_h + offset_h) * global_conv_params.W_by_OUTPUT_CHANNEL + conv_params.output_w * global_conv_params.OUTPUT_CHANNEL + conv_params.conv_idx);
     int16_t *result_addr = matrix_mpy_results;
     // XXX: use DMA makes the whole loop slower as calling DMA for a few numbers brings more overhead than benefits
     uint8_t n_filters = MIN_VAL(global_conv_params.filter_limit, global_conv_params.OUTPUT_CHANNEL - conv_params.conv_idx);
     for (uint8_t idx = 0; idx < matrix_mpy_params.srcARows; idx++) {
         for (uint8_t idx2 = 0; idx2 < n_filters; idx2++) {
+#ifndef MY_NDEBUG
+            if (!global_conv_params.state_bit && *result_addr < 0x4000 && *result_addr >= -0x4000) {
+                ERROR_OCCURRED();
+            }
+#endif
             output_data[idx2] = *result_addr;
             result_addr++;
         }
@@ -242,18 +264,23 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
     my_printf_debug("h_start=%d ", h_start);
     my_printf_debug("h_end=%d" NEWLINE, h_end);
 
-    size_t size = (size_t)((w_end-w_start+1) * CHANNEL * sizeof(uint16_t)); // in bytes
+    size_t size = (w_end-w_start+1) * CHANNEL;
     src = input_addr + (h_start * W + w_start) * CHANNEL;
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                     (int)(dest - lea_buffer));
     for (int32_t h = h_start; h <= h_end; h++) {
-        my_memcpy(dest, src, size);
+        my_memcpy(dest, src, size * sizeof(int16_t));
+        if (global_conv_params.state_bit) {
+            for (uint16_t idx = 0; idx < size; idx++) {
+                dest[idx] += 0x8000;
+            }
+        }
         src += src_offset;
         dest += global_conv_params.dest_offset;
     }
     if (conv_params.flags & CONV_BIAS_MERGED) {
         for (uint8_t idx = 0; idx <= h_end - h_start + 2 * field_size; idx++) {
-            lea_buffer[(idx + 1) * global_conv_params.dest_offset - (global_conv_params.truncated ? 2 : 1)] = 32767; // 32767 is _Q15(1.0)
+            lea_buffer[(idx + 1) * global_conv_params.dest_offset - (global_conv_params.truncated ? 3 : 2)] = 32767; // 32767 is _Q15(1.0)
         }
     }
 
@@ -321,10 +348,17 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
     global_conv_params.dest_offset = kW * CHANNEL;
     global_conv_params.OUTPUT_CHANNEL = conv_filter->dims[0];
     global_conv_params.W_by_OUTPUT_CHANNEL = W * global_conv_params.OUTPUT_CHANNEL;
+    global_conv_params.state_bit = model->state_bit;
+    if (global_conv_params.state_bit) {
+        model->state_bit = 0;
+    } else {
+        model->state_bit = 1;
+    }
 
     if (conv_params.flags & CONV_BIAS_MERGED) {
         global_conv_params.dest_offset++;
     }
+    global_conv_params.dest_offset++;
     /* MSP430 LEA requires length to be even */
     global_conv_params.truncated = (global_conv_params.dest_offset / 2 * 2 != global_conv_params.dest_offset);
     if (global_conv_params.truncated) {
