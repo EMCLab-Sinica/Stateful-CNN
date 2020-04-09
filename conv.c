@@ -115,6 +115,7 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     // http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/716353?MSP430FR5992-MSP-DSPLib-msp-matrix-mpy-q15
     matrix_mpy_params.srcARows = (tile_h - offset_h + kH - 1) / kH;
 
+#ifdef WITH_PROGRESS_EMBEDDING
     if (!global_conv_params.state_bit) {
         int16_t *indicator_addr = input_buffer_addr + filter_offset - (global_conv_params.truncated ? 2 : 1);
         for (uint8_t i = 0; i < matrix_mpy_params.srcARows; i++) {
@@ -122,6 +123,7 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
             indicator_addr += filter_offset;
         }
     }
+#endif
 
 #ifndef USE_ARM_CMSIS
     msp_status status = msp_matrix_mpy_q15(
@@ -163,6 +165,7 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     my_printf_debug(NEWLINE);
     /* END dump data */
 
+#ifdef WITH_PROGRESS_EMBEDDING
     if (!global_conv_params.state_bit) {
         int16_t *indicator_addr = input_buffer_addr + filter_offset - (global_conv_params.truncated ? 2 : 1);
         for (uint8_t i = 0; i < matrix_mpy_params.srcARows; i++) {
@@ -170,6 +173,7 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
             indicator_addr += filter_offset;
         }
     }
+#endif
 
     int16_t *output_data = get_q15_param(conv_params.output, (conv_params.output_h + offset_h) * global_conv_params.W_by_OUTPUT_CHANNEL + conv_params.output_w * global_conv_params.OUTPUT_CHANNEL + conv_params.conv_idx);
     int16_t *result_addr = matrix_mpy_results;
@@ -177,7 +181,7 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     uint8_t n_filters = MIN_VAL(global_conv_params.filter_limit, global_conv_params.OUTPUT_CHANNEL - conv_params.conv_idx);
     for (uint8_t idx = 0; idx < matrix_mpy_params.srcARows; idx++) {
         for (uint8_t idx2 = 0; idx2 < n_filters; idx2++) {
-#ifndef MY_NDEBUG
+#if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
             if (!global_conv_params.state_bit && *result_addr < 0x4000 && *result_addr >= -0x4000) {
                 ERROR_OCCURRED();
             }
@@ -270,17 +274,23 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
                     (int)(dest - lea_buffer));
     for (int32_t h = h_start; h <= h_end; h++) {
         my_memcpy(dest, src, size * sizeof(int16_t));
+#ifdef WITH_PROGRESS_EMBEDDING
         if (global_conv_params.state_bit) {
             for (uint16_t idx = 0; idx < size; idx++) {
                 dest[idx] += 0x8000;
             }
         }
+#endif
         src += src_offset;
         dest += global_conv_params.dest_offset;
     }
     if (conv_params.flags & CONV_BIAS_MERGED) {
         for (uint8_t idx = 0; idx <= h_end - h_start + 2 * field_size; idx++) {
-            lea_buffer[(idx + 1) * global_conv_params.dest_offset - (global_conv_params.truncated ? 3 : 2)] = 32767; // 32767 is _Q15(1.0)
+            uint16_t offset = (idx + 1) * global_conv_params.dest_offset - (global_conv_params.truncated ? 2 : 1);
+#ifdef WITH_PROGRESS_EMBEDDING
+            offset--;
+#endif
+            lea_buffer[offset] = 32767; // 32767 is _Q15(1.0)
         }
     }
 
@@ -348,17 +358,21 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
     global_conv_params.dest_offset = kW * CHANNEL;
     global_conv_params.OUTPUT_CHANNEL = conv_filter->dims[0];
     global_conv_params.W_by_OUTPUT_CHANNEL = W * global_conv_params.OUTPUT_CHANNEL;
+#ifdef WITH_PROGRESS_EMBEDDING
     global_conv_params.state_bit = model->state_bit;
     if (global_conv_params.state_bit) {
         model->state_bit = 0;
     } else {
         model->state_bit = 1;
     }
+#endif
 
     if (conv_params.flags & CONV_BIAS_MERGED) {
         global_conv_params.dest_offset++;
     }
+#ifdef WITH_PROGRESS_EMBEDDING
     global_conv_params.dest_offset++;
+#endif
     /* MSP430 LEA requires length to be even */
     global_conv_params.truncated = (global_conv_params.dest_offset / 2 * 2 != global_conv_params.dest_offset);
     if (global_conv_params.truncated) {

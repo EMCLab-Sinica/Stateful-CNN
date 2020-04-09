@@ -1,3 +1,4 @@
+import argparse
 import io
 import pprint
 import struct
@@ -52,7 +53,12 @@ class Node:
 def get_prev_node(n):
     return nodes[names[n.input[0]] - n_input]
 
-onnx_model = onnx.load(sys.argv[1])
+parser = argparse.ArgumentParser()
+parser.add_argument('--with-progress-embedding', action='store_true', default=False)
+parser.add_argument('onnx_model')
+parser.add_argument('input_img')
+args = parser.parse_args()
+onnx_model = onnx.load(args.onnx_model)
 g = onnx_model.graph
 names = {}
 n_input = len(g.input)
@@ -181,7 +187,7 @@ def bitwidth_and_flags_for_parameters(bitwidth):
 for params in parameters:
     outputs['model'].write(to_bytes(parameters_bin_offset, size=32))  # params_offset
     if params is None:  # input
-        im = cv2.imread(sys.argv[2], cv2.IMREAD_GRAYSCALE)
+        im = cv2.imread(args.input_img, cv2.IMREAD_GRAYSCALE)
         # See https://github.com/microsoft/CNTK/blob/master/Tutorials/CNTK_103*
         # for data format
         im = 255 - im
@@ -223,9 +229,13 @@ for params in parameters:
                     for idx in range(reordered_dims[0] * reordered_dims[1]):
                         float_data_augmented.extend(float_data[idx*filter_len:(idx+1)*filter_len])
                         float_data_augmented.append(bias_node.float_data[idx // reordered_dims[1]] / SCALE / reordered_dims[1])
-                        float_data_augmented.append(-1)
-                        if filter_len & 1 == 1:
-                            float_data_augmented.append(0)
+                        if args.with_progress_embedding:
+                            float_data_augmented.append(-1)
+                            if filter_len & 1 == 1:
+                                float_data_augmented.append(0)
+                        else:
+                            if filter_len & 1 == 0:
+                                float_data_augmented.append(0)
                     float_data = float_data_augmented
             for param in float_data:
                 if len(params.dims) != 4:  # most likely biases
