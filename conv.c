@@ -311,7 +311,7 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
     pending_filter_idx = 0;
 }
 
-uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1], *bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 
@@ -332,8 +332,6 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
     output->dims[1] = H;
     output->dims[2] = W;
     output->dims[3] = input_N;
-
-    uint8_t ret = 0;
 
     conv_params.conv_input = conv_input;
     conv_params.conv_filter = conv_filter;
@@ -401,6 +399,4 @@ uint8_t handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
     dump_params(output);
 
     setOutputValue(0);
-
-    return ret;
 }

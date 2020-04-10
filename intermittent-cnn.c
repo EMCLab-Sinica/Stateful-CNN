@@ -12,7 +12,9 @@ static uint16_t cur_group[16] = { 0 };
 static uint8_t grp_index = 0;
 static uint16_t group_last_item;
 
-static uint8_t handle_cur_group(void) {
+static void handle_cur_group(void) {
+    UNUSED(pvParameters);
+
     uint16_t intermediate_values_offset = 0;
 
     my_printf_debug("Current group: ");
@@ -53,16 +55,13 @@ static uint8_t handle_cur_group(void) {
             ERROR_OCCURRED();
         }
 
-        uint8_t ret = handlers[cur_node->op_type](input, output, cur_node->flags);
+        handlers[cur_node->op_type](input, output, cur_node->flags);
 
         (*counter_idx)++;
         if (*counter_idx >= COUNTERS_LEN) {
             ERROR_OCCURRED();
         }
 
-        if (ret != 0) {
-            return 1;
-        }
         intermediate_values_offset = (uint16_t)new_intermediate_values_offset;
 
         my_printf_debug("output dims: ");
@@ -90,7 +89,6 @@ static uint8_t handle_cur_group(void) {
         cur_node->scheduled = 1;
     }
     my_printf_debug(" - %d element(s)." NEWLINE, grp_index);
-    return 0;
 }
 
 void init_pointers(void) {
@@ -158,9 +156,7 @@ int run_model(int8_t *ansptr) {
             next_node_idx = 0;
         }
 
-        if (handle_cur_group() != 0) {
-            return 1;
-        }
+        handle_cur_group();
 
         group_last_item = cur_group[grp_index - 1];
 

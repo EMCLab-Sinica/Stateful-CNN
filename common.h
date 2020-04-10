@@ -137,6 +137,6 @@ static inline int16_t iq31_to_q15(int32_t val) {
 /**********************************
  *       Operation handlers       *
  **********************************/
-typedef uint8_t (*handler)(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
+typedef void (*handler)(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
 extern uint8_t expected_inputs_len[];
 extern handler handlers[];

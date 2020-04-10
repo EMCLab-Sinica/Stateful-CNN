@@ -8,7 +8,7 @@
 DSPLIB_DATA(lea_buffer, 4)
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
-uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void handle_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     my_printf_debug("MaxPool!" NEWLINE);
 
     uint16_t stride = flags;
@@ -77,11 +77,9 @@ uint8_t handle_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t f
 
     my_printf_debug("handle_maxpool output" NEWLINE);
     dump_params(output);
-
-    return 0;
 }
 
-uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void handle_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(flags);
 
     /* Add: Y = X + W */
@@ -107,11 +105,9 @@ uint8_t handle_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags
     msp_checkStatus(status);
 
     my_memcpy(get_q15_param(output, 0), buffer_a, output->params_len);
-
-    return 0;
 }
 
-uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void handle_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(flags);
 
     ParameterInfo *A = input[0], *B = input[1];
@@ -183,11 +179,9 @@ uint8_t handle_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t fl
 
     my_printf_debug("handle_matmul output" NEWLINE);
     dump_params(output);
-
-    return 0;
 }
 
-uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void handle_relu(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(flags);
 
     my_printf_debug("ReLu!" NEWLINE);
@@ -228,10 +222,9 @@ uint8_t handle_relu(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
 #endif
     }
     dump_params(output);
-    return 0;
 }
 
-uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void handle_reshape(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(flags);
 
     my_printf_debug("Reshape!" NEWLINE);
@@ -275,11 +268,9 @@ uint8_t handle_reshape(ParameterInfo *input[], ParameterInfo *output, uint16_t f
         my_printf_debug("handle_reshape output" NEWLINE);
         dump_params(output);
     }
-
-    return 0;
 }
 
-uint8_t handle_squeeze(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void handle_squeeze(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(flags);
 
     my_printf_debug("Squeeze!" NEWLINE);
@@ -295,5 +286,4 @@ uint8_t handle_squeeze(ParameterInfo *input[], ParameterInfo *output, uint16_t f
             j++;
         }
     }
-    return 0;
 }
