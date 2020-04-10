@@ -5,6 +5,7 @@ Node *nodes;
 ParameterInfo *parameter_info;
 uint16_t *inputs;
 uint16_t *parameters;
+uint8_t *labels;
 
 static int16_t* node_input_ptr(Node *node, size_t i) {
     return (int16_t*)((uint8_t*)inputs + node->inputs_offset) + i;

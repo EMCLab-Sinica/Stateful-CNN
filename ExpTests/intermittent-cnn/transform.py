@@ -2,13 +2,13 @@ import argparse
 import io
 import pprint
 import struct
-import sys
 import warnings
 
-import cv2
 import onnx
+import numpy as np
 
 import ops
+from utils import load_data
 
 """
 Goal: Mapping name-based nodes to integer-based ones.
@@ -56,7 +56,7 @@ def get_prev_node(n):
 parser = argparse.ArgumentParser()
 parser.add_argument('--with-progress-embedding', action='store_true', default=False)
 parser.add_argument('onnx_model')
-parser.add_argument('input_img')
+parser.add_argument('input_file')
 args = parser.parse_args()
 onnx_model = onnx.load(args.onnx_model)
 g = onnx_model.graph
@@ -131,7 +131,9 @@ for params in g.initializer:
 pprint.pprint(model)
 
 def to_bytes(i, size=16):
-    if size == 16:
+    if size == 8:
+        return struct.pack('B', i)  # unsigned char
+    elif size == 16:
         return struct.pack('h', i)
     elif size == 32:
         return struct.pack('i', i)
@@ -158,6 +160,7 @@ outputs = {
     'inputs': io.BytesIO(),
     'parameters': io.BytesIO(),
     'model': io.BytesIO(),
+    'labels': io.BytesIO(),
 }
 
 outputs['model'].write(to_bytes(len(model)))
@@ -165,6 +168,7 @@ outputs['model'].write(to_bytes(n_input))
 outputs['model'].write(to_bytes(0))  # Model.running
 outputs['model'].write(to_bytes(0))  # Model.run_counter
 outputs['model'].write(to_bytes(0))  # Model.state_bit
+outputs['model'].write(to_bytes(0))  # Model.sample_idx
 parameters_bin_offset = 0
 for inputs, op_type, flags in model:
     outputs['model'].write(to_bytes(len(inputs)))
@@ -177,28 +181,29 @@ for inputs, op_type, flags in model:
     outputs['model'].write(to_bytes(flags))
     outputs['model'].write(to_bytes(0))  # Node.scheduled
 
-def bitwidth_and_flags_for_parameters(bitwidth):
-    # Keep this in sync with common.h
-    FLAG_SLOTS = 0b11
-    FLAG_SLOTS_WIDTH = 2
+# Keep these in sync with common.h
+FLAG_SLOTS = 0b11
+FLAG_TEST_SET = 0b10
+FLAG_SLOTS_WIDTH = 2
 
+def bitwidth_and_flags_for_parameters(bitwidth):
     return bitwidth << FLAG_SLOTS_WIDTH | FLAG_SLOTS
 
+def bitwidth_and_flags_for_test_samples(bitwidth):
+    return bitwidth << FLAG_SLOTS_WIDTH | FLAG_TEST_SET
+
+labels, images = load_data(args.input_file, limit=50)
+
+model_samples_offset_ptr = None
 for params in parameters:
     outputs['model'].write(to_bytes(parameters_bin_offset, size=32))  # params_offset
     if params is None:  # input
-        im = cv2.imread(args.input_img, cv2.IMREAD_GRAYSCALE)
-        # See https://github.com/microsoft/CNTK/blob/master/Tutorials/CNTK_103*
-        # for data format
-        im = 255 - im
-        im = im / 256  # to fit into range of _q15
-        dimX, dimY = im.shape
+        # Actual data for test samples are added last
+        assert model_samples_offset_ptr is None
+        model_samples_offset_ptr = outputs['model'].tell() - 4
+        _, _, dimX, dimY = images[0].shape
         outputs['model'].write(to_bytes(dimX * dimY * 2, size=32))  # A _q15 is 16-bit
-        for i in range(im.shape[0]):
-            for j in range(im.shape[1]):
-                outputs['parameters'].write(to_bytes(_Q15(im[i, j] / SCALE)))
-                parameters_bin_offset += 2
-        outputs['model'].write(to_bytes(bitwidth_and_flags_for_parameters(16)))  # bitwidth_and_flags
+        outputs['model'].write(to_bytes(bitwidth_and_flags_for_test_samples(16)))  # bitwidth_and_flags
         # extend_dims
         outputs['model'].write(to_bytes(1))
         outputs['model'].write(to_bytes(dimX))
@@ -268,10 +273,24 @@ for idx, n in enumerate(nodes):
     for _ in range(4):  # dims[4]
         outputs['model'].write(to_bytes(0))
 
-output_c = '''
+# This should be the last write to outputs['model']!
+outputs['model'].seek(model_samples_offset_ptr)
+outputs['model'].write(to_bytes(parameters_bin_offset, size=32))
+
+for im in images:
+    # load_data returns NCHW
+    for i in range(im.shape[2]):
+        for j in range(im.shape[3]):
+            outputs['parameters'].write(to_bytes(_Q15(im[0, 0, i, j] / SCALE)))
+
+for label in labels:
+    outputs['labels'].write(to_bytes(np.argmax(label), size=8))
+
+with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
+    output_c.write('''
 #include "data.h"
-'''
-output_h = f'''
+''')
+    output_h.write(f'''
 #pragma once
 #include <stdint.h>
 
@@ -285,26 +304,31 @@ output_h = f'''
 #define SCALE {SCALE}
 #define NUM_SLOTS {NUM_SLOTS}
 #define INTERMEDIATE_VALUES_SIZE {INTERMEDIATE_VALUES_SIZE}
-'''
-for var_name, data_obj in outputs.items():
-    var_name += '_data'
-    data_obj.seek(0)
-    data = data_obj.read()
-    output_h += f'''
+''')
+    def hex_str(arr):
+        return '  ' + ', '.join([f'0x{num:02x}' for num in arr]) + ',\n'
+
+    for var_name, data_obj in outputs.items():
+        var_name += '_data'
+        data_obj.seek(0)
+        data = data_obj.read()
+        output_h.write(f'''
 extern GLOBAL_CONST uint8_t *{var_name};
 #define {var_name.upper()}_LEN {len(data)}
-'''
-    output_c += f'''
+''')
+        output_c.write(f'''
 #pragma NOINIT(_{var_name})
-GLOBAL_CONST uint8_t _{var_name}[{len(data)}] = {{'''
-    output_c += ', '.join([hex(b) for b in data])
-    output_c += f'''}};
+GLOBAL_CONST uint8_t _{var_name}[{len(data)}] = {{
+''')
+        n_pieces, remaining = divmod(len(data), 16)
+        for idx in range(n_pieces):
+            output_c.write(hex_str(data[idx*16:(idx+1)*16]))
+        if remaining:
+            output_c.write(hex_str(data[len(data) - remaining:len(data)]))
+        output_c.write(f'''}};
 GLOBAL_CONST uint8_t *{var_name} = _{var_name};
-'''
+''')
 
-with open('data.c', 'w') as f, open('data.h', 'w') as g:
-    f.write(output_c)
-    g.write(output_h)
 
 with open('nvm.bin', 'wb') as f:
     f.write(256 * 1024 * b'\0')
@@ -312,3 +336,4 @@ with open('nvm.bin', 'wb') as f:
     for data_obj in outputs.values():
         data_obj.seek(0)
         f.write(data_obj.read())
+        assert f.tell() < 256 * 1024

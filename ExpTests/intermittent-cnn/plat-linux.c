@@ -5,6 +5,7 @@
 #include <DSPLib.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
@@ -17,53 +18,12 @@
 
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *intermediate_values;
-uint8_t *inputs_data, *parameters_data, *model_data;
+uint8_t *inputs_data, *parameters_data, *model_data, *labels_data;
 uint16_t *counters;
 uint16_t *power_counters;
 uint8_t *counter_idx;
 
 uint32_t *copied_size;
-
-void run_tests(char *filename) {
-    int8_t label = -1, predicted = -1;
-    FILE *test_file = fopen(filename, "r");
-    uint32_t correct = 0, total = 0;
-    while (!feof(test_file)) {
-        fscanf(test_file, "|labels ");
-        for (uint8_t i = 0; i < 10; i++) {
-            int j;
-            int ret = fscanf(test_file, "%d", &j);
-            if (ret != 1) {
-                fprintf(stderr, "fscanf returns %d, pos = %ld\n", ret, ftell(test_file));
-                ERROR_OCCURRED();
-            }
-            if (j == 1) {
-                label = i;
-                // not break here, so that remaining numbers are consumed
-            }
-        }
-        fscanf(test_file, " |features ");
-        for (uint16_t i = 0; i < 28*28; i++) {
-            int j;
-            int ret = fscanf(test_file, "%d", &j);
-            if (ret != 1) {
-                fprintf(stderr, "fscanf returns %d, pos = %ld\n", ret, ftell(test_file));
-                ERROR_OCCURRED();
-            }
-            ((int16_t*)parameters_data)[i] = _Q15(1.0 * j / 256 / SCALE);
-        }
-        fscanf(test_file, "\n");
-        my_printf_debug("Test %d\n", total);
-        run_model(&predicted);
-        total++;
-        if (label == predicted) {
-            correct++;
-        }
-        my_printf_debug("%d %d\n", label, predicted);
-    }
-    my_printf("correct=%d total=%d rate=%f\n", correct, total, 1.0*correct/total);
-    fclose(test_file);
-}
 
 void sig_handler(int sig_no) {
     if (sig_no == SIGALRM) {
@@ -86,7 +46,8 @@ int main(int argc, char* argv[]) {
     inputs_data = nvm + NUM_SLOTS * INTERMEDIATE_VALUES_SIZE;
     parameters_data = inputs_data + INPUTS_DATA_LEN;
     model_data = parameters_data + PARAMETERS_DATA_LEN;
-    copied_size = (uint32_t*)(model_data + MODEL_DATA_LEN);
+    labels_data = model_data + MODEL_DATA_LEN;
+    copied_size = (uint32_t*)(labels_data + LABELS_DATA_LEN);
     counters = (uint16_t*)(copied_size + 1);
     power_counters = counters + COUNTERS_LEN;
     counter_idx = (uint8_t*)(power_counters + COUNTERS_LEN);
@@ -97,20 +58,20 @@ int main(int argc, char* argv[]) {
     setitimer(ITIMER_REAL, &interval, NULL);
     signal(SIGALRM, sig_handler);
 
+#ifdef USE_ARM_CMSIS
+    my_printf("Use DSP from ARM CMSIS pack" NEWLINE);
+#else
+    my_printf("Use TI DSPLib" NEWLINE);
+#endif
+
     init_pointers();
     if (argc >= 3) {
-        printf("Usage: %s [test filename]\n", argv[0]);
+        printf("Usage: %s [n_samples]\n", argv[0]);
         ret = 1;
     } else if (argc == 2) {
-        run_tests(argv[1]);
+        run_cnn_tests(atoi(argv[1]));
     } else {
-#ifdef USE_ARM_CMSIS
-        my_printf("Use DSP from ARM CMSIS pack" NEWLINE);
-#else
-        my_printf("Use TI DSPLib" NEWLINE);
-#endif
-        ret = run_model(NULL);
-        print_results();
+        run_cnn_tests(LABELS_DATA_LEN);
     }
 
 exit:

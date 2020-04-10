@@ -1,6 +1,7 @@
 DATA_PATH=../../../intermittent-cnn
 MODEL=$DATA_PATH/models/mnist/model_optimized.onnx
-IMAGE=$DATA_PATH/example3.png
+INPUT_FILE=$DATA_PATH/MNIST/Test-28x28_cntk_text.txt
 
 python gen_ops.py
-python transform.py --with-progress-embedding $MODEL $IMAGE
+# TODO: add --with-progress-embedding back after fixing the performance regression
+python transform.py $MODEL $INPUT_FILE
