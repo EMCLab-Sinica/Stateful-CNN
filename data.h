@@ -17,7 +17,10 @@ extern GLOBAL_CONST uint8_t *inputs_data;
 #define INPUTS_DATA_LEN 36
 
 extern GLOBAL_CONST uint8_t *parameters_data;
-#define PARAMETERS_DATA_LEN 14148
+#define PARAMETERS_DATA_LEN 90820
 
 extern GLOBAL_CONST uint8_t *model_data;
-#define MODEL_DATA_LEN 452
+#define MODEL_DATA_LEN 454
+
+extern GLOBAL_CONST uint8_t *labels_data;
+#define LABELS_DATA_LEN 50

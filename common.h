@@ -6,6 +6,7 @@
 #include "platform.h"
 
 #define FLAG_SLOTS 0b11
+#define FLAG_TEST_SET 0b10
 #define FLAG_SLOTS_WIDTH 2
 #define NUM_FILTERS 16
 
@@ -30,8 +31,9 @@ typedef struct __attribute__((__packed__)) _ParameterInfo {
      * 64: INT64 (from ONNX)
      *
      * The least two sigfinicant bits contains a flag to indicate where the
-     * data are. All 1's indicate data are in parameters, otherwise it's the
-     * slot number for one of intermediate_values.
+     * data are. 0b11 indicates data are in parameters; 0b10 indicates data
+     * are from the test set; otherwise it's the slot number for one of
+     * intermediate_values.
      */
     uint16_t bitwidth_and_flags;
     uint16_t dims[4];
@@ -43,6 +45,7 @@ typedef struct __attribute__((__packed__)) {
     uint16_t running;
     uint16_t run_counter;
     uint16_t state_bit;
+    uint16_t sample_idx;
 } Model;
 
 /**********************************
@@ -53,6 +56,7 @@ extern Node *nodes;
 extern ParameterInfo *parameter_info;
 extern uint16_t *inputs;
 extern uint16_t *parameters;
+extern uint8_t *labels;
 // similar to double buffering
 extern uint8_t *intermediate_values;
 extern uint16_t *counters;
@@ -108,10 +112,12 @@ static inline uint16_t get_next_slot(ParameterInfo *param) {
 
 static inline uint8_t* get_param_base_pointer(ParameterInfo *param) {
     uint16_t slot_id = get_param_slot_id(param);
-    if (slot_id != FLAG_SLOTS) {
-        return intermediate_values + slot_id * INTERMEDIATE_VALUES_SIZE;
-    } else {
-        return (uint8_t*)parameters;
+    switch (slot_id) {
+        case FLAG_SLOTS:
+        case FLAG_TEST_SET:
+            return (uint8_t*)parameters;
+        default:
+            return intermediate_values + slot_id * INTERMEDIATE_VALUES_SIZE;
     }
 }
 

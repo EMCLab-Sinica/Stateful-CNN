@@ -13,8 +13,6 @@ static uint8_t grp_index = 0;
 static uint16_t group_last_item;
 
 static void handle_cur_group(void) {
-    UNUSED(pvParameters);
-
     uint16_t intermediate_values_offset = 0;
 
     my_printf_debug("Current group: ");
@@ -37,6 +35,9 @@ static void handle_cur_group(void) {
             input_id[j] = node_input(cur_node, j);
             my_printf_debug("input_id[%d] = %d ", j, input_id[j]);
             input[j] = &(parameter_info[input_id[j]]);
+            if ((input[j]->bitwidth_and_flags & FLAG_SLOTS) == FLAG_TEST_SET) {
+                input[j]->params_offset = PARAMETERS_DATA_LEN - (LABELS_DATA_LEN - model->sample_idx) * input[j]->params_len;
+            }
             // dump_params(input[j]);
         }
 
@@ -95,6 +96,7 @@ void init_pointers(void) {
     model = (Model*)model_data;
     inputs = (uint16_t*)inputs_data;
     parameters = (uint16_t*)parameters_data;
+    labels = labels_data;
 
     nodes = (Node*)(model + 1);
     parameter_info = (ParameterInfo*)(nodes + model->nodes_len);
@@ -186,14 +188,12 @@ int run_model(int8_t *ansptr) {
 
     /* XXX: is the last node always the output node? */
     ParameterInfo *output_node = &(parameter_info[model->nodes_len + model->n_input - 1]);
-    if (ansptr) {
-        int16_t max = INT16_MIN;
-        for (uint16_t i = 0; i < output_node->dims[1]; i++) {
-            int16_t val = *get_q15_param(output_node, i);
-            if (val > max) {
-                *ansptr = (uint8_t)i;
-                max = val;
-            }
+    int16_t max = INT16_MIN;
+    for (uint16_t i = 0; i < output_node->dims[1]; i++) {
+        int16_t val = *get_q15_param(output_node, i);
+        if (val > max) {
+            *ansptr = (uint8_t)i;
+            max = val;
         }
     }
 
@@ -217,4 +217,23 @@ void print_results(void) {
     }
     my_printf(NEWLINE "run_counter: %d", model->run_counter);
     my_printf(NEWLINE);
+}
+
+void run_cnn_tests(uint16_t n_samples) {
+    int8_t label = -1, predicted = -1;
+    uint32_t correct = 0, total = 0;
+    for (uint16_t i = 0; i < n_samples; i++) {
+        model->sample_idx = i;
+        label = labels[i];
+        run_model(&predicted);
+        total++;
+        if (label == predicted) {
+            correct++;
+        }
+        my_printf_debug("label=%d predicted=%d correct=%d" NEWLINE, label, predicted, label == predicted);
+    }
+    if (n_samples == 1) {
+        print_results();
+    }
+    my_printf("correct=%d total=%d rate=%f" NEWLINE, correct, total, 1.0*correct/total);
 }

@@ -2,6 +2,6 @@
 
 #include <stdint.h>
 
-int run_model(int8_t *ansptr);
 void print_results(void);
 void init_pointers(void);
+void run_cnn_tests(uint16_t n_samples);
