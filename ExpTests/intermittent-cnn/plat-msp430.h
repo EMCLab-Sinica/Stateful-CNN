@@ -2,11 +2,9 @@
 
 #include <driverlib.h>
 #include <msp430.h> /* __no_operation() */
+#include <stdlib.h>
 
 #define ERROR_OCCURRED() for (;;) { __no_operation(); }
-// _Pragma() is a C99 feature
-// https://stackoverflow.com/a/3030312/3786245
-#define ON_NVM(var_name) _Pragma("DATA_SECTION(" var_name ", \".map\")")
 
 #define LEA_BUFFER_SIZE 1884 // (4096 - 0x138 (LEASTACK) - 2 * 8 (MSP_LEA_MAC_PARAMS)) / sizeof(int16_t)
 

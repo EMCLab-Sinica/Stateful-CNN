@@ -33,7 +33,7 @@ void IntermittentCNNTest() {
     }
 
     if (!model->run_counter) {
-        run_model(NULL);
+        run_cnn_tests(1);
     }
 
     while (1) {

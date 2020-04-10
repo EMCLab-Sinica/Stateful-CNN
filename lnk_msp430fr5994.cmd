@@ -63,10 +63,10 @@ MEMORY
     INFOB                   : origin = 0x1900, length = 0x80
     INFOA                   : origin = 0x1980, length = 0x80
     RAM                     : origin = 0x1C00, length = 0x1000
-    FRAM                    : origin = 0x4000, length = 0xBE00
+    FRAM                    : origin = 0x4000, length = 0xAE00
+    NOINI                   : origin = 0xEE00, length = 0x1000
     MAP                     : origin = 0xFE00, length = 0x0180
-    NOINI                   : origin = 0x10000,length = 0x24000
-    FRAM2                   : origin = 0x34000,length = 0x10000
+    FRAM2                   : origin = 0x10000,length = 0x34000
     JTAGSIGNATURE           : origin = 0xFF80, length = 0x0004, fill = 0xFFFF
     BSLSIGNATURE            : origin = 0xFF84, length = 0x0004, fill = 0xFFFF
     IPESIGNATURE            : origin = 0xFF88, length = 0x0008, fill = 0xFFFF
@@ -211,6 +211,7 @@ SECTIONS
     .data       : {} > RAM                  /* Global & static vars              */
     .TI.noinit  : {} > NOINI type=NOINIT    /* For #pragma noinit                */
     .map        : {} > MAP type=NOINIT
+    .nvm        : {} > FRAM2 type=NOINIT
     .stack      : {} > RAM (HIGH)           /* Software system stack             */
 
     .tinyram    : {} > TINYRAM              /* Tiny RAM                          */
