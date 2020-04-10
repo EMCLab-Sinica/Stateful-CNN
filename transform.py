@@ -192,7 +192,7 @@ def bitwidth_and_flags_for_parameters(bitwidth):
 def bitwidth_and_flags_for_test_samples(bitwidth):
     return bitwidth << FLAG_SLOTS_WIDTH | FLAG_TEST_SET
 
-labels, images = load_data(args.input_file, limit=50)
+labels, images = load_data(args.input_file, limit=40)
 
 model_samples_offset_ptr = None
 for params in parameters:
@@ -294,13 +294,6 @@ with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
 #pragma once
 #include <stdint.h>
 
-// const is for putting data on NVM
-#ifdef __MSP430__
-#  define GLOBAL_CONST const
-#else
-#  define GLOBAL_CONST
-#endif
-
 #define SCALE {SCALE}
 #define NUM_SLOTS {NUM_SLOTS}
 #define INTERMEDIATE_VALUES_SIZE {INTERMEDIATE_VALUES_SIZE}
@@ -313,12 +306,15 @@ with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
         data_obj.seek(0)
         data = data_obj.read()
         output_h.write(f'''
-extern GLOBAL_CONST uint8_t *{var_name};
+extern uint8_t *{var_name};
 #define {var_name.upper()}_LEN {len(data)}
 ''')
+        # #define with _Pragma seems to be broken :/
         output_c.write(f'''
-#pragma NOINIT(_{var_name})
-GLOBAL_CONST uint8_t _{var_name}[{len(data)}] = {{
+#ifdef __MSP430__
+#pragma DATA_SECTION(_{var_name}, ".nvm")
+#endif
+uint8_t _{var_name}[{len(data)}] = {{
 ''')
         n_pieces, remaining = divmod(len(data), 16)
         for idx in range(n_pieces):
@@ -326,7 +322,7 @@ GLOBAL_CONST uint8_t _{var_name}[{len(data)}] = {{
         if remaining:
             output_c.write(hex_str(data[len(data) - remaining:len(data)]))
         output_c.write(f'''}};
-GLOBAL_CONST uint8_t *{var_name} = _{var_name};
+uint8_t *{var_name} = _{var_name};
 ''')
 
 

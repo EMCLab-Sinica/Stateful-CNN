@@ -6,19 +6,19 @@
 
 /* on FRAM */
 
-#pragma NOINIT(_intermediate_values)
+#pragma DATA_SECTION(_intermediate_values, ".nvm")
 static uint8_t _intermediate_values[NUM_SLOTS * INTERMEDIATE_VALUES_SIZE];
 uint8_t *intermediate_values = _intermediate_values;
 
-#pragma NOINIT(_counters)
+#pragma DATA_SECTION(_counters, ".nvm")
 static uint16_t _counters[COUNTERS_LEN];
 uint16_t *counters = _counters;
 
-#pragma NOINIT(_power_counters)
+#pragma DATA_SECTION(_power_counters, ".nvm")
 static uint16_t _power_counters[COUNTERS_LEN];
 uint16_t *power_counters = _power_counters;
 
-#pragma NOINIT(_counter_idx)
+#pragma DATA_SECTION(_counter_idx, ".nvm")
 static uint8_t _counter_idx;
 uint8_t *counter_idx = &_counter_idx;
 
