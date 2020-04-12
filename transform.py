@@ -185,13 +185,6 @@ for inputs, op_type, flags in model:
 # Keep these in sync with common.h
 FLAG_SLOTS = 0b11
 FLAG_TEST_SET = 0b10
-FLAG_SLOTS_WIDTH = 2
-
-def bitwidth_and_flags_for_parameters(bitwidth):
-    return bitwidth << FLAG_SLOTS_WIDTH | FLAG_SLOTS
-
-def bitwidth_and_flags_for_test_samples(bitwidth):
-    return bitwidth << FLAG_SLOTS_WIDTH | FLAG_TEST_SET
 
 labels, images = load_data(args.input_file, limit=40)
 
@@ -204,7 +197,10 @@ for params in parameters:
         model_samples_offset_ptr = outputs['model'].tell() - 4
         _, _, dimX, dimY = images[0].shape
         outputs['model'].write(to_bytes(dimX * dimY * 2, size=32))  # A _q15 is 16-bit
-        outputs['model'].write(to_bytes(bitwidth_and_flags_for_test_samples(16)))  # bitwidth_and_flags
+        outputs['model'].write(to_bytes(16, size=8))                # bitwidth
+        outputs['model'].write(to_bytes(FLAG_TEST_SET, size=8))     # slot
+        outputs['model'].write(to_bytes(0, size=8))                 # flag
+        outputs['model'].write(to_bytes(0, size=8))                 # dummy
         # extend_dims
         outputs['model'].write(to_bytes(1))
         outputs['model'].write(to_bytes(dimX))
@@ -249,16 +245,19 @@ for params in parameters:
                 else:
                     outputs['parameters'].write(to_bytes(_Q15(param)))
                 parameters_bin_offset += 2
-            outputs['model'].write(to_bytes(bitwidth_and_flags_for_parameters(16)))  # bitwidth_and_flags
+            outputs['model'].write(to_bytes(16, size=8)) # bitwidth
         elif params.data_type == onnx.TensorProto.INT64:
             data_len = len(params.int64_data)
             outputs['model'].write(to_bytes(data_len * 8, size=32))
             for param in params.int64_data:
                 outputs['parameters'].write(to_bytes(param, size=64))
                 parameters_bin_offset += 8
-            outputs['model'].write(to_bytes(bitwidth_and_flags_for_parameters(64)))  # bitwidth_and_flags
+            outputs['model'].write(to_bytes(64, size=8)) # bitwidth
         else:
             assert False
+        outputs['model'].write(to_bytes(FLAG_SLOTS, size=8))    # slot
+        outputs['model'].write(to_bytes(0, size=8))             # flag
+        outputs['model'].write(to_bytes(0, size=8))             # dummy
         print('dims = {}, length = {}'.format(reordered_dims, data_len))
         for dim in reordered_dims:
             outputs['model'].write(to_bytes(dim))
@@ -270,7 +269,10 @@ for params in parameters:
 for idx, n in enumerate(nodes):
     outputs['model'].write(to_bytes(0, size=32))  # params_offset
     outputs['model'].write(to_bytes(0, size=32))  # params_len
-    outputs['model'].write(to_bytes(0))  # bitwidth_and_flags
+    outputs['model'].write(to_bytes(0, size=8))  # bitwidth
+    outputs['model'].write(to_bytes(0, size=8))  # slot
+    outputs['model'].write(to_bytes(0, size=8))  # flags
+    outputs['model'].write(to_bytes(0, size=8))  # dummy
     for _ in range(4):  # dims[4]
         outputs['model'].write(to_bytes(0))
 

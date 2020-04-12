@@ -13,7 +13,7 @@ extern uint8_t *parameters_data;
 #define PARAMETERS_DATA_LEN 75140
 
 extern uint8_t *model_data;
-#define MODEL_DATA_LEN 454
+#define MODEL_DATA_LEN 492
 
 extern uint8_t *labels_data;
 #define LABELS_DATA_LEN 40

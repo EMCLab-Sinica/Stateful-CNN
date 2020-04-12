@@ -12,6 +12,8 @@
 
 #define LEA_BUFFER_SIZE 16384
 
+#define NVM_BYTE_ADDRESSABLE 1
+
 extern uint32_t *copied_size;
 
 static inline void my_memcpy(void* dest, const void* src, size_t n) {

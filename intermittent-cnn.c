@@ -35,7 +35,7 @@ static void handle_cur_group(void) {
             input_id[j] = node_input(cur_node, j);
             my_printf_debug("input_id[%d] = %d ", j, input_id[j]);
             input[j] = &(parameter_info[input_id[j]]);
-            if ((input[j]->bitwidth_and_flags & FLAG_SLOTS) == FLAG_TEST_SET) {
+            if (input[j]->slot == FLAG_TEST_SET) {
                 input[j]->params_offset = PARAMETERS_DATA_LEN - (LABELS_DATA_LEN - model->sample_idx) * input[j]->params_len;
             }
             // dump_params(input[j]);
@@ -78,7 +78,7 @@ static void handle_cur_group(void) {
             // missing dims
             ERROR_OCCURRED();
         }
-        if (get_param_bitwidth(output) == 0) {
+        if (output->bitwidth == 0) {
             // invalid bitwidth
             ERROR_OCCURRED();
         }
