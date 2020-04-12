@@ -20,7 +20,9 @@ typedef struct {
     uint16_t scheduled;  /* 16 bits for aligned memory */
 } Node;
 
-_Static_assert(sizeof(Node) == 10);
+// _Static_assert in C11 requires the message
+// We target C99 - it works, anyway
+_Static_assert(sizeof(Node) == 10, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct _ParameterInfo {
@@ -43,7 +45,7 @@ typedef struct _ParameterInfo {
     uint16_t dims[4];
 } ParameterInfo;
 
-_Static_assert(sizeof(ParameterInfo) == 20);
+_Static_assert(sizeof(ParameterInfo) == 20, "Unexpected size for ParameterInfo");
 
 typedef struct {
     uint16_t nodes_len;
@@ -54,7 +56,7 @@ typedef struct {
     uint16_t sample_idx;
 } Model;
 
-_Static_assert(sizeof(Model) == 12);
+_Static_assert(sizeof(Model) == 12, "Unexpected size for Model");
 
 /**********************************
  *          Global data           *
