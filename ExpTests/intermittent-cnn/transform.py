@@ -4,6 +4,7 @@ import pprint
 import struct
 import warnings
 
+import cv2
 import onnx
 import numpy as np
 
@@ -277,14 +278,21 @@ for idx, n in enumerate(nodes):
 outputs['model'].seek(model_samples_offset_ptr)
 outputs['model'].write(to_bytes(parameters_bin_offset, size=32))
 
-for im in images:
+for idx, im in enumerate(images):
     # load_data returns NCHW
     for i in range(im.shape[2]):
         for j in range(im.shape[3]):
             outputs['parameters'].write(to_bytes(_Q15(im[0, 0, i, j] / SCALE)))
+    # Restore conanical image format (H, W, C)
+    im = np.expand_dims(np.squeeze(im * 256), axis=-1)
+    im = 255 - im
+    cv2.imwrite(f'images/test{idx:02d}.png', im)
 
 for label in labels:
-    outputs['labels'].write(to_bytes(np.argmax(label), size=8))
+    outputs['labels'].write(to_bytes(label, size=8))
+
+with open('images/ans.txt', 'w') as f:
+    f.write(' '.join(map(str, labels)))
 
 with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
     output_c.write('''
