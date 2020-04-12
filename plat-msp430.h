@@ -10,6 +10,8 @@
 
 #define NVM_BYTE_ADDRESSABLE 1
 
+#define USE_ALL_SAMPLES 0
+
 #define MY_DMA_CHANNEL DMA_CHANNEL_0
 static DMA_initParam dma_params = {
     .channelSelect = MY_DMA_CHANNEL,

@@ -297,6 +297,7 @@ with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
     output_h.write(f'''
 #pragma once
 #include <stdint.h>
+#include "platform.h"
 
 #define SCALE {SCALE}
 #define NUM_SLOTS {NUM_SLOTS}
@@ -305,10 +306,7 @@ with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
     def hex_str(arr):
         return '  ' + ', '.join([f'0x{num:02x}' for num in arr]) + ',\n'
 
-    for var_name, data_obj in outputs.items():
-        var_name += '_data'
-        data_obj.seek(0)
-        data = data_obj.read()
+    def define_var(var_name, data):
         output_h.write(f'''
 extern uint8_t *{var_name};
 #define {var_name.upper()}_LEN {len(data)}
@@ -328,6 +326,29 @@ uint8_t _{var_name}[{len(data)}] = {{
         output_c.write(f'''}};
 uint8_t *{var_name} = _{var_name};
 ''')
+
+    for var_name, data_obj in outputs.items():
+        if var_name in ('samples', 'labels'):
+            continue
+        var_name += '_data'
+        data_obj.seek(0)
+        define_var(var_name, data_obj.read())
+
+    outputs['samples'].seek(0)
+    samples_data = outputs['samples'].read()
+    outputs['labels'].seek(0)
+    labels_data = outputs['labels'].read()
+
+    output_h.write('\n#if USE_ALL_SAMPLES\n')
+    output_c.write('\n#if USE_ALL_SAMPLES\n')
+    define_var('samples_data', samples_data)
+    define_var('labels_data', labels_data)
+    output_h.write('\n#else\n')
+    output_c.write('\n#else\n')
+    define_var('samples_data', samples_data[:len(samples_data)//len(labels)])
+    define_var('labels_data', labels_data[:len(labels_data)//len(labels)])
+    output_h.write('\n#endif\n')
+    output_c.write('\n#endif\n')
 
 
 with open('nvm.bin', 'wb') as f:

@@ -13,6 +13,8 @@
 #define LEA_BUFFER_SIZE 16384
 
 #define NVM_BYTE_ADDRESSABLE 1
+// USE_ALL_SAMPLES must be 1 as nvm.bin contains all samples
+#define USE_ALL_SAMPLES 1
 
 extern uint32_t *copied_size;
 
