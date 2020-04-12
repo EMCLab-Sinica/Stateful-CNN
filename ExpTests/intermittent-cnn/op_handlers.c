@@ -21,7 +21,8 @@ void handle_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
 
     const uint16_t channel = data->dims[3], H = data->dims[1], W = data->dims[2];
     output->params_len = data->params_len / (uint16_t)(stride * stride);
-    output->bitwidth_and_flags = data->bitwidth_and_flags | get_next_slot(data);
+    output->bitwidth = data->bitwidth;
+    output->slot = get_next_slot(data);
     output->dims[0] = 1;
     output->dims[1] = H / stride;
     output->dims[2] = W / stride;
@@ -48,7 +49,16 @@ void handle_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
                 int16_t max_val = INT16_MIN;
                 for (uint16_t sH = 0; sH < stride; sH++) {
                     for (uint16_t sW = 0; sW < stride; sW++) {
-                        int16_t val = data_baseptr[(h+sH) * W * channel + (w+sW) * channel + c];
+                        int16_t val;
+#if !NVM_BYTE_ADDRESSABLE
+                        if (data->flags & TRANSPOSED) {
+                            val = data_baseptr[(w+sW) * H * channel + (h+sH) * channel + c];
+                        } else {
+#endif
+                            val = data_baseptr[(h+sH) * W * channel + (w+sW) * channel + c];
+#if !NVM_BYTE_ADDRESSABLE
+                        }
+#endif
 #ifdef WITH_PROGRESS_EMBEDDING
                         if (state_bit) {
                             val += 0x8000;
@@ -85,13 +95,14 @@ void handle_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     /* Add: Y = X + W */
     my_printf_debug("Add!" NEWLINE);
 
-    if (get_param_bitwidth(input[0]) != 16 || get_param_bitwidth(input[1]) != 16) {
+    if (input[0]->bitwidth != 16 || input[1]->bitwidth != 16) {
         // unsupported bitwidth
         ERROR_OCCURRED();
     }
     ParameterInfo *A = input[0], *B = input[1];
     output->params_len = input[0]->params_len;
-    output->bitwidth_and_flags = input[0]->bitwidth_and_flags | get_next_slot(A);
+    output->bitwidth = input[0]->bitwidth;
+    output->slot = get_next_slot(A);
     output->dims[0] = 1;
     output->dims[1] = A->dims[1];
 
@@ -123,7 +134,8 @@ void handle_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t flags
     output->dims[0] = A->dims[0];
     output->dims[1] = B->dims[1];
     output->params_len = (uint16_t)(output_len * 2);
-    output->bitwidth_and_flags = 16 << FLAG_SLOTS_WIDTH | get_next_slot(A);
+    output->bitwidth = 16;
+    output->slot = get_next_slot(A);
 
     if (A->dims[0] * A->dims[1] > 256) {
         // Matrix A too large!
@@ -190,7 +202,7 @@ void handle_relu(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) 
     my_memcpy(output, X, sizeof(ParameterInfo));
 
     /* XXX: use LEA? */
-    uint16_t bitwidth = get_param_bitwidth(X);
+    uint16_t bitwidth = X->bitwidth;
     if (bitwidth != 16) {
         // unsupported bitwidth for ReLu
         ERROR_OCCURRED();
@@ -232,8 +244,9 @@ void handle_reshape(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
     ParameterInfo *data = input[0], *shape = input[1];
     output->params_offset = data->params_offset;
     output->params_len = data->params_len;
-    output->bitwidth_and_flags = data->bitwidth_and_flags;
-    if (get_param_bitwidth(shape) != 64) {
+    output->bitwidth = data->bitwidth;
+    output->slot = data->slot;
+    if (shape->bitwidth != 64) {
         // unsupported shape format
         ERROR_OCCURRED();
     }
@@ -244,7 +257,7 @@ void handle_reshape(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
      * XXX: Here is an heuristic - no conv nodes after reshape, so remapping
      * NHWC back to NCHW.
      * */
-    uint8_t do_nhwc2nchw = get_param_slot_id(data) != FLAG_SLOTS;
+    uint8_t do_nhwc2nchw = data->slot != FLAG_SLOTS;
     if (do_nhwc2nchw) {
         // data are intermediate values
         int16_t *output_addr = get_q15_param(output, 0);
@@ -279,7 +292,8 @@ void handle_squeeze(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
     /* XXX: add flags; assume squeeze all one-size axes */
     output->params_offset = data->params_offset;
     output->params_len = data->params_len;
-    output->bitwidth_and_flags = data->bitwidth_and_flags;
+    output->bitwidth = data->bitwidth;
+    output->slot = data->slot;
     for (uint8_t i = 0, j = 0; i < 4; i++) {
         if (input[0]->dims[i] != 1) {
             output->dims[j] = input[0]->dims[i];

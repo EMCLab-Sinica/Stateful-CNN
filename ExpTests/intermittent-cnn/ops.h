@@ -17,3 +17,4 @@ void handle_relu(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
 void handle_reshape(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
 void handle_squeeze(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
 #define CONV_BIAS_MERGED 1
+#define TRANSPOSED 2

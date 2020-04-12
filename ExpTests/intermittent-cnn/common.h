@@ -7,7 +7,6 @@
 
 #define FLAG_SLOTS 0b11
 #define FLAG_TEST_SET 0b10
-#define FLAG_SLOTS_WIDTH 2
 #define NUM_FILTERS 16
 
 /**********************************
@@ -21,25 +20,32 @@ typedef struct {
     uint16_t scheduled;  /* 16 bits for aligned memory */
 } Node;
 
+_Static_assert(sizeof(Node) == 10);
+
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
-typedef struct __attribute__((__packed__)) _ParameterInfo {
+typedef struct _ParameterInfo {
     uint32_t params_offset;
     uint32_t params_len;  /* in bytes */
     /* Known bitwidth values:
      * 16: q15
      * 32: iq31
      * 64: INT64 (from ONNX)
-     *
-     * The least two sigfinicant bits contains a flag to indicate where the
-     * data are. 0b11 indicates data are in parameters; 0b10 indicates data
-     * are from the test set; otherwise it's the slot number for one of
-     * intermediate_values.
      */
-    uint16_t bitwidth_and_flags;
+    uint8_t bitwidth;
+    /* A flag to indicate where the data are. 0b11 indicates data are in
+     * parameters; 0b10 indicates data are from the test set; otherwise
+     * it's the slot number for one of intermediate_values.
+     */
+    uint8_t slot;
+    uint8_t flags;
+    uint8_t dummy;
+    // uint8_t is not enough. For example, fully connected layer in MNIST has dims 256x1
     uint16_t dims[4];
 } ParameterInfo;
 
-typedef struct __attribute__((__packed__)) {
+_Static_assert(sizeof(ParameterInfo) == 20);
+
+typedef struct {
     uint16_t nodes_len;
     uint16_t n_input;
     uint16_t running;
@@ -47,6 +53,8 @@ typedef struct __attribute__((__packed__)) {
     uint16_t state_bit;
     uint16_t sample_idx;
 } Model;
+
+_Static_assert(sizeof(Model) == 12);
 
 /**********************************
  *          Global data           *
@@ -89,16 +97,8 @@ static inline int16_t int16_max(int16_t a, int16_t b) {
 /**********************************
  *       Helpers for nodes        *
  **********************************/
-static inline uint16_t get_param_bitwidth(ParameterInfo *param) {
-    return param->bitwidth_and_flags >> FLAG_SLOTS_WIDTH;
-}
-
-static inline uint16_t get_param_slot_id(ParameterInfo *param) {
-    return param->bitwidth_and_flags & FLAG_SLOTS;
-}
-
 static inline uint16_t get_next_slot(ParameterInfo *param) {
-    uint16_t slot_id = get_param_slot_id(param);
+    uint16_t slot_id = param->slot;
     /* Some cases:
      * 1. slot_id == FLAG_SLOTS -> pick the first slot as the current param is input
      * 2. Otherwise, pick the next slot
@@ -111,7 +111,7 @@ static inline uint16_t get_next_slot(ParameterInfo *param) {
 }
 
 static inline uint8_t* get_param_base_pointer(ParameterInfo *param) {
-    uint16_t slot_id = get_param_slot_id(param);
+    uint16_t slot_id = param->slot;
     switch (slot_id) {
         case FLAG_SLOTS:
         case FLAG_TEST_SET:
@@ -122,7 +122,7 @@ static inline uint8_t* get_param_base_pointer(ParameterInfo *param) {
 }
 
 static inline int16_t* get_q15_param(ParameterInfo *param, size_t i) {
-    if (get_param_bitwidth(param) != 16) {
+    if (param->bitwidth != 16) {
         // incorrect param passed
         ERROR_OCCURRED();
     }

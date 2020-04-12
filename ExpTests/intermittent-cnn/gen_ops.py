@@ -8,9 +8,10 @@ ops = {
     'Squeeze': 1,
 }
 
-other_flags = {
-    'CONV': ['BIAS_MERGED'],
-}
+other_flags = [
+    'CONV_BIAS_MERGED',
+    'TRANSPOSED',
+]
 
 with open('ops.py', 'w') as f_py, open('ops.h', 'w') as f_h, open('ops.c', 'w') as f_c:
     f_h.write('#pragma once\n\n')
@@ -34,7 +35,6 @@ with open('ops.py', 'w') as f_py, open('ops.h', 'w') as f_h, open('ops.c', 'w') 
         f_c.write(f'\thandle_{op},\n'.lower())
     f_c.write('};\n')
 
-    for key, values in other_flags.items():
-        for idx, value in enumerate(values):
-            f_h.write(f'#define {key}_{value} {2**idx}\n')
-            f_py.write(f'{key}_{value} = {2**idx}\n')
+    for idx, name in enumerate(other_flags):
+        f_h.write(f'#define {name} {2**idx}\n')
+        f_py.write(f'{name} = {2**idx}\n')

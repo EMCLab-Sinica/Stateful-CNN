@@ -37,7 +37,7 @@ void dump_params(struct _ParameterInfo *cur_param) {
         H = cur_param->dims[0];
         W = cur_param->dims[1];
     }
-    uint16_t bitwidth = get_param_bitwidth(cur_param);
+    uint16_t bitwidth = cur_param->bitwidth;
     for (uint16_t i = 0; i < NUM; i++) {
         my_printf_debug("Matrix %d" NEWLINE, i);
         for (uint16_t j = 0; j < CHANNEL; j++) {

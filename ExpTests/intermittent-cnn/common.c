@@ -33,7 +33,7 @@ uint8_t node_input_marked(Node *node, size_t i) {
 }
 
 int32_t* get_iq31_param(ParameterInfo *param, size_t i) {
-    if (get_param_bitwidth(param) != 32) {
+    if (param->bitwidth != 32) {
         // incorrect param passed
         ERROR_OCCURRED();
     }

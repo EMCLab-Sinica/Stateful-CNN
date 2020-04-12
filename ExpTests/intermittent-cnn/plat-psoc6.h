@@ -8,6 +8,8 @@
 // much larger than conv needed
 #define LEA_BUFFER_SIZE 16384
 
+#define NVM_BYTE_ADDRESSABLE 0
+
 void vTimerHandler(void);
 
 static inline void my_memcpy(void* dest, const void* src, size_t n) {

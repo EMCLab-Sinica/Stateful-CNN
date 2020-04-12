@@ -49,6 +49,7 @@ static struct {
     uint8_t truncated;
     uint16_t OUTPUT_CHANNEL;
     uint16_t W_by_OUTPUT_CHANNEL;
+    uint16_t H_by_OUTPUT_CHANNEL;
     uint16_t state_bit;
 } global_conv_params;
 
@@ -175,11 +176,22 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
     }
 #endif
 
-    int16_t *output_data = get_q15_param(conv_params.output, (conv_params.output_h + offset_h) * global_conv_params.W_by_OUTPUT_CHANNEL + conv_params.output_w * global_conv_params.OUTPUT_CHANNEL + conv_params.conv_idx);
+#if NVM_BYTE_ADDRESSABLE
+    int16_t *output_data = get_q15_param(conv_params.output,
+            (conv_params.output_h + offset_h) * global_conv_params.W_by_OUTPUT_CHANNEL +
+            conv_params.output_w * global_conv_params.OUTPUT_CHANNEL +
+            conv_params.conv_idx);
+#else
+    int16_t *output_data = get_q15_param(conv_params.output,
+            conv_params.output_w * global_conv_params.H_by_OUTPUT_CHANNEL +
+            (conv_params.output_h + offset_h) * global_conv_params.OUTPUT_CHANNEL +
+            conv_params.conv_idx);
+#endif
     int16_t *result_addr = matrix_mpy_results;
     // XXX: use DMA makes the whole loop slower as calling DMA for a few numbers brings more overhead than benefits
     uint8_t n_filters = MIN_VAL(global_conv_params.filter_limit, global_conv_params.OUTPUT_CHANNEL - conv_params.conv_idx);
     for (uint8_t idx = 0; idx < matrix_mpy_params.srcARows; idx++) {
+        my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - get_q15_param(conv_params.output, 0)));
         for (uint8_t idx2 = 0; idx2 < n_filters; idx2++) {
 #if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
             if (!global_conv_params.state_bit && *result_addr < 0x4000 && *result_addr >= -0x4000) {
@@ -189,7 +201,11 @@ static void convTask(uint8_t offset_h, uint8_t tile_h) {
             output_data[idx2] = *result_addr;
             result_addr++;
         }
+#if NVM_BYTE_ADDRESSABLE
         output_data += kH * global_conv_params.W_by_OUTPUT_CHANNEL;
+#else
+        output_data += kH * global_conv_params.OUTPUT_CHANNEL;
+#endif
     }
 }
 
@@ -317,7 +333,7 @@ void handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) 
 
     setOutputValue(1);
 
-    if (get_param_bitwidth(conv_input) != 16 || get_param_bitwidth(conv_filter) != 16) {
+    if (conv_input->bitwidth != 16 || conv_filter->bitwidth != 16) {
         // incorrect bitwidth
         ERROR_OCCURRED();
     }
@@ -327,11 +343,15 @@ void handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) 
                    input_N = conv_filter->dims[0];
     /* XXX: add flags; assume auto_pad=SAME_UPPER, stride=(1, 1), dilation=(1, 1) for now */
     output->params_len = (uint16_t)(input_N * H * W * 2);
-    output->bitwidth_and_flags = 16 << FLAG_SLOTS_WIDTH | get_next_slot(conv_input);
+    output->bitwidth = 16;
+    output->slot = get_next_slot(conv_input);
     output->dims[0] = 1;
     output->dims[1] = H;
     output->dims[2] = W;
     output->dims[3] = input_N;
+#if !NVM_BYTE_ADDRESSABLE
+    output->flags |= TRANSPOSED;
+#endif
 
     conv_params.conv_input = conv_input;
     conv_params.conv_filter = conv_filter;
@@ -356,6 +376,7 @@ void handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) 
     global_conv_params.dest_offset = kW * CHANNEL;
     global_conv_params.OUTPUT_CHANNEL = conv_filter->dims[0];
     global_conv_params.W_by_OUTPUT_CHANNEL = W * global_conv_params.OUTPUT_CHANNEL;
+    global_conv_params.H_by_OUTPUT_CHANNEL = H * global_conv_params.OUTPUT_CHANNEL;
 #ifdef WITH_PROGRESS_EMBEDDING
     global_conv_params.state_bit = model->state_bit;
     if (global_conv_params.state_bit) {
