@@ -66,6 +66,7 @@ extern Node *nodes;
 extern ParameterInfo *parameter_info;
 extern uint16_t *inputs;
 extern uint16_t *parameters;
+extern uint16_t *samples;
 extern uint8_t *labels;
 // similar to double buffering
 extern uint8_t *intermediate_values;
@@ -116,8 +117,9 @@ static inline uint8_t* get_param_base_pointer(ParameterInfo *param) {
     uint16_t slot_id = param->slot;
     switch (slot_id) {
         case FLAG_SLOTS:
-        case FLAG_TEST_SET:
             return (uint8_t*)parameters;
+        case FLAG_TEST_SET:
+            return (uint8_t*)samples;
         default:
             return intermediate_values + slot_id * INTERMEDIATE_VALUES_SIZE;
     }
