@@ -160,6 +160,7 @@ def nchw2nhwc(arr, dims):
 outputs = {
     'inputs': io.BytesIO(),
     'parameters': io.BytesIO(),
+    'samples': io.BytesIO(),
     'model': io.BytesIO(),
     'labels': io.BytesIO(),
 }
@@ -188,13 +189,10 @@ FLAG_TEST_SET = 0b10
 
 labels, images = load_data(args.input_file, limit=40)
 
-model_samples_offset_ptr = None
 for params in parameters:
     outputs['model'].write(to_bytes(parameters_bin_offset, size=32))  # params_offset
     if params is None:  # input
         # Actual data for test samples are added last
-        assert model_samples_offset_ptr is None
-        model_samples_offset_ptr = outputs['model'].tell() - 4
         _, _, dimX, dimY = images[0].shape
         outputs['model'].write(to_bytes(dimX * dimY * 2, size=32))  # A _q15 is 16-bit
         outputs['model'].write(to_bytes(16, size=8))                # bitwidth
@@ -276,15 +274,11 @@ for idx, n in enumerate(nodes):
     for _ in range(4):  # dims[4]
         outputs['model'].write(to_bytes(0))
 
-# This should be the last write to outputs['model']!
-outputs['model'].seek(model_samples_offset_ptr)
-outputs['model'].write(to_bytes(parameters_bin_offset, size=32))
-
 for idx, im in enumerate(images):
     # load_data returns NCHW
     for i in range(im.shape[2]):
         for j in range(im.shape[3]):
-            outputs['parameters'].write(to_bytes(_Q15(im[0, 0, i, j] / SCALE)))
+            outputs['samples'].write(to_bytes(_Q15(im[0, 0, i, j] / SCALE)))
     # Restore conanical image format (H, W, C)
     im = np.expand_dims(np.squeeze(im * 256), axis=-1)
     im = 255 - im

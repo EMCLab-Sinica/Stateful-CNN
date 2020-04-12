@@ -5,6 +5,7 @@ Node *nodes;
 ParameterInfo *parameter_info;
 uint16_t *inputs;
 uint16_t *parameters;
+uint16_t *samples;
 uint8_t *labels;
 
 static int16_t* node_input_ptr(Node *node, size_t i) {

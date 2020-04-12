@@ -10,7 +10,10 @@ extern uint8_t *inputs_data;
 #define INPUTS_DATA_LEN 36
 
 extern uint8_t *parameters_data;
-#define PARAMETERS_DATA_LEN 75140
+#define PARAMETERS_DATA_LEN 12420
+
+extern uint8_t *samples_data;
+#define SAMPLES_DATA_LEN 62720
 
 extern uint8_t *model_data;
 #define MODEL_DATA_LEN 492

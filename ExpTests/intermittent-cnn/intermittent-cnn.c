@@ -36,7 +36,7 @@ static void handle_cur_group(void) {
             my_printf_debug("input_id[%d] = %d ", j, input_id[j]);
             input[j] = &(parameter_info[input_id[j]]);
             if (input[j]->slot == FLAG_TEST_SET) {
-                input[j]->params_offset = PARAMETERS_DATA_LEN - (LABELS_DATA_LEN - model->sample_idx) * input[j]->params_len;
+                input[j]->params_offset = model->sample_idx * input[j]->params_len;
             }
             // dump_params(input[j]);
         }
@@ -96,6 +96,7 @@ void init_pointers(void) {
     model = (Model*)model_data;
     inputs = (uint16_t*)inputs_data;
     parameters = (uint16_t*)parameters_data;
+    samples = (uint16_t*)samples_data;
     labels = labels_data;
 
     nodes = (Node*)(model + 1);
