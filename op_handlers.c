@@ -50,6 +50,7 @@ void handle_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
                 for (uint16_t sH = 0; sH < stride; sH++) {
                     for (uint16_t sW = 0; sW < stride; sW++) {
                         int16_t val;
+                        // XXX: use a moving pointer instead of data_baseptr makes it slower. Why!?
 #if !NVM_BYTE_ADDRESSABLE
                         if (data->flags & TRANSPOSED) {
                             val = data_baseptr[(w+sW) * H * channel + (h+sH) * channel + c];

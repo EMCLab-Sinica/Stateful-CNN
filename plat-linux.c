@@ -2,7 +2,6 @@
 #include "common.h"
 #include "debug.h"
 #include "platform.h"
-#include <DSPLib.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -72,7 +71,7 @@ int main(int argc, char* argv[]) {
     } else if (argc == 2) {
         run_cnn_tests(atoi(argv[1]));
     } else {
-        run_cnn_tests(LABELS_DATA_LEN);
+        run_cnn_tests(0);
     }
 
 exit:

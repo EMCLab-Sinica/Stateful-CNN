@@ -223,6 +223,9 @@ void print_results(void) {
 void run_cnn_tests(uint16_t n_samples) {
     int8_t label = -1, predicted = -1;
     uint32_t correct = 0, total = 0;
+    if (!n_samples) {
+        n_samples = LABELS_DATA_LEN;
+    }
     for (uint16_t i = 0; i < n_samples; i++) {
         model->sample_idx = i;
         label = labels[i];
