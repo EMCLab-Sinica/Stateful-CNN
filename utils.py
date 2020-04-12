@@ -21,10 +21,13 @@ def load_data(filename, limit=None):
         im = 255 - im
         print(im)
         append_img(im)
+        label = int(re.search(r'example(\d)\.png', filename).group(1))
+        print(f'Label: {label}')
+        labels.append(label)
     else:
         def parse_line(line):
             mobj = re.match(r'\|labels ([\d ]+) \|features ([\d ]+)', line)
-            labels.append(np.array(list(map(int, mobj.group(1).split(' ')))))
+            labels.append(np.argmax(list(map(int, mobj.group(1).split(' ')))))
             im = np.reshape(np.array(list(map(int, mobj.group(2).split(' ')))), (28, 28))
             append_img(im)
 
