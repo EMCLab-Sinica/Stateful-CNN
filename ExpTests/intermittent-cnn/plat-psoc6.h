@@ -10,6 +10,8 @@
 
 #define NVM_BYTE_ADDRESSABLE 0
 
+#define USE_ALL_SAMPLES 1
+
 void vTimerHandler(void);
 
 static inline void my_memcpy(void* dest, const void* src, size_t n) {
