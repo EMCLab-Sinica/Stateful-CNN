@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include "common.h"
+#include "cnn_common.h"
 #include "platform.h"
 #include "debug.h"
 
@@ -19,7 +19,7 @@ uint8_t *counter_idx = &_counter_idx;
 
 void setOutputValue(uint8_t value)
 {
-    my_printf("Output set to %d" NEWLINE, value);
+    my_printf_debug("Output set to %d" NEWLINE, value);
 }
 
 void vTimerHandler(void) {

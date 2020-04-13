@@ -183,7 +183,7 @@ for inputs, op_type, flags in model:
     outputs['model'].write(to_bytes(flags))
     outputs['model'].write(to_bytes(0))  # Node.scheduled
 
-# Keep these in sync with common.h
+# Keep these in sync with cnn_common.h
 FLAG_SLOTS = 0b11
 FLAG_TEST_SET = 0b10
 

@@ -50,7 +50,7 @@ add_executable(intermittent-cnn
     ops.c
     op_handlers.c
     conv.c
-    common.c
+    cnn_common.c
     debug.c
     plat-linux.c
 )
