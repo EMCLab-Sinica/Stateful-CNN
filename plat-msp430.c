@@ -1,7 +1,7 @@
 #include <driverlib.h>
 #include <stdint.h>
 #include "FreeRTOSConfig.h"
-#include "common.h"
+#include "cnn_common.h"
 #include "platform.h"
 
 /* on FRAM */

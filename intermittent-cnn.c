@@ -3,7 +3,7 @@
 
 #include "intermittent-cnn.h"
 #include "op_handlers.h"
-#include "common.h"
+#include "cnn_common.h"
 #include "data.h"
 #include "ops.h"
 #include "debug.h"

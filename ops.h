@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common.h"
+#include "cnn_common.h"
 
 #define Add 0
 #define Conv 1

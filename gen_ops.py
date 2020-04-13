@@ -15,7 +15,7 @@ other_flags = [
 
 with open('ops.py', 'w') as f_py, open('ops.h', 'w') as f_h, open('ops.c', 'w') as f_c:
     f_h.write('#pragma once\n\n')
-    f_h.write('#include "common.h"\n\n')
+    f_h.write('#include "cnn_common.h"\n\n')
     f_c.write('#include "ops.h"\n\n')
     f_py.write('ops = {}\n')
     keys = list(ops.keys())

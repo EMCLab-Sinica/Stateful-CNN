@@ -1,5 +1,5 @@
 #include "intermittent-cnn.h"
-#include "common.h"
+#include "cnn_common.h"
 #include "debug.h"
 #include "platform.h"
 #include <stdint.h>

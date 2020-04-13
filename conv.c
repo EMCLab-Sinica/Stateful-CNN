@@ -5,7 +5,7 @@
 #ifdef USE_ARM_CMSIS
 #include <arm_math.h>
 #endif
-#include "common.h"
+#include "cnn_common.h"
 #include "debug.h"
 #include "op_handlers.h"
 #include "ops.h"
@@ -363,9 +363,14 @@ void handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) 
     filter_buffer_addr = NULL;
     cached_filter_idx = -1;
 
+    // TODO: determine these values automatically
     uint8_t tile_h = 1; // fallback value
     if (H == 14) {
+#ifdef CY_TARGET_DEVICE
+        tile_h = 14;
+#else
         tile_h = 7;
+#endif
     } else if (H == 28) {
         tile_h = 28;
     }

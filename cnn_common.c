@@ -1,4 +1,4 @@
-#include "common.h"
+#include "cnn_common.h"
 
 Model *model;
 Node *nodes;
