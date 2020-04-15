@@ -1,5 +1,5 @@
 #include "intermittent-cnn.h"
-#include "common.h"
+#include "cnn_common.h"
 #include "data.h"
 #include "debug.h"
 
@@ -12,7 +12,7 @@ static uint8_t myFirstTime;
 #define DELAY_START_SECONDS 0
 
 void IntermittentCNNTest() {
-    init_pointers();
+    Model *model = (Model*)model_data;
 
     if (myFirstTime != 1) {
         delay_counter = 0;
@@ -37,7 +37,6 @@ void IntermittentCNNTest() {
     }
 
     while (1) {
-        print_results();
         __delay_cycles(16E6);
     }
 }

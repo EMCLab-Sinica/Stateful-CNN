@@ -5,7 +5,7 @@
 
 #define SCALE 50
 #define NUM_SLOTS 2
-#define INTERMEDIATE_VALUES_SIZE 18000
+#define INTERMEDIATE_VALUES_SIZE 18000u
 
 extern uint8_t *inputs_data;
 #define INPUTS_DATA_LEN 36
