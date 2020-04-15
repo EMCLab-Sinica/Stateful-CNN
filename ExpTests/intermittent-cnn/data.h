@@ -5,7 +5,7 @@
 
 #define SCALE 50
 #define NUM_SLOTS 2
-#define INTERMEDIATE_VALUES_SIZE 65536
+#define INTERMEDIATE_VALUES_SIZE 18000
 
 extern uint8_t *inputs_data;
 #define INPUTS_DATA_LEN 36
@@ -19,10 +19,10 @@ extern uint8_t *model_data;
 #if USE_ALL_SAMPLES
 
 extern uint8_t *samples_data;
-#define SAMPLES_DATA_LEN 62720
+#define SAMPLES_DATA_LEN 31360
 
 extern uint8_t *labels_data;
-#define LABELS_DATA_LEN 40
+#define LABELS_DATA_LEN 20
 
 #else
 

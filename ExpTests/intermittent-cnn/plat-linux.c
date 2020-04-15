@@ -88,3 +88,13 @@ void plat_reset_model(void) {
 void setOutputValue(uint8_t value) {
     my_printf("Output set to %d" NEWLINE, value);
 }
+
+void my_memcpy(void* dest, const void* src, size_t n) {
+    *copied_size += n;
+#if MEMCPY_DELAY_US
+    usleep(MEMCPY_DELAY_US);
+#endif
+    my_printf_debug(__func__);
+    my_printf_debug(" copied %d bytes" NEWLINE, (int)n);
+    memcpy(dest, src, n);
+}

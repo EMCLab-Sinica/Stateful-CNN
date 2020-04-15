@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "platform.h"
 
 #define MY_NDEBUG
 #define DUMP_INTEGERS
@@ -12,11 +13,20 @@
 #  define PRIsize_t "l"
 #  define my_printf print2uart
 #  define NEWLINE "\r\n"
-#elif defined(CY_TARGET_DEVICE)
-#  include <stdio.h>
+#elif defined(CYPRESS)
 #  include <inttypes.h> // for PRId32
 #  define PRIsize_t "zu"
-#  define my_printf printf
+#  ifdef CY_PSOC_CREATOR_USED
+#    include "UARTM4.h"
+#    define my_printf(format, ...) { \
+        char uartString[100]; \
+        sprintf(uartString, format, ##__VA_ARGS__); \
+        Uprintf(uartString); \
+    }
+#  else
+#    include <stdio.h>
+#    define my_printf printf
+#  endif
 #  define NEWLINE "\r\n"
 #else
 #  include <stdio.h>

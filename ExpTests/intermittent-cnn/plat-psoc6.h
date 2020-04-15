@@ -1,7 +1,12 @@
 #pragma once
 
 #include <string.h>
-#include "cy_utils.h" // CY_ASSERT
+// CY_ASSERT
+#ifdef CY_PSOC_CREATOR_USED
+#include "syslib/cy_syslib.h"
+#else
+#include "cy_syslib.h"
+#endif
 
 #define ERROR_OCCURRED() do { CY_ASSERT(0); } while (0);
 
