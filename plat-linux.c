@@ -16,13 +16,17 @@
 #define NVM_SIZE 256*1024
 
 /* data on NVM, made persistent via mmap() with a file */
-uint8_t *intermediate_values;
+uint8_t *nvm;
 uint8_t *inputs_data, *parameters_data, *samples_data, *model_data, *labels_data;
 uint16_t *counters;
 uint16_t *power_counters;
 uint8_t *counter_idx;
 
 uint32_t *copied_size;
+
+uint8_t *intermediate_values() {
+    return nvm;
+}
 
 void sig_handler(int sig_no) {
     if (sig_no == SIGALRM) {
@@ -32,7 +36,6 @@ void sig_handler(int sig_no) {
 
 int main(int argc, char* argv[]) {
     int nvm_fd, ret = 0;
-    uint8_t *nvm;
 
     nvm_fd = open("nvm.bin", O_RDWR);
     nvm = mmap(NULL, NVM_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, nvm_fd, 0);
@@ -40,7 +43,6 @@ int main(int argc, char* argv[]) {
         perror("mmap() failed");
         goto exit;
     }
-    intermediate_values = nvm;
     // Keep the order consistent with `outputs` in transform.py
     inputs_data = nvm + NUM_SLOTS * INTERMEDIATE_VALUES_SIZE;
     parameters_data = inputs_data + INPUTS_DATA_LEN;
@@ -64,7 +66,6 @@ int main(int argc, char* argv[]) {
     my_printf("Use TI DSPLib" NEWLINE);
 #endif
 
-    init_pointers();
     if (argc >= 3) {
         printf("Usage: %s [n_samples]\n", argv[0]);
         ret = 1;

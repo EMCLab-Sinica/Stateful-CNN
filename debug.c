@@ -82,7 +82,7 @@ void dump_matrix2(int16_t *mat, size_t rows, size_t cols) {
     my_printf_debug(NEWLINE);
 }
 
-void dump_model(void) {
+void dump_model(Model *model, Node *nodes) {
     uint16_t i, j;
     for (i = 0; i < model->nodes_len; i++) {
         Node *cur_node = &(nodes[i]);

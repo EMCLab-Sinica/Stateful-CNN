@@ -8,7 +8,9 @@
 
 #pragma DATA_SECTION(_intermediate_values, ".nvm")
 static uint8_t _intermediate_values[NUM_SLOTS * INTERMEDIATE_VALUES_SIZE];
-uint8_t *intermediate_values = _intermediate_values;
+uint8_t *intermediate_values(void) {
+    return _intermediate_values;
+}
 
 #pragma DATA_SECTION(_counters, ".nvm")
 static uint16_t _counters[COUNTERS_LEN];

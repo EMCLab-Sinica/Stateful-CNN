@@ -8,7 +8,7 @@
 #include "ops.h"
 #include "debug.h"
 
-static void handle_cur_group(uint16_t *cur_group, uint8_t grp_index) {
+static void handle_cur_group(Model *model, Node *nodes, ParameterInfo* parameter_info, uint16_t *cur_group, uint8_t grp_index) {
     uint16_t intermediate_values_offset = 0;
 
     my_printf_debug("Current group: ");
@@ -88,22 +88,14 @@ static void handle_cur_group(uint16_t *cur_group, uint8_t grp_index) {
     my_printf_debug(" - %d element(s)." NEWLINE, grp_index);
 }
 
-void init_pointers(void) {
-    model = (Model*)model_data;
-    inputs = (uint16_t*)inputs_data;
-    parameters = (uint16_t*)parameters_data;
-    samples = (uint16_t*)samples_data;
-    labels = labels_data;
-
-    nodes = (Node*)(model + 1);
-    parameter_info = (ParameterInfo*)(nodes + model->nodes_len);
-
-    my_printf_debug("model->n_input = %d" NEWLINE, model->n_input);
-}
-
-int run_model(int8_t *ansptr) {
+int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
     uint16_t cur_group[16] = { 0 };
     uint8_t grp_index = 0;
+
+    Node *nodes = (Node*)(model + 1);
+    ParameterInfo *parameter_info = (ParameterInfo*)(nodes + model->nodes_len);
+
+    my_printf_debug("model->n_input = %d" NEWLINE, model->n_input);
 
     if (!model->running) {
         // reset model
@@ -118,7 +110,7 @@ int run_model(int8_t *ansptr) {
 
     power_counters[*counter_idx]++;
 
-    dump_model();
+    dump_model(model, nodes);
 
     uint16_t next_node_idx = 0;
     while (next_node_idx < model->nodes_len) {
@@ -156,7 +148,7 @@ int run_model(int8_t *ansptr) {
             next_node_idx = 0;
         }
 
-        handle_cur_group(cur_group, grp_index);
+        handle_cur_group(model, nodes, parameter_info, cur_group, grp_index);
 
         if (cur_group[grp_index - 1] == model->nodes_len - 1) {
             break;
@@ -179,11 +171,14 @@ int run_model(int8_t *ansptr) {
         grp_index = 0;
         memset(cur_group, 0, sizeof(cur_group));
 
-        dump_model();
+        dump_model(model, nodes);
     }
 
     /* XXX: is the last node always the output node? */
     ParameterInfo *output_node = &(parameter_info[model->nodes_len + model->n_input - 1]);
+    if (output_node_ptr) {
+        *output_node_ptr = output_node;
+    }
     int16_t max = INT16_MIN;
     for (uint16_t i = 0; i < output_node->dims[1]; i++) {
         int16_t val = *get_q15_param(output_node, i);
@@ -196,8 +191,7 @@ int run_model(int8_t *ansptr) {
     return 0;
 }
 
-void print_results(void) {
-    ParameterInfo *output_node = &(parameter_info[model->nodes_len + model->n_input - 1]);
+void print_results(Model *model, ParameterInfo *output_node) {
     for (uint16_t i = 0; i < output_node->dims[1]; i++) {
         print_q15(*get_q15_param(output_node, i));
     }
@@ -221,10 +215,13 @@ void run_cnn_tests(uint16_t n_samples) {
     if (!n_samples) {
         n_samples = LABELS_DATA_LEN;
     }
+    ParameterInfo *output_node;
+    Model *model = (Model*)model_data;
+    uint8_t *labels = labels_data;
     for (uint16_t i = 0; i < n_samples; i++) {
         model->sample_idx = i;
         label = labels[i];
-        run_model(&predicted);
+        run_model(model, &predicted, &output_node);
         total++;
         if (label == predicted) {
             correct++;
@@ -232,11 +229,13 @@ void run_cnn_tests(uint16_t n_samples) {
         my_printf_debug("label=%d predicted=%d correct=%d" NEWLINE, label, predicted, label == predicted);
     }
     if (n_samples == 1) {
-        print_results();
+        print_results(model, output_node);
     }
-    my_printf("correct=%d total=%d rate=%f" NEWLINE, correct, total, 1.0*correct/total);
+    my_printf("correct=%d ", correct);
+    my_printf("total=%d ", total);
+    my_printf("rate=%f" NEWLINE, 1.0*correct/total);
 }
 
-void set_sample_index(uint8_t index) {
+void set_sample_index(Model *model, uint8_t index) {
     model->sample_idx = index;
 }

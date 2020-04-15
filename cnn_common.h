@@ -47,7 +47,7 @@ typedef struct _ParameterInfo {
 
 _Static_assert(sizeof(ParameterInfo) == 20, "Unexpected size for ParameterInfo");
 
-typedef struct {
+typedef struct Model {
     uint16_t nodes_len;
     uint16_t n_input;
     uint16_t running;
@@ -61,15 +61,8 @@ _Static_assert(sizeof(Model) == 12, "Unexpected size for Model");
 /**********************************
  *          Global data           *
  **********************************/
-extern Model *model;
-extern Node *nodes;
-extern ParameterInfo *parameter_info;
-extern uint16_t *inputs;
-extern uint16_t *parameters;
-extern uint16_t *samples;
-extern uint8_t *labels;
 // similar to double buffering
-extern uint8_t *intermediate_values;
+uint8_t *intermediate_values(void);
 extern uint16_t *counters;
 extern uint16_t *power_counters;
 extern uint8_t *counter_idx;
@@ -117,11 +110,11 @@ static inline uint8_t* get_param_base_pointer(ParameterInfo *param) {
     uint16_t slot_id = param->slot;
     switch (slot_id) {
         case FLAG_SLOTS:
-            return (uint8_t*)parameters;
+            return parameters_data;
         case FLAG_TEST_SET:
-            return (uint8_t*)samples;
+            return samples_data;
         default:
-            return intermediate_values + slot_id * INTERMEDIATE_VALUES_SIZE;
+            return intermediate_values() + slot_id * INTERMEDIATE_VALUES_SIZE;
     }
 }
 

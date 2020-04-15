@@ -125,7 +125,7 @@ static void convTask(uint8_t offset_h, uint8_t tile_h, ConvTaskParams *conv_para
 
 #ifndef USE_ARM_CMSIS
     msp_status status = msp_matrix_mpy_q15(
-        &matrix_mpy_params,
+        p_matrix_mpy_params,
         input_buffer_addr,
         filter_buffer_addr,
         matrix_mpy_results
