@@ -8,11 +8,7 @@
 #include "ops.h"
 #include "debug.h"
 
-static uint16_t cur_group[16] = { 0 };
-static uint8_t grp_index = 0;
-static uint16_t group_last_item;
-
-static void handle_cur_group(void) {
+static void handle_cur_group(uint16_t *cur_group, uint8_t grp_index) {
     uint16_t intermediate_values_offset = 0;
 
     my_printf_debug("Current group: ");
@@ -106,7 +102,8 @@ void init_pointers(void) {
 }
 
 int run_model(int8_t *ansptr) {
-    grp_index = 0;
+    uint16_t cur_group[16] = { 0 };
+    uint8_t grp_index = 0;
 
     if (!model->running) {
         // reset model
@@ -159,11 +156,9 @@ int run_model(int8_t *ansptr) {
             next_node_idx = 0;
         }
 
-        handle_cur_group();
+        handle_cur_group(cur_group, grp_index);
 
-        group_last_item = cur_group[grp_index - 1];
-
-        if (group_last_item == model->nodes_len - 1) {
+        if (cur_group[grp_index - 1] == model->nodes_len - 1) {
             break;
         }
 
@@ -240,4 +235,8 @@ void run_cnn_tests(uint16_t n_samples) {
         print_results();
     }
     my_printf("correct=%d total=%d rate=%f" NEWLINE, correct, total, 1.0*correct/total);
+}
+
+void set_sample_index(uint8_t index) {
+    model->sample_idx = index;
 }

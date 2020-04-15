@@ -21,7 +21,8 @@ Indexing policy:
 # XXX: Heuristics for scaling: only scale biases and the input
 SCALE = 50
 NUM_SLOTS = 2
-INTERMEDIATE_VALUES_SIZE = 65536
+INTERMEDIATE_VALUES_SIZE = 18000
+N_SAMPLES = 20
 
 
 def _Q15(num):
@@ -187,7 +188,7 @@ for inputs, op_type, flags in model:
 FLAG_SLOTS = 0b11
 FLAG_TEST_SET = 0b10
 
-labels, images = load_data(args.input_file, limit=40)
+labels, images = load_data(args.input_file, limit=N_SAMPLES)
 
 for params in parameters:
     outputs['model'].write(to_bytes(parameters_bin_offset, size=32))  # params_offset
