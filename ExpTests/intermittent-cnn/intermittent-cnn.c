@@ -54,8 +54,8 @@ static void handle_cur_group(Model *model, Node *nodes, ParameterInfo* parameter
 
         handlers[cur_node->op_type](input, output, cur_node->flags);
 
-        (*counter_idx)++;
-        if (*counter_idx >= COUNTERS_LEN) {
+        counters()->counter_idx++;
+        if (counters()->counter_idx >= COUNTERS_LEN) {
             ERROR_OCCURRED();
         }
 
@@ -104,11 +104,11 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
             node_input_unmark_all(cur_node);
             cur_node->scheduled = 0;
         }
-        *counter_idx = 0;
+        counters()->counter_idx = 0;
         model->running = 1;
     }
 
-    power_counters[*counter_idx]++;
+    counters()->power_counters[counters()->counter_idx]++;
 
     dump_model(model, nodes);
 
@@ -198,12 +198,12 @@ void print_results(Model *model, ParameterInfo *output_node) {
     my_printf(NEWLINE);
 
     my_printf("ticks: ");
-    for (uint8_t i = 0; i < *counter_idx; i++) {
-        my_printf("%d ", counters[i]);
+    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
+        my_printf("%d ", counters()->time_counters[i]);
     }
     my_printf(NEWLINE "power counters: ");
-    for (uint8_t i = 0; i < *counter_idx; i++) {
-        my_printf("%d ", power_counters[i]);
+    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
+        my_printf("%d ", counters()->power_counters[i]);
     }
     my_printf(NEWLINE "run_counter: %d", model->run_counter);
     my_printf(NEWLINE);
@@ -231,8 +231,8 @@ void run_cnn_tests(uint16_t n_samples) {
     if (n_samples == 1) {
         print_results(model, output_node);
     }
-    my_printf("correct=%d ", correct);
-    my_printf("total=%d ", total);
+    my_printf("correct=%" PRId32 " ", correct);
+    my_printf("total=%" PRId32 " ", total);
     my_printf("rate=%f" NEWLINE, 1.0*correct/total);
 }
 

@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
@@ -18,19 +19,19 @@
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
 uint8_t *inputs_data, *parameters_data, *samples_data, *model_data, *labels_data;
-uint16_t *counters;
-uint16_t *power_counters;
-uint8_t *counter_idx;
-
 uint32_t *copied_size;
 
 uint8_t *intermediate_values() {
     return nvm;
 }
 
+Counters *counters() {
+    return (Counters*)(labels_data + LABELS_DATA_LEN);
+}
+
 void sig_handler(int sig_no) {
     if (sig_no == SIGALRM) {
-        counters[*counter_idx]++;
+        counters()->time_counters[counters()->counter_idx]++;
     }
 }
 
@@ -49,10 +50,7 @@ int main(int argc, char* argv[]) {
     samples_data = parameters_data + PARAMETERS_DATA_LEN;
     model_data = samples_data + SAMPLES_DATA_LEN;
     labels_data = model_data + MODEL_DATA_LEN;
-    copied_size = (uint32_t*)(labels_data + LABELS_DATA_LEN);
-    counters = (uint16_t*)(copied_size + 1);
-    power_counters = counters + COUNTERS_LEN;
-    counter_idx = (uint8_t*)(power_counters + COUNTERS_LEN);
+    copied_size = (uint32_t*)(labels_data + COUNTERS_DATA_LEN);
 
     struct itimerval interval;
     interval.it_value.tv_sec = interval.it_interval.tv_sec = 0;

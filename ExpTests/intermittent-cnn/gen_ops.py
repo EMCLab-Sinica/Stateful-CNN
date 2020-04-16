@@ -15,7 +15,8 @@ other_flags = [
 
 with open('ops.py', 'w') as f_py, open('ops.h', 'w') as f_h, open('ops.c', 'w') as f_c:
     f_h.write('#pragma once\n\n')
-    f_h.write('#include "cnn_common.h"\n\n')
+    f_h.write('struct ParameterInfo;\n\n');
+    f_c.write('#include "cnn_common.h"\n\n')
     f_c.write('#include "ops.h"\n\n')
     f_py.write('ops = {}\n')
     keys = list(ops.keys())
@@ -29,7 +30,7 @@ with open('ops.py', 'w') as f_py, open('ops.h', 'w') as f_h, open('ops.c', 'w') 
     f_c.write('};\n\n')
 
     for op in keys:
-        f_h.write('void handle_{}(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
+        f_h.write('void handle_{}(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
     f_c.write('handler handlers[] = {\n')
     for op in keys:
         f_c.write(f'\thandle_{op},\n'.lower())

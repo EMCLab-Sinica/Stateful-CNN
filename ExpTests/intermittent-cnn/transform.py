@@ -23,6 +23,7 @@ SCALE = 50
 NUM_SLOTS = 2
 INTERMEDIATE_VALUES_SIZE = 18000
 N_SAMPLES = 20
+COUNTERS_LEN = 64
 
 
 def _Q15(num):
@@ -164,6 +165,7 @@ outputs = {
     'samples': io.BytesIO(),
     'model': io.BytesIO(),
     'labels': io.BytesIO(),
+    'counters': io.BytesIO(),
 }
 
 outputs['model'].write(to_bytes(len(model)))
@@ -291,6 +293,8 @@ for label in labels:
 with open('images/ans.txt', 'w') as f:
     f.write(' '.join(map(str, labels)))
 
+outputs['counters'].write(b'\0' * (4 * COUNTERS_LEN + 2))
+
 with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
     output_c.write('''
 #include "data.h"
@@ -303,6 +307,7 @@ with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
 #define SCALE {SCALE}
 #define NUM_SLOTS {NUM_SLOTS}
 #define INTERMEDIATE_VALUES_SIZE {INTERMEDIATE_VALUES_SIZE}u
+#define COUNTERS_LEN {COUNTERS_LEN}
 ''')
     def hex_str(arr):
         return '  ' + ', '.join([f'0x{num:02x}' for num in arr]) + ',\n'

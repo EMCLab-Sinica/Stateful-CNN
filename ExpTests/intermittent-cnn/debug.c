@@ -23,7 +23,7 @@ void print_iq31(int32_t val) {
 
 #ifndef MY_NDEBUG
 // dump in NCHW format
-void dump_params(struct _ParameterInfo *cur_param) {
+void dump_params(struct ParameterInfo *cur_param) {
     uint16_t NUM, H, W, CHANNEL;
     if (cur_param->dims[2] && cur_param->dims[3]) {
         // tensor
@@ -51,7 +51,7 @@ void dump_params(struct _ParameterInfo *cur_param) {
                     } else if (bitwidth == 32) {
                         print_iq31_debug(*get_iq31_param(cur_param, offset));
                     } else if (bitwidth == 64) {
-                        my_printf_debug("%ld ", get_int64_param(cur_param, offset));
+                        my_printf_debug("%" PRId64 " ", get_int64_param(cur_param, offset));
                     }
                 }
                 my_printf_debug(NEWLINE);

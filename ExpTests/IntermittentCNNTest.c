@@ -18,8 +18,8 @@ void IntermittentCNNTest() {
         delay_counter = 0;
 
         for (uint8_t i = 0; i < COUNTERS_LEN; i++) {
-            counters[i] = 0;
-            power_counters[i] = 0;
+            counters->time_counters[i] = 0;
+            counters->power_counters[i] = 0;
         }
 
         myFirstTime = 1;

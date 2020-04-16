@@ -280,8 +280,8 @@ static inline void handle_conv_inner_loop(uint16_t n_conv, uint16_t output_h, ui
 
     dest += (h_start + field_size) * conv_params->dest_offset + (w_start + field_size) * CHANNEL;
 
-    my_printf_debug("h_start=%d ", h_start);
-    my_printf_debug("h_end=%d" NEWLINE, h_end);
+    my_printf_debug("h_start=%" PRId32 " ", h_start);
+    my_printf_debug("h_end=%" PRId32 NEWLINE, h_end);
 
     size_t size = (w_end-w_start+1) * CHANNEL;
     src = input_addr + (h_start * W + w_start) * CHANNEL;

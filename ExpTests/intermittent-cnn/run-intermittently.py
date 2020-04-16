@@ -3,7 +3,7 @@ import signal
 
 def main():
     while True:
-        with Popen(['./out/intermittent-cnn']) as proc:
+        with Popen(['./out/intermittent-cnn', '1']) as proc:
             try:
                 proc.wait(timeout=0.001)
             except TimeoutExpired:

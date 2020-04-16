@@ -1,10 +1,7 @@
 #pragma once
 
-#include <stdio.h>
 #include <inttypes.h>
 #include <signal.h>
-#include <string.h>
-#include "debug.h"
 
 #define ERROR_OCCURRED() do { raise(SIGINT); } while (0);
 
