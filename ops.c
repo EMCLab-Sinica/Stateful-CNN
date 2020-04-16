@@ -1,3 +1,5 @@
+#include "cnn_common.h"
+
 #include "ops.h"
 
 uint8_t expected_inputs_len[] = {2, 3, 2, 1, 1, 2, 1, };

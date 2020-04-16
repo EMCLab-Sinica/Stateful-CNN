@@ -13,16 +13,8 @@ uint8_t *intermediate_values(void) {
 }
 
 #pragma DATA_SECTION(_counters, ".nvm")
-static uint16_t _counters[COUNTERS_LEN];
-uint16_t *counters = _counters;
-
-#pragma DATA_SECTION(_power_counters, ".nvm")
-static uint16_t _power_counters[COUNTERS_LEN];
-uint16_t *power_counters = _power_counters;
-
-#pragma DATA_SECTION(_counter_idx, ".nvm")
-static uint8_t _counter_idx;
-uint8_t *counter_idx = &_counter_idx;
+static Counters _counters;
+Counters *counters = &_counters;
 
 #pragma vector=DMA_VECTOR
 __interrupt void DMA_ISR(void)
@@ -47,7 +39,7 @@ __interrupt void vTimerHandler( void )
 {
     // one tick is configured as roughly 1 millisecond
     // See vApplicationSetupTimerInterrupt() in main.h and FreeRTOSConfig.h
-    counters[*counter_idx]++;
+    counters->time_counters[counters->counter_idx]++;
 }
 
 void setOutputValue(uint8_t value)

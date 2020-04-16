@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h> // sprintf()
 #include "platform.h"
 
 #define MY_NDEBUG
@@ -41,8 +42,10 @@ void print_iq31(int32_t val);
 
 #ifndef MY_NDEBUG
 
-struct _ParameterInfo;
-void dump_params(struct _ParameterInfo *cur_param);
+struct ParameterInfo;
+typedef struct Model Model;
+typedef struct Node Node;
+void dump_params(struct ParameterInfo *cur_param);
 void dump_matrix(int16_t *mat, size_t len);
 void dump_matrix2(int16_t *mat, size_t rows, size_t cols);
 void dump_model(Model *model, Node *nodes);

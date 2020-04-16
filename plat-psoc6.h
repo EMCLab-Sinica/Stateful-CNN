@@ -1,11 +1,11 @@
 #pragma once
 
-#include <string.h>
+#include <stddef.h> // size_t
 // CY_ASSERT
 #ifdef CY_PSOC_CREATOR_USED
-#include "syslib/cy_syslib.h"
+#include <syslib/cy_syslib.h>
 #else
-#include "cy_syslib.h"
+#include <cy_syslib.h>
 #endif
 
 #define ERROR_OCCURRED() do { CY_ASSERT(0); } while (0);
@@ -19,6 +19,4 @@
 
 void vTimerHandler(void);
 
-static inline void my_memcpy(void* dest, const void* src, size_t n) {
-    memcpy(dest, src, n);
-}
+void my_memcpy(void* dest, const void* src, size_t n);

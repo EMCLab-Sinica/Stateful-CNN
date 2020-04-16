@@ -3,7 +3,6 @@
 #include <stddef.h> /* size_t, see https://stackoverflow.com/a/26413264 */
 #include <stdint.h>
 #include "data.h"
-#include "platform.h"
 
 #define FLAG_SLOTS 0b11
 #define FLAG_TEST_SET 0b10
@@ -12,7 +11,7 @@
 /**********************************
  *        Data structures         *
  **********************************/
-typedef struct {
+typedef struct Node {
     uint16_t inputs_len;
     uint16_t inputs_offset;
     uint16_t op_type;
@@ -25,7 +24,7 @@ typedef struct {
 _Static_assert(sizeof(Node) == 10, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
-typedef struct _ParameterInfo {
+typedef struct ParameterInfo {
     uint32_t params_offset;
     uint32_t params_len;  /* in bytes */
     /* Known bitwidth values:
@@ -58,15 +57,20 @@ typedef struct Model {
 
 _Static_assert(sizeof(Model) == 12, "Unexpected size for Model");
 
+typedef struct {
+    uint16_t time_counters[COUNTERS_LEN];
+    uint16_t power_counters[COUNTERS_LEN];
+    uint16_t counter_idx;
+} Counters;
+
+_Static_assert(sizeof(Counters) == 4 * COUNTERS_LEN + 2, "Unexpected size of Counters");
+
 /**********************************
  *          Global data           *
  **********************************/
 // similar to double buffering
 uint8_t *intermediate_values(void);
-extern uint16_t *counters;
-extern uint16_t *power_counters;
-extern uint8_t *counter_idx;
-#define COUNTERS_LEN 64
+Counters *counters(void);
 
 
 /**********************************
