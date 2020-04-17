@@ -3,6 +3,12 @@
 #include "cnn_common.h"
 #include "platform.h"
 #include "debug.h"
+#ifdef CY_PSOC_CREATOR_USED
+#  include "config.h"
+#  ifdef CKPT
+#    include "syscheckpoint.h"
+#  endif
+#endif
 
 /* TODO: put them on Flash */
 
@@ -26,4 +32,10 @@ void vTimerHandler(void) {
 
 void my_memcpy(void* dest, const void* src, size_t n) {
     memcpy(dest, src, n);
+}
+
+void registerCheckpointing(uint8_t *addr, size_t len) {
+#ifdef CKPT
+    syscheckpoint_register(addr, len);
+#endif
 }
