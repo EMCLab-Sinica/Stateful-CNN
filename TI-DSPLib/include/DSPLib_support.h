@@ -328,6 +328,8 @@ static inline void msp_checkStatus(msp_status status)
 #endif //MSP_DISABLE_DIAGNOSTICS
 }
 
+#if defined(MSP_USE_LEA)
+
 // Benchmark register support
 #define HWREG16(x)          (*((volatile uint16_t *)((uint16_t)x)))
 #define BENCHMARK_TAxR      (0x0010)
@@ -394,6 +396,8 @@ static inline uint32_t msp_benchmarkStop(uint16_t baseAddress)
     HWREG16(baseAddress) = 0;
     return (scale*((uint32_t)cycles << shift));
 }
+
+#endif
 
 #if defined(__MSP430_HAS_MPY32__)
 

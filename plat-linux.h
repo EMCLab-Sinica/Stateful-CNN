@@ -7,7 +7,7 @@
 
 #define MEMCPY_DELAY_US 0
 
-#define LEA_BUFFER_SIZE 16384
+#define LEA_BUFFER_SIZE 4096
 
 #define NVM_BYTE_ADDRESSABLE 1
 // USE_ALL_SAMPLES must be 1 as nvm.bin contains all samples

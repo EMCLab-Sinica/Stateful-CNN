@@ -15,3 +15,4 @@
 #endif
 
 void setOutputValue(uint8_t value);
+void registerCheckpointing(uint8_t *addr, size_t len);

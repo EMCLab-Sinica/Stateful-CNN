@@ -18,7 +18,11 @@
 #  include <inttypes.h> // for PRId32
 #  define PRIsize_t "zu"
 #  ifdef CY_PSOC_CREATOR_USED
-#    include "UARTM4.h"
+#    if (CY_CPU_CORTEX_M0P)  /* core is Cortex-M0+ */
+#      include "UARTM0.h"
+#    else /* core is Cortex-M4 */
+#      include "UARTM4.h"
+#    endif
 #    define my_printf(format, ...) { \
         char uartString[100]; \
         sprintf(uartString, format, ##__VA_ARGS__); \
