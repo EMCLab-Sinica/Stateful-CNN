@@ -10,8 +10,9 @@
 #include "op_handlers.h"
 #include "ops.h"
 
-#ifdef __MSP430__
+#ifdef WITH_FREERTOS
 #include <FreeRTOS.h>
+#include <task.h>
 #endif
 
 #define configCONV_STACK_SIZE 100
@@ -36,7 +37,7 @@ typedef struct ConvTaskParams {
     uint16_t H;
     uint16_t W;
     uint16_t kH;
-    uint16_t CHANNEL;
+    uint16_t CHANNEL; // Cannot use C as a variable name here as C is a macro on MSP430 :(
     uint16_t OUTPUT_CHANNEL;
     uint16_t W_by_OUTPUT_CHANNEL;
     uint16_t H_by_OUTPUT_CHANNEL;
@@ -63,7 +64,6 @@ int16_t * const matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
 static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
     /* put var declarations first to make the compiler happy */
     int16_t *filter_addr;
-    /* Cannot use C as a variable name here as C is a macro on MSP430 :( */
     msp_matrix_mpy_q15_params *p_matrix_mpy_params = &(conv_params->matrix_mpy_params);
 
     /* copy filter data */
@@ -224,7 +224,9 @@ static inline void schedule_tile(uint16_t idx, ConvTaskParams *conv_params) {
     }
 }
 
-static inline void handle_conv_inner_loop(ConvTaskParams *conv_params) {
+static inline void handle_conv_inner_loop(void *pvParameters) {
+    ConvTaskParams *conv_params = (ConvTaskParams*)pvParameters;
+
     int8_t field_size = (conv_params->kH - 1) / 2;
 
     /* copy input data, row by row */
@@ -319,6 +321,8 @@ static inline void handle_conv_inner_loop(ConvTaskParams *conv_params) {
         my_printf_debug("Mark filter %d as processed" NEWLINE, filter_idx);
     }
     conv_params->pending_filter_idx = 0;
+
+    TASK_FINISHED();
 }
 
 void handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -415,7 +419,20 @@ void handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) 
         for (uint16_t output_h = 0; output_h < H; output_h += conv_params->tile_h) {
             conv_params->output_h = output_h;
             conv_params->output_w = output_w;
+#ifdef WITH_FREERTOS
+            UBaseType_t uxPriority = uxTaskPriorityGet(NULL) + 1;
+            my_printf_debug("Create conv task with priority %" PRIu32 NEWLINE, uxPriority);
+            TaskHandle_t xHandle;
+            if (xTaskCreate(handle_conv_inner_loop, "conv", 300, conv_params, uxPriority, &xHandle) != pdPASS) {
+                my_printf("Failed to create conv task!" NEWLINE);
+                ERROR_OCCURRED();
+            }
+            taskYIELD();
+            // After this line the task should have called TASK_FINISHED()
+            vTaskDelete(xHandle);
+#else
             handle_conv_inner_loop(conv_params);
+#endif
         }
     }
 

@@ -1,12 +1,12 @@
 #pragma once
 
 #include <stddef.h> // size_t
-#ifdef CY_PSOC_CREATOR_USED
+#ifdef WITH_FREERTOS
 #include <FreeRTOS.h>
 #include <task.h>
 #endif
 
-#ifdef CY_PSOC_CREATOR_USED
+#ifdef WITH_FREERTOS
 #define ERROR_OCCURRED() do { vTaskSuspendAll(); while (1) {} } while (0);
 #else
 #define ERROR_OCCURRED() do { while (1) {} } while (0);
@@ -22,3 +22,15 @@
 void vTimerHandler(void);
 
 void my_memcpy(void* dest, const void* src, size_t n);
+
+#ifdef WITH_FREERTOS
+// Not using vTaskDelete() as it does not release heap space
+// for TCB and stack, leading to exhaustion of the heap
+#define TASK_FINISHED()                                     \
+    do {                                                    \
+        vTaskPrioritySet(NULL, tskIDLE_PRIORITY);           \
+        taskYIELD();                                        \
+        my_printf("%s still running!" NEWLINE, __func__);   \
+        ERROR_OCCURRED();                                   \
+    } while (0);
+#endif
