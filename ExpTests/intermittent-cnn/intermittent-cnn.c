@@ -103,9 +103,7 @@ static void handle_cur_group(void *pvParameters) {
     }
     my_printf_debug(" - %d element(s)." NEWLINE, params->grp_index);
 
-#ifdef WITH_FREERTOS
-    vTaskDelete(NULL);
-#endif
+    TASK_FINISHED();
 }
 
 int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
@@ -175,7 +173,13 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
         params.cur_group = cur_group;
         params.grp_index = grp_index;
 #ifdef WITH_FREERTOS
-        xTaskCreate(handle_cur_group, "handle_cur_group", configMINIMAL_STACK_SIZE, &params, uxTaskPriorityGet(NULL) + 1, NULL);
+        TaskHandle_t xHandle;
+        if (xTaskCreate(handle_cur_group, "handle_cur_group", 200, &params, uxTaskPriorityGet(NULL) + 1, &xHandle) != pdPASS) {
+            ERROR_OCCURRED();
+        }
+        taskYIELD();
+        // After this line the task should have called TASK_FINISHED()
+        vTaskDelete(xHandle);
 #else
         handle_cur_group(&params);
 #endif
