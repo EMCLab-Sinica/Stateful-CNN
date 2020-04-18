@@ -1,5 +1,9 @@
 #include <stdint.h>
 #include <string.h>
+#ifdef WITH_FREERTOS
+#include <FreeRTOS.h>
+#include <task.h>
+#endif
 
 #include "intermittent-cnn.h"
 #include "op_handlers.h"
@@ -8,17 +12,29 @@
 #include "ops.h"
 #include "debug.h"
 
-static void handle_cur_group(Model *model, Node *nodes, ParameterInfo* parameter_info, uint16_t *cur_group, uint8_t grp_index) {
+typedef struct {
+    Model *model;
+    Node *nodes;
+    ParameterInfo* parameter_info;
+    uint16_t *cur_group;
+    uint8_t grp_index;
+} handle_cur_group_params;
+
+static void handle_cur_group(void *pvParameters) {
+    handle_cur_group_params *params = (handle_cur_group_params*)pvParameters;
+    Model *model = params->model;
+    ParameterInfo *parameter_info = params->parameter_info;
+
     uint16_t intermediate_values_offset = 0;
 
     my_printf_debug("Current group: ");
 
-    for (uint8_t i = 0; i < grp_index; i++) {
-        uint16_t cur_node_id = cur_group[i];
+    for (uint8_t i = 0; i < params->grp_index; i++) {
+        uint16_t cur_node_id = params->cur_group[i];
         my_printf_debug("%d ", cur_node_id);
 
         /* schedule it */
-        Node *cur_node = &(nodes[cur_node_id]);
+        Node *cur_node = &(params->nodes[cur_node_id]);
         my_printf_debug("op_type = %d" NEWLINE, cur_node->op_type);
 
         int16_t input_id[3];
@@ -85,7 +101,11 @@ static void handle_cur_group(Model *model, Node *nodes, ParameterInfo* parameter
         }
         cur_node->scheduled = 1;
     }
-    my_printf_debug(" - %d element(s)." NEWLINE, grp_index);
+    my_printf_debug(" - %d element(s)." NEWLINE, params->grp_index);
+
+#ifdef WITH_FREERTOS
+    vTaskDelete(NULL);
+#endif
 }
 
 int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
@@ -148,7 +168,17 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
             next_node_idx = 0;
         }
 
-        handle_cur_group(model, nodes, parameter_info, cur_group, grp_index);
+        handle_cur_group_params params;
+        params.model = model;
+        params.nodes = nodes;
+        params.parameter_info = parameter_info;
+        params.cur_group = cur_group;
+        params.grp_index = grp_index;
+#ifdef WITH_FREERTOS
+        xTaskCreate(handle_cur_group, "handle_cur_group", configMINIMAL_STACK_SIZE, &params, uxTaskPriorityGet(NULL) + 1, NULL);
+#else
+        handle_cur_group(&params);
+#endif
 
         if (cur_group[grp_index - 1] == model->nodes_len - 1) {
             break;
