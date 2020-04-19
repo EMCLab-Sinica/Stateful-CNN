@@ -1,6 +1,11 @@
 #pragma once
 
 #include <stddef.h> // size_t
+
+#ifdef CY_PSOC_CREATOR_USED
+#define WITH_FREERTOS
+#endif
+
 #ifdef WITH_FREERTOS
 #include <FreeRTOS.h>
 #include <task.h>
