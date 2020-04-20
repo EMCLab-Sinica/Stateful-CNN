@@ -44,15 +44,15 @@
 void print_q15(int16_t val);
 void print_iq31(int32_t val);
 
-#ifndef MY_NDEBUG
-
 struct ParameterInfo;
 typedef struct Model Model;
 typedef struct Node Node;
+
+#ifndef MY_NDEBUG
+
 void dump_params(struct ParameterInfo *cur_param);
 void dump_matrix(int16_t *mat, size_t len);
 void dump_matrix2(int16_t *mat, size_t rows, size_t cols);
-void dump_model(Model *model, Node *nodes);
 #define print_q15_debug print_q15
 #define print_iq31_debug print_iq31
 #define my_printf_debug my_printf
@@ -62,9 +62,10 @@ void dump_model(Model *model, Node *nodes);
 #define dump_params(cur_param)
 #define dump_matrix(mat, len)
 #define dump_matrix2(mat, rows, cols)
-#define dump_model(model, nodes)
 #define print_q15_debug(val)
 #define print_iq31_debug(val)
 #define my_printf_debug(...)
 
 #endif
+
+void dump_model(Model *model, Node *nodes);
