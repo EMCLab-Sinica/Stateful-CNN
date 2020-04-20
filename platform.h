@@ -6,6 +6,10 @@
 #define CYPRESS
 #endif
 
+#ifdef CY_PSOC_CREATOR_USED
+#define WITH_FAILURE_RESILIENT_OS
+#endif
+
 #ifdef __MSP430__
 #  include "plat-msp430.h"
 #elif defined(CYPRESS)
