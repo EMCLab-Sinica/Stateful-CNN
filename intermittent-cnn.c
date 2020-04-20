@@ -108,11 +108,6 @@ static void handle_cur_group(void *pvParameters) {
         cur_node->scheduled = 1;
     }
     my_printf_debug(" - %d element(s)." NEWLINE, params->grp_index);
-
-#ifdef WITH_FAILURE_RESILIENT_OS
-    int objId = OBJ_CNN_MODEL;
-    commit(params->DB, IDCNN, &objId, 1, MODEL_DATA_LEN);
-#endif
 }
 
 int run_model(struct DBImage *DB, Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
@@ -213,6 +208,11 @@ int run_model(struct DBImage *DB, Model *model, int8_t *ansptr, ParameterInfo **
         memset(cur_group, 0, sizeof(cur_group));
 
         dump_model(model, nodes);
+
+#ifdef WITH_FAILURE_RESILIENT_OS
+        int objId = OBJ_CNN_MODEL;
+        commit(DB, IDCNN, &objId, 1, MODEL_DATA_LEN);
+#endif
     }
 
     /* XXX: is the last node always the output node? */
