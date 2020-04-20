@@ -4,6 +4,7 @@
 #include <signal.h>
 
 #define ERROR_OCCURRED() do { raise(SIGINT); } while (0);
+#define TASK_FINISHED()
 
 #define MEMCPY_DELAY_US 0
 

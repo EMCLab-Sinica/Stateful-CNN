@@ -70,6 +70,7 @@ _Static_assert(sizeof(Counters) == 4 * COUNTERS_LEN + 2, "Unexpected size of Cou
  **********************************/
 // similar to double buffering
 uint8_t *intermediate_values(void);
+uint8_t *inputs_data;
 Counters *counters(void);
 
 

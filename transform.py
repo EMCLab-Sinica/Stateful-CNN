@@ -159,8 +159,8 @@ def nchw2nhwc(arr, dims):
     return ret, (N, H, W, C)
 
 
+inputs_data = io.BytesIO()
 outputs = {
-    'inputs': io.BytesIO(),
     'parameters': io.BytesIO(),
     'samples': io.BytesIO(),
     'model': io.BytesIO(),
@@ -177,10 +177,10 @@ outputs['model'].write(to_bytes(0))  # Model.sample_idx
 parameters_bin_offset = 0
 for inputs, op_type, flags in model:
     outputs['model'].write(to_bytes(len(inputs)))
-    outputs['model'].write(to_bytes(outputs['inputs'].tell()))  # Node.inputs_offset
+    outputs['model'].write(to_bytes(inputs_data.tell()))  # Node.inputs_offset
     for inp in inputs:
         # the lowest bit is used as a flag in topological sort
-        outputs['inputs'].write(to_bytes(inp * 2))
+        inputs_data.write(to_bytes(inp * 2))
     outputs['model'].write(to_bytes(ops.ops[op_type]))
     print(f'flags: {flags}')
     outputs['model'].write(to_bytes(flags))
@@ -276,6 +276,9 @@ for idx, n in enumerate(nodes):
     outputs['model'].write(to_bytes(0, size=8))  # dummy
     for _ in range(4):  # dims[4]
         outputs['model'].write(to_bytes(0))
+
+inputs_data.seek(0)
+outputs['model'].write(inputs_data.read())
 
 for idx, im in enumerate(images):
     # load_data returns NCHW

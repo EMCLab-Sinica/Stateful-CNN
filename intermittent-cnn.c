@@ -127,6 +127,7 @@ int run_model(struct DBImage *DB, Model *model, int8_t *ansptr, ParameterInfo **
 
     Node *nodes = (Node*)(model + 1);
     ParameterInfo *parameter_info = (ParameterInfo*)(nodes + model->nodes_len);
+    inputs_data = (uint8_t*)(parameter_info + model->nodes_len + model->n_input);
 
     my_printf_debug("model->n_input = %d" NEWLINE, model->n_input);
 

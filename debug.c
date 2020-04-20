@@ -105,6 +105,9 @@ void dump_model(Model *model, Node *nodes) {
 
 #else
 
-void dump_model(Model *model, Node *nodes) {}
+void dump_model(Model *model, Node *nodes) {
+    UNUSED(model);
+    UNUSED(nodes);
+}
 
 #endif

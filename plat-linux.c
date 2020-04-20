@@ -18,7 +18,7 @@
 
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
-uint8_t *inputs_data, *parameters_data, *samples_data, *model_data, *labels_data;
+uint8_t *parameters_data, *samples_data, *model_data, *labels_data;
 uint32_t *copied_size;
 
 uint8_t *intermediate_values() {
@@ -45,8 +45,7 @@ int main(int argc, char* argv[]) {
         goto exit;
     }
     // Keep the order consistent with `outputs` in transform.py
-    inputs_data = nvm + NUM_SLOTS * INTERMEDIATE_VALUES_SIZE;
-    parameters_data = inputs_data + INPUTS_DATA_LEN;
+    parameters_data = nvm + NUM_SLOTS * INTERMEDIATE_VALUES_SIZE;
     samples_data = parameters_data + PARAMETERS_DATA_LEN;
     model_data = samples_data + SAMPLES_DATA_LEN;
     labels_data = model_data + MODEL_DATA_LEN;

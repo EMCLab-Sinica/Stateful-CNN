@@ -8,14 +8,11 @@
 #define INTERMEDIATE_VALUES_SIZE 18000u
 #define COUNTERS_LEN 64
 
-extern uint8_t *inputs_data;
-#define INPUTS_DATA_LEN 36
-
 extern uint8_t *parameters_data;
 #define PARAMETERS_DATA_LEN 12420
 
 extern uint8_t *model_data;
-#define MODEL_DATA_LEN 492
+#define MODEL_DATA_LEN 528
 
 extern uint8_t *counters_data;
 #define COUNTERS_DATA_LEN 258
