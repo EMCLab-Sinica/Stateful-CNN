@@ -1,8 +1,13 @@
 #include <stdint.h>
 #include <string.h>
+#include "platform.h" // for WITH_FREERTOS
 #ifdef WITH_FREERTOS
 #include <FreeRTOS.h>
 #include <task.h>
+#endif
+
+#ifdef WITH_FAILURE_RESILIENT_OS
+#include "SharedDB.h"
 #endif
 
 #include "intermittent-cnn.h"
@@ -13,6 +18,7 @@
 #include "debug.h"
 
 typedef struct {
+    struct DBImage *DB;
     Model *model;
     Node *nodes;
     ParameterInfo* parameter_info;
@@ -103,12 +109,21 @@ static void handle_cur_group(void *pvParameters) {
     }
     my_printf_debug(" - %d element(s)." NEWLINE, params->grp_index);
 
-    TASK_FINISHED();
+#ifdef WITH_FAILURE_RESILIENT_OS
+    int objId = OBJ_CNN_MODEL;
+    commit(params->DB, IDCNN, &objId, 1, MODEL_DATA_LEN);
+#endif
 }
 
-int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
+int run_model(struct DBImage *DB, Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
     uint16_t cur_group[16] = { 0 };
     uint8_t grp_index = 0;
+
+#ifdef WITH_FAILURE_RESILIENT_OS
+    if (!model->n_input) {
+        memcpy(model, model_data, MODEL_DATA_LEN);
+    }
+#endif
 
     Node *nodes = (Node*)(model + 1);
     ParameterInfo *parameter_info = (ParameterInfo*)(nodes + model->nodes_len);
@@ -167,22 +182,13 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
         }
 
         handle_cur_group_params params;
+        params.DB = DB;
         params.model = model;
         params.nodes = nodes;
         params.parameter_info = parameter_info;
         params.cur_group = cur_group;
         params.grp_index = grp_index;
-#ifdef WITH_FREERTOS
-        TaskHandle_t xHandle;
-        if (xTaskCreate(handle_cur_group, "handle_cur_group", 200, &params, uxTaskPriorityGet(NULL) + 1, &xHandle) != pdPASS) {
-            ERROR_OCCURRED();
-        }
-        taskYIELD();
-        // After this line the task should have called TASK_FINISHED()
-        vTaskDelete(xHandle);
-#else
         handle_cur_group(&params);
-#endif
 
         if (cur_group[grp_index - 1] == model->nodes_len - 1) {
             break;
@@ -255,7 +261,7 @@ void run_cnn_tests(uint16_t n_samples) {
     for (uint16_t i = 0; i < n_samples; i++) {
         model->sample_idx = i;
         label = labels[i];
-        run_model(model, &predicted, &output_node);
+        run_model(NULL, model, &predicted, &output_node);
         total++;
         if (label == predicted) {
             correct++;
