@@ -21,8 +21,8 @@ uint8_t *nvm;
 uint8_t *parameters_data, *samples_data, *model_data, *labels_data;
 uint32_t *copied_size;
 
-uint8_t *intermediate_values() {
-    return nvm;
+uint8_t *intermediate_values(uint8_t slot_id) {
+    return nvm + slot_id * INTERMEDIATE_VALUES_SIZE;
 }
 
 Counters *counters() {

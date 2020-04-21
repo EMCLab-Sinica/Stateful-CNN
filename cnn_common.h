@@ -68,8 +68,6 @@ _Static_assert(sizeof(Counters) == 4 * COUNTERS_LEN + 2, "Unexpected size of Cou
 /**********************************
  *          Global data           *
  **********************************/
-// similar to double buffering
-uint8_t *intermediate_values(void);
 uint8_t *inputs_data;
 Counters *counters(void);
 
@@ -119,7 +117,7 @@ static inline uint8_t* get_param_base_pointer(ParameterInfo *param) {
         case FLAG_TEST_SET:
             return samples_data;
         default:
-            return intermediate_values() + slot_id * INTERMEDIATE_VALUES_SIZE;
+            return intermediate_values(slot_id);
     }
 }
 
