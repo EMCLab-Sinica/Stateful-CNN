@@ -15,6 +15,10 @@
 #include <task.h>
 #endif
 
+#ifdef WITH_FAILURE_RESILIENT_OS
+#include "config.h"
+#endif
+
 #define configCONV_STACK_SIZE 100
 
 // TODO: make these adjustable on runtime
@@ -75,7 +79,9 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
         for (uint8_t idx = 0; idx < conv_params->filter_limit; idx++) {
             filter_addr = get_q15_param(
                 conv_params->conv_filter,
-                (conv_params->conv_idx + idx) * conv_params->filter_offset);
+                (conv_params->conv_idx + idx) * conv_params->filter_offset,
+                WILL_NOT_WRITE
+            );
             my_printf_debug("Copying filter %d" NEWLINE, conv_params->conv_idx + idx);
             uint16_t buffer_size = sizeof(int16_t) * conv_params->filter_offset;
             my_memcpy(filter_tmp,
@@ -96,7 +102,9 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
 #else
         filter_addr = get_q15_param(
             conv_params->conv_filter,
-            conv_params->conv_idx * conv_params->filter_offset);
+            conv_params->conv_idx * conv_params->filter_offset,
+            WILL_NOT_WRITE
+        );
         uint16_t buffer_size = sizeof(int16_t) * conv_params->filter_offset * conv_params->filter_limit;
         my_memcpy(conv_params->filter_buffer_addr, filter_addr, buffer_size);
 #endif
@@ -177,22 +185,27 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
     }
 #endif
 
+#ifdef WITH_FAILURE_RESILIENT_OS
+    curTaskID = IDCNN_INNER;
+#endif
+
+    int16_t *output_baseptr = get_q15_param(conv_params->output, 0, WILL_WRITE);
 #if NVM_BYTE_ADDRESSABLE
-    int16_t *output_data = get_q15_param(conv_params->output,
+    int16_t *output_data = output_baseptr +
             (conv_params->output_h + offset_h) * conv_params->W_by_OUTPUT_CHANNEL +
             conv_params->output_w * conv_params->OUTPUT_CHANNEL +
-            conv_params->conv_idx);
+            conv_params->conv_idx;
 #else
-    int16_t *output_data = get_q15_param(conv_params->output,
+    int16_t *output_data = output_baseptr +
             conv_params->output_w * conv_params->H_by_OUTPUT_CHANNEL +
             (conv_params->output_h + offset_h) * conv_params->OUTPUT_CHANNEL +
-            conv_params->conv_idx);
+            conv_params->conv_idx;
 #endif
     int16_t *result_addr = matrix_mpy_results;
     // XXX: use DMA makes the whole loop slower as calling DMA for a few numbers brings more overhead than benefits
     uint8_t n_filters = MIN_VAL(conv_params->filter_limit, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
     for (uint8_t idx = 0; idx < p_matrix_mpy_params->srcARows; idx++) {
-        my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - get_q15_param(conv_params->output, 0)));
+        my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - output_baseptr));
         for (uint8_t idx2 = 0; idx2 < n_filters; idx2++) {
 #if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
             if (!conv_params->state_bit && *result_addr < 0x4000 && *result_addr >= -0x4000) {
@@ -233,7 +246,8 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
 
     int16_t *input_addr = get_q15_param(
         conv_params->conv_input,
-        conv_params->CHANNEL * (conv_params->output_h * conv_params->W + conv_params->output_w)
+        conv_params->CHANNEL * (conv_params->output_h * conv_params->W + conv_params->output_w),
+        WILL_NOT_WRITE
     );
 
     /* int32_t instead of int16_t as TI's compiler cannot handle negative
@@ -321,6 +335,10 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
         my_printf_debug("Mark filter %d as processed" NEWLINE, filter_idx);
     }
     conv_params->pending_filter_idx = 0;
+
+#ifdef WITH_FAILURE_RESILIENT_OS
+    commit_intermediate_values(conv_params->output);
+#endif
 
     TASK_FINISHED();
 }
@@ -423,7 +441,7 @@ void handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) 
             UBaseType_t uxPriority = uxTaskPriorityGet(NULL) + 1;
             my_printf_debug("Create conv task with priority %" PRIu32 NEWLINE, uxPriority);
             TaskHandle_t xHandle;
-            if (xTaskCreate(handle_conv_inner_loop, "conv", 300, conv_params, uxPriority, &xHandle) != pdPASS) {
+            if (xTaskCreate(handle_conv_inner_loop, "conv", 300, conv_params, uxPriority, (uint32_t)(&xHandle)|1) != pdPASS) {
                 my_printf("Failed to create conv task!" NEWLINE);
                 ERROR_OCCURRED();
             }

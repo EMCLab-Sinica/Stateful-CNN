@@ -96,6 +96,12 @@ static inline int16_t int16_max(int16_t a, int16_t b) {
 /**********************************
  *       Helpers for nodes        *
  **********************************/
+
+enum {
+    WILL_NOT_WRITE,
+    WILL_WRITE
+};
+
 static inline uint16_t get_next_slot(ParameterInfo *param) {
     uint16_t slot_id = param->slot;
     /* Some cases:
@@ -109,24 +115,30 @@ static inline uint16_t get_next_slot(ParameterInfo *param) {
     return next_slot_id;
 }
 
-static inline uint8_t* get_param_base_pointer(ParameterInfo *param) {
+static inline uint8_t* get_param_base_pointer(ParameterInfo *param, uint8_t will_write) {
     uint16_t slot_id = param->slot;
     switch (slot_id) {
         case FLAG_SLOTS:
+            if (will_write) {
+                ERROR_OCCURRED();
+            }
             return parameters_data;
         case FLAG_TEST_SET:
+            if (will_write) {
+                ERROR_OCCURRED();
+            }
             return samples_data;
         default:
-            return intermediate_values(slot_id);
+            return intermediate_values(slot_id, will_write);
     }
 }
 
-static inline int16_t* get_q15_param(ParameterInfo *param, size_t i) {
+static inline int16_t* get_q15_param(ParameterInfo *param, size_t i, uint8_t will_write) {
     if (param->bitwidth != 16) {
         // incorrect param passed
         ERROR_OCCURRED();
     }
-    return (int16_t*)(get_param_base_pointer(param) + param->params_offset) + i;
+    return (int16_t*)(get_param_base_pointer(param, will_write) + param->params_offset) + i;
 }
 
 

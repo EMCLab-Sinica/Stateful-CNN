@@ -18,7 +18,6 @@
 #include "debug.h"
 
 typedef struct {
-    struct DBImage *DB;
     Model *model;
     Node *nodes;
     ParameterInfo* parameter_info;
@@ -54,7 +53,7 @@ static void handle_cur_group(void *pvParameters) {
             my_printf_debug("input_id[%d] = %d ", j, input_id[j]);
             input[j] = &(parameter_info[input_id[j]]);
             if (input[j]->slot == FLAG_TEST_SET) {
-                input[j]->params_offset = model->sample_idx * input[j]->params_len;
+                input[j]->params_offset = (model->sample_idx % LABELS_DATA_LEN) * input[j]->params_len;
             }
             // dump_params(input[j]);
         }
@@ -110,7 +109,7 @@ static void handle_cur_group(void *pvParameters) {
     my_printf_debug(" - %d element(s)." NEWLINE, params->grp_index);
 }
 
-int run_model(struct DBImage *DB, Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
+int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
     uint16_t cur_group[16] = { 0 };
     uint8_t grp_index = 0;
 
@@ -178,7 +177,6 @@ int run_model(struct DBImage *DB, Model *model, int8_t *ansptr, ParameterInfo **
         }
 
         handle_cur_group_params params;
-        params.DB = DB;
         params.model = model;
         params.nodes = nodes;
         params.parameter_info = parameter_info;
@@ -211,7 +209,7 @@ int run_model(struct DBImage *DB, Model *model, int8_t *ansptr, ParameterInfo **
 
 #ifdef WITH_FAILURE_RESILIENT_OS
         int objId = OBJ_CNN_MODEL;
-        commit(DB, IDCNN, &objId, 1, MODEL_DATA_LEN);
+        commit(DB, IDCNN, &objId, 1, MODEL_DATA_LEN, 0);
 #endif
     }
 
@@ -222,7 +220,7 @@ int run_model(struct DBImage *DB, Model *model, int8_t *ansptr, ParameterInfo **
     }
     int16_t max = INT16_MIN;
     for (uint16_t i = 0; i < output_node->dims[1]; i++) {
-        int16_t val = *get_q15_param(output_node, i);
+        int16_t val = *get_q15_param(output_node, i, WILL_NOT_WRITE);
         if (val > max) {
             *ansptr = (uint8_t)i;
             max = val;
@@ -234,7 +232,7 @@ int run_model(struct DBImage *DB, Model *model, int8_t *ansptr, ParameterInfo **
 
 void print_results(Model *model, ParameterInfo *output_node) {
     for (uint16_t i = 0; i < output_node->dims[1]; i++) {
-        print_q15(*get_q15_param(output_node, i));
+        print_q15(*get_q15_param(output_node, i, WILL_NOT_WRITE));
     }
     my_printf(NEWLINE);
 
@@ -262,7 +260,7 @@ void run_cnn_tests(uint16_t n_samples) {
     for (uint16_t i = 0; i < n_samples; i++) {
         model->sample_idx = i;
         label = labels[i];
-        run_model(NULL, model, &predicted, &output_node);
+        run_model(model, &predicted, &output_node);
         total++;
         if (label == predicted) {
             correct++;

@@ -6,6 +6,10 @@
 #include "debug.h"
 #include "platform.h"
 
+#ifdef WITH_FAILURE_RESILIENT_OS
+#include "config.h"
+#endif
+
 DSPLIB_DATA(lea_buffer, 4)
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
@@ -38,9 +42,13 @@ void handle_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
     }
 #endif
 
-    int16_t *data_baseptr = get_q15_param(data, 0);
+#ifdef WITH_FAILURE_RESILIENT_OS
+    curTaskID = IDCNN;
+#endif
+    int16_t *data_baseptr = get_q15_param(data, 0, WILL_NOT_WRITE);
+    int16_t *output_baseptr = get_q15_param(output, 0, WILL_WRITE);
     for (uint16_t c = 0; c < channel; c++) {
-        int16_t *output_ptr = get_q15_param(output, c);
+        int16_t *output_ptr = output_baseptr + c;
         for (uint16_t h = 0; h +stride <= H; h += stride) {
             for (uint16_t w = 0; w + stride <= W; w += stride) {
                 my_printf_debug("h=%d ", h);
@@ -75,7 +83,7 @@ void handle_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
                 }
                 my_printf_debug("max=");
                 print_q15_debug(max_val);
-                my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - get_q15_param(output, 0)));
+                my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
 #ifdef WITH_PROGRESS_EMBEDDING
                 if (!state_bit) {
                     max_val += 0x8000;
@@ -88,6 +96,9 @@ void handle_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
     }
 
     my_printf_debug("handle_maxpool output" NEWLINE);
+#ifdef WITH_FAILURE_RESILIENT_OS
+    commit_intermediate_values(output);
+#endif
     dump_params(output);
 }
 
@@ -112,12 +123,18 @@ void handle_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
 
     int16_t *buffer_a = lea_buffer,
             *buffer_b = lea_buffer + output->params_len / sizeof(int16_t);
-    my_memcpy(buffer_a, get_q15_param(A, 0), output->params_len);
-    my_memcpy(buffer_b, get_q15_param(B, 0), output->params_len);
+    my_memcpy(buffer_a, get_q15_param(A, 0, WILL_NOT_WRITE), output->params_len);
+    my_memcpy(buffer_b, get_q15_param(B, 0, WILL_NOT_WRITE), output->params_len);
     msp_status status = msp_add_q15(&params, buffer_a, buffer_b, buffer_a);
     msp_checkStatus(status);
 
-    my_memcpy(get_q15_param(output, 0), buffer_a, output->params_len);
+#ifdef WITH_FAILURE_RESILIENT_OS
+    curTaskID = IDCNN;
+#endif
+    my_memcpy(get_q15_param(output, 0, WILL_WRITE), buffer_a, output->params_len);
+#ifdef WITH_FAILURE_RESILIENT_OS
+    commit_intermediate_values(output);
+#endif
 }
 
 void handle_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -156,7 +173,7 @@ void handle_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t flags
     msp_status status = msp_fill_q15(&fill_params, buffer_matmul);
     msp_checkStatus(status);
 
-    my_memcpy(buffer_a, get_q15_param(A, 0), (uint16_t)(A->dims[0] * A->dims[1] * sizeof(uint16_t)));
+    my_memcpy(buffer_a, get_q15_param(A, 0, WILL_NOT_WRITE), (uint16_t)(A->dims[0] * A->dims[1] * sizeof(uint16_t)));
 
     /* LEA wants addresses to be 4-aligned */
     uint16_t step = (uint16_t)((256 / B->dims[1]) / 4 * 4);
@@ -168,7 +185,9 @@ void handle_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t flags
         params.srcBRows = current_width;
         params.srcBCols = B->dims[1];
 
-        my_memcpy(buffer_b, get_q15_param(B, (uint16_t)(i * B->dims[1])), (uint16_t)(current_width * B->dims[1] * sizeof(uint16_t)));
+        my_memcpy(buffer_b,
+                  get_q15_param(B, i * B->dims[1], WILL_NOT_WRITE),
+                  current_width * B->dims[1] * sizeof(uint16_t));
 
         my_printf_debug("strip for A" NEWLINE);
         dump_matrix(buffer_a + A->dims[0] * i, (size_t)(A->dims[0] * current_width));
@@ -189,9 +208,15 @@ void handle_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t flags
         status = msp_add_q15(&params2, buffer_matmul, buffer_temp, buffer_matmul);
         msp_checkStatus(status);
     }
-    my_memcpy(get_q15_param(output, 0), buffer_matmul, output->params_len);
+#ifdef WITH_FAILURE_RESILIENT_OS
+    curTaskID = IDCNN;
+#endif
+    my_memcpy(get_q15_param(output, 0, WILL_WRITE), buffer_matmul, output->params_len);
 
     my_printf_debug("handle_matmul output" NEWLINE);
+#ifdef WITH_FAILURE_RESILIENT_OS
+    commit_intermediate_values(output);
+#endif
     dump_params(output);
 }
 
@@ -209,7 +234,10 @@ void handle_relu(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) 
         // unsupported bitwidth for ReLu
         ERROR_OCCURRED();
     }
-    int16_t *data = get_q15_param(X, 0);
+#ifdef WITH_FAILURE_RESILIENT_OS
+    curTaskID = IDCNN;
+#endif
+    int16_t *data = get_q15_param(X, 0, WILL_WRITE);
     int16_t data_len = X->params_len / (bitwidth / 8);
 
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -235,6 +263,9 @@ void handle_relu(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) 
         }
 #endif
     }
+#ifdef WITH_FAILURE_RESILIENT_OS
+    commit_intermediate_values(output);
+#endif
     dump_params(output);
 }
 
@@ -262,7 +293,10 @@ void handle_reshape(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
     uint8_t do_nhwc2nchw = data->slot != FLAG_SLOTS;
     if (do_nhwc2nchw) {
         // data are intermediate values
-        int16_t *output_addr = get_q15_param(output, 0);
+#ifdef WITH_FAILURE_RESILIENT_OS
+        curTaskID = IDCNN;
+#endif
+        int16_t *output_addr = get_q15_param(output, 0, WILL_WRITE);
         my_memcpy(lea_buffer, output_addr, output->params_len);
         uint16_t NUM = data->dims[0], H = data->dims[1],
                  W = data->dims[2], CHANNEL = data->dims[3];
@@ -281,6 +315,9 @@ void handle_reshape(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
 
     if (do_nhwc2nchw) {
         my_printf_debug("handle_reshape output" NEWLINE);
+#ifdef WITH_FAILURE_RESILIENT_OS
+        commit_intermediate_values(output);
+#endif
         dump_params(output);
     }
 }

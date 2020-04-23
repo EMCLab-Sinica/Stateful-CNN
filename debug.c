@@ -47,7 +47,7 @@ void dump_params(struct ParameterInfo *cur_param) {
                     // internal format is NHWC
                     size_t offset = (size_t)(i * H * W * CHANNEL + k * W * CHANNEL + l * CHANNEL + j);
                     if (bitwidth == 16) {
-                        print_q15_debug(*get_q15_param(cur_param, offset));
+                        print_q15_debug(*get_q15_param(cur_param, offset, WILL_NOT_WRITE));
                     } else if (bitwidth == 32) {
                         print_iq31_debug(*get_iq31_param(cur_param, offset));
                     } else if (bitwidth == 64) {

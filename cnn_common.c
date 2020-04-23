@@ -30,7 +30,7 @@ int32_t* get_iq31_param(ParameterInfo *param, size_t i) {
         // incorrect param passed
         ERROR_OCCURRED();
     }
-    return (int32_t*)(get_param_base_pointer(param) + param->params_offset) + i;
+    return (int32_t*)(get_param_base_pointer(param, 0) + param->params_offset) + i;
 }
 
 int64_t get_int64_param(ParameterInfo *param, size_t i) {

@@ -39,3 +39,11 @@ void my_memcpy(void* dest, const void* src, size_t n);
         ERROR_OCCURRED();                                   \
     } while (0);
 #endif
+
+#ifdef WITH_FAILURE_RESILIENT_OS
+extern uint16_t curTaskID;
+struct DBImage;
+extern struct DBImage *DB;
+struct ParameterInfo;
+void commit_intermediate_values(struct ParameterInfo *param);
+#endif
