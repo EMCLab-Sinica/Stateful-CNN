@@ -19,7 +19,7 @@ uint8_t *intermediate_values(uint8_t slot_id, uint8_t will_write) {
     return _intermediate_values + slot_id * INTERMEDIATE_VALUES_SIZE;
 }
 // intermediate values are not managed by data manager for CKPT
-void commit_intermediate_values(ParameterInfo *param) {};
+void commit_intermediate_values(ParameterInfo *param, uint16_t begin_offset, uint16_t end_offset) {};
 #else
 uint16_t curTaskID;
 struct DBImage *DB;
@@ -40,8 +40,14 @@ uint8_t *intermediate_values(uint8_t slot_id, uint8_t will_write) {
             ERROR_OCCURRED();
     }
 }
-void commit_intermediate_values(ParameterInfo *param) {
+void commit_intermediate_values(ParameterInfo *param, uint16_t begin_offset, uint16_t end_offset) {
     int objId;
+    if (!begin_offset) {
+        begin_offset = param->params_offset;
+    }
+    if (!end_offset) {
+        end_offset = param->params_offset + param->params_len;
+    }
     switch(param->slot) {
         case 0:
             objId = OBJ_INTERMEDIATE_VALUES_1;
@@ -52,7 +58,7 @@ void commit_intermediate_values(ParameterInfo *param) {
         default:
             ERROR_OCCURRED();
     }
-    commit(DB, curTaskID, &objId, 1, INTERMEDIATE_VALUES_SIZE, 1);
+    commit(DB, curTaskID, &objId, 1, INTERMEDIATE_VALUES_SIZE, 1, begin_offset, end_offset);
 }
 #endif
 

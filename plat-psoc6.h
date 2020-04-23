@@ -45,5 +45,5 @@ extern uint16_t curTaskID;
 struct DBImage;
 extern struct DBImage *DB;
 struct ParameterInfo;
-void commit_intermediate_values(struct ParameterInfo *param);
+void commit_intermediate_values(struct ParameterInfo *param, uint16_t begin_offset, uint16_t end_offset);
 #endif

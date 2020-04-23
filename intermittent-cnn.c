@@ -209,7 +209,7 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
 
 #ifdef WITH_FAILURE_RESILIENT_OS
         int objId = OBJ_CNN_MODEL;
-        commit(DB, IDCNN, &objId, 1, MODEL_DATA_LEN, 0);
+        commit(DB, IDCNN, &objId, 1, MODEL_DATA_LEN, 0, 0, MODEL_DATA_LEN);
 #endif
     }
 

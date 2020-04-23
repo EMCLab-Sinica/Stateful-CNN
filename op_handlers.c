@@ -97,7 +97,7 @@ void handle_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
 
     my_printf_debug("handle_maxpool output" NEWLINE);
 #ifdef WITH_FAILURE_RESILIENT_OS
-    commit_intermediate_values(output);
+    commit_intermediate_values(output, 0, 0);
 #endif
     dump_params(output);
 }
@@ -133,7 +133,7 @@ void handle_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
 #endif
     my_memcpy(get_q15_param(output, 0, WILL_WRITE), buffer_a, output->params_len);
 #ifdef WITH_FAILURE_RESILIENT_OS
-    commit_intermediate_values(output);
+    commit_intermediate_values(output, 0, 0);
 #endif
 }
 
@@ -215,7 +215,7 @@ void handle_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t flags
 
     my_printf_debug("handle_matmul output" NEWLINE);
 #ifdef WITH_FAILURE_RESILIENT_OS
-    commit_intermediate_values(output);
+    commit_intermediate_values(output, 0, 0);
 #endif
     dump_params(output);
 }
@@ -264,7 +264,7 @@ void handle_relu(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) 
 #endif
     }
 #ifdef WITH_FAILURE_RESILIENT_OS
-    commit_intermediate_values(output);
+    commit_intermediate_values(output, 0, 0);
 #endif
     dump_params(output);
 }
@@ -316,7 +316,7 @@ void handle_reshape(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
     if (do_nhwc2nchw) {
         my_printf_debug("handle_reshape output" NEWLINE);
 #ifdef WITH_FAILURE_RESILIENT_OS
-        commit_intermediate_values(output);
+        commit_intermediate_values(output, 0, 0);
 #endif
         dump_params(output);
     }

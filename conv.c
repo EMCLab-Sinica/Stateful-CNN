@@ -337,7 +337,8 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
     conv_params->pending_filter_idx = 0;
 
 #ifdef WITH_FAILURE_RESILIENT_OS
-    commit_intermediate_values(conv_params->output);
+    // XXX: specify smaller ranges
+    commit_intermediate_values(conv_params->output, 0, 0);
 #endif
 
     TASK_FINISHED();
