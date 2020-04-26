@@ -21,6 +21,7 @@ Indexing policy:
 # XXX: Heuristics for scaling: only scale biases and the input
 SCALE = 50
 NUM_SLOTS = 2
+# TODO: Don't consume intermediate_values for in-place update operators (Reshape, Squeeze, Relu)
 INTERMEDIATE_VALUES_SIZE = 18000
 N_SAMPLES = 20
 COUNTERS_LEN = 64

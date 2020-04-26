@@ -62,6 +62,7 @@ static void handle_cur_group(void *pvParameters) {
          * individual operation handlers */
         ParameterInfo *output = &(parameter_info[cur_node_id + model->n_input]);
         output->params_offset = intermediate_values_offset;
+        my_printf_debug("Old intermediate_values_offset = %d" NEWLINE, intermediate_values_offset);
 
         uint32_t new_intermediate_values_offset = (uint32_t)(
             /* use uint32_t here to avoid overflow */
@@ -81,6 +82,7 @@ static void handle_cur_group(void *pvParameters) {
         }
 
         intermediate_values_offset = (uint16_t)new_intermediate_values_offset;
+        my_printf_debug("New intermediate_values_offset = %d" NEWLINE, intermediate_values_offset);
 
         my_printf_debug("output dims: ");
         uint8_t has_dims = 0;
