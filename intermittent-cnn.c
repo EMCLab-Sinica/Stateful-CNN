@@ -64,20 +64,25 @@ static void handle_cur_group(void *pvParameters) {
         output->params_offset = intermediate_values_offset;
         my_printf_debug("Old intermediate_values_offset = %d" NEWLINE, intermediate_values_offset);
 
-        uint32_t new_intermediate_values_offset = (uint32_t)(
-            /* use uint32_t here to avoid overflow */
-            intermediate_values_offset + output->params_len
-        );
-        if (new_intermediate_values_offset >= INTERMEDIATE_VALUES_SIZE) {
-            /* TODO: reuse the ring buffer */
-            // too many immediate values
-            ERROR_OCCURRED();
-        }
-
         handlers[cur_node->op_type](input, output, cur_node->flags);
 
         counters()->counter_idx++;
         if (counters()->counter_idx >= COUNTERS_LEN) {
+            ERROR_OCCURRED();
+        }
+
+        uint32_t new_intermediate_values_offset;
+        if (!inplace_update[cur_node->op_type]) {
+            new_intermediate_values_offset = (uint32_t)(
+                /* use uint32_t here to avoid overflow */
+                intermediate_values_offset + output->params_len
+            );
+        } else {
+            new_intermediate_values_offset = intermediate_values_offset;
+        }
+        if (new_intermediate_values_offset >= INTERMEDIATE_VALUES_SIZE) {
+            /* TODO: reuse the ring buffer */
+            // too many immediate values
             ERROR_OCCURRED();
         }
 

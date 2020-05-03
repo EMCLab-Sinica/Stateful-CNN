@@ -1,11 +1,13 @@
+# [expected_inputs_len, inplace_update]
 ops = {
-    'Add': 2,
-    'Conv': 3,
-    'MatMul': 2,
-    'MaxPool': 1,
-    'Relu': 1,
-    'Reshape': 2,
-    'Squeeze': 1,
+    'Add': [2, 0],
+    'Conv': [3, 0],
+    'MatMul': [2, 0],
+    'MaxPool': [1, 0],
+    # TODO: use inplace update for Relu
+    'Relu': [1, 0],
+    'Reshape': [2, 1],
+    'Squeeze': [1, 1],
 }
 
 other_flags = [
@@ -26,7 +28,11 @@ with open('ops.py', 'w') as f_py, open('ops.h', 'w') as f_h, open('ops.c', 'w') 
 
     f_c.write('uint8_t expected_inputs_len[] = {')
     for op in keys:
-        f_c.write(f'{ops[op]}, ')
+        f_c.write(f'{ops[op][0]}, ')
+    f_c.write('};\n\n')
+    f_c.write('uint8_t inplace_update[] = {')
+    for op in keys:
+        f_c.write(f'{ops[op][1]}, ')
     f_c.write('};\n\n')
 
     for op in keys:
