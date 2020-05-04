@@ -1,14 +1,5 @@
 #include <stdint.h>
 #include <string.h>
-#include "platform.h" // for WITH_FREERTOS
-#ifdef WITH_FREERTOS
-#include <FreeRTOS.h>
-#include <task.h>
-#endif
-
-#ifdef WITH_FAILURE_RESILIENT_OS
-#include "SharedDB.h"
-#endif
 
 #include "intermittent-cnn.h"
 #include "op_handlers.h"
@@ -64,7 +55,7 @@ static void handle_cur_group(void *pvParameters) {
         output->params_offset = intermediate_values_offset;
         my_printf_debug("Old intermediate_values_offset = %d" NEWLINE, intermediate_values_offset);
 
-        handlers[cur_node->op_type](input, output, cur_node->flags);
+        handlers[cur_node->op_type](model, input, output, cur_node->flags);
 
         counters()->counter_idx++;
         if (counters()->counter_idx >= COUNTERS_LEN) {
@@ -119,12 +110,6 @@ static void handle_cur_group(void *pvParameters) {
 int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
     uint16_t cur_group[16] = { 0 };
     uint8_t grp_index = 0;
-
-#ifdef WITH_FAILURE_RESILIENT_OS
-    if (!model->n_input) {
-        memcpy(model, model_data, MODEL_DATA_LEN);
-    }
-#endif
 
     Node *nodes = (Node*)(model + 1);
     ParameterInfo *parameter_info = (ParameterInfo*)(nodes + model->nodes_len);
@@ -213,11 +198,6 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
         memset(cur_group, 0, sizeof(cur_group));
 
         dump_model(model, nodes);
-
-#ifdef WITH_FAILURE_RESILIENT_OS
-        int objId = OBJ_CNN_MODEL;
-        commit(DB, IDCNN, &objId, 1, MODEL_DATA_LEN, 0, 0, MODEL_DATA_LEN);
-#endif
     }
 
     /* XXX: is the last node always the output node? */

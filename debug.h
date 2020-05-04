@@ -11,27 +11,15 @@
 #if defined(__MSP430__)
 #  include "Tools/myuart.h"
 #  define PRId32 "L" // see print2uart() in Tools/myuart.c
+#  define PRId64 "L"
 #  define PRIsize_t "l"
 #  define my_printf print2uart
 #  define NEWLINE "\r\n"
 #elif defined(CYPRESS)
 #  include <inttypes.h> // for PRId32
 #  define PRIsize_t "zu"
-#  ifdef CY_PSOC_CREATOR_USED
-#    if (CY_CPU_CORTEX_M0P)  /* core is Cortex-M0+ */
-#      include "UARTM0.h"
-#    else /* core is Cortex-M4 */
-#      include "UARTM4.h"
-#    endif
-#    define my_printf(format, ...) { \
-        char uartString[100]; \
-        sprintf(uartString, format, ##__VA_ARGS__); \
-        Uprintf(uartString); \
-    }
-#  else
-#    include <stdio.h>
-#    define my_printf printf
-#  endif
+#  include <stdio.h>
+#  define my_printf printf
 #  define NEWLINE "\r\n"
 #else
 #  include <stdio.h>

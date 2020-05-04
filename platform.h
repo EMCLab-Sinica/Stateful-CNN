@@ -2,12 +2,8 @@
 
 #include <stdint.h>
 
-#if defined(CY_TARGET_DEVICE) || defined(CY_PSOC_CREATOR_USED)
+#if defined(CY_TARGET_DEVICE)
 #define CYPRESS
-#endif
-
-#ifdef CY_PSOC_CREATOR_USED
-#define WITH_FAILURE_RESILIENT_OS
 #endif
 
 #ifdef __MSP430__

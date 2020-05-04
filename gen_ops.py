@@ -36,7 +36,7 @@ with open('ops.py', 'w') as f_py, open('ops.h', 'w') as f_h, open('ops.c', 'w') 
     f_c.write('};\n\n')
 
     for op in keys:
-        f_h.write('void handle_{}(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
+        f_h.write('void handle_{}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
     f_c.write('handler handlers[] = {\n')
     for op in keys:
         f_c.write(f'\thandle_{op},\n'.lower())

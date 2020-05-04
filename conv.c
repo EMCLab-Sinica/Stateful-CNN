@@ -10,15 +10,6 @@
 #include "op_handlers.h"
 #include "ops.h"
 
-#ifdef WITH_FREERTOS
-#include <FreeRTOS.h>
-#include <task.h>
-#endif
-
-#ifdef WITH_FAILURE_RESILIENT_OS
-#include "config.h"
-#endif
-
 #define configCONV_STACK_SIZE 100
 
 // TODO: make these adjustable on runtime
@@ -129,7 +120,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
     if (!conv_params->state_bit) {
         int16_t *indicator_addr = input_buffer_addr + conv_params->filter_offset - (conv_params->truncated ? 2 : 1);
         for (uint8_t i = 0; i < p_matrix_mpy_params->srcARows; i++) {
-            *indicator_addr = -32768;
+            *indicator_addr = -0x4000;
             indicator_addr += conv_params->filter_offset;
         }
     }
@@ -185,10 +176,6 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
     }
 #endif
 
-#ifdef WITH_FAILURE_RESILIENT_OS
-    curTaskID = IDCNN_INNER;
-#endif
-
     int16_t *output_baseptr = get_q15_param(conv_params->output, 0, WILL_WRITE);
 #if NVM_BYTE_ADDRESSABLE
     int16_t *output_data = output_baseptr +
@@ -208,7 +195,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
         my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - output_baseptr));
         for (uint8_t idx2 = 0; idx2 < n_filters; idx2++) {
 #if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
-            if (!conv_params->state_bit && *result_addr < 0x4000 && *result_addr >= -0x4000) {
+            if (!conv_params->state_bit && *result_addr < 0x2000 && *result_addr >= -0x2000) {
                 ERROR_OCCURRED();
             }
 #endif
@@ -303,7 +290,7 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
 #ifdef WITH_PROGRESS_EMBEDDING
         if (conv_params->state_bit) {
             for (uint16_t idx = 0; idx < size; idx++) {
-                dest[idx] += 0x8000;
+                dest[idx] -= 0x4000;
             }
         }
 #endif
@@ -336,15 +323,10 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
     }
     conv_params->pending_filter_idx = 0;
 
-#ifdef WITH_FAILURE_RESILIENT_OS
-    // XXX: specify smaller ranges
-    commit_intermediate_values(conv_params->output, 0, 0);
-#endif
-
     TASK_FINISHED();
 }
 
-void handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1];
     my_printf_debug("Conv!" NEWLINE);
 
@@ -438,20 +420,7 @@ void handle_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) 
         for (uint16_t output_h = 0; output_h < H; output_h += conv_params->tile_h) {
             conv_params->output_h = output_h;
             conv_params->output_w = output_w;
-#ifdef WITH_FREERTOS
-            UBaseType_t uxPriority = uxTaskPriorityGet(NULL) + 1;
-            my_printf_debug("Create conv task with priority %" PRIu32 NEWLINE, uxPriority);
-            TaskHandle_t xHandle;
-            if (xTaskCreate(handle_conv_inner_loop, "conv", 300, conv_params, uxPriority, (uint32_t)(&xHandle)|1) != pdPASS) {
-                my_printf("Failed to create conv task!" NEWLINE);
-                ERROR_OCCURRED();
-            }
-            taskYIELD();
-            // After this line the task should have called TASK_FINISHED()
-            vTaskDelete(xHandle);
-#else
             handle_conv_inner_loop(conv_params);
-#endif
         }
     }
 

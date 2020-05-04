@@ -6,4 +6,4 @@ INPUT_FILE=data/Test-28x28_cntk_text.txt
 python optimize_model.py $MODEL
 python gen_ops.py
 # TODO: add --with-progress-embedding back after fixing the performance regression
-python transform.py ${MODEL/.onnx/_optimized.onnx} $INPUT_FILE
+python transform.py --with-progress-embedding ${MODEL/.onnx/_optimized.onnx} $INPUT_FILE

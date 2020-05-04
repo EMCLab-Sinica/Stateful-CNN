@@ -1,4 +1,5 @@
 /out
 nvm.bin
 *.pyc
-/images/
+/images/*
+!/images/.keep

@@ -19,7 +19,7 @@ Indexing policy:
 """
 
 # XXX: Heuristics for scaling: only scale biases and the input
-SCALE = 50
+SCALE = 100
 NUM_SLOTS = 2
 INTERMEDIATE_VALUES_SIZE = 13000
 N_SAMPLES = 20
@@ -312,6 +312,9 @@ with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
 #define INTERMEDIATE_VALUES_SIZE {INTERMEDIATE_VALUES_SIZE}u
 #define COUNTERS_LEN {COUNTERS_LEN}
 ''')
+
+    if args.with_progress_embedding:
+        output_h.write('#define WITH_PROGRESS_EMBEDDING\n')
     def hex_str(arr):
         return '  ' + ', '.join([f'0x{num:02x}' for num in arr]) + ',\n'
 
