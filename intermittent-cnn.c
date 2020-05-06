@@ -56,6 +56,7 @@ static void handle_cur_group(void *pvParameters) {
         my_printf_debug("Old intermediate_values_offset = %d" NEWLINE, intermediate_values_offset);
 
         handlers[cur_node->op_type](model, input, output, cur_node->flags);
+        my_printf_debug("State bit=%d" NEWLINE, model->state_bit);
 
         counters()->counter_idx++;
         if (counters()->counter_idx >= COUNTERS_LEN) {
@@ -126,6 +127,7 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
         }
         counters()->counter_idx = 0;
         model->running = 1;
+        model->state_bit = 0;
     }
 
     counters()->power_counters[counters()->counter_idx]++;

@@ -57,7 +57,6 @@ def get_prev_node(n):
     return nodes[names[n.input[0]] - n_input]
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--with-progress-embedding', action='store_true', default=False)
 parser.add_argument('onnx_model')
 parser.add_argument('input_file')
 args = parser.parse_args()
@@ -231,14 +230,9 @@ for params in parameters:
                     float_data_augmented = []
                     for idx in range(reordered_dims[0] * reordered_dims[1]):
                         float_data_augmented.extend(float_data[idx*filter_len:(idx+1)*filter_len])
-                        float_data_augmented.append(bias_node.float_data[idx // reordered_dims[1]] / SCALE / reordered_dims[1])
-                        if args.with_progress_embedding:
-                            float_data_augmented.append(-1)
-                            if filter_len & 1 == 1:
-                                float_data_augmented.append(0)
-                        else:
-                            if filter_len & 1 == 0:
-                                float_data_augmented.append(0)
+                        float_data_augmented.append(-bias_node.float_data[idx // reordered_dims[1]] / SCALE / reordered_dims[1] / 2)
+                        if filter_len & 1 == 0:
+                            float_data_augmented.append(0)
                     float_data = float_data_augmented
             for param in float_data:
                 if len(params.dims) != 4:  # most likely biases
@@ -313,8 +307,6 @@ with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
 #define COUNTERS_LEN {COUNTERS_LEN}
 ''')
 
-    if args.with_progress_embedding:
-        output_h.write('#define WITH_PROGRESS_EMBEDDING\n')
     def hex_str(arr):
         return '  ' + ', '.join([f'0x{num:02x}' for num in arr]) + ',\n'
 

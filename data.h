@@ -7,10 +7,9 @@
 #define NUM_SLOTS 2
 #define INTERMEDIATE_VALUES_SIZE 13000u
 #define COUNTERS_LEN 64
-#define WITH_PROGRESS_EMBEDDING
 
 extern uint8_t *parameters_data;
-#define PARAMETERS_DATA_LEN 12580
+#define PARAMETERS_DATA_LEN 12420
 
 extern uint8_t *model_data;
 #define MODEL_DATA_LEN 528

@@ -145,8 +145,10 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         ERROR_OCCURRED();
     }
 
+    int16_t A_len = A->dims[0] * A->dims[1];
+
     int16_t *buffer_a = lea_buffer,
-            *buffer_temp = buffer_a + A->dims[0] * A->dims[1],
+            *buffer_temp = buffer_a + A_len,
             *buffer_matmul = buffer_temp + A->dims[0] * B->dims[1],
             *buffer_b = buffer_matmul + A->dims[0] * B->dims[1];
 
@@ -158,6 +160,16 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     msp_checkStatus(status);
 
     my_memcpy(buffer_a, get_q15_param(A, 0, WILL_NOT_WRITE), (uint16_t)(A->dims[0] * A->dims[1] * sizeof(uint16_t)));
+
+#ifdef WITH_PROGRESS_EMBEDDING
+    if (model->state_bit) {
+        for (uint16_t idx = 0; idx < A_len; idx++) {
+            buffer_a[idx] -= 0x4000;
+        }
+        model->state_bit = 0;
+    }
+    // XXX: not further changing the state bits, assuming the last layer
+#endif
 
     /* LEA wants addresses to be 4-aligned */
     uint16_t step = (uint16_t)((256 / B->dims[1]) / 4 * 4);

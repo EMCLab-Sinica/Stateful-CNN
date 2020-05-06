@@ -78,6 +78,9 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
             my_memcpy(filter_tmp,
                       filter_addr,
                       buffer_size);
+#ifdef WITH_PROGRESS_EMBEDDING
+            filter_tmp[conv_params->filter_offset - (conv_params->truncated?2:1)] -= 0x4000;
+#endif
 
             msp_interleave_q15_params params;
             params.length = p_matrix_mpy_params->srcBRows;
@@ -98,7 +101,13 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
         );
         uint16_t buffer_size = sizeof(int16_t) * conv_params->filter_offset * conv_params->filter_limit;
         my_memcpy(conv_params->filter_buffer_addr, filter_addr, buffer_size);
-#endif
+#ifdef WITH_PROGRESS_EMBEDDING
+        for (uint8_t idx = 0; idx < conv_params->filter_limit; idx++) {
+            filter_addr[conv_params->filter_offset * idx - (conv_params->truncated?2:1)] -= 0x4000;
+        }
+#endif // WITH_PROGRESS_EMBEDDING
+
+#endif // USE_ARM_CMSIS
         conv_params->cached_filter_idx = conv_params->conv_idx;
     }
 
@@ -115,16 +124,6 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
     // srcBCols should really be even, though
     // http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/716353?MSP430FR5992-MSP-DSPLib-msp-matrix-mpy-q15
     p_matrix_mpy_params->srcARows = (conv_params->tile_h - offset_h + conv_params->kH - 1) / conv_params->kH;
-
-#ifdef WITH_PROGRESS_EMBEDDING
-    if (!conv_params->state_bit) {
-        int16_t *indicator_addr = input_buffer_addr + conv_params->filter_offset - (conv_params->truncated ? 2 : 1);
-        for (uint8_t i = 0; i < p_matrix_mpy_params->srcARows; i++) {
-            *indicator_addr = -0x4000;
-            indicator_addr += conv_params->filter_offset;
-        }
-    }
-#endif
 
 #ifndef USE_ARM_CMSIS
     msp_status status = msp_matrix_mpy_q15(
@@ -165,16 +164,6 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
     dump_matrix2(matrix_mpy_results, p_matrix_mpy_params->srcARows, p_matrix_mpy_params->srcBCols);
     my_printf_debug(NEWLINE);
     /* END dump data */
-
-#ifdef WITH_PROGRESS_EMBEDDING
-    if (!conv_params->state_bit) {
-        int16_t *indicator_addr = input_buffer_addr + conv_params->filter_offset - (conv_params->truncated ? 2 : 1);
-        for (uint8_t i = 0; i < p_matrix_mpy_params->srcARows; i++) {
-            *indicator_addr = 0;
-            indicator_addr += conv_params->filter_offset;
-        }
-    }
-#endif
 
     int16_t *output_baseptr = get_q15_param(conv_params->output, 0, WILL_WRITE);
 #if NVM_BYTE_ADDRESSABLE
@@ -289,6 +278,7 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
         my_memcpy(dest, src, size * sizeof(int16_t));
 #ifdef WITH_PROGRESS_EMBEDDING
         if (conv_params->state_bit) {
+            // XXX: LEA does not make this faster?
             for (uint16_t idx = 0; idx < size; idx++) {
                 dest[idx] -= 0x4000;
             }
@@ -300,10 +290,7 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
     if (conv_params->flags & CONV_BIAS_MERGED) {
         for (uint8_t idx = 0; idx <= h_end - h_start + 2 * field_size; idx++) {
             uint16_t offset = (idx + 1) * conv_params->dest_offset - (conv_params->truncated ? 2 : 1);
-#ifdef WITH_PROGRESS_EMBEDDING
-            offset--;
-#endif
-            lea_buffer[offset] = 32767; // 32767 is _Q15(1.0)
+            lea_buffer[offset] = -0x8000; // _Q15(-1.0)
         }
     }
 
@@ -384,19 +371,13 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     conv_params->H_by_OUTPUT_CHANNEL = H * conv_params->OUTPUT_CHANNEL;
 #ifdef WITH_PROGRESS_EMBEDDING
     conv_params->state_bit = model->state_bit;
-    if (conv_params->state_bit) {
-        model->state_bit = 0;
-    } else {
-        model->state_bit = 1;
-    }
+    // XXX
+    model->state_bit = 1;
 #endif
 
     if (conv_params->flags & CONV_BIAS_MERGED) {
         conv_params->dest_offset++;
     }
-#ifdef WITH_PROGRESS_EMBEDDING
-    conv_params->dest_offset++;
-#endif
     /* MSP430 LEA requires length to be even */
     conv_params->truncated = (conv_params->dest_offset / 2 * 2 != conv_params->dest_offset);
     if (conv_params->truncated) {

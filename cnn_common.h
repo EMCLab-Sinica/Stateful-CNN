@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include "data.h"
 
+#define WITH_PROGRESS_EMBEDDING
+
 #define FLAG_SLOTS 0b11
 #define FLAG_TEST_SET 0b10
 #define NUM_FILTERS 16
