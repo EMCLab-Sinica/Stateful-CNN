@@ -90,11 +90,6 @@ void dump_model(Model *model, Node *nodes) {
         my_printf("(");
         for (j = 0; j < cur_node->inputs_len; j++) {
             my_printf("%d", node_input(cur_node, j));
-            if (node_input_marked(cur_node, j)) {
-                my_printf("M");
-            } else {
-                my_printf("U");
-            }
             if (j != cur_node->inputs_len - 1) {
                 my_printf(", ");
             }

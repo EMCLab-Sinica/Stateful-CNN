@@ -8,110 +8,89 @@
 #include "ops.h"
 #include "debug.h"
 
-typedef struct {
-    Model *model;
-    Node *nodes;
-    ParameterInfo* parameter_info;
-    uint16_t *cur_group;
-    uint8_t grp_index;
-} handle_cur_group_params;
-
-static void handle_cur_group(void *pvParameters) {
-    handle_cur_group_params *params = (handle_cur_group_params*)pvParameters;
-    Model *model = params->model;
-    ParameterInfo *parameter_info = params->parameter_info;
-
+static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info, uint16_t node_idx) {
     uint16_t intermediate_values_offset = 0;
 
-    my_printf_debug("Current group: ");
+    my_printf_debug("Current node: %d ", node_idx);
 
-    for (uint8_t i = 0; i < params->grp_index; i++) {
-        uint16_t cur_node_id = params->cur_group[i];
-        my_printf_debug("%d ", cur_node_id);
+    /* schedule it */
+    Node *cur_node = &(nodes[node_idx]);
+    my_printf_debug("op_type = %d" NEWLINE, cur_node->op_type);
 
-        /* schedule it */
-        Node *cur_node = &(params->nodes[cur_node_id]);
-        my_printf_debug("op_type = %d" NEWLINE, cur_node->op_type);
-
-        int16_t input_id[3];
-        ParameterInfo *input[3];
-        if (cur_node->inputs_len != expected_inputs_len[cur_node->op_type]) {
-            // unexpected input length
-            ERROR_OCCURRED();
-        }
-        for (uint16_t j = 0; j < cur_node->inputs_len; j++) {
-            input_id[j] = node_input(cur_node, j);
-            my_printf_debug("input_id[%d] = %d ", j, input_id[j]);
-            input[j] = &(parameter_info[input_id[j]]);
-            if (input[j]->slot == FLAG_TEST_SET) {
-                input[j]->params_offset = (model->sample_idx % LABELS_DATA_LEN) * input[j]->params_len;
-            }
-            // dump_params(input[j]);
-        }
-
-        /* Allocate an ParameterInfo for output. Details are filled by
-         * individual operation handlers */
-        ParameterInfo *output = &(parameter_info[cur_node_id + model->n_input]);
-        output->params_offset = intermediate_values_offset;
-        my_printf_debug("Old intermediate_values_offset = %d" NEWLINE, intermediate_values_offset);
-
-        handlers[cur_node->op_type](model, input, output, cur_node->flags);
-        my_printf_debug("State bit=%d" NEWLINE, model->state_bit);
-
-        counters()->counter_idx++;
-        if (counters()->counter_idx >= COUNTERS_LEN) {
-            ERROR_OCCURRED();
-        }
-
-        uint32_t new_intermediate_values_offset;
-        if (!inplace_update[cur_node->op_type]) {
-            new_intermediate_values_offset = (uint32_t)(
-                /* use uint32_t here to avoid overflow */
-                intermediate_values_offset + output->params_len
-            );
-        } else {
-            new_intermediate_values_offset = intermediate_values_offset;
-        }
-        if (new_intermediate_values_offset >= INTERMEDIATE_VALUES_SIZE) {
-            /* TODO: reuse the ring buffer */
-            // too many immediate values
-            ERROR_OCCURRED();
-        }
-
-        intermediate_values_offset = (uint16_t)new_intermediate_values_offset;
-        my_printf_debug("New intermediate_values_offset = %d" NEWLINE, intermediate_values_offset);
-
-        my_printf_debug("output dims: ");
-        uint8_t has_dims = 0;
-        for (uint8_t j = 0; j < 4; j++) {
-            if (output->dims[j]) {
-                has_dims = 1;
-                my_printf_debug("%d, ", output->dims[j]);
-            }
-        }
-        my_printf_debug(NEWLINE);
-        if (!has_dims) {
-            // missing dims
-            ERROR_OCCURRED();
-        }
-        if (output->bitwidth == 0) {
-            // invalid bitwidth
-            ERROR_OCCURRED();
-        }
-
-        if (cur_node_id == model->nodes_len - 1) {
-            model->running = 0;
-            model->run_counter++;
-        }
-        cur_node->scheduled = 1;
+    int16_t input_id[3];
+    ParameterInfo *input[3];
+    if (cur_node->inputs_len != expected_inputs_len[cur_node->op_type]) {
+        // unexpected input length
+        ERROR_OCCURRED();
     }
-    my_printf_debug(" - %d element(s)." NEWLINE, params->grp_index);
+    for (uint16_t j = 0; j < cur_node->inputs_len; j++) {
+        input_id[j] = node_input(cur_node, j);
+        my_printf_debug("input_id[%d] = %d ", j, input_id[j]);
+        input[j] = &(parameter_info[input_id[j]]);
+        if (input[j]->slot == FLAG_TEST_SET) {
+            input[j]->params_offset = (model->sample_idx % LABELS_DATA_LEN) * input[j]->params_len;
+        }
+        // dump_params(input[j]);
+    }
+
+    /* Allocate an ParameterInfo for output. Details are filled by
+     * individual operation handlers */
+    ParameterInfo *output = &(parameter_info[node_idx + model->n_input]);
+    output->params_offset = intermediate_values_offset;
+    my_printf_debug("Old intermediate_values_offset = %d" NEWLINE, intermediate_values_offset);
+
+    handlers[cur_node->op_type](model, input, output, cur_node->flags);
+    my_printf_debug("State bit=%d" NEWLINE, model->state_bit);
+
+    counters()->counter_idx++;
+    if (counters()->counter_idx >= COUNTERS_LEN) {
+        ERROR_OCCURRED();
+    }
+
+    uint32_t new_intermediate_values_offset;
+    if (!inplace_update[cur_node->op_type]) {
+        new_intermediate_values_offset = (uint32_t)(
+            /* use uint32_t here to avoid overflow */
+            intermediate_values_offset + output->params_len
+        );
+    } else {
+        new_intermediate_values_offset = intermediate_values_offset;
+    }
+    if (new_intermediate_values_offset >= INTERMEDIATE_VALUES_SIZE) {
+        /* TODO: reuse the ring buffer */
+        // too many immediate values
+        ERROR_OCCURRED();
+    }
+
+    intermediate_values_offset = (uint16_t)new_intermediate_values_offset;
+    my_printf_debug("New intermediate_values_offset = %d" NEWLINE, intermediate_values_offset);
+
+    my_printf_debug("output dims: ");
+    uint8_t has_dims = 0;
+    for (uint8_t j = 0; j < 4; j++) {
+        if (output->dims[j]) {
+            has_dims = 1;
+            my_printf_debug("%d, ", output->dims[j]);
+        }
+    }
+    my_printf_debug(NEWLINE);
+    if (!has_dims) {
+        // missing dims
+        ERROR_OCCURRED();
+    }
+    if (output->bitwidth == 0) {
+        // invalid bitwidth
+        ERROR_OCCURRED();
+    }
+
+    if (node_idx == model->nodes_len - 1) {
+        model->running = 0;
+        model->run_counter++;
+    }
+    cur_node->scheduled = 1;
 }
 
 int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
-    uint16_t cur_group[16] = { 0 };
-    uint8_t grp_index = 0;
-
     Node *nodes = (Node*)(model + 1);
     ParameterInfo *parameter_info = (ParameterInfo*)(nodes + model->nodes_len);
     inputs_data = (uint8_t*)(parameter_info + model->nodes_len + model->n_input);
@@ -122,7 +101,6 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
         // reset model
         for (uint16_t i = 0; i < model->nodes_len; i++) {
             Node *cur_node = &(nodes[i]);
-            node_input_unmark_all(cur_node);
             cur_node->scheduled = 0;
         }
         counters()->counter_idx = 0;
@@ -134,70 +112,14 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
 
     dump_model(model, nodes);
 
-    uint16_t next_node_idx = 0;
-    while (next_node_idx < model->nodes_len) {
-        for (uint16_t i = next_node_idx; i < model->nodes_len; i++) {
-            Node *cur_node = &(nodes[i]);
-            uint8_t no_inputs = 1;
+    for (uint16_t node_idx = 0; node_idx < model->nodes_len; node_idx++) {
+        Node *cur_node = &(nodes[node_idx]);
 
-            if (cur_node->scheduled) {
-                continue;
-            }
-
-            for (uint16_t j = 0; j < cur_node->inputs_len; j++) {
-                if (node_input(cur_node, j) >= model->n_input && !node_input_marked(cur_node, j)) {
-                    no_inputs = 0;
-                }
-            }
-            if (no_inputs) {
-                my_printf_debug("Node %d has no inputs." NEWLINE, i);
-                cur_group[grp_index] = i;
-                grp_index++;
-                /* https://stackoverflow.com/a/47417220 */
-                next_node_idx = (uint16_t)(i + 1);
-                if (grp_index == 16) {
-                    break;
-                }
-            }
+        if (cur_node->scheduled) {
+            continue;
         }
 
-        if (!grp_index) {
-            // unable to establish a group
-            ERROR_OCCURRED();
-        }
-
-        if (grp_index < 16) {
-            next_node_idx = 0;
-        }
-
-        handle_cur_group_params params;
-        params.model = model;
-        params.nodes = nodes;
-        params.parameter_info = parameter_info;
-        params.cur_group = cur_group;
-        params.grp_index = grp_index;
-        handle_cur_group(&params);
-
-        if (cur_group[grp_index - 1] == model->nodes_len - 1) {
-            break;
-        }
-
-        /**
-         * topological sort: remove handled (scheduled) dependent nodes
-         */
-        for (uint16_t i = cur_group[0]; i < model->nodes_len; i++) {
-            Node *cur_node = &(nodes[i]);
-            for (uint16_t j = 0; j < cur_node->inputs_len; j++) {
-                for (uint8_t k = 0; k < grp_index; k++) {
-                    if (node_input(cur_node, j) == cur_group[k] + model->n_input) {
-                        node_input_mark(cur_node, j);
-                    }
-                }
-            }
-        }
-
-        grp_index = 0;
-        memset(cur_group, 0, sizeof(cur_group));
+        handle_node(model, nodes, parameter_info, node_idx);
 
         dump_model(model, nodes);
     }
