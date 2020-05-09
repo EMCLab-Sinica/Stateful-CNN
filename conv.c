@@ -276,14 +276,6 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
                     (int)(dest - lea_buffer));
     for (int32_t h = h_start; h <= h_end; h++) {
         my_memcpy(dest, src, size * sizeof(int16_t));
-#ifdef WITH_PROGRESS_EMBEDDING
-        if (conv_params->state_bit) {
-            // XXX: LEA does not make this faster?
-            for (uint16_t idx = 0; idx < size; idx++) {
-                dest[idx] -= 0x4000;
-            }
-        }
-#endif
         src += src_offset;
         dest += conv_params->dest_offset;
     }
@@ -373,6 +365,14 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     conv_params->state_bit = model->state_bit;
     // XXX
     model->state_bit = 1;
+    if (conv_params->state_bit) {
+        int16_t *input_ptr = get_q15_param(conv_input, 0, WILL_WRITE);
+        uint32_t len = conv_input->params_len / sizeof(int16_t);
+        for (uint16_t idx = 0; idx < len; idx++) {
+            *input_ptr -= 0x4000;
+            input_ptr++;
+        }
+    }
 #endif
 
     if (conv_params->flags & CONV_BIAS_MERGED) {
