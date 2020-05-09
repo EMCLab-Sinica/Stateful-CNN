@@ -29,16 +29,23 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     output->dims[2] = W / stride;
     output->dims[3] = channel;
 
+    int16_t *data_baseptr = get_q15_param(data, 0, WILL_WRITE);
+
 #ifdef WITH_PROGRESS_EMBEDDING
     int16_t state_bit = model->state_bit;
     if (state_bit) {
         model->state_bit = 0;
+        int16_t *data_ptr = data_baseptr;
+        uint32_t len = data->params_len / sizeof(int16_t);
+        for (uint32_t idx = 0; idx < len; idx++) {
+            *data_ptr -= 0x4000;
+            data_ptr++;
+        }
     } else {
         model->state_bit = 1;
     }
 #endif
 
-    int16_t *data_baseptr = get_q15_param(data, 0, WILL_NOT_WRITE);
     int16_t *output_baseptr = get_q15_param(output, 0, WILL_WRITE);
     for (uint16_t c = 0; c < channel; c++) {
         int16_t *output_ptr = output_baseptr + c;
@@ -60,11 +67,6 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 #endif
                             val = data_baseptr[(h+sH) * W * channel + (w+sW) * channel + c];
 #if !NVM_BYTE_ADDRESSABLE
-                        }
-#endif
-#ifdef WITH_PROGRESS_EMBEDDING
-                        if (state_bit) {
-                            val -= 0x4000;
                         }
 #endif
                         print_q15_debug(val);
@@ -235,20 +237,25 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         model->state_bit = 1;
     }
 #endif
+    int16_t *data_ptr = data;
+    int16_t threshold, offset;
+#ifdef WITH_PROGRESS_EMBEDDING
+    if (state_bit) {
+        threshold = 0x4000;
+        offset = -0x4000;
+    } else {
+        threshold = 0;
+        offset = 0x4000;
+    }
+#else
+    threshold = offset = 0;
+#endif
     for (uint16_t i = 0; i < data_len; i++) {
-#ifdef WITH_PROGRESS_EMBEDDING
-        if (state_bit) {
-            data[i] -= 0x4000;
+        if (*data_ptr < threshold) {
+            *data_ptr = threshold;
         }
-#endif
-        if (data[i] < 0) {
-            data[i] = 0;
-        }
-#ifdef WITH_PROGRESS_EMBEDDING
-        if (!state_bit) {
-            data[i] += 0x4000;
-        }
-#endif
+        *data_ptr += offset;
+        data_ptr++;
     }
     dump_params(output);
 }
