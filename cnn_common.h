@@ -70,7 +70,7 @@ _Static_assert(sizeof(Counters) == 4 * COUNTERS_LEN + 2, "Unexpected size of Cou
 /**********************************
  *          Global data           *
  **********************************/
-uint8_t *inputs_data;
+extern uint8_t *inputs_data;
 Counters *counters(void);
 
 

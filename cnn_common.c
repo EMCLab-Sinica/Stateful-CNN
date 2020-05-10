@@ -1,5 +1,7 @@
 #include "cnn_common.h"
 
+uint8_t *inputs_data;
+
 static int16_t* node_input_ptr(Node *node, size_t i) {
     return (int16_t*)(inputs_data + node->inputs_offset) + i;
 }
