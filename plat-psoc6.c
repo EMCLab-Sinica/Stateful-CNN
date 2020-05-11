@@ -31,7 +31,4 @@ void my_memcpy(void* dest, const void* src, size_t n) {
 }
 
 void registerCheckpointing(uint8_t *addr, size_t len) {
-#ifdef CKPT
-    syscheckpoint_register(addr, len);
-#endif
 }

@@ -341,11 +341,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     // TODO: determine these values automatically
     conv_params->tile_h = 1; // fallback value
     if (H == 14) {
-#ifdef CYPRESS
-        conv_params->tile_h = 14;
-#else
         conv_params->tile_h = 7;
-#endif
     } else if (H == 28) {
         conv_params->tile_h = 28;
     }
