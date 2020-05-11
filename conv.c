@@ -145,7 +145,11 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
 #endif
 
     /* START dump data */
-    my_printf_debug("conv_idx=%d ", conv_params->conv_idx);
+#ifndef MY_NDEBUG
+    my_printf_debug("conv_idx=");
+    for (uint8_t idx = 0; idx < conv_params->filter_limit; idx++) {
+        my_printf_debug("%d ", conv_params->conv_idx + idx);
+    }
     my_printf_debug("output_h=%d ", conv_params->output_h + offset_h);
     my_printf_debug("output_w=%d" NEWLINE, conv_params->output_w);
 
@@ -163,6 +167,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
     my_printf_debug("matrix_mpy_results" NEWLINE);
     dump_matrix2(matrix_mpy_results, p_matrix_mpy_params->srcARows, p_matrix_mpy_params->srcBCols);
     my_printf_debug(NEWLINE);
+#endif
     /* END dump data */
 
     int16_t *output_baseptr = get_q15_param(conv_params->output, 0, WILL_WRITE);
@@ -241,7 +246,7 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
     int16_t *src = NULL,
             *dest;
     int16_t src_offset = conv_params->W * conv_params->CHANNEL;
-    // two additional filters for values before transpose
+    // TEMP_FILTER_WIDTH additional filters for values before transpose
     uint16_t inputs_len = MIN_VAL(
         LEA_BUFFER_SIZE - OUTPUT_LEN - (conv_params->filter_limit + TEMP_FILTER_WIDTH) * conv_params->kH * conv_params->dest_offset,
         (conv_params->H + conv_params->kH - 1) * conv_params->dest_offset
@@ -280,9 +285,11 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
         dest += conv_params->dest_offset;
     }
     if (conv_params->flags & CONV_BIAS_MERGED) {
-        for (uint8_t idx = 0; idx <= h_end - h_start + 2 * field_size; idx++) {
-            uint16_t offset = (idx + 1) * conv_params->dest_offset - (conv_params->truncated ? 2 : 1);
+        uint16_t offset = conv_params->dest_offset - (conv_params->truncated ? 2 : 1);
+        while (offset < inputs_len) {
+            my_printf_debug("Offset for CONV_BIAS_MERGED = %d" NEWLINE, offset);
             lea_buffer[offset] = -0x8000; // _Q15(-1.0)
+            offset += conv_params->dest_offset;
         }
     }
 
