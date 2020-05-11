@@ -20,14 +20,14 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     my_printf_debug("handle_maxpool input" NEWLINE);
     dump_params(data);
 
-    const uint16_t channel = data->dims[3], H = data->dims[1], W = data->dims[2];
+    const uint16_t CHANNEL = data->dims[3], H = data->dims[1], W = data->dims[2];
     output->params_len = data->params_len / (uint16_t)(stride * stride);
     output->bitwidth = data->bitwidth;
     output->slot = get_next_slot(data);
     output->dims[0] = 1;
     output->dims[1] = H / stride;
     output->dims[2] = W / stride;
-    output->dims[3] = channel;
+    output->dims[3] = CHANNEL;
 
     int16_t *data_baseptr = get_q15_param(data, 0, WILL_WRITE);
 
@@ -46,8 +46,20 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     }
 #endif
 
+    int16_t offset_w, offset_h;
+#if !NVM_BYTE_ADDRESSABLE
+    if (data->flags & TRANSPOSED) {
+        offset_w = H * CHANNEL;
+        offset_h = CHANNEL;
+    } else {
+#endif
+        offset_h = W * CHANNEL;
+        offset_w = CHANNEL;
+#if !NVM_BYTE_ADDRESSABLE
+    }
+#endif
     int16_t *output_baseptr = get_q15_param(output, 0, WILL_WRITE);
-    for (uint16_t c = 0; c < channel; c++) {
+    for (uint16_t c = 0; c < CHANNEL; c++) {
         int16_t *output_ptr = output_baseptr + c;
         for (uint16_t h = 0; h +stride <= H; h += stride) {
             for (uint16_t w = 0; w + stride <= W; w += stride) {
@@ -60,15 +72,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                     for (uint16_t sW = 0; sW < stride; sW++) {
                         int16_t val;
                         // XXX: use a moving pointer instead of data_baseptr makes it slower. Why!?
-#if !NVM_BYTE_ADDRESSABLE
-                        if (data->flags & TRANSPOSED) {
-                            val = data_baseptr[(w+sW) * H * channel + (h+sH) * channel + c];
-                        } else {
-#endif
-                            val = data_baseptr[(h+sH) * W * channel + (w+sW) * channel + c];
-#if !NVM_BYTE_ADDRESSABLE
-                        }
-#endif
+                        val = data_baseptr[(w+sW) * offset_w + (h+sH) * offset_h + c];
                         print_q15_debug(val);
                         // XXX: use LEA?
                         if (val > max_val) {
@@ -85,7 +89,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                 }
 #endif
                 *output_ptr = max_val;
-                output_ptr += channel;
+                output_ptr += CHANNEL;
             }
         }
     }
