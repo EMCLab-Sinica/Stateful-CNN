@@ -10,7 +10,6 @@
 
 #define LEA_BUFFER_SIZE 4096
 
-#define NVM_BYTE_ADDRESSABLE 1
 // USE_ALL_SAMPLES must be 1 as nvm.bin contains all samples
 #define USE_ALL_SAMPLES 1
 

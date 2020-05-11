@@ -47,17 +47,13 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 #endif
 
     int16_t offset_w, offset_h;
-#if !NVM_BYTE_ADDRESSABLE
     if (data->flags & TRANSPOSED) {
         offset_w = H * CHANNEL;
         offset_h = CHANNEL;
     } else {
-#endif
         offset_h = W * CHANNEL;
         offset_w = CHANNEL;
-#if !NVM_BYTE_ADDRESSABLE
     }
-#endif
     int16_t *output_baseptr = get_q15_param(output, 0, WILL_WRITE);
     for (uint16_t c = 0; c < CHANNEL; c++) {
         int16_t *output_ptr = output_baseptr + c;

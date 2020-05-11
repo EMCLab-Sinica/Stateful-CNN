@@ -173,17 +173,10 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
     /* END dump data */
 
     int16_t *output_baseptr = get_q15_param(conv_params->output, 0, WILL_WRITE);
-#if NVM_BYTE_ADDRESSABLE
-    int16_t *output_data = output_baseptr +
-            (conv_params->output_h + offset_h) * conv_params->W_by_OUTPUT_CHANNEL +
-            conv_params->output_w * conv_params->OUTPUT_CHANNEL +
-            conv_params->conv_idx;
-#else
     int16_t *output_data = output_baseptr +
             conv_params->output_w * conv_params->H_by_OUTPUT_CHANNEL +
             (conv_params->output_h + offset_h) * conv_params->OUTPUT_CHANNEL +
             conv_params->conv_idx;
-#endif
     int16_t *result_addr = matrix_mpy_results;
     // XXX: use DMA makes the whole loop slower as calling DMA for a few numbers brings more overhead than benefits
     uint8_t n_filters = MIN_VAL(conv_params->filter_limit, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
@@ -198,11 +191,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
             output_data[idx2] = *result_addr;
             result_addr++;
         }
-#if NVM_BYTE_ADDRESSABLE
-        output_data += conv_params->kH * conv_params->W_by_OUTPUT_CHANNEL;
-#else
         output_data += conv_params->kH * conv_params->OUTPUT_CHANNEL;
-#endif
     }
 }
 
@@ -336,9 +325,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     output->dims[1] = H;
     output->dims[2] = W;
     output->dims[3] = OUTPUT_CHANNEL;
-#if !NVM_BYTE_ADDRESSABLE
     output->flags |= TRANSPOSED;
-#endif
 
     ConvTaskParams conv_params_obj;
     ConvTaskParams *conv_params = &conv_params_obj;

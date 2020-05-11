@@ -7,8 +7,6 @@
 // larger than conv needed
 #define LEA_BUFFER_SIZE 4096
 
-#define NVM_BYTE_ADDRESSABLE 0
-
 #define USE_ALL_SAMPLES 1
 
 void vTimerHandler(void);
