@@ -103,7 +103,9 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
         my_memcpy(conv_params->filter_buffer_addr, filter_addr, buffer_size);
 #ifdef WITH_PROGRESS_EMBEDDING
         for (uint8_t idx = 0; idx < conv_params->filter_limit; idx++) {
-            filter_addr[conv_params->filter_offset * idx - (conv_params->truncated?2:1)] -= 0x4000;
+            uint16_t offset = (idx + 1) * conv_params->filter_offset - (conv_params->truncated?2:1);
+            my_printf_debug("offset for the bias with embedded progress = %d" NEWLINE, offset);
+            conv_params->filter_buffer_addr[offset] -= 0x4000;
         }
 #endif // WITH_PROGRESS_EMBEDDING
 
