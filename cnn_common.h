@@ -52,12 +52,13 @@ typedef struct Model {
     uint16_t nodes_len;
     uint16_t n_input;
     uint16_t running;
+    uint16_t recovery;
     uint16_t run_counter;
     uint16_t state_bit;
     uint16_t sample_idx;
 } Model;
 
-_Static_assert(sizeof(Model) == 12, "Unexpected size for Model");
+_Static_assert(sizeof(Model) == 14, "Unexpected size for Model");
 
 typedef struct {
     uint16_t time_counters[COUNTERS_LEN];

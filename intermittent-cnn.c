@@ -39,6 +39,7 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
     output->params_offset = intermediate_values_offset;
     my_printf_debug("Old intermediate_values_offset = %d" NEWLINE, intermediate_values_offset);
 
+    my_printf_debug("State bit=%d" NEWLINE, model->state_bit);
     handlers[cur_node->op_type](model, input, output, cur_node->flags);
     my_printf_debug("State bit=%d" NEWLINE, model->state_bit);
 
@@ -106,6 +107,8 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
         counters()->counter_idx = 0;
         model->running = 1;
         model->state_bit = 0;
+    } else {
+        model->recovery = 1;
     }
 
     counters()->power_counters[counters()->counter_idx]++;

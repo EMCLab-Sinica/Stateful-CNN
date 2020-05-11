@@ -12,7 +12,7 @@ extern uint8_t *parameters_data;
 #define PARAMETERS_DATA_LEN 12420
 
 extern uint8_t *model_data;
-#define MODEL_DATA_LEN 528
+#define MODEL_DATA_LEN 530
 
 extern uint8_t *counters_data;
 #define COUNTERS_DATA_LEN 258

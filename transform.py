@@ -170,6 +170,7 @@ outputs = {
 outputs['model'].write(to_bytes(len(model)))
 outputs['model'].write(to_bytes(n_input))
 outputs['model'].write(to_bytes(0))  # Model.running
+outputs['model'].write(to_bytes(0))  # Model.recovery
 outputs['model'].write(to_bytes(0))  # Model.run_counter
 outputs['model'].write(to_bytes(0))  # Model.state_bit
 outputs['model'].write(to_bytes(0))  # Model.sample_idx
