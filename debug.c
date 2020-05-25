@@ -8,7 +8,7 @@ void print_q15(int16_t val) {
     my_printf("% 6d ", val);
 #else
     // 2^15
-    my_printf("% f ", SCALE * val / 32768.0);
+    my_printf("% 12.6f ", SCALE * val / 32768.0);
 #endif
 }
 
@@ -28,9 +28,9 @@ void dump_params(struct ParameterInfo *cur_param) {
     if (cur_param->dims[2] && cur_param->dims[3]) {
         // tensor
         NUM = cur_param->dims[0];
-        H = cur_param->dims[1];
-        W = cur_param->dims[2];
-        CHANNEL = cur_param->dims[3];
+        CHANNEL = cur_param->dims[1];
+        H = cur_param->dims[2];
+        W = cur_param->dims[3];
     } else {
         // matrix
         NUM = CHANNEL = 1;
@@ -44,8 +44,8 @@ void dump_params(struct ParameterInfo *cur_param) {
             my_printf_debug("Channel %d" NEWLINE, j);
             for (uint16_t k = 0; k < H; k++) {
                 for (uint16_t l = 0; l < W; l++) {
-                    // internal format is NHWC
-                    size_t offset = (size_t)(i * H * W * CHANNEL + k * W * CHANNEL + l * CHANNEL + j);
+                    // internal format is NCHW
+                    size_t offset = (size_t)(i * H * W * CHANNEL + j * H * W + k * W + l);
                     if (bitwidth == 16) {
                         print_q15_debug(*get_q15_param(cur_param, offset, WILL_NOT_WRITE));
                     } else if (bitwidth == 32) {

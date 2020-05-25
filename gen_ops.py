@@ -11,7 +11,6 @@ ops = {
 }
 
 other_flags = [
-    'CONV_BIAS_MERGED',
     'TRANSPOSED',
 ]
 

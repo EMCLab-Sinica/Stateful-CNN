@@ -6,5 +6,4 @@ ops["MaxPool"] = 3
 ops["Relu"] = 4
 ops["Reshape"] = 5
 ops["Squeeze"] = 6
-CONV_BIAS_MERGED = 1
-TRANSPOSED = 2
+TRANSPOSED = 1

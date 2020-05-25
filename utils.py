@@ -21,9 +21,6 @@ def load_data(filename, limit=None):
         im = 255 - im
         print(im)
         append_img(im)
-        label = int(re.search(r'example(\d)\.png', filename).group(1))
-        print(f'Label: {label}')
-        labels.append(label)
     else:
         def parse_line(line):
             mobj = re.match(r'\|labels ([\d ]+) \|features ([\d ]+)', line)

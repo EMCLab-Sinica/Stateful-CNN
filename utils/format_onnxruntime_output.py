@@ -24,7 +24,7 @@ def main():
         while c:
             h = H
             while h:
-                print(' '.join(map(lambda f: '{: .6f}'.format(f), numbers[offset:offset+W])))
+                print(' '.join(map(lambda f: '{: 12.6f}'.format(f), numbers[offset:offset+W])))
                 offset += W
                 h -= 1
             print()

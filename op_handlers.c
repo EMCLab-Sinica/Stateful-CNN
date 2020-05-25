@@ -20,14 +20,14 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     my_printf_debug("handle_maxpool input" NEWLINE);
     dump_params(data);
 
-    const uint16_t CHANNEL = data->dims[3], H = data->dims[1], W = data->dims[2];
+    const uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
     output->params_len = data->params_len / (uint16_t)(stride * stride);
     output->bitwidth = data->bitwidth;
     output->slot = get_next_slot(data);
     output->dims[0] = 1;
-    output->dims[1] = H / stride;
-    output->dims[2] = W / stride;
-    output->dims[3] = CHANNEL;
+    output->dims[1] = CHANNEL;
+    output->dims[2] = H / stride;
+    output->dims[3] = W / stride;
 
     int16_t *data_baseptr = get_q15_param(data, 0, WILL_WRITE);
 
@@ -46,17 +46,15 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     }
 #endif
 
-    int16_t offset_w, offset_h;
+    int16_t offset_c = H * W, offset_h;
     if (data->flags & TRANSPOSED) {
-        offset_w = H * CHANNEL;
-        offset_h = CHANNEL;
+        offset_h = H;
     } else {
-        offset_h = W * CHANNEL;
-        offset_w = CHANNEL;
+        offset_h = W;
     }
     int16_t *output_baseptr = get_q15_param(output, 0, WILL_WRITE);
     for (uint16_t c = 0; c < CHANNEL; c++) {
-        int16_t *output_ptr = output_baseptr + c;
+        int16_t *output_ptr = output_baseptr + c * (H / stride) * (W / stride);
         for (uint16_t h = 0; h +stride <= H; h += stride) {
             for (uint16_t w = 0; w + stride <= W; w += stride) {
                 my_printf_debug("h=%d ", h);
@@ -68,7 +66,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                     for (uint16_t sW = 0; sW < stride; sW++) {
                         int16_t val;
                         // XXX: use a moving pointer instead of data_baseptr makes it slower. Why!?
-                        val = data_baseptr[(w+sW) * offset_w + (h+sH) * offset_h + c];
+                        val = data_baseptr[c * offset_c + (h+sH) * offset_h + (w+sW)];
                         print_q15_debug(val);
                         // XXX: use LEA?
                         if (val > max_val) {
@@ -85,7 +83,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                 }
 #endif
                 *output_ptr = max_val;
-                output_ptr += CHANNEL;
+                output_ptr++;
             }
         }
     }
@@ -276,34 +274,6 @@ void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output,
     }
     for (uint8_t i = 0; i < 4 && i < shape->dims[0]; i++) {
         output->dims[i] = (uint16_t)get_int64_param(shape, i);
-    }
-    /*
-     * XXX: Here is an heuristic - no conv nodes after reshape, so remapping
-     * NHWC back to NCHW.
-     * */
-    uint8_t do_nhwc2nchw = data->slot != FLAG_SLOTS;
-    if (do_nhwc2nchw) {
-        // data are intermediate values
-        int16_t *output_addr = get_q15_param(output, 0, WILL_WRITE);
-        my_memcpy(lea_buffer, output_addr, output->params_len);
-        uint16_t NUM = data->dims[0], H = data->dims[1],
-                 W = data->dims[2], CHANNEL = data->dims[3];
-        for (uint16_t n = 0; n < NUM; n++) {
-            for (uint16_t c = 0; c < CHANNEL; c++) {
-                for (uint16_t h = 0; h < H; h++) {
-                    for (uint16_t w = 0; w < W; w++) {
-                        uint16_t old_idx = n * CHANNEL * H * W + c * H * W       + h * W       + w,
-                                 new_idx = n * H * W * CHANNEL + h * W * CHANNEL + w * CHANNEL + c;
-                        output_addr[new_idx] = lea_buffer[old_idx];
-                    }
-                }
-            }
-        }
-    }
-
-    if (do_nhwc2nchw) {
-        my_printf_debug("handle_reshape output" NEWLINE);
-        dump_params(output);
     }
 }
 

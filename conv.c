@@ -26,16 +26,16 @@
 typedef struct ConvTaskParams {
     ParameterInfo *conv_input;
     ParameterInfo *conv_filter;
+    ParameterInfo *conv_bias;
     ParameterInfo *output;
 
     /* aux vars remaining constant for a conv layer */
     uint16_t H;
     uint16_t W;
     uint16_t kH;
+    uint16_t kW;
     uint16_t CHANNEL; // Cannot use C as a variable name here as C is a macro on MSP430 :(
     uint16_t OUTPUT_CHANNEL;
-    uint16_t W_by_OUTPUT_CHANNEL;
-    uint16_t H_by_OUTPUT_CHANNEL;
     uint16_t flags;
     uint8_t tile_h;
     uint16_t dest_offset;
@@ -67,17 +67,29 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
 #ifndef USE_ARM_CMSIS
         int16_t *filter_tmp = matrix_mpy_results - conv_params->filter_offset; // before transpose
 
+        msp_fill_q15_params fill_params = {
+            .length = conv_params->filter_offset,
+            .value = 0,
+        };
+        msp_status status = msp_fill_q15(&fill_params, filter_tmp);
+        msp_checkStatus(status);
+
+        uint16_t buffer_size = sizeof(int16_t) * conv_params->kW;
         for (uint8_t idx = 0; idx < conv_params->filter_limit; idx++) {
             filter_addr = get_q15_param(
                 conv_params->conv_filter,
-                (conv_params->conv_idx + idx) * conv_params->filter_offset,
+                (conv_params->conv_idx + idx) * conv_params->kH * conv_params->kW * conv_params->CHANNEL,
                 WILL_NOT_WRITE
             );
             my_printf_debug("Copying filter %d" NEWLINE, conv_params->conv_idx + idx);
-            uint16_t buffer_size = sizeof(int16_t) * conv_params->filter_offset;
-            my_memcpy(filter_tmp,
-                      filter_addr,
-                      buffer_size);
+            for (uint8_t idx2 = 0; idx2 < conv_params->kH; idx2++) {
+                for (uint8_t idx3 = 0; idx3 < conv_params->CHANNEL; idx3++) {
+                    my_memcpy(filter_tmp + idx2 * conv_params->dest_offset + idx3 * conv_params->kW,
+                              filter_addr + idx3 * conv_params->kH * conv_params->kW + idx2 * conv_params->kW,
+                              buffer_size);
+                }
+                *(filter_tmp + (idx2 + 1) * conv_params->dest_offset - 1) = *get_q15_param(conv_params->conv_bias, conv_params->conv_idx + idx, WILL_NOT_WRITE) / -conv_params->kH / 2;
+            }
 #ifdef WITH_PROGRESS_EMBEDDING
             filter_tmp[conv_params->filter_offset - (conv_params->truncated?2:1)] -= 0x4000;
 #endif
@@ -86,7 +98,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
             params.length = p_matrix_mpy_params->srcBRows;
             params.numChannels = conv_params->filter_limit;
             params.channel = idx;
-            msp_status status = msp_interleave_q15(
+            status = msp_interleave_q15(
                 &params,
                 filter_tmp, /* src */
                 conv_params->filter_buffer_addr /* dst */
@@ -174,9 +186,9 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
 
     int16_t *output_baseptr = get_q15_param(conv_params->output, 0, WILL_WRITE);
     int16_t *output_data = output_baseptr +
-            conv_params->output_w * conv_params->H_by_OUTPUT_CHANNEL +
-            (conv_params->output_h + offset_h) * conv_params->OUTPUT_CHANNEL +
-            conv_params->conv_idx;
+            conv_params->conv_idx * conv_params->H * conv_params->W +
+            (conv_params->output_h + offset_h) * conv_params->W +
+            conv_params->output_w;
     int16_t *result_addr = matrix_mpy_results;
     // XXX: use DMA makes the whole loop slower as calling DMA for a few numbers brings more overhead than benefits
     uint8_t n_filters = MIN_VAL(conv_params->filter_limit, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
@@ -188,10 +200,10 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
                 ERROR_OCCURRED();
             }
 #endif
-            output_data[idx2] = *result_addr;
+            *(output_data + idx2 * conv_params->H * conv_params->W) = *result_addr;
             result_addr++;
         }
-        output_data += conv_params->kH * conv_params->OUTPUT_CHANNEL;
+        output_data += conv_params->kH * conv_params->W;
     }
 }
 
@@ -218,7 +230,7 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
 
     int16_t *input_addr = get_q15_param(
         conv_params->conv_input,
-        conv_params->CHANNEL * (conv_params->output_h * conv_params->W + conv_params->output_w),
+        0,
         WILL_NOT_WRITE
     );
 
@@ -234,9 +246,7 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
      */
     int32_t w_start = int16_max(-field_size,                 -conv_params->output_w),
             w_end   = int16_min( field_size, conv_params->W-1-conv_params->output_w);
-    int16_t *src = NULL,
-            *dest;
-    int16_t src_offset = conv_params->W * conv_params->CHANNEL;
+    int16_t *dest;
     // TEMP_FILTER_WIDTH additional filters for values before transpose
     uint16_t inputs_len = MIN_VAL(
         LEA_BUFFER_SIZE - OUTPUT_LEN - (conv_params->filter_limit + TEMP_FILTER_WIDTH) * conv_params->kH * conv_params->dest_offset,
@@ -261,27 +271,27 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
     arm_fill_q15(0, lea_buffer, inputs_len);
 #endif
 
-    dest += (h_start + field_size) * conv_params->dest_offset + (w_start + field_size) * conv_params->CHANNEL;
+    dest += (h_start + field_size) * conv_params->dest_offset;
 
     my_printf_debug("h_start=%" PRId32 " ", h_start);
     my_printf_debug("h_end=%" PRId32 NEWLINE, h_end);
 
-    size_t size = (w_end-w_start+1) * conv_params->CHANNEL;
-    src = input_addr + (h_start * conv_params->W + w_start) * conv_params->CHANNEL;
+    size_t size = w_end - w_start + 1;
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                     (int)(dest - lea_buffer));
     for (int32_t h = h_start; h <= h_end; h++) {
-        my_memcpy(dest, src, size * sizeof(int16_t));
-        src += src_offset;
+        for (uint16_t c = 0; c < conv_params->CHANNEL; c++) {
+            my_memcpy(
+                dest + c * conv_params->kW + (w_start + field_size),
+                input_addr + c * conv_params->H * conv_params->W + (conv_params->output_h + h) * conv_params->W + (conv_params->output_w + w_start),
+                size * sizeof(int16_t));
+        }
         dest += conv_params->dest_offset;
     }
-    if (conv_params->flags & CONV_BIAS_MERGED) {
-        uint16_t offset = conv_params->dest_offset - (conv_params->truncated ? 2 : 1);
-        while (offset < inputs_len) {
-            my_printf_debug("Offset for CONV_BIAS_MERGED = %d" NEWLINE, offset);
-            lea_buffer[offset] = -0x8000; // _Q15(-1.0)
-            offset += conv_params->dest_offset;
-        }
+    uint16_t offset = conv_params->dest_offset - 1;
+    while (offset < inputs_len) {
+        lea_buffer[offset] = -0x8000; // _Q15(-1.0)
+        offset += conv_params->dest_offset;
     }
 
     for (uint8_t idx = 0; idx < conv_params->OUTPUT_CHANNEL; idx += conv_params->filter_limit) {
@@ -304,7 +314,7 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
 }
 
 void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    ParameterInfo *conv_input = input[0], *conv_filter = input[1];
+    ParameterInfo *conv_input = input[0], *conv_filter = input[1], *conv_bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 
     setOutputValue(1);
@@ -313,24 +323,23 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         // incorrect bitwidth
         ERROR_OCCURRED();
     }
-    /* original: input: N x C x H x W, filter: M x C x kW x kW
-     * remapped: input: N x H x W x C, filter: M x kH x kW x C */
-    const uint16_t H = conv_input->dims[1], W = conv_input->dims[2],
+    /* input: N x C x H x W, filter: M x C x kH x kW */
+    const uint16_t H = conv_input->dims[2], W = conv_input->dims[3],
                    OUTPUT_CHANNEL = conv_filter->dims[0];
     /* XXX: add flags; assume auto_pad=SAME_UPPER, stride=(1, 1), dilation=(1, 1) for now */
     output->params_len = (uint16_t)(OUTPUT_CHANNEL * H * W * 2);
     output->bitwidth = 16;
     output->slot = get_next_slot(conv_input);
     output->dims[0] = 1;
-    output->dims[1] = H;
-    output->dims[2] = W;
-    output->dims[3] = OUTPUT_CHANNEL;
-    output->flags |= TRANSPOSED;
+    output->dims[1] = OUTPUT_CHANNEL;
+    output->dims[2] = H;
+    output->dims[3] = W;
 
     ConvTaskParams conv_params_obj;
     ConvTaskParams *conv_params = &conv_params_obj;
     conv_params->conv_input = conv_input;
     conv_params->conv_filter = conv_filter;
+    conv_params->conv_bias = conv_bias;
     conv_params->output = output;
     conv_params->flags = flags;
     conv_params->filter_buffer_addr = NULL;
@@ -346,13 +355,12 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         conv_params->tile_h = 28;
     }
 
-    conv_params->kH = conv_filter->dims[1];
-    conv_params->CHANNEL = conv_filter->dims[3];
+    conv_params->kH = conv_filter->dims[2];
+    conv_params->kW = conv_filter->dims[3];
+    conv_params->CHANNEL = conv_filter->dims[1];
     conv_params->pending_filter_idx = 0;
-    conv_params->dest_offset = conv_filter->dims[2] * conv_params->CHANNEL;
+    conv_params->dest_offset = conv_params->kH * conv_params->CHANNEL;
     conv_params->OUTPUT_CHANNEL = OUTPUT_CHANNEL;
-    conv_params->W_by_OUTPUT_CHANNEL = W * conv_params->OUTPUT_CHANNEL;
-    conv_params->H_by_OUTPUT_CHANNEL = H * conv_params->OUTPUT_CHANNEL;
 #ifdef WITH_PROGRESS_EMBEDDING
     conv_params->state_bit = model->state_bit;
     // XXX
@@ -367,9 +375,8 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     }
 #endif
 
-    if (conv_params->flags & CONV_BIAS_MERGED) {
-        conv_params->dest_offset++;
-    }
+    // for bias
+    conv_params->dest_offset++;
     /* MSP430 LEA requires length to be even */
     conv_params->truncated = (conv_params->dest_offset / 2 * 2 != conv_params->dest_offset);
     if (conv_params->truncated) {

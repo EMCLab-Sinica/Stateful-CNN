@@ -90,9 +90,6 @@ for n in new_nodes:
 nodes = [Node(n) for n in new_nodes]
 print("n_input = {}".format(n_input))
 
-conv_param_names = set()
-bias_merge_map = {}  # filter -> bias
-
 for idx, inp in enumerate(g.input):
     names[inp.name] = idx
 
@@ -102,15 +99,6 @@ for idx, n in enumerate(nodes):
     else:
         output = n.output
     assert len(output) == 1
-    if n.op_type == 'Conv':
-        # https://github.com/onnx/onnx/blob/master/docs/Operators.md#conv
-        for inp in n.input[:2]:
-            conv_param_names.add(inp)
-        if len(n.input) == 3:
-            filters = n.input[1]
-            biases = n.input[2]
-            bias_merge_map[filters] = biases
-            n.flags |= ops.CONV_BIAS_MERGED
     if n.op_type == 'MaxPool':
         stride = next(attr.ints[0] for attr in n.attribute if attr.name == 'strides')
         n.flags = stride
@@ -143,20 +131,6 @@ def to_bytes(i, size=16):
         return struct.pack('q', i)
     else:
         raise ValueError(f'Unsupported size {size}')
-
-
-def nchw2nhwc(arr, dims):
-    N, C, H, W = dims
-    ret = [0] * (N * C * H * W)
-    for n in range(N):
-        for c in range(C):
-            for h in range(H):
-                for w in range(W):
-                    old_idx = n * C * H * W + c * H * W + h * W + w
-                    new_idx = n * H * W * C + h * W * C + w * C + c
-                    ret[new_idx] = arr[old_idx]
-    return ret, (N, H, W, C)
-
 
 inputs_data = io.BytesIO()
 outputs = {
@@ -204,12 +178,11 @@ for params in parameters:
         outputs['model'].write(to_bytes(0, size=8))                 # dummy
         # extend_dims
         outputs['model'].write(to_bytes(1))
+        outputs['model'].write(to_bytes(1))
         outputs['model'].write(to_bytes(dimX))
         outputs['model'].write(to_bytes(dimY))
-        outputs['model'].write(to_bytes(1))
     else:
         assert len(params.dims) <= 4
-        reordered_dims = params.dims
         if params.data_type == onnx.TensorProto.FLOAT:
             if params.float_data:
                 float_data = params.float_data
@@ -221,20 +194,6 @@ for params in parameters:
             data_len = len(float_data)
             assert data_len > 0
             outputs['model'].write(to_bytes(data_len * 2, size=32))  # A _q15 is 16-bit
-            if params.name in conv_param_names:
-                print(f'Reorder conv param {params.name}')
-                float_data, reordered_dims = nchw2nhwc(float_data, params.dims)
-                if params.name in bias_merge_map.keys():
-                    bias_node_idx = names[bias_merge_map[params.name]]
-                    bias_node = parameters[bias_node_idx]
-                    filter_len = reordered_dims[2] * reordered_dims[3]
-                    float_data_augmented = []
-                    for idx in range(reordered_dims[0] * reordered_dims[1]):
-                        float_data_augmented.extend(float_data[idx*filter_len:(idx+1)*filter_len])
-                        float_data_augmented.append(-bias_node.float_data[idx // reordered_dims[1]] / SCALE / reordered_dims[1] / 2)
-                        if filter_len & 1 == 0:
-                            float_data_augmented.append(0)
-                    float_data = float_data_augmented
             for param in float_data:
                 if len(params.dims) != 4:  # most likely biases
                     outputs['parameters'].write(to_bytes(_Q15(param / SCALE)))
@@ -254,11 +213,11 @@ for params in parameters:
         outputs['model'].write(to_bytes(FLAG_SLOTS, size=8))    # slot
         outputs['model'].write(to_bytes(0, size=8))             # flag
         outputs['model'].write(to_bytes(0, size=8))             # dummy
-        print('dims = {}, length = {}'.format(reordered_dims, data_len))
-        for dim in reordered_dims:
+        print('dims = {}, length = {}'.format(params.dims, data_len))
+        for dim in params.dims:
             outputs['model'].write(to_bytes(dim))
         # dims are always 4 uint16_t's in C
-        for _ in range(4 - len(reordered_dims)):
+        for _ in range(4 - len(params.dims)):
             outputs['model'].write(to_bytes(0))
 
 # Placeholder for ParameterInfo of intermediate values
