@@ -15,12 +15,6 @@
 #  define PRIsize_t "l"
 #  define my_printf print2uart
 #  define NEWLINE "\r\n"
-#elif defined(CYPRESS)
-#  include <inttypes.h> // for PRId32
-#  define PRIsize_t "zu"
-#  include <stdio.h>
-#  define my_printf printf
-#  define NEWLINE "\r\n"
 #else
 #  include <stdio.h>
 #  include <inttypes.h> // for PRId32
