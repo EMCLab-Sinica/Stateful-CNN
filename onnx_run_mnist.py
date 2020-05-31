@@ -27,7 +27,6 @@ rep = backend.prepare(model)
 correct = 0
 labels, images = load_data(args.input_file)
 for idx, im in enumerate(images):
-    im = im * 256
     outputs = rep.run(im.astype(np.float32))
     predicted = np.argmax(outputs[0])
     if not labels:

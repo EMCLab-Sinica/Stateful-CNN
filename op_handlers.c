@@ -21,7 +21,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     dump_params(data);
 
     const uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
-    output->params_len = data->params_len / (uint16_t)(stride * stride);
+    output->params_len = (H / stride) * (W / stride) * CHANNEL * sizeof(int16_t);
     output->bitwidth = data->bitwidth;
     output->slot = get_next_slot(data);
     output->dims[0] = 1;

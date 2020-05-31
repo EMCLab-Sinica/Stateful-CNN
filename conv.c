@@ -37,7 +37,11 @@ typedef struct ConvTaskParams {
     uint16_t CHANNEL; // Cannot use C as a variable name here as C is a macro on MSP430 :(
     uint16_t OUTPUT_CHANNEL;
     uint16_t flags;
+    uint8_t tile_c_offset;
+    uint8_t tile_c_index;
     uint8_t tile_h;
+    uint8_t tile_c;
+    uint8_t n_tiles_c;
     uint16_t dest_offset;
     uint16_t filter_offset;
     uint16_t filter_limit;
@@ -50,6 +54,7 @@ typedef struct ConvTaskParams {
     msp_matrix_mpy_q15_params matrix_mpy_params;
     int16_t *filter_buffer_addr;
     int16_t cached_filter_idx;
+    uint8_t cached_tile_c_offset;
     uint8_t pending_filters[NUM_FILTERS];
     uint8_t pending_filter_idx;
 } ConvTaskParams;
@@ -62,7 +67,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
     msp_matrix_mpy_q15_params *p_matrix_mpy_params = &(conv_params->matrix_mpy_params);
 
     /* copy filter data */
-    if (conv_params->cached_filter_idx != conv_params->conv_idx) {
+    if (conv_params->cached_filter_idx != conv_params->conv_idx || conv_params->cached_tile_c_offset != conv_params->tile_c_offset) {
         conv_params->filter_buffer_addr = matrix_mpy_results - conv_params->filter_offset * (conv_params->filter_limit + TEMP_FILTER_WIDTH);
 #ifndef USE_ARM_CMSIS
         int16_t *filter_tmp = matrix_mpy_results - conv_params->filter_offset; // before transpose
@@ -82,13 +87,13 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
                 WILL_NOT_WRITE
             );
             my_printf_debug("Copying filter %d" NEWLINE, conv_params->conv_idx + idx);
+            *(filter_tmp + conv_params->dest_offset - 1) = *get_q15_param(conv_params->conv_bias, conv_params->conv_idx + idx, WILL_NOT_WRITE) / -conv_params->n_tiles_c;
             for (uint8_t idx2 = 0; idx2 < conv_params->kH; idx2++) {
-                for (uint8_t idx3 = 0; idx3 < conv_params->CHANNEL; idx3++) {
-                    my_memcpy(filter_tmp + idx2 * conv_params->dest_offset + idx3 * conv_params->kW,
-                              filter_addr + idx3 * conv_params->kH * conv_params->kW + idx2 * conv_params->kW,
+                for (uint8_t c = 0; c < conv_params->tile_c; c++) {
+                    my_memcpy(filter_tmp + idx2 * conv_params->dest_offset + c * conv_params->kW,
+                              filter_addr + (c + conv_params->tile_c_offset) * conv_params->kH * conv_params->kW + idx2 * conv_params->kW,
                               buffer_size);
                 }
-                *(filter_tmp + (idx2 + 1) * conv_params->dest_offset - 1) = *get_q15_param(conv_params->conv_bias, conv_params->conv_idx + idx, WILL_NOT_WRITE) / -conv_params->kH / 2;
             }
 #ifdef WITH_PROGRESS_EMBEDDING
             filter_tmp[conv_params->filter_offset - (conv_params->truncated?2:1)] -= 0x4000;
@@ -123,6 +128,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
 
 #endif // USE_ARM_CMSIS
         conv_params->cached_filter_idx = conv_params->conv_idx;
+        conv_params->cached_tile_c_offset = conv_params->tile_c_offset;
     }
 
     int16_t *filter_buffer_addr = conv_params->filter_buffer_addr;
@@ -184,7 +190,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
 #endif
     /* END dump data */
 
-    int16_t *output_baseptr = get_q15_param(conv_params->output, 0, WILL_WRITE);
+    int16_t *output_baseptr = get_q15_param(conv_params->output, conv_params->tile_c_index * conv_params->OUTPUT_CHANNEL * conv_params->H * conv_params->W, WILL_WRITE);
     int16_t *output_data = output_baseptr +
             conv_params->conv_idx * conv_params->H * conv_params->W +
             (conv_params->output_h + offset_h) * conv_params->W +
@@ -280,10 +286,10 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                     (int)(dest - lea_buffer));
     for (int32_t h = h_start; h <= h_end; h++) {
-        for (uint16_t c = 0; c < conv_params->CHANNEL; c++) {
+        for (uint16_t c = 0; c < conv_params->tile_c; c++) {
             my_memcpy(
                 dest + c * conv_params->kW + (w_start + field_size),
-                input_addr + c * conv_params->H * conv_params->W + (conv_params->output_h + h) * conv_params->W + (conv_params->output_w + w_start),
+                input_addr + (c + conv_params->tile_c_offset) * conv_params->H * conv_params->W + (conv_params->output_h + h) * conv_params->W + (conv_params->output_w + w_start),
                 size * sizeof(int16_t));
         }
         dest += conv_params->dest_offset;
@@ -325,18 +331,36 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     }
     /* input: N x C x H x W, filter: M x C x kH x kW */
     const uint16_t H = conv_input->dims[2], W = conv_input->dims[3],
+                   CHANNEL = conv_filter->dims[1],
                    OUTPUT_CHANNEL = conv_filter->dims[0];
-    /* XXX: add flags; assume auto_pad=SAME_UPPER, stride=(1, 1), dilation=(1, 1) for now */
-    output->params_len = (uint16_t)(OUTPUT_CHANNEL * H * W * 2);
-    output->bitwidth = 16;
-    output->slot = get_next_slot(conv_input);
-    output->dims[0] = 1;
-    output->dims[1] = OUTPUT_CHANNEL;
-    output->dims[2] = H;
-    output->dims[3] = W;
 
     ConvTaskParams conv_params_obj;
     ConvTaskParams *conv_params = &conv_params_obj;
+
+    // TODO: determine these values automatically
+    uint8_t tile_c;
+    conv_params->tile_h = 1; // fallback value
+    if (H == 14) {
+        conv_params->tile_h = 7;
+        tile_c = 4;
+    } else if (H == 28) {
+        conv_params->tile_h = 28;
+        tile_c = 1;
+    }
+    conv_params->n_tiles_c = (CHANNEL + tile_c - 1) / tile_c;
+    my_printf_debug("n_tiles_c = %d" NEWLINE, conv_params->n_tiles_c);
+
+    /* XXX: add flags; assume auto_pad=SAME_UPPER, stride=(1, 1), dilation=(1, 1) for now */
+    output->bitwidth = 16;
+    output->slot = get_next_slot(conv_input);
+    output->dims[0] = 1;
+    // Although handle_conv requires more memory than params_len, only the first OUTPUT_CHANNEL
+    // channels are useful after merging results from tiling
+    output->dims[1] = OUTPUT_CHANNEL;
+    output->dims[2] = H;
+    output->dims[3] = W;
+    output->params_len = OUTPUT_CHANNEL * H * W * sizeof(int16_t);
+
     conv_params->conv_input = conv_input;
     conv_params->conv_filter = conv_filter;
     conv_params->conv_bias = conv_bias;
@@ -347,19 +371,10 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     conv_params->H = H;
     conv_params->W = W;
 
-    // TODO: determine these values automatically
-    conv_params->tile_h = 1; // fallback value
-    if (H == 14) {
-        conv_params->tile_h = 7;
-    } else if (H == 28) {
-        conv_params->tile_h = 28;
-    }
-
     conv_params->kH = conv_filter->dims[2];
     conv_params->kW = conv_filter->dims[3];
-    conv_params->CHANNEL = conv_filter->dims[1];
+    conv_params->CHANNEL = CHANNEL;
     conv_params->pending_filter_idx = 0;
-    conv_params->dest_offset = conv_params->kH * conv_params->CHANNEL;
     conv_params->OUTPUT_CHANNEL = OUTPUT_CHANNEL;
 #ifdef WITH_PROGRESS_EMBEDDING
     conv_params->state_bit = model->state_bit;
@@ -375,36 +390,59 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     }
 #endif
 
-    // for bias
-    conv_params->dest_offset++;
-    /* MSP430 LEA requires length to be even */
-    conv_params->truncated = (conv_params->dest_offset / 2 * 2 != conv_params->dest_offset);
-    if (conv_params->truncated) {
-        // when CHANNEL * kH * kW is odd, CHANNEL * kW (dest_offset) is
-        // also odd, so dummy values are needed between slices to make
-        // addresses even.
-        // a dummy value for each slice (kW * CHANNEL q15 values)
-        conv_params->dest_offset++;
-    }
-    conv_params->filter_offset = conv_params->kH * conv_params->dest_offset;
+    for (uint8_t tile_c_offset = 0, tile_c_index = 0; tile_c_offset < CHANNEL ; tile_c_offset += tile_c, tile_c_index++) {
+        conv_params->tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
+        // +1 for bias
+        conv_params->dest_offset = conv_params->kH * conv_params->tile_c + 1;
+        /* MSP430 LEA requires length to be even */
+        conv_params->truncated = (conv_params->dest_offset / 2 * 2 != conv_params->dest_offset);
+        if (conv_params->truncated) {
+            // when CHANNEL * kH * kW is odd, CHANNEL * kW (dest_offset) is
+            // also odd, so dummy values are needed between slices to make
+            // addresses even.
+            // a dummy value for each slice (kW * CHANNEL q15 values)
+            conv_params->dest_offset++;
+        }
+        conv_params->filter_offset = conv_params->kH * conv_params->dest_offset;
 
-    conv_params->filter_limit = MIN_VAL(
-        conv_params->OUTPUT_CHANNEL,
-        // `/ 2 * 2` as LEA requires matrix dimensions to be even
-        ((LEA_BUFFER_SIZE - OUTPUT_LEN - conv_params->dest_offset * (conv_params->kH + conv_params->tile_h - 1)) / (conv_params->dest_offset * conv_params->kH) - TEMP_FILTER_WIDTH) / 2 * 2
-    );
+        conv_params->filter_limit = MIN_VAL(
+            conv_params->OUTPUT_CHANNEL,
+            // `/ 2 * 2` as LEA requires matrix dimensions to be even
+            ((LEA_BUFFER_SIZE - OUTPUT_LEN - conv_params->dest_offset * (conv_params->kH + conv_params->tile_h - 1)) / (conv_params->dest_offset * conv_params->kH) - TEMP_FILTER_WIDTH) / 2 * 2
+        );
 
-    my_printf_debug("filter_limit: %d" NEWLINE, conv_params->filter_limit);
+        my_printf_debug("filter_limit: %d" NEWLINE, conv_params->filter_limit);
 
-    for (uint16_t output_w = 0; output_w < W; output_w++) {
-        for (uint16_t output_h = 0; output_h < H; output_h += conv_params->tile_h) {
-            conv_params->output_h = output_h;
-            conv_params->output_w = output_w;
-            handle_conv_inner_loop(conv_params);
+        conv_params->tile_c_offset = tile_c_offset;
+        conv_params->tile_c_index = tile_c_index;
+        for (uint16_t output_w = 0; output_w < W; output_w++) {
+            for (uint16_t output_h = 0; output_h < H; output_h += conv_params->tile_h) {
+                conv_params->output_h = output_h;
+                conv_params->output_w = output_w;
+                handle_conv_inner_loop(conv_params);
+            }
         }
     }
 
     my_printf_debug("handle_conv output" NEWLINE);
+    output->dims[1] *= conv_params->n_tiles_c;
+    output->params_len *= conv_params->n_tiles_c;
+    dump_params(output);
+    output->dims[1] /= conv_params->n_tiles_c;
+    output->params_len /= conv_params->n_tiles_c;
+
+    int16_t *output_baseptr = get_q15_param(conv_params->output, 0, WILL_WRITE);
+    for (uint16_t c = 0; c < OUTPUT_CHANNEL; c++) {
+        for (uint16_t output_h = 0; output_h < H; output_h++) {
+            for (uint16_t output_w = 0; output_w < H; output_w++) {
+                // XXX: handle state bits
+                for (uint8_t tile_c_index = 1; tile_c_index * tile_c < CHANNEL; tile_c_index++) {
+                    output_baseptr[c * H * W + output_h * W + output_w] += output_baseptr[(c + tile_c_index * OUTPUT_CHANNEL) * H * W + output_h * W + output_w];
+                }
+            }
+        }
+    }
+
     dump_params(output);
 
     setOutputValue(0);

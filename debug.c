@@ -8,7 +8,7 @@ void print_q15(int16_t val) {
     my_printf("% 6d ", val);
 #else
     // 2^15
-    my_printf("% 12.6f ", SCALE * val / 32768.0);
+    my_printf("% 13.6f", SCALE * val / 32768.0);
 #endif
 }
 
@@ -36,6 +36,15 @@ void dump_params(struct ParameterInfo *cur_param) {
         NUM = CHANNEL = 1;
         H = cur_param->dims[0];
         W = cur_param->dims[1];
+    }
+    uint16_t expected_params_len = sizeof(int16_t);
+    for (uint8_t i = 0; i < 4; i++) {
+        if (cur_param->dims[i]) {
+            expected_params_len *= cur_param->dims[i];
+        }
+    }
+    if (cur_param->params_len != expected_params_len) {
+        ERROR_OCCURRED();
     }
     uint16_t bitwidth = cur_param->bitwidth;
     for (uint16_t i = 0; i < NUM; i++) {

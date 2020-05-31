@@ -16,19 +16,17 @@ def main():
             print(line)
             continue
         numbers = list(map(lambda s: float(s.strip()), line.split(',')))
-        offset = 0
         C, H, W = 1, dims[-2], dims[-1]
         if len(dims) >= 3:
             C = dims[-3]
-        c = C
-        while c:
-            h = H
-            while h:
-                print(' '.join(map(lambda f: '{: 12.6f}'.format(f), numbers[offset:offset+W])))
-                offset += W
-                h -= 1
+        # Somehow dumped values use format NHWC
+        for c in range(C):
+            print(f'Channel {c}')
+            for h in range(H):
+                for w in range(W):
+                    print('{: 13.6f}'.format(numbers[h * W * C + w * C + c]), end='')
+                print()
             print()
-            c -= 1
         dims = None
 
 if __name__ == '__main__':
