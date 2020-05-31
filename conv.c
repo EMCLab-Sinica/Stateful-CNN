@@ -64,6 +64,7 @@ int16_t * const matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
 static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
     /* put var declarations first to make the compiler happy */
     int16_t *filter_addr;
+    uint8_t n_filters = MIN_VAL(conv_params->filter_limit, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
     msp_matrix_mpy_q15_params *p_matrix_mpy_params = &(conv_params->matrix_mpy_params);
 
     /* copy filter data */
@@ -80,7 +81,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
         msp_checkStatus(status);
 
         uint16_t buffer_size = sizeof(int16_t) * conv_params->kW;
-        for (uint8_t idx = 0; idx < conv_params->filter_limit; idx++) {
+        for (uint8_t idx = 0; idx < n_filters; idx++) {
             filter_addr = get_q15_param(
                 conv_params->conv_filter,
                 (conv_params->conv_idx + idx) * conv_params->kH * conv_params->kW * conv_params->CHANNEL,
@@ -101,7 +102,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
 
             msp_interleave_q15_params params;
             params.length = p_matrix_mpy_params->srcBRows;
-            params.numChannels = conv_params->filter_limit;
+            params.numChannels = n_filters;
             params.channel = idx;
             status = msp_interleave_q15(
                 &params,
@@ -197,7 +198,6 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
             conv_params->output_w;
     int16_t *result_addr = matrix_mpy_results;
     // XXX: use DMA makes the whole loop slower as calling DMA for a few numbers brings more overhead than benefits
-    uint8_t n_filters = MIN_VAL(conv_params->filter_limit, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
     for (uint8_t idx = 0; idx < p_matrix_mpy_params->srcARows; idx++) {
         my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - output_baseptr));
         for (uint8_t idx2 = 0; idx2 < n_filters; idx2++) {
