@@ -144,7 +144,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
     // appears to still give correct results when srcARows is odd
     // srcBCols should really be even, though
     // http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/716353?MSP430FR5992-MSP-DSPLib-msp-matrix-mpy-q15
-    p_matrix_mpy_params->srcARows = (conv_params->tile_h - offset_h + conv_params->kH - 1) / conv_params->kH;
+    p_matrix_mpy_params->srcARows = (MIN_VAL(conv_params->tile_h, conv_params->H - conv_params->output_h) - offset_h + conv_params->kH - 1) / conv_params->kH;
 
 #ifndef USE_ARM_CMSIS
     msp_status status = msp_matrix_mpy_q15(
@@ -222,7 +222,7 @@ static inline void schedule_tile(uint16_t idx, ConvTaskParams *conv_params) {
     if ((p_matrix_mpy_params->srcACols & 1) || (p_matrix_mpy_params->srcBCols & 1)) {
         ERROR_OCCURRED();
     }
-    for (uint8_t j = 0; j < conv_params->kH; j++) {
+    for (uint8_t j = 0; j < MIN_VAL(conv_params->kH, conv_params->H - conv_params->output_h); j++) {
         convTask(j, conv_params);
     }
 }
@@ -341,7 +341,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     uint8_t tile_c;
     conv_params->tile_h = 1; // fallback value
     if (H == 14) {
-        conv_params->tile_h = 7;
+        conv_params->tile_h = 6;
         tile_c = 4;
     } else if (H == 28) {
         conv_params->tile_h = 28;
