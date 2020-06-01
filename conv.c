@@ -445,17 +445,21 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     output->params_len /= conv_params->n_tiles_c;
 
     if (tile_c != CHANNEL) {
+        // XXX: a little slower if treating tensors as 1-D vectors!?
         int16_t *output_baseptr = get_q15_param(conv_params->output, 0, WILL_WRITE);
         for (uint16_t c = 0; c < OUTPUT_CHANNEL; c++) {
             for (uint16_t output_h = 0; output_h < H; output_h++) {
                 for (uint16_t output_w = 0; output_w < H; output_w++) {
                     // XXX: handle state bits
-                    int16_t *tiling_src = output_baseptr + (c + OUTPUT_CHANNEL) * H * W + output_h * W + output_w;
-                    int16_t *tiling_dest = output_baseptr + c * H * W + output_h * W + output_w;
-                    for (uint8_t tile_c_index = 1; tile_c_index * tile_c < CHANNEL; tile_c_index++) {
-                        *tiling_dest += *tiling_src;
-                        tiling_src += OUTPUT_CHANNEL * H * W;
+                    int16_t *tiling_src, *tiling_dest;
+                    tiling_src = tiling_dest = output_baseptr + c * H * W + output_h * W + output_w;
+                    int16_t sum = 0;
+                    uint16_t tile_results_len = OUTPUT_CHANNEL * H * W;
+                    for (uint8_t tile_c_offset = 0; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
+                        sum += *tiling_src;
+                        tiling_src += tile_results_len;
                     }
+                    *tiling_dest = sum;
                 }
             }
         }
