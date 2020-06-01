@@ -81,19 +81,27 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
         msp_checkStatus(status);
 
         uint16_t buffer_size = sizeof(int16_t) * conv_params->kW;
+        uint16_t filter_src_offset = conv_params->kH * conv_params->kW * conv_params->CHANNEL;
         for (uint8_t idx = 0; idx < n_filters; idx++) {
             filter_addr = get_q15_param(
                 conv_params->conv_filter,
-                (conv_params->conv_idx + idx) * conv_params->kH * conv_params->kW * conv_params->CHANNEL,
+                (conv_params->conv_idx + idx) * filter_src_offset,
                 WILL_NOT_WRITE
             );
             my_printf_debug("Copying filter %d" NEWLINE, conv_params->conv_idx + idx);
-            *(filter_tmp + conv_params->dest_offset - 1) = *get_q15_param(conv_params->conv_bias, conv_params->conv_idx + idx, WILL_NOT_WRITE) / -conv_params->n_tiles_c;
-            for (uint8_t idx2 = 0; idx2 < conv_params->kH; idx2++) {
-                for (uint8_t c = 0; c < conv_params->tile_c; c++) {
-                    my_memcpy(filter_tmp + idx2 * conv_params->dest_offset + c * conv_params->kW,
-                              filter_addr + (c + conv_params->tile_c_offset) * conv_params->kH * conv_params->kW + idx2 * conv_params->kW,
+            if (conv_params->tile_c_index == 0) {
+                *(filter_tmp + conv_params->dest_offset - 1) = -*get_q15_param(conv_params->conv_bias, conv_params->conv_idx + idx, WILL_NOT_WRITE);
+            }
+            int16_t filter_size = conv_params->kH * conv_params->kW;
+            for (uint8_t c = 0; c < conv_params->tile_c; c++) {
+                int16_t *filter_dest_ptr = filter_tmp + c * conv_params->kW;
+                int16_t *filter_src_ptr = filter_addr + (c + conv_params->tile_c_offset) * filter_size;
+                for (uint8_t idx2 = 0; idx2 < conv_params->kH; idx2++) {
+                    my_memcpy(filter_dest_ptr,
+                              filter_src_ptr,
                               buffer_size);
+                    filter_dest_ptr += conv_params->dest_offset;
+                    filter_src_ptr += conv_params->kW;
                 }
             }
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -191,22 +199,25 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
 #endif
     /* END dump data */
 
-    int16_t *output_baseptr = get_q15_param(conv_params->output, conv_params->tile_c_index * conv_params->OUTPUT_CHANNEL * conv_params->H * conv_params->W, WILL_WRITE);
+    int16_t offset = conv_params->H * conv_params->W;
+    int16_t *output_baseptr = get_q15_param(conv_params->output, conv_params->tile_c_index * conv_params->OUTPUT_CHANNEL * offset, WILL_WRITE);
     int16_t *output_data = output_baseptr +
-            conv_params->conv_idx * conv_params->H * conv_params->W +
+            conv_params->conv_idx * offset +
             (conv_params->output_h + offset_h) * conv_params->W +
             conv_params->output_w;
     int16_t *result_addr = matrix_mpy_results;
     // XXX: use DMA makes the whole loop slower as calling DMA for a few numbers brings more overhead than benefits
     for (uint8_t idx = 0; idx < p_matrix_mpy_params->srcARows; idx++) {
         my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - output_baseptr));
+        int16_t *output_data_tmp = output_data;
         for (uint8_t idx2 = 0; idx2 < n_filters; idx2++) {
 #if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
             if (!conv_params->state_bit && *result_addr < 0x2000 && *result_addr >= -0x2000) {
                 ERROR_OCCURRED();
             }
 #endif
-            *(output_data + idx2 * conv_params->H * conv_params->W) = *result_addr;
+            *output_data_tmp = *result_addr;
+            output_data_tmp += offset;
             result_addr++;
         }
         output_data += conv_params->kH * conv_params->W;
@@ -286,11 +297,13 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                     (int)(dest - lea_buffer));
     for (int32_t h = h_start; h <= h_end; h++) {
+        int16_t *input_src_addr = input_addr + (conv_params->tile_c_offset) * conv_params->H * conv_params->W + (conv_params->output_h + h) * conv_params->W + (conv_params->output_w + w_start);
         for (uint16_t c = 0; c < conv_params->tile_c; c++) {
             my_memcpy(
                 dest + c * conv_params->kW + (w_start + field_size),
-                input_addr + (c + conv_params->tile_c_offset) * conv_params->H * conv_params->W + (conv_params->output_h + h) * conv_params->W + (conv_params->output_w + w_start),
+                input_src_addr,
                 size * sizeof(int16_t));
+            input_src_addr += conv_params->H * conv_params->W;
         }
         dest += conv_params->dest_offset;
     }
@@ -341,8 +354,8 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     uint8_t tile_c;
     conv_params->tile_h = 1; // fallback value
     if (H == 14) {
-        conv_params->tile_h = 6;
-        tile_c = 2;
+        conv_params->tile_h = 14;
+        tile_c = 3;
     } else if (H == 28) {
         conv_params->tile_h = 28;
         tile_c = 1;
@@ -431,13 +444,18 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     output->dims[1] /= conv_params->n_tiles_c;
     output->params_len /= conv_params->n_tiles_c;
 
-    int16_t *output_baseptr = get_q15_param(conv_params->output, 0, WILL_WRITE);
-    for (uint16_t c = 0; c < OUTPUT_CHANNEL; c++) {
-        for (uint16_t output_h = 0; output_h < H; output_h++) {
-            for (uint16_t output_w = 0; output_w < H; output_w++) {
-                // XXX: handle state bits
-                for (uint8_t tile_c_index = 1; tile_c_index * tile_c < CHANNEL; tile_c_index++) {
-                    output_baseptr[c * H * W + output_h * W + output_w] += output_baseptr[(c + tile_c_index * OUTPUT_CHANNEL) * H * W + output_h * W + output_w];
+    if (tile_c != CHANNEL) {
+        int16_t *output_baseptr = get_q15_param(conv_params->output, 0, WILL_WRITE);
+        for (uint16_t c = 0; c < OUTPUT_CHANNEL; c++) {
+            for (uint16_t output_h = 0; output_h < H; output_h++) {
+                for (uint16_t output_w = 0; output_w < H; output_w++) {
+                    // XXX: handle state bits
+                    int16_t *tiling_src = output_baseptr + (c + OUTPUT_CHANNEL) * H * W + output_h * W + output_w;
+                    int16_t *tiling_dest = output_baseptr + c * H * W + output_h * W + output_w;
+                    for (uint8_t tile_c_index = 1; tile_c_index * tile_c < CHANNEL; tile_c_index++) {
+                        *tiling_dest += *tiling_src;
+                        tiling_src += OUTPUT_CHANNEL * H * W;
+                    }
                 }
             }
         }
