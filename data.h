@@ -5,7 +5,7 @@
 
 #define SCALE 100
 #define NUM_SLOTS 2
-#define INTERMEDIATE_VALUES_SIZE 13000u
+#define INTERMEDIATE_VALUES_SIZE 26000u
 #define COUNTERS_LEN 64
 
 extern uint8_t *parameters_data;

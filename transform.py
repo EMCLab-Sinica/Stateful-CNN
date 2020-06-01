@@ -21,7 +21,7 @@ Indexing policy:
 # XXX: Heuristics for scaling: only scale biases and the input
 SCALE = 100
 NUM_SLOTS = 2
-INTERMEDIATE_VALUES_SIZE = 13000
+INTERMEDIATE_VALUES_SIZE = 26000
 N_SAMPLES = 20
 COUNTERS_LEN = 64
 

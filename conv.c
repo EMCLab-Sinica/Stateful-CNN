@@ -342,7 +342,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     conv_params->tile_h = 1; // fallback value
     if (H == 14) {
         conv_params->tile_h = 6;
-        tile_c = 4;
+        tile_c = 2;
     } else if (H == 28) {
         conv_params->tile_h = 28;
         tile_c = 1;
