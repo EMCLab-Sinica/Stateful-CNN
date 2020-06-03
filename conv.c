@@ -206,7 +206,6 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
             (conv_params->output_h + offset_h) * conv_params->W +
             conv_params->output_w;
     int16_t *result_addr = matrix_mpy_results;
-    // XXX: use DMA makes the whole loop slower as calling DMA for a few numbers brings more overhead than benefits
     for (uint8_t idx = 0; idx < p_matrix_mpy_params->srcARows; idx++) {
         my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - output_baseptr));
         int16_t *output_data_tmp = output_data;
