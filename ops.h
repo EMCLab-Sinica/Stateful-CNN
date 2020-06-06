@@ -16,4 +16,3 @@ void handle_maxpool(struct Model *model, struct ParameterInfo *input[], struct P
 void handle_relu(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
 void handle_reshape(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
 void handle_squeeze(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
-#define TRANSPOSED 1

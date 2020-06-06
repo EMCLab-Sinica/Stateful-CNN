@@ -6,4 +6,3 @@ ops["MaxPool"] = 3
 ops["Relu"] = 4
 ops["Reshape"] = 5
 ops["Squeeze"] = 6
-TRANSPOSED = 1

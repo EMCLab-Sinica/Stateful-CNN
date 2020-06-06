@@ -46,12 +46,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     }
 #endif
 
-    int16_t offset_c = H * W, offset_h;
-    if (data->flags & TRANSPOSED) {
-        offset_h = H;
-    } else {
-        offset_h = W;
-    }
+    int16_t offset_h = W * CHANNEL, offset_w = CHANNEL;
     int16_t *output_baseptr = get_q15_param(output, 0, WILL_WRITE);
     for (uint16_t c = 0; c < CHANNEL; c++) {
         int16_t *output_ptr = output_baseptr + c * (H / stride) * (W / stride);
@@ -66,7 +61,8 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                     for (uint16_t sW = 0; sW < stride; sW++) {
                         int16_t val;
                         // XXX: use a moving pointer instead of data_baseptr makes it slower. Why!?
-                        val = data_baseptr[c * offset_c + (h+sH) * offset_h + (w+sW)];
+                        // Output from handle_conv uses NHWC
+                        val = data_baseptr[(h+sH) * offset_h + (w+sW) * offset_w + c];
                         print_q15_debug(val);
                         // XXX: use LEA?
                         if (val > max_val) {
@@ -255,7 +251,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         *data_ptr += offset;
         data_ptr++;
     }
-    dump_params(output);
+    dump_params_nhwc(output);
 }
 
 void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {

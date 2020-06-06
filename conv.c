@@ -199,27 +199,25 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
 #endif
     /* END dump data */
 
-    int16_t offset = conv_params->H * conv_params->W;
-    int16_t *output_baseptr = get_q15_param(conv_params->output, conv_params->tile_c_index * conv_params->OUTPUT_CHANNEL * offset, WILL_WRITE);
+    int16_t offset = conv_params->W * conv_params->OUTPUT_CHANNEL;
+    int16_t *output_baseptr = get_q15_param(conv_params->output, conv_params->tile_c_index * conv_params->H * offset, WILL_WRITE);
     int16_t *output_data = output_baseptr +
-            conv_params->conv_idx * offset +
-            (conv_params->output_h + offset_h) * conv_params->W +
-            conv_params->output_w;
+            conv_params->conv_idx +
+            (conv_params->output_h + offset_h) * conv_params->W * conv_params->OUTPUT_CHANNEL +
+            conv_params->output_w * conv_params->OUTPUT_CHANNEL;
     int16_t *result_addr = matrix_mpy_results;
     for (uint8_t idx = 0; idx < p_matrix_mpy_params->srcARows; idx++) {
         my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - output_baseptr));
-        int16_t *output_data_tmp = output_data;
-        for (uint8_t idx2 = 0; idx2 < n_filters; idx2++) {
 #if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
+        for (uint8_t idx2 = 0; idx2 < n_filters; idx2++) {
             if (!conv_params->state_bit && *result_addr < 0x2000 && *result_addr >= -0x2000) {
                 ERROR_OCCURRED();
             }
-#endif
-            *output_data_tmp = *result_addr;
-            output_data_tmp += offset;
-            result_addr++;
         }
-        output_data += conv_params->kH * conv_params->W;
+#endif
+        my_memcpy(output_data, result_addr, n_filters * sizeof(int16_t));
+        result_addr += n_filters;
+        output_data += conv_params->kH * offset;
     }
 }
 
@@ -439,7 +437,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     my_printf_debug("handle_conv output" NEWLINE);
     output->dims[1] *= conv_params->n_tiles_c;
     output->params_len *= conv_params->n_tiles_c;
-    dump_params(output);
+    dump_params_nhwc(output);
     output->dims[1] /= conv_params->n_tiles_c;
     output->params_len /= conv_params->n_tiles_c;
 
@@ -464,7 +462,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         }
     }
 
-    dump_params(output);
+    dump_params_nhwc(output);
 
     setOutputValue(0);
 }

@@ -10,9 +10,7 @@ ops = {
     'Squeeze': [1, 1],
 }
 
-other_flags = [
-    'TRANSPOSED',
-]
+other_flags = []
 
 with open('ops.py', 'w') as f_py, open('ops.h', 'w') as f_h, open('ops.c', 'w') as f_c:
     f_h.write('#pragma once\n\n')
