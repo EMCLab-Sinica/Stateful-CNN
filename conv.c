@@ -435,34 +435,36 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     }
 
     my_printf_debug("handle_conv output" NEWLINE);
-    output->dims[1] *= conv_params->n_tiles_c;
-    output->params_len *= conv_params->n_tiles_c;
-    dump_params_nhwc(output);
-    output->dims[1] /= conv_params->n_tiles_c;
-    output->params_len /= conv_params->n_tiles_c;
 
     if (tile_c != CHANNEL) {
-        // XXX: a little slower if treating tensors as 1-D vectors!?
+        // XXX: handle state bits
         int16_t *output_baseptr = get_q15_param(conv_params->output, 0, WILL_WRITE);
-        for (uint16_t c = 0; c < OUTPUT_CHANNEL; c++) {
-            for (uint16_t output_h = 0; output_h < H; output_h++) {
-                for (uint16_t output_w = 0; output_w < H; output_w++) {
-                    // XXX: handle state bits
-                    int16_t *tiling_src, *tiling_dest;
-                    tiling_src = tiling_dest = output_baseptr + c * H * W + output_h * W + output_w;
-                    int16_t sum = 0;
-                    uint16_t tile_results_len = OUTPUT_CHANNEL * H * W;
-                    for (uint8_t tile_c_offset = 0; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
-                        sum += *tiling_src;
-                        tiling_src += tile_results_len;
-                    }
-                    *tiling_dest = sum;
+        uint16_t chunk_len = LEA_BUFFER_SIZE / conv_params->n_tiles_c;
+        uint16_t tiling_results_len = OUTPUT_CHANNEL * H * W;
+
+        for (uint8_t tile_c_index = 0; tile_c_index * tile_c < CHANNEL; tile_c_index++) {
+            dump_params_nhwc(output, tile_c_index * tiling_results_len);
+        }
+
+        for (uint16_t tiling_results_offset = 0; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
+            uint16_t real_chunk_len = MIN_VAL(chunk_len, tiling_results_len - tiling_results_offset);
+            my_printf_debug("real_chunk_len = %d" NEWLINE, real_chunk_len);
+            for (uint8_t tile_c_index = 0; tile_c_index * tile_c < CHANNEL; tile_c_index++) {
+                int16_t *to_add = lea_buffer + tile_c_index * chunk_len;
+                my_memcpy(to_add,
+                          output_baseptr + tile_c_index * tiling_results_len + tiling_results_offset,
+                          real_chunk_len * sizeof(int16_t));
+                if (tile_c_index != 0) {
+                    msp_add_q15_params params2 = { .length = real_chunk_len };
+                    msp_status status = msp_add_q15(&params2, lea_buffer, to_add, lea_buffer);
+                    msp_checkStatus(status);
                 }
             }
+            my_memcpy(output_baseptr + tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));
         }
     }
 
-    dump_params_nhwc(output);
+    dump_params_nhwc(output, 0);
 
     setOutputValue(0);
 }

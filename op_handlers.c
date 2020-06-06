@@ -251,7 +251,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         *data_ptr += offset;
         data_ptr++;
     }
-    dump_params_nhwc(output);
+    dump_params_nhwc(output, 0);
 }
 
 void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {

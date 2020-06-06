@@ -79,7 +79,7 @@ void dump_params(struct ParameterInfo *cur_param) {
     }
 }
 
-void dump_params_nhwc(struct ParameterInfo *cur_param) {
+void dump_params_nhwc(struct ParameterInfo *cur_param, size_t offset) {
     uint16_t NUM, H, W, CHANNEL;
     // tensor
     NUM = cur_param->dims[0];
@@ -94,8 +94,7 @@ void dump_params_nhwc(struct ParameterInfo *cur_param) {
             for (uint16_t k = 0; k < H; k++) {
                 for (uint16_t l = 0; l < W; l++) {
                     // internal format is NHWC
-                    size_t offset = i * H * W * CHANNEL + k * W * CHANNEL + l * CHANNEL + j;
-                    dump_value(cur_param, offset);
+                    dump_value(cur_param, offset + i * H * W * CHANNEL + k * W * CHANNEL + l * CHANNEL + j);
                 }
                 my_printf_debug(NEWLINE);
             }
