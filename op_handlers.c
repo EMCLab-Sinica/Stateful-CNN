@@ -5,6 +5,7 @@
 #include "op_handlers.h"
 #include "debug.h"
 #include "platform.h"
+#include "conv.h"
 
 DSPLIB_DATA(lea_buffer, 4)
 int16_t lea_buffer[LEA_BUFFER_SIZE];
@@ -21,13 +22,21 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     dump_params(data);
 
     const uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
-    output->params_len = (H / stride) * (W / stride) * CHANNEL * sizeof(int16_t);
+    uint16_t new_H = H / stride;
+    uint16_t new_W = W / stride;
+    output->params_len = new_H * new_W * CHANNEL * sizeof(int16_t);
     output->bitwidth = data->bitwidth;
     output->slot = get_next_slot(data);
     output->dims[0] = 1;
     output->dims[1] = CHANNEL;
-    output->dims[2] = H / stride;
-    output->dims[3] = W / stride;
+    output->dims[2] = new_H;
+    output->dims[3] = new_W;
+
+    uint8_t tile_c = get_tile_c(output->dims[2]);
+    if (!tile_c) {
+        tile_c = CHANNEL;
+    }
+    my_printf_debug("tile_c = %d" NEWLINE, tile_c);
 
     int16_t *data_baseptr = get_q15_param(data, 0, WILL_WRITE);
 
@@ -48,44 +57,66 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 
     int16_t offset_h = W * CHANNEL, offset_w = CHANNEL;
     int16_t *output_baseptr = get_q15_param(output, 0, WILL_WRITE);
-    for (uint16_t c = 0; c < CHANNEL; c++) {
-        int16_t *output_ptr = output_baseptr + c * (H / stride) * (W / stride);
-        for (uint16_t h = 0; h +stride <= H; h += stride) {
+    for (uint16_t tile_c_offset = 0; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
+        uint16_t real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
+        int16_t *output_ptr = output_baseptr + tile_c_offset * new_H * new_W;
+        for (uint16_t h = 0; h + stride <= H; h += stride) {
             for (uint16_t w = 0; w + stride <= W; w += stride) {
-                my_printf_debug("h=%d ", h);
-                my_printf_debug("w=%d ", w);
-                my_printf_debug("c=%d" NEWLINE, c);
+                for (uint16_t c = 0; c < real_tile_c; c++) {
+                    my_printf_debug("h=%d ", h);
+                    my_printf_debug("w=%d ", w);
+                    my_printf_debug("c=%d" NEWLINE, tile_c_offset + c);
 
-                int16_t max_val = INT16_MIN;
-                for (uint16_t sH = 0; sH < stride; sH++) {
-                    for (uint16_t sW = 0; sW < stride; sW++) {
-                        int16_t val;
-                        // XXX: use a moving pointer instead of data_baseptr makes it slower. Why!?
-                        // Output from handle_conv uses NHWC
-                        val = data_baseptr[(h+sH) * offset_h + (w+sW) * offset_w + c];
-                        print_q15_debug(val);
-                        // XXX: use LEA?
-                        if (val > max_val) {
-                            max_val = val;
+                    int16_t max_val = INT16_MIN;
+                    for (uint16_t sH = 0; sH < stride; sH++) {
+                        for (uint16_t sW = 0; sW < stride; sW++) {
+                            int16_t val;
+                            // XXX: use a moving pointer instead of data_baseptr makes it slower. Why!?
+                            // Output from handle_conv uses NHWC
+                            val = data_baseptr[(h+sH) * offset_h + (w+sW) * offset_w + tile_c_offset + c];
+                            print_q15_debug(val);
+                            // XXX: use LEA?
+                            if (val > max_val) {
+                                max_val = val;
+                            }
                         }
                     }
-                }
-                my_printf_debug("max=");
-                print_q15_debug(max_val);
-                my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
+                    my_printf_debug("max=");
+                    print_q15_debug(max_val);
+                    my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
 #ifdef WITH_PROGRESS_EMBEDDING
-                if (!state_bit) {
-                    max_val += 0x4000;
-                }
+                    if (!state_bit) {
+                        max_val += 0x4000;
+                    }
 #endif
-                *output_ptr = max_val;
-                output_ptr++;
+                    *output_ptr = max_val;
+                    output_ptr++;
+                }
             }
         }
     }
 
     my_printf_debug("handle_maxpool output" NEWLINE);
-    dump_params(output);
+    if (tile_c != 1 && tile_c != CHANNEL) {
+        for (uint16_t c = 0; c < CHANNEL; c += tile_c) {
+            output->dims[1] = MIN_VAL(tile_c, CHANNEL - c);
+            dump_params_nhwc(output, c * new_H * new_W);
+        }
+        output->dims[1] = CHANNEL;
+    } else if (tile_c == CHANNEL) {
+        // the next operator does not need tiled channels, so do NHWC -> NCHW
+        int16_t *output_addr = get_q15_param(output, 0, WILL_WRITE);
+        my_memcpy(lea_buffer, output_addr, output->params_len);
+        for (uint16_t c = 0; c < CHANNEL; c++) {
+            for (uint16_t h = 0; h < new_H; h++) {
+                for (uint16_t w = 0; w < new_W; w++) {
+                    uint16_t old_idx = c * new_H * new_W   + h * new_W   + w,
+                             new_idx = h * new_W * CHANNEL + w * CHANNEL + c;
+                    output_addr[new_idx] = lea_buffer[old_idx];
+                }
+            }
+        }
+    }
 }
 
 void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {

@@ -86,7 +86,7 @@ void dump_params_nhwc(struct ParameterInfo *cur_param, size_t offset) {
     CHANNEL = cur_param->dims[1];
     H = cur_param->dims[2];
     W = cur_param->dims[3];
-    check_params_len(cur_param);
+    // check_params_len(cur_param);
     for (uint16_t i = 0; i < NUM; i++) {
         my_printf_debug("Matrix %d" NEWLINE, i);
         for (uint16_t j = 0; j < CHANNEL; j++) {

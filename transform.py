@@ -90,6 +90,8 @@ for n in new_nodes:
 nodes = [Node(n) for n in new_nodes]
 print("n_input = {}".format(n_input))
 
+conv_param_names = set()
+
 for idx, inp in enumerate(g.input):
     names[inp.name] = idx
 
@@ -99,6 +101,9 @@ for idx, n in enumerate(nodes):
     else:
         output = n.output
     assert len(output) == 1
+    if n.op_type == 'Conv':
+        # https://github.com/onnx/onnx/blob/master/docs/Operators.md#conv
+        conv_param_names.add(n.input[1])
     if n.op_type == 'MaxPool':
         stride = next(attr.ints[0] for attr in n.attribute if attr.name == 'strides')
         n.flags = stride
@@ -131,6 +136,18 @@ def to_bytes(i, size=16):
         return struct.pack('q', i)
     else:
         raise ValueError(f'Unsupported size {size}')
+
+def nchw2nhwc(arr, dims):
+    N, C, H, W = dims
+    ret = [0] * (N * C * H * W)
+    for n in range(N):
+        for c in range(C):
+            for h in range(H):
+                for w in range(W):
+                    old_idx = n * C * H * W + c * H * W + h * W + w
+                    new_idx = n * H * W * C + h * W * C + w * C + c
+                    ret[new_idx] = arr[old_idx]
+    return ret, (N, H, W, C)
 
 inputs_data = io.BytesIO()
 outputs = {
@@ -194,6 +211,9 @@ for params in parameters:
             data_len = len(float_data)
             assert data_len > 0
             outputs['model'].write(to_bytes(data_len * 2, size=32))  # A _q15 is 16-bit
+            if params.name in conv_param_names:
+                print(f'Reorder conv param {params.name}')
+                float_data, _ = nchw2nhwc(float_data, params.dims)
             for param in float_data:
                 if len(params.dims) != 4:  # most likely biases
                     outputs['parameters'].write(to_bytes(_Q15(param / SCALE)))
