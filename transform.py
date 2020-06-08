@@ -22,6 +22,7 @@ Indexing policy:
 SCALE = 100
 NUM_SLOTS = 2
 INTERMEDIATE_VALUES_SIZE = 26000
+CACHED_FILTERS_LEN = 8000
 N_SAMPLES = 20
 COUNTERS_LEN = 64
 
@@ -284,6 +285,7 @@ with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
 #define SCALE {SCALE}
 #define NUM_SLOTS {NUM_SLOTS}
 #define INTERMEDIATE_VALUES_SIZE {INTERMEDIATE_VALUES_SIZE}u
+#define CACHED_FILTERS_LEN {CACHED_FILTERS_LEN}
 #define COUNTERS_LEN {COUNTERS_LEN}
 ''')
 
@@ -337,7 +339,7 @@ uint8_t *{var_name} = _{var_name};
 
 with open('nvm.bin', 'wb') as f:
     f.write(256 * 1024 * b'\0')
-    f.seek(NUM_SLOTS * INTERMEDIATE_VALUES_SIZE)
+    f.seek(CACHED_FILTERS_LEN + NUM_SLOTS * INTERMEDIATE_VALUES_SIZE)
     for data_obj in outputs.values():
         data_obj.seek(0)
         f.write(data_obj.read())
