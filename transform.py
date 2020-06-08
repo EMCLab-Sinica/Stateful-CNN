@@ -271,7 +271,7 @@ for label in labels:
 with open('images/ans.txt', 'w') as f:
     f.write(' '.join(map(str, labels)))
 
-outputs['counters'].write(b'\0' * (4 * COUNTERS_LEN + 2))
+outputs['counters'].write(b'\0' * (8 * COUNTERS_LEN + 2))
 
 with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
     output_c.write('''

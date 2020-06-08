@@ -63,10 +63,13 @@ _Static_assert(sizeof(Model) == 14, "Unexpected size for Model");
 typedef struct {
     uint16_t time_counters[COUNTERS_LEN];
     uint16_t power_counters[COUNTERS_LEN];
+    uint16_t dma_invocations[COUNTERS_LEN];
+    uint16_t dma_bytes[COUNTERS_LEN];
     uint16_t counter_idx;
 } Counters;
 
-_Static_assert(sizeof(Counters) == 4 * COUNTERS_LEN + 2, "Unexpected size of Counters");
+// Keep the following coefficients synced with transform.py
+_Static_assert(sizeof(Counters) == 8 * COUNTERS_LEN + 2, "Unexpected size of Counters");
 
 /**********************************
  *          Global data           *

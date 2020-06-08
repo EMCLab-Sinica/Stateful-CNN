@@ -158,6 +158,16 @@ void print_results(Model *model, ParameterInfo *output_node) {
     for (uint8_t i = 0; i < counters()->counter_idx; i++) {
         my_printf("%d ", counters()->power_counters[i]);
     }
+#ifndef MY_NDEBUG
+    my_printf(NEWLINE "DMA invocations:" NEWLINE);
+    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
+        my_printf("% 8d", counters()->dma_invocations[i]);
+    }
+    my_printf(NEWLINE "DMA bytes:" NEWLINE);
+    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
+        my_printf("% 8d", counters()->dma_bytes[i]);
+    }
+#endif
     my_printf(NEWLINE "run_counter: %d", model->run_counter);
     my_printf(NEWLINE);
 }

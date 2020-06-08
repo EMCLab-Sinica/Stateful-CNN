@@ -19,7 +19,6 @@
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
 uint8_t *parameters_data, *samples_data, *model_data, *labels_data;
-uint32_t *copied_size;
 
 uint8_t *intermediate_values(uint8_t slot_id, uint8_t will_write) {
     UNUSED(will_write);
@@ -50,7 +49,6 @@ int main(int argc, char* argv[]) {
     samples_data = parameters_data + PARAMETERS_DATA_LEN;
     model_data = samples_data + SAMPLES_DATA_LEN;
     labels_data = model_data + MODEL_DATA_LEN;
-    copied_size = (uint32_t*)(labels_data + COUNTERS_DATA_LEN);
 
     struct itimerval interval;
     interval.it_value.tv_sec = interval.it_interval.tv_sec = 0;
@@ -73,15 +71,17 @@ int main(int argc, char* argv[]) {
         run_cnn_tests(0);
     }
 
+    for (uint16_t counter_idx = 0; counter_idx < COUNTERS_LEN; counter_idx++) {
+        counters()->dma_invocations[counter_idx] = 0;
+        counters()->dma_bytes[counter_idx] = 0;
+    }
+
 exit:
     close(nvm_fd);
-    my_printf("Copied size: %" PRId32 NEWLINE, *copied_size);
-    *copied_size = 0;
     return ret;
 }
 
 void plat_reset_model(void) {
-    *copied_size = 0;
 }
 
 void setOutputValue(uint8_t value) {
@@ -89,7 +89,9 @@ void setOutputValue(uint8_t value) {
 }
 
 void my_memcpy(void* dest, const void* src, size_t n) {
-    *copied_size += n;
+    uint16_t counter_idx = counters()->counter_idx;
+    counters()->dma_invocations[counter_idx]++;
+    counters()->dma_bytes[counter_idx] += n;
 #if MEMCPY_DELAY_US
     usleep(MEMCPY_DELAY_US);
 #endif
