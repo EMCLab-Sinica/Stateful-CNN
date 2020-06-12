@@ -337,6 +337,10 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
 }
 
 void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+#ifndef WITH_PROGRESS_EMBEDDING
+    UNUSED(model);
+#endif
+
     ParameterInfo *conv_input = input[0], *conv_filter = input[1], *conv_bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 

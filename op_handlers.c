@@ -11,6 +11,10 @@ DSPLIB_DATA(lea_buffer, 4)
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
 void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+#ifndef WITH_PROGRESS_EMBEDDING
+    UNUSED(model);
+#endif
+
     my_printf_debug("MaxPool!" NEWLINE);
 
     uint16_t stride = flags;
@@ -120,6 +124,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 }
 
 void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+    UNUSED(model);
     UNUSED(flags);
 
     /* Add: Y = X + W */
@@ -149,6 +154,10 @@ void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
 }
 
 void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+#ifndef WITH_PROGRESS_EMBEDDING
+    UNUSED(model);
+#endif
+
     UNUSED(flags);
 
     ParameterInfo *A = input[0], *B = input[1];
@@ -238,6 +247,10 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 }
 
 void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+#ifndef WITH_PROGRESS_EMBEDDING
+    UNUSED(model);
+#endif
+
     UNUSED(flags);
 
     my_printf_debug("ReLu!" NEWLINE);
@@ -286,6 +299,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 }
 
 void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+    UNUSED(model);
     UNUSED(flags);
 
     my_printf_debug("Reshape!" NEWLINE);
@@ -305,6 +319,7 @@ void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output,
 }
 
 void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+    UNUSED(model);
     UNUSED(flags);
 
     my_printf_debug("Squeeze!" NEWLINE);
