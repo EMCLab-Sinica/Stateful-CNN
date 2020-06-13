@@ -121,33 +121,7 @@ static inline uint16_t get_next_slot(ParameterInfo *param) {
     return next_slot_id;
 }
 
-static inline uint8_t* get_param_base_pointer(ParameterInfo *param, uint8_t will_write) {
-    uint16_t slot_id = param->slot;
-    switch (slot_id) {
-        case FLAG_SLOTS:
-            if (will_write) {
-                ERROR_OCCURRED();
-            }
-            return parameters_data;
-        case FLAG_TEST_SET:
-            if (will_write) {
-                ERROR_OCCURRED();
-            }
-            return samples_data;
-        default:
-            return intermediate_values(slot_id, will_write);
-    }
-}
-
-static inline int16_t* get_q15_param(ParameterInfo *param, size_t i, uint8_t will_write) {
-    if (param->bitwidth != 16) {
-        // incorrect param passed
-        ERROR_OCCURRED();
-    }
-    return (int16_t*)(get_param_base_pointer(param, will_write) + param->params_offset) + i;
-}
-
-
+int16_t* get_q15_param(ParameterInfo *param, size_t i, uint8_t will_write);
 int32_t* get_iq31_param(ParameterInfo *param, size_t i);
 int64_t get_int64_param(ParameterInfo *param, size_t i);
 int16_t node_input(Node *node, size_t i);
