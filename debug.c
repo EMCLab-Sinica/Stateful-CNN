@@ -34,7 +34,7 @@ static void dump_value(ParameterInfo *cur_param, size_t offset) {
 }
 
 static void check_params_len(ParameterInfo *cur_param) {
-    uint16_t expected_params_len = sizeof(int16_t);
+    uint32_t expected_params_len = sizeof(int16_t);
     for (uint8_t i = 0; i < 4; i++) {
         if (cur_param->dims[i]) {
             expected_params_len *= cur_param->dims[i];
