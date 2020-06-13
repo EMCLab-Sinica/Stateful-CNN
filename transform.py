@@ -9,7 +9,7 @@ import onnx
 import numpy as np
 
 import ops
-from utils import load_data
+from utils import load_data, load_data_cifar10
 
 """
 Goal: Mapping name-based nodes to integer-based ones.
@@ -25,6 +25,7 @@ INTERMEDIATE_VALUES_SIZE = 26000
 CACHED_FILTERS_LEN = 8000
 N_SAMPLES = 20
 COUNTERS_LEN = 64
+NVM_SIZE = 512 * 1024
 
 
 def _Q15(num):
@@ -64,7 +65,6 @@ args = parser.parse_args()
 onnx_model = onnx.load(args.onnx_model)
 g = onnx_model.graph
 names = {}
-n_input = len(g.input)
 
 # Remoe Squeeze nodes with constants as the input
 replaced_squeeze_map = {}
@@ -89,12 +89,21 @@ for n in new_nodes:
         n.input[idx] = replaced_squeeze_map.get(inp, inp)
 
 nodes = [Node(n) for n in new_nodes]
-print("n_input = {}".format(n_input))
 
 conv_param_names = set()
 
 for idx, inp in enumerate(g.input):
     names[inp.name] = idx
+
+# For some ONNX models (e.g., squeezenet-cifar10 converted from Keras), inputs
+# do not include initializers. Merge them here.
+inputs_len = len(names.keys())
+for idx, initializer in enumerate(g.initializer):
+    if initializer.name not in names:
+        names[initializer.name] = idx + inputs_len
+
+n_input = len(names.keys())
+print("n_input = {}".format(n_input))
 
 for idx, n in enumerate(nodes):
     if n.op_type == 'Dropout':
@@ -182,21 +191,26 @@ for inputs, op_type, flags in model:
 FLAG_SLOTS = 0b11
 FLAG_TEST_SET = 0b10
 
-labels, images = load_data(args.input_file, limit=N_SAMPLES)
+if 'mnist' in args.onnx_model:
+    labels, images = load_data(args.input_file, limit=N_SAMPLES)
+elif 'cifar10' in args.onnx_model:
+    labels, images = load_data_cifar10(args.input_file, limit=N_SAMPLES)
+else:
+    raise NotImplementedError
 
 for params in parameters:
     outputs['model'].write(to_bytes(parameters_bin_offset, size=32))  # params_offset
     if params is None:  # input
         # Actual data for test samples are added last
-        _, _, dimX, dimY = images[0].shape
-        outputs['model'].write(to_bytes(dimX * dimY * 2, size=32))  # A _q15 is 16-bit
+        _, input_channel, dimX, dimY = images[0].shape
+        outputs['model'].write(to_bytes(input_channel* dimX * dimY * 2, size=32))  # A _q15 is 16-bit
         outputs['model'].write(to_bytes(16, size=8))                # bitwidth
         outputs['model'].write(to_bytes(FLAG_TEST_SET, size=8))     # slot
         outputs['model'].write(to_bytes(0, size=8))                 # flag
         outputs['model'].write(to_bytes(0, size=8))                 # dummy
         # extend_dims
         outputs['model'].write(to_bytes(1))
-        outputs['model'].write(to_bytes(1))
+        outputs['model'].write(to_bytes(input_channel))
         outputs['model'].write(to_bytes(dimX))
         outputs['model'].write(to_bytes(dimY))
     else:
@@ -205,10 +219,7 @@ for params in parameters:
             if params.float_data:
                 float_data = params.float_data
             else:
-                float_data = [None] * (len(params.raw_data) // 4)
-                for i in range(len(params.raw_data) // 4):
-                    float_data[i] = struct.unpack_from(
-                        'f', params.raw_data, offset=4 * i)[0]
+                float_data = list(map(lambda t: t[0], struct.iter_unpack('f', params.raw_data)))
             data_len = len(float_data)
             assert data_len > 0
             outputs['model'].write(to_bytes(data_len * 2, size=32))  # A _q15 is 16-bit
@@ -257,12 +268,15 @@ outputs['model'].write(inputs_data.read())
 
 for idx, im in enumerate(images):
     # load_data returns NCHW
-    for i in range(im.shape[2]):
-        for j in range(im.shape[3]):
-            outputs['samples'].write(to_bytes(_Q15(im[0, 0, i, j] / SCALE)))
+    for idx_c in range(im.shape[1]):
+        for idx_h in range(im.shape[2]):
+            for idx_w in range(im.shape[3]):
+                outputs['samples'].write(to_bytes(_Q15(im[0, idx_c, idx_h, idx_w] / SCALE)))
     # Restore conanical image format (H, W, C)
-    im = np.expand_dims(np.squeeze(im * 256), axis=-1)
-    im = 255 - im
+    im = np.squeeze(im * 256)
+    if 'mnist' in args.onnx_model:
+        im = np.expand_dims(im, axis=-1)
+        im = 255 - im
     cv2.imwrite(f'images/test{idx:02d}.png', im)
 
 for label in labels:
@@ -287,6 +301,7 @@ with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
 #define INTERMEDIATE_VALUES_SIZE {INTERMEDIATE_VALUES_SIZE}u
 #define CACHED_FILTERS_LEN {CACHED_FILTERS_LEN}
 #define COUNTERS_LEN {COUNTERS_LEN}
+#define NVM_SIZE {NVM_SIZE}
 ''')
 
     def hex_str(arr):
@@ -338,9 +353,9 @@ uint8_t *{var_name} = _{var_name};
 
 
 with open('nvm.bin', 'wb') as f:
-    f.write(256 * 1024 * b'\0')
+    f.write(NVM_SIZE * b'\0')
     f.seek(CACHED_FILTERS_LEN + NUM_SLOTS * INTERMEDIATE_VALUES_SIZE)
     for data_obj in outputs.values():
         data_obj.seek(0)
         f.write(data_obj.read())
-        assert f.tell() < 256 * 1024
+        assert f.tell() < NVM_SIZE

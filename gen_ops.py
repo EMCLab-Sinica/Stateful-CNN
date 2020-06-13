@@ -1,13 +1,20 @@
+# https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
 ops = {
     'Add': [2, 0],
+    # Concat actually accepts 1~infinity inputs. Use 2 to fit SqueezeNet
+    'Concat': [2, 0],
     'Conv': [3, 0],
+    'Dropout': [1, 1],
+    'GlobalAveragePool': [1, 1],
     'MatMul': [2, 0],
     'MaxPool': [1, 0],
     # TODO: use inplace update for Relu
     'Relu': [1, 0],
     'Reshape': [2, 1],
+    'Softmax': [1, 1],
     'Squeeze': [1, 1],
+    'Transpose': [1, 0],
 }
 
 other_flags = []

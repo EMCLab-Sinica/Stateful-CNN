@@ -2,6 +2,7 @@
 #include "cnn_common.h"
 #include "debug.h"
 #include "platform.h"
+#include "data.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,8 +14,6 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/time.h>
-
-#define NVM_SIZE 256*1024
 
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
