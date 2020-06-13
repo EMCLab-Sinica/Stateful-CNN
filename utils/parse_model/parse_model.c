@@ -39,6 +39,18 @@ int main(void) {
           printf("\t\t%s\n", n->output[j]);
       }
   }
+  printf("\nInitializers:\n");
+  for (i = 0; i < graph->n_initializer; i++) {
+      Onnx__TensorProto *t = graph->initializer[i];
+      printf("name = %s, dims = [", t->name);
+      for (j = 0; j < t->n_dims; j++) {
+          printf("%d", t->dims[j]);
+          if (j != t->n_dims - 1) {
+              printf(", ");
+          }
+      }
+      printf("]\n");
+  }
 
   onnx__model_proto__free_unpacked(msg, NULL);
   free(buf);
