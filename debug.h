@@ -27,8 +27,8 @@ void print_q15(int16_t val);
 void print_iq31(int32_t val);
 
 struct ParameterInfo;
-typedef struct Model Model;
-typedef struct Node Node;
+struct Model;
+struct Node;
 
 #ifndef MY_NDEBUG
 
@@ -52,4 +52,4 @@ void dump_matrix2(int16_t *mat, size_t rows, size_t cols);
 
 #endif
 
-void dump_model(Model *model, Node *nodes);
+void dump_model(struct Model *model, struct Node *nodes);
