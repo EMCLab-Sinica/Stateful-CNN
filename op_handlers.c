@@ -41,7 +41,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     uint8_t tile_c = get_tile_c(output);
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
 
-    int16_t *data_baseptr = get_q15_param(data, 0, WILL_WRITE);
+    int16_t *data_baseptr = get_q15_param(data, 0);
 
 #ifdef WITH_PROGRESS_EMBEDDING
     int16_t state_bit = model->state_bit;
@@ -59,7 +59,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 #endif
 
     int16_t offset_h = W * CHANNEL, offset_w = CHANNEL;
-    int16_t *output_baseptr = get_q15_param(output, 0, WILL_WRITE);
+    int16_t *output_baseptr = get_q15_param(output, 0);
     for (uint16_t tile_c_offset = 0; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
         uint16_t real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
         int16_t *output_ptr;
@@ -143,12 +143,12 @@ void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
 
     int16_t *buffer_a = lea_buffer,
             *buffer_b = lea_buffer + output->params_len / sizeof(int16_t);
-    my_memcpy(buffer_a, get_q15_param(A, 0, WILL_NOT_WRITE), output->params_len);
-    my_memcpy(buffer_b, get_q15_param(B, 0, WILL_NOT_WRITE), output->params_len);
+    my_memcpy(buffer_a, get_q15_param(A, 0), output->params_len);
+    my_memcpy(buffer_b, get_q15_param(B, 0), output->params_len);
     msp_status status = msp_add_q15(&params, buffer_a, buffer_b, buffer_a);
     msp_checkStatus(status);
 
-    my_memcpy(get_q15_param(output, 0, WILL_WRITE), buffer_a, output->params_len);
+    my_memcpy(get_q15_param(output, 0), buffer_a, output->params_len);
 }
 
 void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -193,7 +193,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     msp_status status = msp_fill_q15(&fill_params, buffer_matmul);
     msp_checkStatus(status);
 
-    my_memcpy(buffer_a, get_q15_param(A, 0, WILL_NOT_WRITE), (uint16_t)(A->dims[0] * A->dims[1] * sizeof(uint16_t)));
+    my_memcpy(buffer_a, get_q15_param(A, 0), A->dims[0] * A->dims[1] * sizeof(uint16_t));
 
 #ifdef WITH_PROGRESS_EMBEDDING
     if (model->state_bit) {
@@ -216,7 +216,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         params.srcBCols = B->dims[1];
 
         my_memcpy(buffer_b,
-                  get_q15_param(B, i * B->dims[1], WILL_NOT_WRITE),
+                  get_q15_param(B, i * B->dims[1]),
                   current_width * B->dims[1] * sizeof(uint16_t));
 
         my_printf_debug("strip for A" NEWLINE);
@@ -238,7 +238,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         status = msp_add_q15(&params2, buffer_matmul, buffer_temp, buffer_matmul);
         msp_checkStatus(status);
     }
-    my_memcpy(get_q15_param(output, 0, WILL_WRITE), buffer_matmul, output->params_len);
+    my_memcpy(get_q15_param(output, 0), buffer_matmul, output->params_len);
 
     my_printf_debug("handle_matmul output" NEWLINE);
     dump_params(output);
@@ -262,7 +262,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         // unsupported bitwidth for ReLu
         ERROR_OCCURRED();
     }
-    int16_t *data = get_q15_param(X, 0, WILL_WRITE);
+    int16_t *data = get_q15_param(X, 0);
     int16_t data_len = X->params_len / (bitwidth / 8);
 
 #ifdef WITH_PROGRESS_EMBEDDING

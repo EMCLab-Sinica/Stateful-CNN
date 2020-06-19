@@ -104,12 +104,11 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
             // TODO: cache reordered filters on NVM
             filter_addr = get_q15_param(
                 conv_params->conv_filter,
-                (conv_params->conv_idx + idx) * filter_src_offset,
-                WILL_NOT_WRITE
+                (conv_params->conv_idx + idx) * filter_src_offset
             );
             my_printf_debug("Copying filter %d" NEWLINE, conv_params->conv_idx + idx);
             if (conv_params->tile_c_index == 0) {
-                *(filter_tmp + conv_params->dest_offset - 1) = -*get_q15_param(conv_params->conv_bias, conv_params->conv_idx + idx, WILL_NOT_WRITE);
+                *(filter_tmp + conv_params->dest_offset - 1) = -*get_q15_param(conv_params->conv_bias, conv_params->conv_idx + idx);
             }
             for (uint16_t h = 0; h < conv_params->kH; h++) {
                 int16_t *filter_dest_ptr = filter_tmp + h * conv_params->dest_offset;
@@ -140,9 +139,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
 #else
         filter_addr = get_q15_param(
             conv_params->conv_filter,
-            conv_params->conv_idx * conv_params->filter_offset,
-            WILL_NOT_WRITE
-        );
+            conv_params->conv_idx * conv_params->filter_offset);
         uint16_t buffer_size = sizeof(int16_t) * conv_params->filter_offset * conv_params->filter_limit;
         my_memcpy(conv_params->filter_buffer_addr, filter_addr, buffer_size);
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -210,7 +207,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
     /* END dump data */
 
     int16_t offset = conv_params->OUTPUT_W * conv_params->OUTPUT_CHANNEL;
-    int16_t *output_baseptr = get_q15_param(conv_params->output, conv_params->tile_c_index * conv_params->OUTPUT_H * offset, WILL_WRITE);
+    int16_t *output_baseptr = get_q15_param(conv_params->output, conv_params->tile_c_index * conv_params->OUTPUT_H * offset);
     int16_t *output_data = output_baseptr +
             conv_params->conv_idx +
             (conv_params->output_h + offset_h) / conv_params->stride * conv_params->OUTPUT_W * conv_params->OUTPUT_CHANNEL +
@@ -218,7 +215,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
     int16_t *result_addr = matrix_mpy_results;
     for (uint8_t idx = 0; idx < p_matrix_mpy_params->srcARows; idx++) {
         my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - output_baseptr));
-        MY_ASSERT((uint8_t*)(output_data + n_filters) < intermediate_values(0, WILL_NOT_WRITE) + INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
+        MY_ASSERT((uint8_t*)(output_data + n_filters) < intermediate_values(0) + INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
 #if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
         for (uint8_t idx2 = 0; idx2 < n_filters; idx2++) {
             if (!conv_params->state_bit && *result_addr < 0x2000 && *result_addr >= -0x2000) {
@@ -261,9 +258,7 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
 
     int16_t *input_addr = get_q15_param(
         conv_params->conv_input,
-        conv_params->tile_c_offset * conv_params->H * conv_params->W,
-        WILL_NOT_WRITE
-    );
+        conv_params->tile_c_offset * conv_params->H * conv_params->W);
 
     /* int32_t instead of int16_t as TI's compiler cannot handle negative
      * offsets correctly. The expression `input_addr + (int16_t)(-2)` is
@@ -418,7 +413,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     // XXX
     model->state_bit = 1;
     if (conv_params->state_bit) {
-        int16_t *input_ptr = get_q15_param(conv_input, 0, WILL_WRITE);
+        int16_t *input_ptr = get_q15_param(conv_input, 0);
         uint32_t len = conv_input->params_len / sizeof(int16_t);
         for (uint16_t idx = 0; idx < len; idx++) {
             *input_ptr -= 0x4000;
@@ -464,7 +459,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     my_printf_debug("handle_conv output" NEWLINE);
 
     // XXX: handle state bits
-    int16_t *output_baseptr = get_q15_param(conv_params->output, 0, WILL_WRITE);
+    int16_t *output_baseptr = get_q15_param(conv_params->output, 0);
     uint16_t chunk_len = (LEA_BUFFER_SIZE - 1) / conv_params->n_tiles_c / 2 * 2;
     uint32_t tiling_results_len = OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W;
     float scale_q15 = SCALE;

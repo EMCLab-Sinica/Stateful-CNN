@@ -8,7 +8,7 @@
 
 #pragma DATA_SECTION(_intermediate_values, ".nvm")
 static uint8_t _intermediate_values[NUM_SLOTS * INTERMEDIATE_VALUES_SIZE];
-uint8_t *intermediate_values(uint8_t slot_id, uint8_t will_write) {
+uint8_t *intermediate_values(uint8_t slot_id) {
     return _intermediate_values + slot_id * INTERMEDIATE_VALUES_SIZE;
 }
 

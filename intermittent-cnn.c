@@ -134,7 +134,7 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
     }
     int16_t max = INT16_MIN;
     for (uint16_t i = 0; i < output_node->dims[1]; i++) {
-        int16_t val = *get_q15_param(output_node, i, WILL_NOT_WRITE);
+        int16_t val = *get_q15_param(output_node, i);
         if (val > max) {
             *ansptr = (uint8_t)i;
             max = val;
@@ -146,7 +146,7 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
 
 void print_results(Model *model, ParameterInfo *output_node) {
     for (uint16_t i = 0; i < output_node->dims[1]; i++) {
-        print_q15(*get_q15_param(output_node, i, WILL_NOT_WRITE));
+        print_q15(*get_q15_param(output_node, i));
     }
     my_printf(NEWLINE);
 

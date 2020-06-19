@@ -25,7 +25,7 @@ void print_iq31(int32_t val) {
 
 static void dump_value(ParameterInfo *cur_param, size_t offset) {
     if (cur_param->bitwidth == 16) {
-        print_q15_debug(*get_q15_param(cur_param, offset, WILL_NOT_WRITE));
+        print_q15_debug(*get_q15_param(cur_param, offset));
     } else if (cur_param->bitwidth == 32) {
         print_iq31_debug(*get_iq31_param(cur_param, offset));
     } else if (cur_param->bitwidth == 64) {

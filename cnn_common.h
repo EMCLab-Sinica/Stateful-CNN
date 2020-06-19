@@ -106,12 +106,6 @@ static inline int16_t int16_max(int16_t a, int16_t b) {
 /**********************************
  *       Helpers for nodes        *
  **********************************/
-
-enum {
-    WILL_NOT_WRITE,
-    WILL_WRITE
-};
-
 static inline uint16_t get_next_slot(ParameterInfo *param) {
     uint16_t slot_id = param->slot;
     /* Some cases:
@@ -125,7 +119,7 @@ static inline uint16_t get_next_slot(ParameterInfo *param) {
     return next_slot_id;
 }
 
-int16_t* get_q15_param(ParameterInfo *param, size_t i, uint8_t will_write);
+int16_t* get_q15_param(ParameterInfo *param, size_t i);
 int32_t* get_iq31_param(ParameterInfo *param, size_t i);
 int64_t get_int64_param(ParameterInfo *param, size_t i);
 int16_t node_input(Node *node, size_t i);

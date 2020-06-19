@@ -19,8 +19,7 @@
 uint8_t *nvm;
 uint8_t *parameters_data, *samples_data, *model_data, *labels_data;
 
-uint8_t *intermediate_values(uint8_t slot_id, uint8_t will_write) {
-    UNUSED(will_write);
+uint8_t *intermediate_values(uint8_t slot_id) {
     return nvm + CACHED_FILTERS_LEN + slot_id * INTERMEDIATE_VALUES_SIZE;
 }
 
@@ -44,7 +43,7 @@ int main(int argc, char* argv[]) {
         goto exit;
     }
     // Keep the order consistent with `outputs` in transform.py
-    parameters_data = intermediate_values(NUM_SLOTS, WILL_NOT_WRITE);
+    parameters_data = intermediate_values(NUM_SLOTS);
     samples_data = parameters_data + PARAMETERS_DATA_LEN;
     model_data = samples_data + SAMPLES_DATA_LEN;
     labels_data = model_data + MODEL_DATA_LEN;

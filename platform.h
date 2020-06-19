@@ -13,4 +13,4 @@
 void setOutputValue(uint8_t value);
 void registerCheckpointing(uint8_t *addr, size_t len);
 // similar to double buffering
-uint8_t *intermediate_values(uint8_t slot_id, uint8_t will_write);
+uint8_t *intermediate_values(uint8_t slot_id);
