@@ -17,6 +17,11 @@ typedef struct Node {
     uint16_t inputs_len;
     uint16_t inputs_offset;
     uint16_t op_type;
+    /* Layout of 16 bits in flags
+     * 15-08 generic flags
+     * 07-04 kernel_size (used in MaxPool)
+     * 03-00 stride (used in Conv and MaxPool)
+     **/
     uint16_t flags;
     uint16_t scheduled;  /* 16 bits for aligned memory */
 } Node;

@@ -218,7 +218,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
     int16_t *result_addr = matrix_mpy_results;
     for (uint8_t idx = 0; idx < p_matrix_mpy_params->srcARows; idx++) {
         my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - output_baseptr));
-        MY_ASSERT((uint8_t*)(output_data + n_filters) < intermediate_values(0, WILL_NOT_WRITE) + INTERMEDIATE_VALUES_SIZE * 2 / 2);
+        MY_ASSERT((uint8_t*)(output_data + n_filters) < intermediate_values(0, WILL_NOT_WRITE) + INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
 #if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
         for (uint8_t idx2 = 0; idx2 < n_filters; idx2++) {
             if (!conv_params->state_bit && *result_addr < 0x2000 && *result_addr >= -0x2000) {
@@ -368,7 +368,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     conv_params->stride = flags & 0x0f;
     conv_params->kH = conv_filter->dims[2];
     conv_params->kW = conv_filter->dims[3];
-    if ((flags & 0xf0) >> 4 == AUTO_PAD_VALID) {
+    if ((flags & 0xff00) >> 8 == AUTO_PAD_VALID) {
         conv_params->offset_h = conv_params->kH / 2;
         conv_params->offset_w = conv_params->kW / 2;
     } else {

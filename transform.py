@@ -114,6 +114,7 @@ def get_attr(node, attr_name):
     # Not found
     return None
 
+prev_node = None
 for idx, n in enumerate(nodes):
     if n.op_type == 'Dropout':
         output = n.output[:1]  # we don't care the second output `mask`
@@ -125,7 +126,7 @@ for idx, n in enumerate(nodes):
         conv_param_names.add(n.input[1])
         auto_pad = get_attr(n, 'auto_pad')
         if auto_pad == b'VALID':
-            n.flags += ops.AUTO_PAD_VALID * 0x10
+            n.flags += ops.AUTO_PAD_VALID * 0x100
     if n.op_type == 'MaxPool':
         kernel_shape = get_attr(n, 'kernel_shape')
         if kernel_shape is not None:
@@ -133,7 +134,10 @@ for idx, n in enumerate(nodes):
     if n.op_type in ('MaxPool', 'Conv'):
         stride = get_attr(n, 'strides')[0]
         n.flags += stride
+    if n.op_type == 'Reshape' and prev_node and prev_node.op_type == 'MaxPool':
+        prev_node.flags += ops.NHWC2NCHW * 0x100
     names[output[0]] = idx + n_input
+    prev_node = n
 
 pprint.pprint(names)
 

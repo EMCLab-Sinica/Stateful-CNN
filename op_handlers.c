@@ -19,6 +19,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 
     uint16_t stride = flags & 0x0f;
     uint16_t kernel_size = (flags & 0xf0) >> 4;
+    uint8_t need_nhwc2nchw = ((flags & 0xff00) >> 8 == NHWC2NCHW);
 
     /* XXX: add flags; assume no padding for now */
     ParameterInfo *data = input[0];
@@ -39,9 +40,6 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 
     uint8_t tile_c = get_tile_c(output);
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
-
-    // the next operator does not need tiled channels, so do NHWC -> NCHW
-    uint8_t need_nhwc2nchw = (tile_c == CHANNEL);
 
     int16_t *data_baseptr = get_q15_param(data, 0, WILL_WRITE);
 
