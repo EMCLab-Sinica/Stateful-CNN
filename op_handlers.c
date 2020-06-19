@@ -36,11 +36,11 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     output->dims[2] = new_H;
     output->dims[3] = new_W;
 
-    uint8_t tile_c = get_tile_c(output->dims[2]);
-    if (!tile_c) {
-        tile_c = CHANNEL;
-    }
+    uint8_t tile_c = get_tile_c(output);
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
+
+    // the next operator does not need tiled channels, so do NHWC -> NCHW
+    uint8_t need_nhwc2nchw = (tile_c == CHANNEL);
 
     int16_t *data_baseptr = get_q15_param(data, 0, WILL_WRITE);
 
@@ -63,7 +63,12 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     int16_t *output_baseptr = get_q15_param(output, 0, WILL_WRITE);
     for (uint16_t tile_c_offset = 0; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
         uint16_t real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
-        int16_t *output_ptr = output_baseptr + tile_c_offset * new_H * new_W;
+        int16_t *output_ptr;
+        if (need_nhwc2nchw) {
+            output_ptr = output_baseptr;
+        } else {
+            output_ptr = output_baseptr + tile_c_offset * new_H * new_W;
+        }
         for (uint16_t h = 0; h + stride <= H; h += stride) {
             for (uint16_t w = 0; w + stride <= W; w += stride) {
                 for (uint16_t c = 0; c < real_tile_c; c++) {
@@ -85,7 +90,8 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                             }
                         }
                     }
-                    my_printf_debug("max=");
+                    // need a space as print_q15_debug does not append spaces when DUMP_INTEGERS is not defined
+                    my_printf_debug(" max=");
                     print_q15_debug(max_val);
                     my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -93,33 +99,26 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                         max_val += 0x4000;
                     }
 #endif
-                    *output_ptr = max_val;
-                    output_ptr++;
+                    if (!need_nhwc2nchw) {
+                        *output_ptr = max_val;
+                        output_ptr++;
+                    } else {
+                        *(output_ptr + (tile_c_offset + c) * new_H * new_W + h / stride * new_W + w / stride) = max_val;
+                    }
                 }
             }
         }
     }
 
     my_printf_debug("handle_maxpool output" NEWLINE);
-    if (tile_c != 1 && tile_c != CHANNEL) {
+    if (!need_nhwc2nchw) {
         for (uint16_t c = 0; c < CHANNEL; c += tile_c) {
             output->dims[1] = MIN_VAL(tile_c, CHANNEL - c);
             dump_params_nhwc(output, c * new_H * new_W);
         }
         output->dims[1] = CHANNEL;
     } else if (tile_c == CHANNEL) {
-        // the next operator does not need tiled channels, so do NHWC -> NCHW
-        int16_t *output_addr = get_q15_param(output, 0, WILL_WRITE);
-        my_memcpy(lea_buffer, output_addr, output->params_len);
-        for (uint16_t c = 0; c < CHANNEL; c++) {
-            for (uint16_t h = 0; h < new_H; h++) {
-                for (uint16_t w = 0; w < new_W; w++) {
-                    uint16_t old_idx = c * new_H * new_W   + h * new_W   + w,
-                             new_idx = h * new_W * CHANNEL + w * CHANNEL + c;
-                    output_addr[new_idx] = lea_buffer[old_idx];
-                }
-            }
-        }
+        dump_params(output);
     }
 }
 
@@ -313,9 +312,12 @@ void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output,
         // unsupported shape format
         ERROR_OCCURRED();
     }
+    uint32_t new_len = 1;
     for (uint8_t i = 0; i < 4 && i < shape->dims[0]; i++) {
         output->dims[i] = (uint16_t)get_int64_param(shape, i);
+        new_len *= output->dims[i];
     }
+    MY_ASSERT(new_len * sizeof(int16_t) == output->params_len)
 }
 
 void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -336,4 +338,53 @@ void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output,
             j++;
         }
     }
+}
+
+void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+    UNUSED(model);
+    UNUSED(input);
+    UNUSED(output);
+    UNUSED(flags);
+
+    ERROR_OCCURRED();
+}
+
+void handle_dropout(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+    UNUSED(model);
+    UNUSED(input);
+    UNUSED(output);
+    UNUSED(flags);
+
+    ERROR_OCCURRED();
+}
+
+void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+    UNUSED(model);
+    UNUSED(input);
+    UNUSED(output);
+    UNUSED(flags);
+
+    ERROR_OCCURRED();
+}
+
+void handle_softmax(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+    UNUSED(model);
+    UNUSED(input);
+    UNUSED(output);
+    UNUSED(flags);
+
+    ERROR_OCCURRED();
+}
+
+void handle_transpose(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+    UNUSED(model);
+    UNUSED(flags);
+
+    ParameterInfo *X = input[0];
+    // not actually transpose data as we happen to need NHWC
+    my_memcpy(output, X, sizeof(ParameterInfo));
+    // XXX: assume NHWC -> NCHW
+    output->dims[1] = X->dims[3];
+    output->dims[2] = X->dims[1];
+    output->dims[3] = X->dims[2];
 }

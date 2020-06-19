@@ -18,10 +18,9 @@ Indexing policy:
     len(g.input)~ : other (hidden) nodes
 """
 
-# XXX: Heuristics for scaling: only scale biases and the input
-SCALE = 100
+SCALE = 10
 NUM_SLOTS = 2
-INTERMEDIATE_VALUES_SIZE = 26000
+INTERMEDIATE_VALUES_SIZE = 66000
 CACHED_FILTERS_LEN = 8000
 N_SAMPLES = 20
 COUNTERS_LEN = 64
@@ -114,9 +113,15 @@ for idx, n in enumerate(nodes):
     if n.op_type == 'Conv':
         # https://github.com/onnx/onnx/blob/master/docs/Operators.md#conv
         conv_param_names.add(n.input[1])
-    if n.op_type == 'MaxPool':
+        try:
+            auto_pad = next(attr.s for attr in n.attribute if attr.name == 'auto_pad')
+            if auto_pad == b'VALID':
+                n.flags += ops.AUTO_PAD_VALID * 0x10
+        except StopIteration:
+            pass
+    if n.op_type in ('MaxPool', 'Conv'):
         stride = next(attr.ints[0] for attr in n.attribute if attr.name == 'strides')
-        n.flags = stride
+        n.flags += stride
     names[output[0]] = idx + n_input
 
 pprint.pprint(names)
@@ -228,9 +233,9 @@ for params in parameters:
                 float_data, _ = nchw2nhwc(float_data, params.dims)
             for param in float_data:
                 if len(params.dims) != 4:  # most likely biases
-                    outputs['parameters'].write(to_bytes(_Q15(param / SCALE)))
+                    outputs['parameters'].write(to_bytes(_Q15(param / SCALE / SCALE)))
                 else:
-                    outputs['parameters'].write(to_bytes(_Q15(param)))
+                    outputs['parameters'].write(to_bytes(_Q15(param / SCALE)))
                 parameters_bin_offset += 2
             outputs['model'].write(to_bytes(16, size=8)) # bitwidth
         elif params.data_type == onnx.TensorProto.INT64:

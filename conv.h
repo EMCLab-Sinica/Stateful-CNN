@@ -2,4 +2,6 @@
 
 #include <stdint.h>
 
-uint8_t get_tile_c(uint16_t H);
+struct ParameterInfo;
+
+uint8_t get_tile_c(struct ParameterInfo *param);

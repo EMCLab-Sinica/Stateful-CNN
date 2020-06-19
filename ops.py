@@ -11,3 +11,4 @@ ops["Reshape"] = 8
 ops["Softmax"] = 9
 ops["Squeeze"] = 10
 ops["Transpose"] = 11
+AUTO_PAD_VALID = 1

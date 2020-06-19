@@ -17,7 +17,9 @@ ops = {
     'Transpose': [1, 0],
 }
 
-other_flags = []
+other_flags = [
+    'AUTO_PAD_VALID'
+]
 
 with open('ops.py', 'w') as f_py, open('ops.h', 'w') as f_h, open('ops.c', 'w') as f_c:
     f_h.write('#pragma once\n\n')

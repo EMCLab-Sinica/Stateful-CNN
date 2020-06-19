@@ -26,3 +26,4 @@ void handle_reshape(struct Model *model, struct ParameterInfo *input[], struct P
 void handle_softmax(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
 void handle_squeeze(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
 void handle_transpose(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
+#define AUTO_PAD_VALID 1
