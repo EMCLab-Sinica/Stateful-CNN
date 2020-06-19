@@ -1,34 +1,3 @@
-/* --COPYRIGHT--,BSD
- * Copyright (c) 2016, Texas Instruments Incorporated
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * *  Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *
- * *  Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- * *  Neither the name of Texas Instruments Incorporated nor the names of
- *    its contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * --/COPYRIGHT--*/
 //*****************************************************************************
 //
 // rtc_c.h - Driver for the RTC_C Module.
@@ -60,8 +29,7 @@ extern "C"
 //! parameter.
 //
 //*****************************************************************************
-typedef struct Calendar
-{
+typedef struct Calendar {
     //! Seconds of minute between 0-59
     uint8_t Seconds;
     //! Minutes of hour between 0-59
@@ -72,7 +40,7 @@ typedef struct Calendar
     uint8_t DayOfWeek;
     //! Day of month between 1-31
     uint8_t DayOfMonth;
-    //! Month between 0-11
+    //! Month between 1-12
     uint8_t Month;
     //! Year between 0-4095
     uint16_t Year;
@@ -84,8 +52,7 @@ typedef struct Calendar
 //! parameter.
 //
 //*****************************************************************************
-typedef struct RTC_C_configureCalendarAlarmParam
-{
+typedef struct RTC_C_configureCalendarAlarmParam {
     //! Is the alarm condition for the minutes.
     //! \n Valid values are:
     //! - \b RTC_C_ALARMCONDITION_OFF [Default]
@@ -103,6 +70,7 @@ typedef struct RTC_C_configureCalendarAlarmParam
     //! - \b RTC_C_ALARMCONDITION_OFF [Default]
     uint8_t dayOfMonthAlarm;
 } RTC_C_configureCalendarAlarmParam;
+
 
 //*****************************************************************************
 //
@@ -313,9 +281,9 @@ extern void RTC_C_setCalibrationFrequency(uint16_t baseAddress,
 //! \brief Sets the specified calibration for the RTC.
 //!
 //! This function sets the calibration offset to make the RTC as accurate as
-//! possible. The offsetDirection can be either +4-ppm or -2-ppm, and the
-//! offsetValue should be from 1-63 and is multiplied by the direction setting
-//! (i.e. +4-ppm * 8 (offsetValue) = +32-ppm).
+//! possible. The offsetDirection can be either +1-ppm or -1-ppm, and the
+//! offsetValue should be from 1-240 and is multiplied by the direction setting
+//! (i.e. +1-ppm * 8 (offsetValue) = +8-ppm).
 //!
 //! \param baseAddress is the base address of the RTC_C module.
 //! \param offsetDirection is the direction that the calibration offset will
@@ -405,10 +373,11 @@ extern bool RTC_C_setTemperatureCompensation(uint16_t baseAddress,
 //! \param CalendarTime is the pointer to the structure containing the values
 //!        for the Calendar to be initialized to. Valid values should be of
 //!        type pointer to Calendar and should contain the following members
-//!        and corresponding values: \b Seconds between 0-59 \b Minutes between
-//!        0-59 \b Hours between 0-23 \b DayOfWeek between 0-6 \b DayOfMonth
-//!        between 1-31 \b Year between 0-4095 NOTE: Values beyond the ones
-//!        specified may result in erratic behavior.
+//!        and corresponding values: \n\b Seconds between 0-59 \n\b Minutes
+//!        between 0-59 \n\b Hours between 0-23 \n\b DayOfWeek between 0-6 \n\b
+//!        DayOfMonth between 1-31 \n\b Month between 1-12 \n\b Year between
+//!        0-4095 \n\b NOTE: Values beyond the ones specified may result in
+//!        erratic behavior.
 //! \param formatSelect is the format for the Calendar registers to use.
 //!        Valid values are:
 //!        - \b RTC_C_FORMAT_BINARY [Default]

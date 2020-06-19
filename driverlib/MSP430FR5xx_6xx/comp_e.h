@@ -1,34 +1,3 @@
-/* --COPYRIGHT--,BSD
- * Copyright (c) 2016, Texas Instruments Incorporated
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * *  Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *
- * *  Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- * *  Neither the name of Texas Instruments Incorporated nor the names of
- *    its contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * --/COPYRIGHT--*/
 //*****************************************************************************
 //
 // comp_e.h - Driver for the COMP_E Module.
@@ -59,8 +28,7 @@ extern "C"
 //! \brief Used in the Comp_E_init() function as the param parameter.
 //
 //*****************************************************************************
-typedef struct Comp_E_initParam
-{
+typedef struct Comp_E_initParam {
     //! Selects the input to the positive terminal.
     //! \n Valid values are:
     //! - \b COMP_E_INPUT0 [Default]
@@ -118,6 +86,8 @@ typedef struct Comp_E_initParam
     //! - \b COMP_E_INVERTEDOUTPUTPOLARITY - the output should be inverted
     uint16_t invertedOutputPolarity;
 } Comp_E_initParam;
+
+
 
 //*****************************************************************************
 //
@@ -228,8 +198,8 @@ typedef struct Comp_E_initParam
 // for functions: Comp_E_setInterruptEdgeDirection().
 //
 //*****************************************************************************
-#define COMP_E_FALLINGEDGE                                           (!(CEIES))
-#define COMP_E_RISINGEDGE                                               (CEIES)
+#define COMP_E_RISINGEDGE                                            (!(CEIES))
+#define COMP_E_FALLINGEDGE                                              (CEIES)
 
 //*****************************************************************************
 //
@@ -423,10 +393,10 @@ extern void Comp_E_clearInterrupt(uint16_t baseAddress,
 //!        - \b COMP_E_INTERRUPT_FLAG_READY - Ready interrupt flag
 //!
 //! \return Logical OR of any of the following:
-//!         - \b Comp_E_OUTPUT_INTERRUPT_FLAG Output interrupt flag
-//!         - \b Comp_E_INTERRUPT_FLAG_INVERTED_POLARITY Output interrupt flag
+//!         - \b COMP_E_OUTPUT_INTERRUPT_FLAG Output interrupt flag
+//!         - \b COMP_E_INTERRUPT_FLAG_INVERTED_POLARITY Output interrupt flag
 //!         inverted polarity
-//!         - \b Comp_E_INTERRUPT_FLAG_READY Ready interrupt flag
+//!         - \b COMP_E_INTERRUPT_FLAG_READY Ready interrupt flag
 //!         \n indicating the status of the masked flags
 //
 //*****************************************************************************
@@ -445,13 +415,13 @@ extern uint8_t Comp_E_getInterruptStatus(uint16_t baseAddress,
 //! \param edgeDirection determines which direction the edge would have to go
 //!        to generate an interrupt based on the non-inverted interrupt flag.
 //!        Valid values are:
-//!        - \b COMP_E_FALLINGEDGE [Default] - sets the bit to generate an
-//!           interrupt when the output of the Comp_E falls from HIGH to LOW if
-//!           the normal interrupt bit is set(and LOW to HIGH if the inverted
+//!        - \b COMP_E_RISINGEDGE [Default] - sets the bit to generate an
+//!           interrupt when the output of the Comp_E rises from LOW to HIGH if
+//!           the normal interrupt bit is set(and HIGH to LOW if the inverted
 //!           interrupt enable bit is set).
-//!        - \b COMP_E_RISINGEDGE - sets the bit to generate an interrupt when
-//!           the output of the Comp_E rises from LOW to HIGH if the normal
-//!           interrupt bit is set(and HIGH to LOW if the inverted interrupt
+//!        - \b COMP_E_FALLINGEDGE - sets the bit to generate an interrupt when
+//!           the output of the Comp_E falls from HIGH to LOW if the normal
+//!           interrupt bit is set(and LOW to HIGH if the inverted interrupt
 //!           enable bit is set).
 //!        \n Modified bits are \b CEIES of \b CECTL1 register.
 //!
@@ -645,8 +615,8 @@ extern void Comp_E_swapIO(uint16_t baseAddress);
 //! \param baseAddress is the base address of the COMP_E module.
 //!
 //! \return One of the following:
-//!         - \b Comp_E_LOW
-//!         - \b Comp_E_HIGH
+//!         - \b COMP_E_LOW
+//!         - \b COMP_E_HIGH
 //!         \n indicating the output value of the Comp_E module
 //
 //*****************************************************************************

@@ -1,34 +1,3 @@
-/* --COPYRIGHT--,BSD
- * Copyright (c) 2016, Texas Instruments Incorporated
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * *  Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *
- * *  Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- * *  Neither the name of Texas Instruments Incorporated nor the names of
- *    its contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * --/COPYRIGHT--*/
 //*****************************************************************************
 //
 // tlv.c - Driver for the tlv Module.
@@ -50,18 +19,19 @@
 #include <assert.h>
 
 void TLV_getInfo(uint8_t tag,
-                 uint8_t instance,
-                 uint8_t *length,
-                 uint16_t **data_address)
+        uint8_t instance,
+        uint8_t *length,
+        uint16_t **data_address
+        )
 {
     // TLV Structure Start Address
     char *TLV_address = (char *)TLV_START;
 
     while((TLV_address < (char *)TLV_END)
-          && ((*TLV_address != tag) || instance) // check for tag and instance
-          && (*TLV_address != TLV_TAGEND))       // do range check first
+            && ((*TLV_address != tag) || instance)   // check for tag and instance
+            && (*TLV_address != TLV_TAGEND))         // do range check first
     {
-        if(*TLV_address == tag)
+        if (*TLV_address == tag)
         {
             // repeat till requested instance is reached
             instance--;
@@ -71,7 +41,7 @@ void TLV_getInfo(uint8_t tag,
     }
 
     // Check if Tag match happened..
-    if(*TLV_address == tag)
+    if (*TLV_address == tag)
     {
         // Return length = Address + 1
         *length = *(TLV_address + 1);
@@ -92,7 +62,7 @@ uint16_t TLV_getDeviceType()
 {
     uint16_t *pDeviceType = (uint16_t *)TLV_DEVICE_ID_0;
     // Return Value from TLV Table
-    return(pDeviceType[0]);
+    return pDeviceType[0];
 }
 
 uint16_t TLV_getMemory(uint8_t instance)
@@ -107,30 +77,33 @@ uint16_t TLV_getMemory(uint8_t instance)
     // TLV access Function Call
     // Get Peripheral data pointer
     TLV_getInfo(TLV_PDTAG,
-                0,
-                &bPDTAG_bytes,
-                (uint16_t **)&pPDTAG
-                );
-
-    for(count = 0; count <= instance; count += 2)
+            0,
+            &bPDTAG_bytes,
+            (uint16_t **)&pPDTAG
+            );
+    if (pPDTAG != 0)
     {
-        if(pPDTAG[count] == 0)
+        for (count = 0; count <= instance; count += 2)
         {
-            // Return 0 if end reached
-            return(0);
-        }
-        if(count == instance)
-        {
-            return (pPDTAG[count] | pPDTAG[count + 1] << 8);
-        }
-    }
+            if (pPDTAG[count] == 0)
+            {
+                // Return 0 if end reached
+                return 0;
+            }
+            if (count == instance)
+            {
+                return (pPDTAG[count] | pPDTAG[count+1]<<8);
+            }
+        }   // for count
+    }   // pPDTAG != 0
 
     // Return 0: not found
-    return(0);
+    return 0;
 }
 
 uint16_t TLV_getPeripheral(uint8_t tag,
-                           uint8_t instance)
+        uint8_t instance
+        )
 {
     uint8_t *pPDTAG;
     uint8_t bPDTAG_bytes;
@@ -139,48 +112,50 @@ uint16_t TLV_getPeripheral(uint8_t tag,
 
     // Get Peripheral data pointer
     TLV_getInfo(TLV_PDTAG,
-                0,
-                &bPDTAG_bytes,
-                (uint16_t **)&pPDTAG
-                );
-
-    // read memory configuration from TLV to get offset for Peripherals
-    while(TLV_getMemory(count))
+            0,
+            &bPDTAG_bytes,
+            (uint16_t **)&pPDTAG
+            );
+    if (pPDTAG != 0)
     {
-        count++;
-    }
-    // get number of Peripheral entries
-    pcount = pPDTAG[count * 2 + 1];
-    // inc count to first Periperal
-    count++;
-    // adjust point to first address of Peripheral
-    pPDTAG += count * 2;
-    // set counter back to 0
-    count = 0;
-    // align pcount for work comparision
-    pcount *= 2;
-
-    // TLV access Function Call
-    for(count = 0; count <= pcount; count += 2)
-    {
-        if(pPDTAG[count + 1] == tag)
+        // read memory configuration from TLV to get offset for Peripherals
+        while (TLV_getMemory(count))
         {
-            // test if required Peripheral is found
-            if(instance > 0)
-            {
-                // test if required instance is found
-                instance--;
-            }
-            else
-            {
-                // Return found data
-                return (pPDTAG[count] | pPDTAG[count + 1] << 8);
-            }
+            count++;
         }
-    }
+        // get number of Peripheral entries
+        pcount = pPDTAG[count * 2 + 1];
+        // inc count to first Periperal
+        count++;
+        // adjust point to first address of Peripheral
+        pPDTAG += count*2;
+        // set counter back to 0
+        count = 0;
+        // align pcount for work comparision
+        pcount *= 2;
+
+        // TLV access Function Call
+        for (count = 0; count <= pcount; count += 2)
+        {
+            if (pPDTAG[count+1] == tag)
+            {
+                // test if required Peripheral is found
+                if (instance > 0)
+                {
+                    // test if required instance is found
+                    instance--;
+                }
+                else
+                {
+                    // Return found data
+                    return (pPDTAG[count] | pPDTAG[count + 1] << 8);
+                }
+            }   // pPDTAG[count+1] == tag
+        }   // for count
+    }   // pPDTAG != 0
 
     // Return 0: not found
-    return(0);
+    return 0;
 }
 
 uint8_t TLV_getInterrupt(uint8_t tag)
@@ -192,42 +167,44 @@ uint8_t TLV_getInterrupt(uint8_t tag)
 
     // Get Peripheral data pointer
     TLV_getInfo(TLV_PDTAG,
-                0,
-                &bPDTAG_bytes,
-                (uint16_t **)&pPDTAG
-                );
-
-    // read memory configuration from TLV to get offset for Peripherals
-    while(TLV_getMemory(count))
+            0,
+            &bPDTAG_bytes,
+            (uint16_t **)&pPDTAG
+            );
+    if (pPDTAG != 0)
     {
+        // read memory configuration from TLV to get offset for Peripherals
+        while (TLV_getMemory(count))
+        {
+            count++;
+        }
+
+        pcount = pPDTAG[count * 2 + 1];
+        // inc count to first Periperal
         count++;
-    }
+        // adjust point to first address of Peripheral
+        pPDTAG += (pcount + count) * 2;
+        // set counter back to 0
+        count = 0;
 
-    pcount = pPDTAG[count * 2 + 1];
-    // inc count to first Periperal
-    count++;
-    // adjust point to first address of Peripheral
-    pPDTAG += (pcount + count) * 2;
-    // set counter back to 0
-    count = 0;
-
-    // TLV access Function Call
-    for(count = 0; count <= tag; count += 2)
-    {
-        if(pPDTAG[count] == 0)
+        // TLV access Function Call
+        for (count = 0; count <= tag; count += 2)
         {
-            // Return 0: not found/end of table
-            return(0);
-        }
-        if(count == tag)
-        {
-            // Return found data
-            return (pPDTAG[count]);
-        }
-    }
+            if (pPDTAG[count] == 0)
+            {
+                // Return 0: not found/end of table
+                return 0;
+            }
+            if (count == tag)
+            {
+                // Return found data
+                return (pPDTAG[count]);
+            }
+        }   // for count
+    }   // pPDTAG != 0
 
     // Return 0: not found
-    return(0);
+    return 0;
 }
 
 #endif

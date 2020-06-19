@@ -1,34 +1,3 @@
-/* --COPYRIGHT--,BSD
- * Copyright (c) 2016, Texas Instruments Incorporated
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * *  Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *
- * *  Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- * *  Neither the name of Texas Instruments Incorporated nor the names of
- *    its contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * --/COPYRIGHT--*/
 //*****************************************************************************
 //
 // lcd_c.h - Driver for the LCD_C Module.
@@ -59,8 +28,7 @@ extern "C"
 //! \brief Used in the LCD_C_init() function as the initParams parameter.
 //
 //*****************************************************************************
-typedef struct LCD_C_initParam
-{
+typedef struct LCD_C_initParam {
     //! Selects the clock that will be used by the LCD.
     //! \n Valid values are:
     //! - \b LCD_C_CLOCKSOURCE_ACLK [Default]
@@ -132,6 +100,7 @@ typedef struct LCD_C_initParam
     //! - \b LCD_C_SEGMENTS_ENABLED
     uint16_t segments;
 } LCD_C_initParam;
+
 
 extern const LCD_C_initParam LCD_C_INIT_PARAM;
 
@@ -280,7 +249,7 @@ extern const LCD_C_initParam LCD_C_INIT_PARAM;
 #define LCD_C_BLINK_FREQ_CLOCK_PRESCALAR_16384        (LCDBLKPRE2 | LCDBLKPRE0)
 #define LCD_C_BLINK_FREQ_CLOCK_PRESCALAR_32768        (LCDBLKPRE2 | LCDBLKPRE1)
 #define LCD_C_BLINK_FREQ_CLOCK_PRESCALAR_65536                                \
-    (LCDBLKPRE2 | LCDBLKPRE1 | LCDBLKPRE0)
+                                         (LCDBLKPRE2 | LCDBLKPRE1 | LCDBLKPRE0)
 
 //*****************************************************************************
 //
@@ -362,7 +331,7 @@ extern const LCD_C_initParam LCD_C_INIT_PARAM;
 #define LCD_C_CHARGEPUMP_VOLTAGE_3_32V_OR_2_77VREF      (VLCD3 | VLCD2 | VLCD0)
 #define LCD_C_CHARGEPUMP_VOLTAGE_3_38V_OR_2_82VREF      (VLCD3 | VLCD2 | VLCD1)
 #define LCD_C_CHARGEPUMP_VOLTAGE_3_44V_OR_2_87VREF                            \
-    (VLCD3 | VLCD2 | VLCD1 | VLCD0)
+                                                (VLCD3 | VLCD2 | VLCD1 | VLCD0)
 
 //*****************************************************************************
 //
@@ -457,8 +426,8 @@ extern const LCD_C_initParam LCD_C_INIT_PARAM;
 //
 //! \brief Initializes the LCD Module.
 //!
-//! his function initializes the LCD but without turning on. It bascially setup
-//! the clock source, clock divider, clock prescalar, mux rate, low-power
+//! This function initializes the LCD but without turning on. It bascially
+//! setup the clock source, clock divider, clock prescalar, mux rate, low-power
 //! waveform and segments on/off. After calling this function, user can config
 //! charge pump, internal reference voltage and voltage sources.
 //!
@@ -1210,6 +1179,32 @@ extern void LCD_C_setMemory(uint16_t baseAddress,
 
 //*****************************************************************************
 //
+//! \brief Gets the LCD memory register.
+//!
+//!
+//! \return The uint8_t value of the LCD memory register.
+//
+//*****************************************************************************
+extern uint8_t LCD_C_getMemory(uint16_t baseAddress,
+                               uint8_t pin);
+
+//*****************************************************************************
+//
+//! \brief Sets the LCD memory register without erasing what is already there.
+//! Uses LCD getMemory() function.
+//!
+//!
+//! Modified bits are \b MBITx of \b LCDMx register.
+//!
+//! \return None
+//
+//*****************************************************************************
+extern void LCD_C_setMemoryWithoutOverwrite(uint16_t baseAddress,
+                                            uint8_t pin,
+                                            uint8_t value);
+
+//*****************************************************************************
+//
 //! \brief Sets the LCD blink memory register.
 //!
 //! \param baseAddress is the base address of the LCD_C module.
@@ -1289,6 +1284,32 @@ extern void LCD_C_setMemory(uint16_t baseAddress,
 extern void LCD_C_setBlinkingMemory(uint16_t baseAddress,
                                     uint8_t pin,
                                     uint8_t value);
+
+//*****************************************************************************
+//
+//! \brief Gets the LCD blink memory register.
+//!
+//!
+//! \return The uint8_t value of the LCD blink memory register.
+//
+//*****************************************************************************
+extern uint8_t LCD_C_getBlinkingMemory(uint16_t baseAddress,
+                                       uint8_t pin);
+
+//*****************************************************************************
+//
+//! \brief Sets the LCD blink memory register without erasing what is already
+//! there. Uses LCD getBlinkingMemory() function.
+//!
+//!
+//! Modified bits are \b MBITx of \b LCDBMx register.
+//!
+//! \return None
+//
+//*****************************************************************************
+extern void LCD_C_setBlinkingMemoryWithoutOverwrite(uint16_t baseAddress,
+                                                    uint8_t pin,
+                                                    uint8_t value);
 
 //*****************************************************************************
 //

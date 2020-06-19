@@ -1,34 +1,3 @@
-/* --COPYRIGHT--,BSD
- * Copyright (c) 2016, Texas Instruments Incorporated
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * *  Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *
- * *  Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- * *  Neither the name of Texas Instruments Incorporated nor the names of
- *    its contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * --/COPYRIGHT--*/
 //*****************************************************************************
 //
 // gpio.c - Driver for the gpio Module.
@@ -44,7 +13,7 @@
 
 #include "inc/hw_memmap.h"
 
-#if defined(__MSP430_HAS_PORT1_R__) || defined(__MSP430_HAS_PORT2_R__) || \
+#if defined(__MSP430_HAS_PORT1_R__) || defined(__MSP430_HAS_PORT2_R__) ||\
     defined(__MSP430_HAS_PORTA_R__)
 #include "gpio.h"
 
@@ -139,20 +108,18 @@ static const uint16_t GPIO_PORT_TO_BASE[] = {
 #endif
 };
 
-void GPIO_setAsOutputPin(uint8_t selectedPort,
-                         uint16_t selectedPins) {
+void GPIO_setAsOutputPin(uint8_t selectedPort, uint16_t selectedPins) {
+
     uint16_t baseAddress = GPIO_PORT_TO_BASE[selectedPort];
 
     #ifndef NDEBUG
-    if(baseAddress == 0xFFFF)
-    {
+    if(baseAddress == 0xFFFF) {
         return;
     }
     #endif
 
     // Shift by 8 if port is even (upper 8-bits)
-    if((selectedPort & 1) ^ 1)
-    {
+    if((selectedPort & 1) ^ 1) {
         selectedPins <<= 8;
     }
 
@@ -163,20 +130,18 @@ void GPIO_setAsOutputPin(uint8_t selectedPort,
     return;
 }
 
-void GPIO_setAsInputPin(uint8_t selectedPort,
-                        uint16_t selectedPins) {
+void GPIO_setAsInputPin(uint8_t selectedPort, uint16_t selectedPins) {
+
     uint16_t baseAddress = GPIO_PORT_TO_BASE[selectedPort];
 
     #ifndef NDEBUG
-    if(baseAddress == 0xFFFF)
-    {
+    if(baseAddress == 0xFFFF) {
         return;
     }
     #endif
 
     // Shift by 8 if port is even (upper 8-bits)
-    if((selectedPort & 1) ^ 1)
-    {
+    if((selectedPort & 1) ^ 1) {
         selectedPins <<= 8;
     }
 
@@ -187,133 +152,121 @@ void GPIO_setAsInputPin(uint8_t selectedPort,
 }
 
 void GPIO_setAsPeripheralModuleFunctionOutputPin(uint8_t selectedPort,
-                                                 uint16_t selectedPins
-                                                 ,
-                                                 uint8_t mode) {
+                                                      uint16_t selectedPins
+                                                     ,uint8_t mode) {
+
     uint16_t baseAddress = GPIO_PORT_TO_BASE[selectedPort];
 
     #ifndef NDEBUG
-    if(baseAddress == 0xFFFF)
-    {
+    if(baseAddress == 0xFFFF) {
         return;
     }
     #endif
 
     // Shift by 8 if port is even (upper 8-bits)
-    if((selectedPort & 1) ^ 1)
-    {
+    if((selectedPort & 1) ^ 1) {
         selectedPins <<= 8;
     }
 
     HWREG16(baseAddress + OFS_PADIR) |= selectedPins;
-    switch(mode)
-    {
-    case GPIO_PRIMARY_MODULE_FUNCTION:
-        HWREG16(baseAddress + OFS_PASEL0) |= selectedPins;
-        HWREG16(baseAddress + OFS_PASEL1) &= ~selectedPins;
-        break;
-    case GPIO_SECONDARY_MODULE_FUNCTION:
-        HWREG16(baseAddress + OFS_PASEL0) &= ~selectedPins;
-        HWREG16(baseAddress + OFS_PASEL1) |= selectedPins;
-        break;
-    case GPIO_TERNARY_MODULE_FUNCTION:
-        HWREG16(baseAddress + OFS_PASEL0) |= selectedPins;
-        HWREG16(baseAddress + OFS_PASEL1) |= selectedPins;
-        break;
+    switch (mode){
+        case GPIO_PRIMARY_MODULE_FUNCTION:
+            HWREG16(baseAddress + OFS_PASEL0) |= selectedPins;
+            HWREG16(baseAddress + OFS_PASEL1) &= ~selectedPins;
+            break;
+        case GPIO_SECONDARY_MODULE_FUNCTION:
+            HWREG16(baseAddress + OFS_PASEL0) &= ~selectedPins;
+            HWREG16(baseAddress + OFS_PASEL1) |= selectedPins;
+            break;
+        case GPIO_TERNARY_MODULE_FUNCTION:
+            HWREG16(baseAddress + OFS_PASEL0) |= selectedPins;
+            HWREG16(baseAddress + OFS_PASEL1) |= selectedPins;
+            break;
     }
 }
 
 void GPIO_setAsPeripheralModuleFunctionInputPin(uint8_t selectedPort,
-                                                uint16_t selectedPins
-                                                ,
-                                                uint8_t mode) {
+                                                     uint16_t selectedPins
+                                                     ,uint8_t mode) {
     uint16_t baseAddress = GPIO_PORT_TO_BASE[selectedPort];
 
     #ifndef NDEBUG
-    if(baseAddress == 0xFFFF)
-    {
+    if(baseAddress == 0xFFFF) {
         return;
     }
     #endif
 
     // Shift by 8 if port is even (upper 8-bits)
-    if((selectedPort & 1) ^ 1)
-    {
+    if((selectedPort & 1) ^ 1) {
         selectedPins <<= 8;
     }
 
     HWREG16(baseAddress + OFS_PADIR) &= ~selectedPins;
-    switch(mode)
-    {
-    case GPIO_PRIMARY_MODULE_FUNCTION:
-        HWREG16(baseAddress + OFS_PASEL0) |= selectedPins;
-        HWREG16(baseAddress + OFS_PASEL1) &= ~selectedPins;
-        break;
-    case GPIO_SECONDARY_MODULE_FUNCTION:
-        HWREG16(baseAddress + OFS_PASEL0) &= ~selectedPins;
-        HWREG16(baseAddress + OFS_PASEL1) |= selectedPins;
-        break;
-    case GPIO_TERNARY_MODULE_FUNCTION:
-        HWREG16(baseAddress + OFS_PASEL0) |= selectedPins;
-        HWREG16(baseAddress + OFS_PASEL1) |= selectedPins;
-        break;
+    switch (mode){
+        case GPIO_PRIMARY_MODULE_FUNCTION:
+            HWREG16(baseAddress + OFS_PASEL0) |= selectedPins;
+            HWREG16(baseAddress + OFS_PASEL1) &= ~selectedPins;
+            break;
+        case GPIO_SECONDARY_MODULE_FUNCTION:
+            HWREG16(baseAddress + OFS_PASEL0) &= ~selectedPins;
+            HWREG16(baseAddress + OFS_PASEL1) |= selectedPins;
+            break;
+        case GPIO_TERNARY_MODULE_FUNCTION:
+            HWREG16(baseAddress + OFS_PASEL0) |= selectedPins;
+            HWREG16(baseAddress + OFS_PASEL1) |= selectedPins;
+            break;
     }
 }
 
-void GPIO_setOutputHighOnPin(uint8_t selectedPort,
-                             uint16_t selectedPins) {
+void GPIO_setOutputHighOnPin (uint8_t selectedPort,
+                                   uint16_t selectedPins) {
+
     uint16_t baseAddress = GPIO_PORT_TO_BASE[selectedPort];
 
     #ifndef NDEBUG
-    if(baseAddress == 0xFFFF)
-    {
+    if(baseAddress == 0xFFFF) {
         return;
     }
     #endif
 
     // Shift by 8 if port is even (upper 8-bits)
-    if((selectedPort & 1) ^ 1)
-    {
+    if((selectedPort & 1) ^ 1) {
         selectedPins <<= 8;
     }
 
     HWREG16(baseAddress + OFS_PAOUT) |= selectedPins;
 }
 
-void GPIO_setOutputLowOnPin(uint8_t selectedPort,
-                            uint16_t selectedPins) {
+void GPIO_setOutputLowOnPin (uint8_t selectedPort, uint16_t selectedPins) {
+
     uint16_t baseAddress = GPIO_PORT_TO_BASE[selectedPort];
 
     #ifndef NDEBUG
-    if(baseAddress == 0xFFFF)
-    {
+    if(baseAddress == 0xFFFF) {
         return;
     }
     #endif
 
     // Shift by 8 if port is even (upper 8-bits)
-    if((selectedPort & 1) ^ 1)
-    {
+    if((selectedPort & 1) ^ 1) {
         selectedPins <<= 8;
     }
 
     HWREG16(baseAddress + OFS_PAOUT) &= ~selectedPins;
 }
 
-void GPIO_toggleOutputOnPin(uint8_t selectedPort,
-                            uint16_t selectedPins) {
+void GPIO_toggleOutputOnPin (uint8_t selectedPort, uint16_t selectedPins) {
+
     uint16_t baseAddress = GPIO_PORT_TO_BASE[selectedPort];
 
     #ifndef NDEBUG
-    if(baseAddress == 0xFFFF)
-    {
+    if(baseAddress == 0xFFFF) {
         return;
     }
     #endif
 
     // Shift by 8 if port is even (upper 8-bits)
-    if((selectedPort & 1) ^ 1)
-    {
+    if((selectedPort & 1) ^ 1) {
         selectedPins <<= 8;
     }
 
@@ -321,19 +274,18 @@ void GPIO_toggleOutputOnPin(uint8_t selectedPort,
 }
 
 void GPIO_setAsInputPinWithPullDownResistor(uint8_t selectedPort,
-                                            uint16_t selectedPins) {
+                                                 uint16_t selectedPins) {
+
     uint16_t baseAddress = GPIO_PORT_TO_BASE[selectedPort];
 
     #ifndef NDEBUG
-    if(baseAddress == 0xFFFF)
-    {
+    if(baseAddress == 0xFFFF) {
         return;
     }
     #endif
 
     // Shift by 8 if port is even (upper 8-bits)
-    if((selectedPort & 1) ^ 1)
-    {
+    if((selectedPort & 1) ^ 1) {
         selectedPins <<= 8;
     }
 
@@ -346,19 +298,18 @@ void GPIO_setAsInputPinWithPullDownResistor(uint8_t selectedPort,
 }
 
 void GPIO_setAsInputPinWithPullUpResistor(uint8_t selectedPort,
-                                          uint16_t selectedPins) {
+                                                uint16_t selectedPins) {
+
     uint16_t baseAddress = GPIO_PORT_TO_BASE[selectedPort];
 
     #ifndef NDEBUG
-    if(baseAddress == 0xFFFF)
-    {
+    if(baseAddress == 0xFFFF) {
         return;
     }
     #endif
 
     // Shift by 8 if port is even (upper 8-bits)
-    if((selectedPort & 1) ^ 1)
-    {
+    if((selectedPort & 1) ^ 1) {
         selectedPins <<= 8;
     }
 
@@ -370,140 +321,133 @@ void GPIO_setAsInputPinWithPullUpResistor(uint8_t selectedPort,
 }
 
 uint8_t GPIO_getInputPinValue(uint8_t selectedPort,
-                              uint16_t selectedPins) {
+                                   uint16_t selectedPins) {
+
     uint16_t baseAddress = GPIO_PORT_TO_BASE[selectedPort];
 
     #ifndef NDEBUG
-    if(baseAddress == 0xFFFF)
-    {
+    if(baseAddress == 0xFFFF) {
         return;
     }
     #endif
 
     // Shift by 8 if port is even (upper 8-bits)
-    if((selectedPort & 1) ^ 1)
-    {
+    if((selectedPort & 1) ^ 1) {
         selectedPins <<= 8;
     }
 
     uint16_t inputPinValue = HWREG16(baseAddress + OFS_PAIN) & (selectedPins);
 
-    if(inputPinValue > 0)
-    {
+    if(inputPinValue > 0){
         return (GPIO_INPUT_PIN_HIGH);
     }
     return (GPIO_INPUT_PIN_LOW);
 }
 
-void GPIO_enableInterrupt(uint8_t selectedPort,
-                          uint16_t selectedPins) {
+void GPIO_enableInterrupt(uint8_t selectedPort, uint16_t selectedPins) {
+
     uint16_t baseAddress = GPIO_PORT_TO_BASE[selectedPort];
 
     #ifndef NDEBUG
-    if(baseAddress == 0xFFFF)
-    {
+    if(baseAddress == 0xFFFF) {
         return;
     }
     #endif
 
     // Shift by 8 if port is even (upper 8-bits)
-    if((selectedPort & 1) ^ 1)
-    {
+    if((selectedPort & 1) ^ 1) {
         selectedPins <<= 8;
     }
 
     HWREG16(baseAddress + OFS_PAIE) |= selectedPins;
 }
 
-void GPIO_disableInterrupt(uint8_t selectedPort,
-                           uint16_t selectedPins) {
+void GPIO_disableInterrupt(uint8_t selectedPort, uint16_t selectedPins) {
+
     uint16_t baseAddress = GPIO_PORT_TO_BASE[selectedPort];
 
     #ifndef NDEBUG
-    if(baseAddress == 0xFFFF)
-    {
+    if(baseAddress == 0xFFFF) {
         return;
     }
     #endif
 
     // Shift by 8 if port is even (upper 8-bits)
-    if((selectedPort & 1) ^ 1)
-    {
+    if((selectedPort & 1) ^ 1) {
         selectedPins <<= 8;
     }
 
     HWREG16(baseAddress + OFS_PAIE) &= ~selectedPins;
 }
 
-uint16_t GPIO_getInterruptStatus(uint8_t selectedPort,
-                                 uint16_t selectedPins) {
+uint16_t GPIO_getInterruptStatus(uint8_t selectedPort, uint16_t selectedPins) {
+
     uint16_t baseAddress = GPIO_PORT_TO_BASE[selectedPort];
 
     #ifndef NDEBUG
-    if(baseAddress == 0xFFFF)
-    {
+    if(baseAddress == 0xFFFF) {
         return;
     }
     #endif
 
     // Shift by 8 if port is even (upper 8-bits)
-    if((selectedPort & 1) ^ 1)
-    {
-        return (HWREG8(baseAddress + OFS_PAIFG_H) & selectedPins);
+    if((selectedPort & 1) ^ 1) {
+        if((baseAddress & 0x1) ^ 0x1)
+        {
+            return (HWREG8(baseAddress + OFS_PAIFG_H) & selectedPins);
+        }
+        else
+        {
+            return (HWREG8(baseAddress + OFS_PAIFG) & selectedPins);
+        }
     }
-    else
-    {
+    else {
         return (HWREG16(baseAddress + OFS_PAIFG) & selectedPins);
     }
 }
 
-void GPIO_clearInterrupt(uint8_t selectedPort,
-                         uint16_t selectedPins) {
+void GPIO_clearInterrupt(uint8_t selectedPort, uint16_t selectedPins) {
+
     uint16_t baseAddress = GPIO_PORT_TO_BASE[selectedPort];
 
     #ifndef NDEBUG
-    if(baseAddress == 0xFFFF)
-    {
+    if(baseAddress == 0xFFFF) {
         return;
     }
     #endif
 
     // Shift by 8 if port is even (upper 8-bits)
-    if((selectedPort & 1) ^ 1)
-    {
+    if((selectedPort & 1) ^ 1) {
         selectedPins <<= 8;
     }
 
     HWREG16(baseAddress + OFS_PAIFG) &= ~selectedPins;
 }
 
-void GPIO_selectInterruptEdge(uint8_t selectedPort,
-                              uint16_t selectedPins,
-                              uint8_t edgeSelect) {
+void GPIO_selectInterruptEdge(uint8_t selectedPort, uint16_t selectedPins,
+                                   uint8_t edgeSelect) {
+
     uint16_t baseAddress = GPIO_PORT_TO_BASE[selectedPort];
 
     #ifndef NDEBUG
-    if(baseAddress == 0xFFFF)
-    {
+    if(baseAddress == 0xFFFF) {
         return;
     }
     #endif
 
     // Shift by 8 if port is even (upper 8-bits)
-    if((selectedPort & 1) ^ 1)
-    {
+    if((selectedPort & 1) ^ 1) {
         selectedPins <<= 8;
     }
 
-    if(GPIO_LOW_TO_HIGH_TRANSITION == edgeSelect)
-    {
+    if (GPIO_LOW_TO_HIGH_TRANSITION == edgeSelect){
         HWREG16(baseAddress + OFS_PAIES) &= ~selectedPins;
     }
-    else
-    {
+    else {
         HWREG16(baseAddress + OFS_PAIES) |= selectedPins;
     }
 }
+
 
 #endif
 //*****************************************************************************

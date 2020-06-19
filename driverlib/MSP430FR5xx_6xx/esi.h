@@ -1,34 +1,3 @@
-/* --COPYRIGHT--,BSD
- * Copyright (c) 2016, Texas Instruments Incorporated
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * *  Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *
- * *  Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- * *  Neither the name of Texas Instruments Incorporated nor the names of
- *    its contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * --/COPYRIGHT--*/
 //*****************************************************************************
 //
 // esi.h - Driver for the ESI Module.
@@ -150,8 +119,7 @@ uint16_t ESI_getOscCounter(void);
 #define ESI_TSM_DAC_CONTROL_AFE2_DISABLE    0x0
 #define ESI_TSM_DAC_CONTROL_AFE2_ENABLE     ESIDAC2EN
 
-typedef struct ESI_AFE1_InitParams
-{
+typedef struct ESI_AFE1_InitParams {
     uint16_t excitationCircuitSelect;
     uint16_t sampleAndHoldSelect;
     uint16_t midVoltageGeneratorSelect;
@@ -162,10 +130,9 @@ typedef struct ESI_AFE1_InitParams
 
 extern const ESI_AFE1_InitParams ESI_AFE1_INITPARAMS_DEFAULT;
 
-void ESI_AFE1_init(ESI_AFE1_InitParams *params);
+void ESI_AFE1_init (ESI_AFE1_InitParams *params);
 
-typedef struct ESI_AFE2_InitParams
-{
+typedef struct ESI_AFE2_InitParams {
     uint16_t inputSelectAFE2;
     uint16_t inverterSelectOutputAFE2;
     uint16_t tsmControlComparatorAFE2;
@@ -174,7 +141,7 @@ typedef struct ESI_AFE2_InitParams
 
 extern const ESI_AFE2_InitParams ESI_AFE2_INITPARAMS_DEFAULT;
 
-void ESI_AFE2_init(ESI_AFE2_InitParams *params);
+void ESI_AFE2_init (ESI_AFE2_InitParams *params);
 
 //*****************************************************************************
 //
@@ -201,7 +168,8 @@ void ESI_AFE2_init(ESI_AFE2_InitParams *params);
 #define ESI_AFE_OUTPUT_HIGH   0x1
 #define ESI_AFE_OUTPUT_LOW  0x0
 
-uint16_t ESI_getLatchedComparatorOutput(uint16_t channelSelect);
+uint16_t ESI_getLatchedComparatorOutput (
+    uint16_t channelSelect);
 
 //*****************************************************************************
 //
@@ -240,43 +208,30 @@ uint16_t ESI_getLatchedComparatorOutput(uint16_t channelSelect);
 #define ESI_TSM_START_TRIGGER_DIV_26    ESIDIV3A2 + ESIDIV3A1
 #define ESI_TSM_START_TRIGGER_DIV_30    ESIDIV3A2 + ESIDIV3A1 + ESIDIV3A0
 #define ESI_TSM_START_TRIGGER_DIV_42    ESIDIV3A0 + ESIDIV3A1 + ESIDIV3B0
-#define ESI_TSM_START_TRIGGER_DIV_50    ESIDIV3A1 + ESIDIV3B1
+#define ESI_TSM_START_TRIGGER_DIV_50	ESIDIV3A1 + ESIDIV3B1
 #define ESI_TSM_START_TRIGGER_DIV_54    ESIDIV3A2 + ESIDIV3B0
 #define ESI_TSM_START_TRIGGER_DIV_66    ESIDIV3A2 + ESIDIV3A0 + ESIDIV3B0
-#define ESI_TSM_START_TRIGGER_DIV_70    ESIDIV3A1 + ESIDIV3A0 + ESIDIV3B1
+#define ESI_TSM_START_TRIGGER_DIV_70	ESIDIV3A1 + ESIDIV3A0 + ESIDIV3B1
 #define ESI_TSM_START_TRIGGER_DIV_78    ESIDIV3A2 + ESIDIV3A1 + ESIDIV3B0
-#define ESI_TSM_START_TRIGGER_DIV_90    ESIDIV3A2 + ESIDIV3A1 + ESIDIV3A0 + \
-    ESIDIV3B0
-#define ESI_TSM_START_TRIGGER_DIV_98    ESIDIV3A0 + ESIDIV3A1 + ESIDIV3B0 + \
-    ESIDIV3B1
+#define ESI_TSM_START_TRIGGER_DIV_90    ESIDIV3A2 + ESIDIV3A1 + ESIDIV3A0 + ESIDIV3B0
+#define ESI_TSM_START_TRIGGER_DIV_98    ESIDIV3A0 + ESIDIV3A1 + ESIDIV3B0 + ESIDIV3B1
 #define ESI_TSM_START_TRIGGER_DIV_110   ESIDIV3A2 + ESIDIV3A0 + ESIDIV3B1
 #define ESI_TSM_START_TRIGGER_DIV_126   ESIDIV3A2 + ESIDIV3B0 + ESIDIV3B1
 #define ESI_TSM_START_TRIGGER_DIV_130   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3B1
-#define ESI_TSM_START_TRIGGER_DIV_150   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3A0 + \
-    ESIDIV3B1
-#define ESI_TSM_START_TRIGGER_DIV_154   ESIDIV3A2 + ESIDIV3A0 + ESIDIV3B0 + \
-    ESIDIV3B1
+#define ESI_TSM_START_TRIGGER_DIV_150   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3A0 + ESIDIV3B1
+#define ESI_TSM_START_TRIGGER_DIV_154   ESIDIV3A2 + ESIDIV3A0 + ESIDIV3B0 + ESIDIV3B1
 #define ESI_TSM_START_TRIGGER_DIV_162   ESIDIV3A2 + ESIDIV3B2
-#define ESI_TSM_START_TRIGGER_DIV_182   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3B0 + \
-    ESIDIV3B1
+#define ESI_TSM_START_TRIGGER_DIV_182   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3B0 + ESIDIV3B1
 #define ESI_TSM_START_TRIGGER_DIV_198   ESIDIV3A2 + ESIDIV3A0 + ESIDIV3B2
-#define ESI_TSM_START_TRIGGER_DIV_210   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3A0 + \
-    ESIDIV3B0 + ESIDIV3B1
+#define ESI_TSM_START_TRIGGER_DIV_210   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3A0 + ESIDIV3B0 + ESIDIV3B1
 #define ESI_TSM_START_TRIGGER_DIV_234   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3B2
-#define ESI_TSM_START_TRIGGER_DIV_242   ESIDIV3A2 + ESIDIV3A0 + ESIDIV3B2 + \
-    ESIDIV3B0
-#define ESI_TSM_START_TRIGGER_DIV_270   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3A0 + \
-    ESIDIV3B2
-#define ESI_TSM_START_TRIGGER_DIV_286   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3B2 + \
-    ESIDIV3B0
-#define ESI_TSM_START_TRIGGER_DIV_330   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3A0 + \
-    ESIDIV3B2 + ESIDIV3B0
-#define ESI_TSM_START_TRIGGER_DIV_338   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3B2 + \
-    ESIDIV3B1
-#define ESI_TSM_START_TRIGGER_DIV_390   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3A0 + \
-    ESIDIV3B2 + ESIDIV3B1
-#define ESI_TSM_START_TRIGGER_DIV_450   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3A0 + \
-    ESIDIV3B2 + ESIDIV3B1 + ESIDIV3B0
+#define ESI_TSM_START_TRIGGER_DIV_242   ESIDIV3A2 + ESIDIV3A0 + ESIDIV3B2 + ESIDIV3B0
+#define ESI_TSM_START_TRIGGER_DIV_270   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3A0 + ESIDIV3B2
+#define ESI_TSM_START_TRIGGER_DIV_286   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3B2 + ESIDIV3B0
+#define ESI_TSM_START_TRIGGER_DIV_330   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3A0 + ESIDIV3B2 + ESIDIV3B0
+#define ESI_TSM_START_TRIGGER_DIV_338   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3B2 + ESIDIV3B1
+#define ESI_TSM_START_TRIGGER_DIV_390   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3A0 + ESIDIV3B2 + ESIDIV3B1
+#define ESI_TSM_START_TRIGGER_DIV_450   ESIDIV3A2 + ESIDIV3A1 + ESIDIV3A0 + ESIDIV3B2 + ESIDIV3B1 + ESIDIV3B0
 
 //*****************************************************************************
 //
@@ -307,8 +262,7 @@ uint16_t ESI_getLatchedComparatorOutput(uint16_t channelSelect);
 #define ESI_TSM_HIGH_FREQ_CLK_FUNCTION_ON   0x0
 #define ESI_TSM_AUTOZERO_CYCLE_FUNCTION_ON  ESICLKAZSEL
 
-typedef struct ESI_TSM_InitParams
-{
+typedef struct ESI_TSM_InitParams {
     uint16_t smclkDivider;
     uint16_t aclkDivider;
     uint16_t startTriggerAclkDivider;
@@ -319,19 +273,17 @@ typedef struct ESI_TSM_InitParams
 
 extern const ESI_TSM_InitParams ESI_TSM_INITPARAMS_DEFAULT;
 
-void ESI_TSM_init(ESI_TSM_InitParams *params);
+void ESI_TSM_init (ESI_TSM_InitParams *params);
 
 void ESI_TSM_clearTable(void);
 
-void ESI_TSM_copyTable(uint16_t* tsmTable,
-                       uint16_t size);
+void ESI_TSM_copyTable(uint16_t* tsmTable, uint16_t size);
 
 void ESI_TSM_softwareTrigger(void);
 
 uint8_t ESI_TSM_getTSMStateDuration(uint8_t stateRegNum);
 
-void ESI_TSM_setTSMStateDuration(uint8_t stateRegNum,
-                                 uint8_t duration);
+void ESI_TSM_setTSMStateDuration(uint8_t stateRegNum, uint8_t duration);
 
 //*****************************************************************************
 //
@@ -405,6 +357,7 @@ void ESI_TSM_setTSMStateDuration(uint8_t stateRegNum,
 #define ESI_PSM_CNT2_NO_RESET 0x0
 #define ESI_PSM_CNT2_RESET ESICNT2RST
 
+
 //*****************************************************************************
 //
 //The following are values that can be passed to
@@ -423,29 +376,27 @@ void ESI_TSM_setTSMStateDuration(uint8_t stateRegNum,
 #define ESI_PSM_TEST4_IS_Q2         0x0
 #define ESI_PSM_TEST4_IS_Q1         ESITEST4SEL0
 #define ESI_PSM_TEST4_IS_TSM_CLK    ESITEST4SEL1
-#define ESI_PSM_TEST4_IS_AFE1_COMPARATOR   ESITEST4SEL0 + ESITEST4SEL1
+#define ESI_PSM_TEST4_IS_AFE1_COMPARATOR   ESITEST4SEL0 +  ESITEST4SEL1
 
-typedef struct ESI_PSM_InitParams
-{
+typedef struct ESI_PSM_InitParams {
     uint16_t Q6Select;
     uint16_t Q7TriggerSelect;
     uint16_t count0Select;
-    uint16_t count0Reset;
+	uint16_t count0Reset;
     uint16_t count1Select;
-    uint16_t count1Reset;
+	uint16_t count1Reset;
     uint16_t count2Select;
-    uint16_t count2Reset;
+	uint16_t count2Reset;
     uint16_t V2Select;
     uint16_t TEST4Select;
 } ESI_PSM_InitParams;
 
 extern const ESI_PSM_InitParams ESI_PSM_INITPARAMS_DEFAULT;
 
-void ESI_PSM_init(ESI_PSM_InitParams *params);
+void ESI_PSM_init (ESI_PSM_InitParams *params);
 
 void ESI_PSM_clearTable(void);
-void ESI_PSM_copyTable(uint8_t * psmTable,
-                       uint8_t size);
+void ESI_PSM_copyTable(uint8_t * psmTable, uint8_t size);
 
 //*****************************************************************************
 //
@@ -457,7 +408,7 @@ void ESI_PSM_copyTable(uint8_t * psmTable,
 #define ESI_PSM_CNT1_RST    ESICNT1RST
 #define ESI_PSM_CNT2_RST    ESICNT2RST
 
-void ESI_PSM_resetCounter(uint16_t counterToReset);
+void ESI_PSM_resetCounter (uint16_t counterToReset);
 
 //*****************************************************************************
 //
@@ -534,8 +485,7 @@ void ESI_PSM_resetCounter(uint16_t counterToReset);
 #define ESI_PSM_SOURCE_IS_ESIOUT7    7
 
 void ESI_timerAInputSelect(uint16_t select);
-void ESI_psmSourceSelect(uint16_t sourceNum,
-                         uint16_t sourceSelect);
+void ESI_psmSourceSelect(uint16_t sourceNum, uint16_t sourceSelect);
 void ESI_testChannel0SourceSelect(uint16_t sourceSelect);
 void ESI_testChannel1SourceSelect(uint16_t sourceSelect);
 void ESI_enable(void);
@@ -552,10 +502,10 @@ void ESI_stopInternalOscCal(void);
 //oversample parameter in ESI_measureESIOSCOversample
 //
 //*****************************************************************************
-#define ESI_ESIOSC_NO_OVERSAMPLE                        0
-#define ESI_ESIOSC_OVERSAMPLE_2                         2
-#define ESI_ESIOSC_OVERSAMPLE_4                         4
-#define ESI_ESIOSC_OVERSAMPLE_8                         8
+#define ESI_ESIOSC_NO_OVERSAMPLE	 		0
+#define ESI_ESIOSC_OVERSAMPLE_2		 		2
+#define ESI_ESIOSC_OVERSAMPLE_4				4
+#define ESI_ESIOSC_OVERSAMPLE_8				8
 uint16_t ESI_measureESIOSC(uint8_t oversample);
 uint8_t ESI_getESICLKFQ(void);
 
@@ -571,9 +521,11 @@ uint8_t ESI_getESICLKFQ(void);
 void ESI_adjustInternalOscFreq(uint16_t incOrDec);
 void ESI_setNominalInternalOscFreq(void);
 void ESI_calibrateInternalOscFreq(uint16_t targetAclkCounts);
-void ESI_setPSMCounter1IncreaseThreshold(uint16_t threshold);
+void ESI_setPSMCounter1IncreaseThreshold(
+    uint16_t threshold);
 
-void ESI_setPSMCounter1DecreaseThreshold(uint16_t threshold);
+void ESI_setPSMCounter1DecreaseThreshold(
+    uint16_t threshold);
 
 //*****************************************************************************
 //
@@ -604,7 +556,7 @@ uint16_t ESI_getConversionResult(uint16_t resultNum);
 #define ESI_DAC1_REG7   7
 
 void ESI_setAFE1DACValue(uint16_t dacValue,
-                         uint8_t dacRegNum);
+    uint8_t dacRegNum);
 uint16_t ESI_getAFE1DACValue(uint8_t dacRegNum);
 
 //*****************************************************************************
@@ -623,8 +575,9 @@ uint16_t ESI_getAFE1DACValue(uint8_t dacRegNum);
 #define ESI_DAC2_REG7   7
 
 void ESI_setAFE2DACValue(uint16_t dacValue,
-                         uint8_t dacRegNum);
+    uint8_t dacRegNum);
 uint16_t ESI_getAFE2DACValue(uint8_t dacRegNum);
+
 
 //*****************************************************************************
 //
@@ -766,8 +719,7 @@ uint16_t ESI_getAFE2DACValue(uint8_t dacRegNum);
 #define ESI_TSM_STATE_DURATION_MIN  0x00
 #define ESI_TSM_STATE_DURATION_MAX  0x1F
 
-typedef struct ESI_TSM_StateParams
-{
+typedef struct ESI_TSM_StateParams {
     uint16_t inputChannelSelect;
     uint16_t LCDampingSelect;
     uint16_t excitationSelect;
@@ -782,7 +734,7 @@ typedef struct ESI_TSM_StateParams
 } ESI_TSM_StateParams;
 
 void ESI_setTSMstateReg(ESI_TSM_StateParams *params,
-                        uint8_t stateRegNum);
+    uint8_t stateRegNum);
 
 uint16_t ESIgetInterruptVectorRegister(void);
 
@@ -792,17 +744,16 @@ uint16_t ESIgetInterruptVectorRegister(void);
 //ESI_enableInterrupt and ESI_disableInterrupt
 //
 //*****************************************************************************
-#define ESI_INTERRUPT_AFE1_ESIOUTX \
-    ESIIE0
-#define ESI_INTERRUPT_ESISTOP                                       ESIIE1
-#define ESI_INTERRUPT_ESISTART                                      ESIIE2
-#define ESI_INTERRUPT_ESICNT1                                       ESIIE3
-#define ESI_INTERRUPT_ESICNT2                                       ESIIE4
-#define ESI_INTERRUPT_Q6_BIT_SET                                    ESIIE5
-#define ESI_INTERRUPT_Q7_BIT_SET                                    ESIIE6
-#define ESI_INTERRUPT_ESICNT0_COUNT_INTERVAL                ESIIE7
-#define ESI_INTERRUPT_AFE2_ESIOUTX \
-    ESIIE8
+#define ESI_INTERRUPT_AFE1_ESIOUTX						ESIIE0
+#define ESI_INTERRUPT_ESISTOP				            ESIIE1
+#define ESI_INTERRUPT_ESISTART				            ESIIE2
+#define ESI_INTERRUPT_ESICNT1				            ESIIE3
+#define ESI_INTERRUPT_ESICNT2				            ESIIE4
+#define ESI_INTERRUPT_Q6_BIT_SET			            ESIIE5
+#define ESI_INTERRUPT_Q7_BIT_SET			            ESIIE6
+#define ESI_INTERRUPT_ESICNT0_COUNT_INTERVAL		    ESIIE7
+#define ESI_INTERRUPT_AFE2_ESIOUTX					    ESIIE8
+
 
 void ESI_enableInterrupt(uint16_t interruptMask);
 void ESI_disableInterrupt(uint16_t interruptMask);
@@ -812,18 +763,19 @@ void ESI_disableInterrupt(uint16_t interruptMask);
 //Return values for ESI_getInterruptStatus
 //
 //*****************************************************************************
-#define ESI_INTERRUPT_FLAG_AFE1_ESIOUTX                             ESIIFG0
-#define ESI_INTERRUPT_FLAG_ESISTOP                                      ESIIFG1
-#define ESI_INTERRUPT_FLAG_ESISTART                                     ESIIFG2
-#define ESI_INTERRUPT_FLAG_ESICNT1                                      ESIIFG3
-#define ESI_INTERRUPT_FLAG_ESICNT2                                      ESIIFG4
-#define ESI_INTERRUPT_FLAG_Q6_BIT_SET                           ESIIFG5
-#define ESI_INTERRUPT_FLAG_Q7_BIT_SET                           ESIIFG6
-#define ESI_INTERRUPT_FLAG_ESICNT0_COUNT_INTERVAL               ESIIFG7
-#define ESI_INTERRUPT_FLAG_AFE2_ESIOUTX                                 ESIIFG8
+#define ESI_INTERRUPT_FLAG_AFE1_ESIOUTX				    ESIIFG0
+#define ESI_INTERRUPT_FLAG_ESISTOP				        ESIIFG1
+#define ESI_INTERRUPT_FLAG_ESISTART				        ESIIFG2
+#define ESI_INTERRUPT_FLAG_ESICNT1				        ESIIFG3
+#define ESI_INTERRUPT_FLAG_ESICNT2				        ESIIFG4
+#define ESI_INTERRUPT_FLAG_Q6_BIT_SET			        ESIIFG5
+#define ESI_INTERRUPT_FLAG_Q7_BIT_SET			        ESIIFG6
+#define ESI_INTERRUPT_FLAG_ESICNT0_COUNT_INTERVAL		ESIIFG7
+#define ESI_INTERRUPT_FLAG_AFE2_ESIOUTX					ESIIFG8
 
-uint16_t ESI_getInterruptStatus(uint16_t interruptMask);
-void ESI_clearInterrupt(uint16_t interruptMask);
+
+uint16_t ESI_getInterruptStatus ( uint16_t interruptMask);
+void ESI_clearInterrupt (uint16_t interruptMask);
 
 //*****************************************************************************
 //
@@ -880,6 +832,7 @@ void ESI_setIFG7Source(uint16_t ifg7Src);
 #define ESI_IFG4_SOURCE_CNT2_ROLLOVER           ESIIS2_3
 
 void ESI_setIFG4Source(uint16_t ifg4Src);
+
 
 void ESI_setPSMCounter1UpperThreshold(uint16_t threshold);
 void ESI_setPSMCounter1LowerThreshold(uint16_t threshold);

@@ -1,34 +1,3 @@
-/* --COPYRIGHT--,BSD
- * Copyright (c) 2016, Texas Instruments Incorporated
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * *  Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *
- * *  Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- * *  Neither the name of Texas Instruments Incorporated nor the names of
- *    its contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * --/COPYRIGHT--*/
 //*****************************************************************************
 //
 // eusci_b_i2c.h - Driver for the EUSCI_B_I2C Module.
@@ -60,8 +29,7 @@ extern "C"
 //! parameter.
 //
 //*****************************************************************************
-typedef struct EUSCI_B_I2C_initMasterParam
-{
+typedef struct EUSCI_B_I2C_initMasterParam {
     //! Selects the clocksource. Refer to device specific datasheet for
     //! available options.
     //! \n Valid values are:
@@ -91,8 +59,7 @@ typedef struct EUSCI_B_I2C_initMasterParam
 //! \brief Used in the EUSCI_B_I2C_initSlave() function as the param parameter.
 //
 //*****************************************************************************
-typedef struct EUSCI_B_I2C_initSlaveParam
-{
+typedef struct EUSCI_B_I2C_initSlaveParam {
     //! 7-bit slave address
     uint8_t slaveAddress;
     //! Own address Offset referred to- 'x' value of UCBxI2COAx.
@@ -108,6 +75,7 @@ typedef struct EUSCI_B_I2C_initSlaveParam
     //! - \b EUSCI_B_I2C_OWN_ADDRESS_ENABLE
     uint32_t slaveOwnAddressEnable;
 } EUSCI_B_I2C_initSlaveParam;
+
 
 //*****************************************************************************
 //
@@ -165,7 +133,7 @@ typedef struct EUSCI_B_I2C_initSlaveParam
 //
 //*****************************************************************************
 #define EUSCI_B_I2C_TRANSMIT_MODE                                          UCTR
-#define EUSCI_B_I2C_RECEIVE_MODE                                           0x00
+#define EUSCI_B_I2C_RECEIVE_MODE                                         0x0000
 
 //*****************************************************************************
 //
@@ -217,6 +185,17 @@ typedef struct EUSCI_B_I2C_initSlaveParam
 //*****************************************************************************
 #define EUSCI_B_I2C_START_SEND_COMPLETE                                    0x00
 #define EUSCI_B_I2C_SENDING_START                                       UCTXSTT
+
+//*****************************************************************************
+//
+// The following are values that can be passed to the timeout parameter for
+// functions: EUSCI_B_I2C_setTimeout().
+//
+//*****************************************************************************
+#define EUSCI_B_I2C_TIMEOUT_DISABLE                                    UCCLTO_0
+#define EUSCI_B_I2C_TIMEOUT_28_MS                                      UCCLTO_1
+#define EUSCI_B_I2C_TIMEOUT_31_MS                                      UCCLTO_2
+#define EUSCI_B_I2C_TIMEOUT_34_MS                                      UCCLTO_3
 
 //*****************************************************************************
 //
@@ -312,9 +291,9 @@ extern void EUSCI_B_I2C_setSlaveAddress(uint16_t baseAddress,
 //
 //! \brief Sets the mode of the I2C device
 //!
-//! When the receive parameter is set to EUSCI_B_I2C_TRANSMIT_MODE, the address
-//! will indicate that the I2C module is in receive mode; otherwise, the I2C
-//! module is in send mode.
+//! When the mode parameter is set to EUSCI_B_I2C_TRANSMIT_MODE, the address
+//! will indicate that the I2C module is in send mode; otherwise, the I2C
+//! module is in receive mode.
 //!
 //! \param baseAddress is the base address of the USCI I2C module.
 //! \param mode Mode for the EUSCI_B_I2C module
@@ -328,7 +307,7 @@ extern void EUSCI_B_I2C_setSlaveAddress(uint16_t baseAddress,
 //
 //*****************************************************************************
 extern void EUSCI_B_I2C_setMode(uint16_t baseAddress,
-                                uint8_t mode);
+                                uint16_t mode);
 
 //*****************************************************************************
 //
@@ -696,10 +675,9 @@ extern void EUSCI_B_I2C_masterSendMultiByteStart(uint16_t baseAddress,
 //! \return STATUS_SUCCESS or STATUS_FAILURE of the transmission process.
 //
 //*****************************************************************************
-extern bool EUSCI_B_I2C_masterSendMultiByteStartWithTimeout(
-    uint16_t baseAddress,
-    uint8_t txData,
-    uint32_t timeout);
+extern bool EUSCI_B_I2C_masterSendMultiByteStartWithTimeout(uint16_t baseAddress,
+                                                            uint8_t txData,
+                                                            uint32_t timeout);
 
 //*****************************************************************************
 //
@@ -779,10 +757,9 @@ extern void EUSCI_B_I2C_masterSendMultiByteFinish(uint16_t baseAddress,
 //! \return STATUS_SUCCESS or STATUS_FAILURE of the transmission process.
 //
 //*****************************************************************************
-extern bool EUSCI_B_I2C_masterSendMultiByteFinishWithTimeout(
-    uint16_t baseAddress,
-    uint8_t txData,
-    uint32_t timeout);
+extern bool EUSCI_B_I2C_masterSendMultiByteFinishWithTimeout(uint16_t baseAddress,
+                                                             uint8_t txData,
+                                                             uint32_t timeout);
 
 //*****************************************************************************
 //
@@ -902,10 +879,9 @@ extern uint8_t EUSCI_B_I2C_masterReceiveMultiByteFinish(uint16_t baseAddress);
 //! \return STATUS_SUCCESS or STATUS_FAILURE of the reception process
 //
 //*****************************************************************************
-extern bool EUSCI_B_I2C_masterReceiveMultiByteFinishWithTimeout(
-    uint16_t baseAddress,
-    uint8_t *txData,
-    uint32_t timeout);
+extern bool EUSCI_B_I2C_masterReceiveMultiByteFinishWithTimeout(uint16_t baseAddress,
+                                                                uint8_t *txData,
+                                                                uint32_t timeout);
 
 //*****************************************************************************
 //
@@ -996,6 +972,36 @@ extern uint32_t EUSCI_B_I2C_getReceiveBufferAddress(uint16_t baseAddress);
 //
 //*****************************************************************************
 extern uint32_t EUSCI_B_I2C_getTransmitBufferAddress(uint16_t baseAddress);
+
+//*****************************************************************************
+//
+//! \brief Enforces a timeout if the I2C clock is held low longer than a
+//! defined time.
+//!
+//! By using this function, the UCCLTOIFG interrupt will trigger if the clock
+//! is held low longer than this defined time. It is possible to detect the
+//! situation, when a clock is stretched by a master or slave for too long. The
+//! user can then handle this issue by, for example, resetting the eUSCI_B
+//! module. It is possible to select one of three predefined times for the
+//! clock low timeout.
+//!
+//! \param baseAddress is the base address of the I2C module.
+//! \param timeout how long the clock can be low before a timeout triggers.
+//!        Enables generation of the UCCLTOIFG interrupt.
+//!        Valid values are:
+//!        - \b EUSCI_B_I2C_TIMEOUT_DISABLE [Default]
+//!        - \b EUSCI_B_I2C_TIMEOUT_28_MS
+//!        - \b EUSCI_B_I2C_TIMEOUT_31_MS
+//!        - \b EUSCI_B_I2C_TIMEOUT_34_MS
+//!
+//! Modified bits are \b UCCLTO of \b UCBxCTLW1 register; bits \b UCSWRST of \b
+//! UCBxCTLW0 register.
+//!
+//! \return None
+//
+//*****************************************************************************
+extern void EUSCI_B_I2C_setTimeout(uint16_t baseAddress,
+                                   uint16_t timeout);
 
 //*****************************************************************************
 //
