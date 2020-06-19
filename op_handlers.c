@@ -17,7 +17,8 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 
     my_printf_debug("MaxPool!" NEWLINE);
 
-    uint16_t stride = flags;
+    uint16_t stride = flags & 0x0f;
+    uint16_t kernel_size = (flags & 0xf0) >> 4;
 
     /* XXX: add flags; assume no padding for now */
     ParameterInfo *data = input[0];
@@ -77,8 +78,8 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                     my_printf_debug("c=%d" NEWLINE, tile_c_offset + c);
 
                     int16_t max_val = INT16_MIN;
-                    for (uint16_t sH = 0; sH < stride; sH++) {
-                        for (uint16_t sW = 0; sW < stride; sW++) {
+                    for (uint16_t sH = 0; sH < kernel_size; sH++) {
+                        for (uint16_t sW = 0; sW < kernel_size; sW++) {
                             int16_t val;
                             // XXX: use a moving pointer instead of data_baseptr makes it slower. Why!?
                             // Output from handle_conv uses NHWC

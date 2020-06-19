@@ -6,6 +6,7 @@ import warnings
 
 import cv2
 import onnx
+import onnx.helper
 import numpy as np
 
 import ops
@@ -104,6 +105,15 @@ for idx, initializer in enumerate(g.initializer):
 n_input = len(names.keys())
 print("n_input = {}".format(n_input))
 
+def get_attr(node, attr_name):
+    for attr in node.attribute:
+        if attr.name != attr_name:
+            continue
+        return onnx.helper.get_attribute_value(attr)
+
+    # Not found
+    return None
+
 for idx, n in enumerate(nodes):
     if n.op_type == 'Dropout':
         output = n.output[:1]  # we don't care the second output `mask`
@@ -113,14 +123,15 @@ for idx, n in enumerate(nodes):
     if n.op_type == 'Conv':
         # https://github.com/onnx/onnx/blob/master/docs/Operators.md#conv
         conv_param_names.add(n.input[1])
-        try:
-            auto_pad = next(attr.s for attr in n.attribute if attr.name == 'auto_pad')
-            if auto_pad == b'VALID':
-                n.flags += ops.AUTO_PAD_VALID * 0x10
-        except StopIteration:
-            pass
+        auto_pad = get_attr(n, 'auto_pad')
+        if auto_pad == b'VALID':
+            n.flags += ops.AUTO_PAD_VALID * 0x10
+    if n.op_type == 'MaxPool':
+        kernel_shape = get_attr(n, 'kernel_shape')
+        if kernel_shape is not None:
+            n.flags += kernel_shape[0] * 0x10
     if n.op_type in ('MaxPool', 'Conv'):
-        stride = next(attr.ints[0] for attr in n.attribute if attr.name == 'strides')
+        stride = get_attr(n, 'strides')[0]
         n.flags += stride
     names[output[0]] = idx + n_input
 
