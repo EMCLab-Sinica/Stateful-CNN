@@ -274,8 +274,7 @@ for idx, n in enumerate(nodes):
     outputs['model'].write(to_bytes(0, size=32))  # params_len
     outputs['model'].write(to_bytes(0, size=8))  # bitwidth
     outputs['model'].write(to_bytes(0, size=8))  # slot
-    outputs['model'].write(to_bytes(0, size=8))  # flags
-    outputs['model'].write(to_bytes(0, size=8))  # dummy
+    outputs['model'].write(to_bytes(0, size=16))  # dummy
     for _ in range(4):  # dims[4]
         outputs['model'].write(to_bytes(0))
 

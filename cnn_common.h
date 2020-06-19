@@ -40,8 +40,7 @@ typedef struct ParameterInfo {
      * it's the slot number for one of intermediate_values.
      */
     uint8_t slot;
-    uint8_t flags;
-    uint8_t dummy;
+    uint16_t dummy;
     // uint8_t is not enough. For example, fully connected layer in MNIST has dims 256x1
     uint16_t dims[4];
 } ParameterInfo;
