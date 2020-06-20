@@ -8,8 +8,6 @@
 #include "ops.h"
 #include "debug.h"
 
-static uint16_t intermediate_values_offset = 0;
-
 static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info, uint16_t node_idx) {
     my_printf_debug("Current node: %d ", node_idx);
 
@@ -36,8 +34,23 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
     /* Allocate an ParameterInfo for output. Details are filled by
      * individual operation handlers */
     ParameterInfo *output = &(parameter_info[node_idx + model->n_input]);
-    output->params_offset = intermediate_values_offset;
-    my_printf_debug("Old intermediate_values_offset = %d" NEWLINE, intermediate_values_offset);
+    output->params_offset = 0;
+    int16_t prev_node_idx = node_idx - 1;
+    while (prev_node_idx >= 0) {
+        if (!inplace_update[nodes[prev_node_idx].op_type]) {
+            ParameterInfo *prev_node = &(parameter_info[prev_node_idx + model->n_input]);
+            uint32_t new_params_offset = prev_node->params_offset + prev_node->params_len;
+            if (new_params_offset >= INTERMEDIATE_VALUES_SIZE) {
+                /* TODO: reuse the ring buffer */
+                // too many immediate values
+                ERROR_OCCURRED();
+            }
+            output->params_offset = new_params_offset;
+            break;
+        }
+        prev_node_idx--;
+    }
+    my_printf_debug("New params_offset = %d" NEWLINE, output->params_offset);
 
     my_printf_debug("State bit=%d" NEWLINE, model->state_bit);
     handlers[cur_node->op_type](model, input, output, cur_node->flags);
@@ -47,24 +60,6 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
     if (counters()->counter_idx >= COUNTERS_LEN) {
         ERROR_OCCURRED();
     }
-
-    uint32_t new_intermediate_values_offset;
-    if (!inplace_update[cur_node->op_type]) {
-        new_intermediate_values_offset = (uint32_t)(
-            /* use uint32_t here to avoid overflow */
-            intermediate_values_offset + output->params_len
-        );
-    } else {
-        new_intermediate_values_offset = intermediate_values_offset;
-    }
-    if (new_intermediate_values_offset >= INTERMEDIATE_VALUES_SIZE) {
-        /* TODO: reuse the ring buffer */
-        // too many immediate values
-        ERROR_OCCURRED();
-    }
-
-    intermediate_values_offset = (uint16_t)new_intermediate_values_offset;
-    my_printf_debug("New intermediate_values_offset = %d" NEWLINE, intermediate_values_offset);
 
     my_printf_debug("output dims: ");
     uint8_t has_dims = 0;
@@ -85,7 +80,6 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
     }
 
     if (node_idx == model->nodes_len - 1) {
-        intermediate_values_offset = 0;
         model->running = 0;
         model->run_counter++;
     }
