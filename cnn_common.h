@@ -14,6 +14,7 @@
 typedef struct Node {
     uint16_t inputs_len;
     uint16_t inputs_offset;
+    uint16_t max_output_id;
     uint16_t op_type;
     /* Layout of 16 bits in flags
      * 15-08 generic flags
@@ -26,7 +27,7 @@ typedef struct Node {
 
 // _Static_assert in C11 requires the message
 // We target C99 - it works, anyway
-_Static_assert(sizeof(Node) == 10, "Unexpected size for Node");
+_Static_assert(sizeof(Node) == 12, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct ParameterInfo {

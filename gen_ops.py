@@ -9,8 +9,7 @@ ops = {
     'GlobalAveragePool': [1, 1],
     'MatMul': [2, 0],
     'MaxPool': [1, 0],
-    # TODO: use inplace update for Relu
-    'Relu': [1, 0],
+    'Relu': [1, 1],
     'Reshape': [2, 1],
     'Softmax': [1, 1],
     'Squeeze': [1, 1],

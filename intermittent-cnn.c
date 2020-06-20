@@ -39,6 +39,9 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
     while (prev_node_idx >= 0) {
         if (!inplace_update[nodes[prev_node_idx].op_type]) {
             ParameterInfo *prev_node = &(parameter_info[prev_node_idx + model->n_input]);
+            if (prev_node->slot != SLOT_INTERMEDIATE_VALUES) {
+                continue;
+            }
             uint32_t new_params_offset = prev_node->params_offset + prev_node->params_len;
             if (new_params_offset >= INTERMEDIATE_VALUES_SIZE) {
                 /* TODO: reuse the ring buffer */

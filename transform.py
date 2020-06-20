@@ -1,8 +1,10 @@
 import argparse
+import dataclasses
 import io
 import pprint
 import struct
 import warnings
+from typing import List
 
 import cv2
 import onnx
@@ -48,7 +50,7 @@ def _Q15(num):
     return int(num * 2 ** 15)
 
 
-class Node:
+class ONNXNodeWrapper:
     def __init__(self, orig_node: onnx.NodeProto, flags: int = 0):
         self.orig_node = orig_node
         self.flags = flags
@@ -90,7 +92,7 @@ for n in new_nodes:
     for idx, inp in enumerate(n.input):
         n.input[idx] = replaced_squeeze_map.get(inp, inp)
 
-nodes = [Node(n) for n in new_nodes]
+nodes = [ONNXNodeWrapper(n) for n in new_nodes]
 
 conv_param_names = set()
 
@@ -143,9 +145,23 @@ for idx, n in enumerate(nodes):
 
 pprint.pprint(names)
 
+@dataclasses.dataclass
+class Node:
+    inputs: List[int]
+    op_type: str
+    flags: int
+    max_output_id: int
+
 model = []
 for n in nodes:
-    model.append(([names[i] for i in n.input], n.op_type, n.flags))
+    model.append(Node([names[i] for i in n.input], n.op_type, n.flags, 0))
+
+for idx, node in enumerate(model):
+    for inp in node.inputs:
+        if inp < n_input:
+            continue
+        used_node = model[inp - n_input]
+        used_node.max_output_id = max([idx, used_node.max_output_id])
 parameters = [None for _ in range(n_input)]
 
 for params in g.initializer:
@@ -198,15 +214,15 @@ outputs['model'].write(to_bytes(0))  # Model.run_counter
 outputs['model'].write(to_bytes(0))  # Model.state_bit
 outputs['model'].write(to_bytes(0))  # Model.sample_idx
 parameters_bin_offset = 0
-for inputs, op_type, flags in model:
-    outputs['model'].write(to_bytes(len(inputs)))
+for node in model:
+    outputs['model'].write(to_bytes(len(node.inputs)))
     outputs['model'].write(to_bytes(inputs_data.tell()))  # Node.inputs_offset
-    for inp in inputs:
+    outputs['model'].write(to_bytes(node.max_output_id))
+    for inp in node.inputs:
         # the lowest bit is used as a flag in topological sort
         inputs_data.write(to_bytes(inp * 2))
-    outputs['model'].write(to_bytes(ops.ops[op_type]))
-    print(f'flags: {flags}')
-    outputs['model'].write(to_bytes(flags))
+    outputs['model'].write(to_bytes(ops.ops[node.op_type]))
+    outputs['model'].write(to_bytes(node.flags))
     outputs['model'].write(to_bytes(0))  # Node.scheduled
 
 

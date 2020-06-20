@@ -4,7 +4,7 @@
 
 uint8_t expected_inputs_len[] = {2, 2, 3, 1, 1, 2, 1, 1, 2, 1, 1, 1, };
 
-uint8_t inplace_update[] = {0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, };
+uint8_t inplace_update[] = {0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, };
 
 handler handlers[] = {
 	handle_add,
