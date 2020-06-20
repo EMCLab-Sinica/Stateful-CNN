@@ -215,7 +215,7 @@ static void convTask(uint8_t offset_h, ConvTaskParams *conv_params) {
     int16_t *result_addr = matrix_mpy_results;
     for (uint8_t idx = 0; idx < p_matrix_mpy_params->srcARows; idx++) {
         my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - output_baseptr));
-        MY_ASSERT((uint8_t*)(output_data + n_filters) < intermediate_values(0) + INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
+        MY_ASSERT((uint8_t*)(output_data + n_filters) < intermediate_values() + INTERMEDIATE_VALUES_SIZE);
 #if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
         for (uint8_t idx2 = 0; idx2 < n_filters; idx2++) {
             if (!conv_params->state_bit && *result_addr < 0x2000 && *result_addr >= -0x2000) {
@@ -387,7 +387,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 
     /* XXX: extend flags; assume dilation=(1, 1) for now */
     output->bitwidth = 16;
-    output->slot = get_next_slot(conv_input);
+    output->slot = SLOT_INTERMEDIATE_VALUES;
     output->dims[0] = 1;
     // Although handle_conv requires more memory than params_len, only the first OUTPUT_CHANNEL
     // channels are useful after merging results from tiling

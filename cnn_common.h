@@ -6,8 +6,6 @@
 
 //#define WITH_PROGRESS_EMBEDDING
 
-#define FLAG_SLOTS 0b11
-#define FLAG_TEST_SET 0b10
 #define NUM_FILTERS 16
 
 /**********************************
@@ -40,9 +38,8 @@ typedef struct ParameterInfo {
      * 64: INT64 (from ONNX)
      */
     uint8_t bitwidth;
-    /* A flag to indicate where the data are. 0b11 indicates data are in
-     * parameters; 0b10 indicates data are from the test set; otherwise
-     * it's the slot number for one of intermediate_values.
+    /* A flag to indicate where the data are. Possible values are SLOT_TEST_SET,
+     * SLOT_PARAMETERS and SLOT_INTERMEDIATE_VALUES.
      */
     uint8_t slot;
     uint16_t dummy;
@@ -106,19 +103,6 @@ static inline int16_t int16_max(int16_t a, int16_t b) {
 /**********************************
  *       Helpers for nodes        *
  **********************************/
-static inline uint16_t get_next_slot(ParameterInfo *param) {
-    uint16_t slot_id = param->slot;
-    /* Some cases:
-     * 1. slot_id == FLAG_SLOTS -> pick the first slot as the current param is input
-     * 2. Otherwise, pick the next slot
-     */
-    uint16_t next_slot_id = (slot_id + 1) & FLAG_SLOTS;
-    if (next_slot_id >= NUM_SLOTS) {
-        next_slot_id = 0;
-    }
-    return next_slot_id;
-}
-
 int16_t* get_q15_param(ParameterInfo *param, size_t i);
 int32_t* get_iq31_param(ParameterInfo *param, size_t i);
 int64_t get_int64_param(ParameterInfo *param, size_t i);

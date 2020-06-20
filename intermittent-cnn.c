@@ -8,9 +8,9 @@
 #include "ops.h"
 #include "debug.h"
 
-static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info, uint16_t node_idx) {
-    uint16_t intermediate_values_offset = 0;
+static uint16_t intermediate_values_offset = 0;
 
+static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info, uint16_t node_idx) {
     my_printf_debug("Current node: %d ", node_idx);
 
     /* schedule it */
@@ -27,7 +27,7 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
         input_id[j] = node_input(cur_node, j);
         my_printf_debug("input_id[%d] = %d ", j, input_id[j]);
         input[j] = &(parameter_info[input_id[j]]);
-        if (input[j]->slot == FLAG_TEST_SET) {
+        if (input[j]->slot == SLOT_TEST_SET) {
             input[j]->params_offset = (model->sample_idx % LABELS_DATA_LEN) * input[j]->params_len;
         }
         // dump_params(input[j]);
@@ -85,6 +85,7 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
     }
 
     if (node_idx == model->nodes_len - 1) {
+        intermediate_values_offset = 0;
         model->running = 0;
         model->run_counter++;
     }

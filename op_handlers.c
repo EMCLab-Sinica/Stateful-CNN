@@ -32,7 +32,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     uint16_t new_W = W / stride;
     output->params_len = new_H * new_W * CHANNEL * sizeof(int16_t);
     output->bitwidth = data->bitwidth;
-    output->slot = get_next_slot(data);
+    output->slot = SLOT_INTERMEDIATE_VALUES;
     output->dims[0] = 1;
     output->dims[1] = CHANNEL;
     output->dims[2] = new_H;
@@ -135,7 +135,7 @@ void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
     ParameterInfo *A = input[0], *B = input[1];
     output->params_len = input[0]->params_len;
     output->bitwidth = input[0]->bitwidth;
-    output->slot = get_next_slot(A);
+    output->slot = SLOT_INTERMEDIATE_VALUES;
     output->dims[0] = 1;
     output->dims[1] = A->dims[1];
 
@@ -172,7 +172,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     output->dims[1] = B->dims[1];
     output->params_len = (uint16_t)(output_len * 2);
     output->bitwidth = 16;
-    output->slot = get_next_slot(A);
+    output->slot = SLOT_INTERMEDIATE_VALUES;
 
     if (A->dims[0] * A->dims[1] > 256) {
         // Matrix A too large!

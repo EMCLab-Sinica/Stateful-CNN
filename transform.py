@@ -20,7 +20,9 @@ Indexing policy:
 """
 
 SCALE = 10
-NUM_SLOTS = 2
+SLOT_PARAMETERS = 0b11
+SLOT_TEST_SET = 0b10
+SLOT_INTERMEDIATE_VALUES = 0b01
 INTERMEDIATE_VALUES_SIZE = 66000
 CACHED_FILTERS_LEN = 8000
 N_SAMPLES = 20
@@ -207,9 +209,6 @@ for inputs, op_type, flags in model:
     outputs['model'].write(to_bytes(flags))
     outputs['model'].write(to_bytes(0))  # Node.scheduled
 
-# Keep these in sync with cnn_common.h
-FLAG_SLOTS = 0b11
-FLAG_TEST_SET = 0b10
 
 if 'mnist' in args.onnx_model:
     labels, images = load_data(args.input_file, limit=N_SAMPLES)
@@ -225,7 +224,7 @@ for params in parameters:
         _, input_channel, dimX, dimY = images[0].shape
         outputs['model'].write(to_bytes(input_channel* dimX * dimY * 2, size=32))  # A _q15 is 16-bit
         outputs['model'].write(to_bytes(16, size=8))                # bitwidth
-        outputs['model'].write(to_bytes(FLAG_TEST_SET, size=8))     # slot
+        outputs['model'].write(to_bytes(SLOT_TEST_SET, size=8))     # slot
         outputs['model'].write(to_bytes(0, size=8))                 # flag
         outputs['model'].write(to_bytes(0, size=8))                 # dummy
         # extend_dims
@@ -262,7 +261,7 @@ for params in parameters:
             outputs['model'].write(to_bytes(64, size=8)) # bitwidth
         else:
             assert False
-        outputs['model'].write(to_bytes(FLAG_SLOTS, size=8))    # slot
+        outputs['model'].write(to_bytes(SLOT_PARAMETERS, size=8))    # slot
         outputs['model'].write(to_bytes(0, size=8))             # flag
         outputs['model'].write(to_bytes(0, size=8))             # dummy
         print('dims = {}, length = {}'.format(params.dims, data_len))
@@ -316,7 +315,9 @@ with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
 #include "platform.h"
 
 #define SCALE {SCALE}
-#define NUM_SLOTS {NUM_SLOTS}
+#define SLOT_PARAMETERS {SLOT_PARAMETERS}
+#define SLOT_TEST_SET {SLOT_TEST_SET}
+#define SLOT_INTERMEDIATE_VALUES {SLOT_INTERMEDIATE_VALUES}
 #define INTERMEDIATE_VALUES_SIZE {INTERMEDIATE_VALUES_SIZE}u
 #define CACHED_FILTERS_LEN {CACHED_FILTERS_LEN}
 #define COUNTERS_LEN {COUNTERS_LEN}
@@ -373,7 +374,7 @@ uint8_t *{var_name} = _{var_name};
 
 with open('nvm.bin', 'wb') as f:
     f.write(NVM_SIZE * b'\0')
-    f.seek(CACHED_FILTERS_LEN + NUM_SLOTS * INTERMEDIATE_VALUES_SIZE)
+    f.seek(CACHED_FILTERS_LEN + INTERMEDIATE_VALUES_SIZE)
     for data_obj in outputs.values():
         data_obj.seek(0)
         f.write(data_obj.read())

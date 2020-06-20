@@ -13,18 +13,20 @@ int16_t node_input(Node *node, size_t i) {
 static void get_param_base_pointer(ParameterInfo *param, uint8_t **baseptr_p, uint32_t *limit_p) {
     uint16_t slot_id = param->slot;
     switch (slot_id) {
-        case FLAG_SLOTS:
+        case SLOT_PARAMETERS:
             *baseptr_p = parameters_data;
             *limit_p = PARAMETERS_DATA_LEN;
             break;
-        case FLAG_TEST_SET:
+        case SLOT_TEST_SET:
             *baseptr_p = samples_data;
             *limit_p = SAMPLES_DATA_LEN;
             break;
-        default:
-            *baseptr_p = intermediate_values(slot_id);
+        case SLOT_INTERMEDIATE_VALUES:
+            *baseptr_p = intermediate_values();
             *limit_p = INTERMEDIATE_VALUES_SIZE;
             break;
+        default:
+            ERROR_OCCURRED();
     }
 }
 
