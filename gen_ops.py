@@ -13,7 +13,8 @@ ops = {
     'Reshape': [2, 1],
     'Softmax': [1, 1],
     'Squeeze': [1, 1],
-    'Transpose': [1, 0],
+    # XXX: Transpose does nothing as we happens to need NHWC
+    'Transpose': [1, 1],
 }
 
 other_flags = [
@@ -43,10 +44,23 @@ with open('ops.py', 'w') as f_py, open('ops.h', 'w') as f_h, open('ops.c', 'w') 
 
     for op in keys:
         f_h.write('void handle_{}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
+        f_h.write('uint32_t alloc_{}(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
     f_c.write('handler handlers[] = {\n')
     for op in keys:
         f_c.write(f'\thandle_{op},\n'.lower())
     f_c.write('};\n')
+    f_c.write('allocator allocators[] = {\n')
+    for op in keys:
+        f_c.write(f'\talloc_{op},\n'.lower())
+    f_c.write('};\n')
+    for op in keys:
+        if ops[op][1]:
+            f_c.write(f'uint32_t alloc_{op.lower()}(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)\n')
+            f_c.write('{\n')
+            f_c.write('\tUNUSED(flags);\n')
+            f_c.write('\tmy_memcpy(output, input[0], sizeof(struct ParameterInfo));\n')
+            f_c.write('\treturn 0;\n')
+            f_c.write('}\n')
 
     for idx, name in enumerate(other_flags):
         f_h.write(f'#define {name} {2**idx}\n')

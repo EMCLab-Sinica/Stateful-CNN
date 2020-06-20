@@ -30,30 +30,35 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
         }
         // dump_params(input[j]);
     }
+    my_printf_debug(NEWLINE);
 
     /* Allocate an ParameterInfo for output. Details are filled by
      * individual operation handlers */
     ParameterInfo *output = &(parameter_info[node_idx + model->n_input]);
     output->params_offset = 0;
-    int16_t prev_node_idx = node_idx - 1;
-    while (prev_node_idx >= 0) {
+    uint32_t needed_mem = allocators[cur_node->op_type](input, output, cur_node->flags);
+    if (!needed_mem && !inplace_update[cur_node->op_type]) {
+        needed_mem = output->params_len;
+    }
+    my_printf_debug("Needed mem = %d" NEWLINE, needed_mem);
+    for (int16_t prev_node_idx = node_idx - 1; prev_node_idx >= 0; prev_node_idx--) {
         if (!inplace_update[nodes[prev_node_idx].op_type]) {
             ParameterInfo *prev_node = &(parameter_info[prev_node_idx + model->n_input]);
             if (prev_node->slot != SLOT_INTERMEDIATE_VALUES) {
                 continue;
             }
-            uint32_t new_params_offset = prev_node->params_offset + prev_node->params_len;
-            if (new_params_offset >= INTERMEDIATE_VALUES_SIZE) {
+            output->params_offset = prev_node->params_offset + prev_node->params_len;
+            if (output->params_offset + needed_mem >= INTERMEDIATE_VALUES_SIZE) {
                 /* TODO: reuse the ring buffer */
                 // too many immediate values
                 ERROR_OCCURRED();
             }
-            output->params_offset = new_params_offset;
             break;
         }
-        prev_node_idx--;
     }
-    my_printf_debug("New params_offset = %d" NEWLINE, output->params_offset);
+    if (output->slot == SLOT_INTERMEDIATE_VALUES) {
+        my_printf_debug("New params_offset = %d" NEWLINE, output->params_offset);
+    }
 
     my_printf_debug("State bit=%d" NEWLINE, model->state_bit);
     handlers[cur_node->op_type](model, input, output, cur_node->flags);

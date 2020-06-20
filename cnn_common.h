@@ -116,6 +116,9 @@ static inline int16_t iq31_to_q15(int32_t val) {
  *       Operation handlers       *
  **********************************/
 typedef void (*handler)(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
+typedef uint32_t (*allocator)(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
+// below are defined in ops.c
 extern uint8_t expected_inputs_len[];
 extern uint8_t inplace_update[];
 extern handler handlers[];
+extern allocator allocators[];

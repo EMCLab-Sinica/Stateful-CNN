@@ -10,6 +10,26 @@
 DSPLIB_DATA(lea_buffer, 4)
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
+uint32_t alloc_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+    uint16_t stride = flags & 0x0f;
+
+    ParameterInfo *data = input[0];
+
+    const uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
+    uint16_t new_H = H / stride;
+    uint16_t new_W = W / stride;
+
+    output->params_len = new_H * new_W * CHANNEL * sizeof(int16_t);
+    output->bitwidth = data->bitwidth;
+    output->slot = SLOT_INTERMEDIATE_VALUES;
+    output->dims[0] = 1;
+    output->dims[1] = CHANNEL;
+    output->dims[2] = new_H;
+    output->dims[3] = new_W;
+
+    return 0;
+}
+
 void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
 #ifndef WITH_PROGRESS_EMBEDDING
     UNUSED(model);
@@ -30,13 +50,6 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     const uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
     uint16_t new_H = H / stride;
     uint16_t new_W = W / stride;
-    output->params_len = new_H * new_W * CHANNEL * sizeof(int16_t);
-    output->bitwidth = data->bitwidth;
-    output->slot = SLOT_INTERMEDIATE_VALUES;
-    output->dims[0] = 1;
-    output->dims[1] = CHANNEL;
-    output->dims[2] = new_H;
-    output->dims[3] = new_W;
 
     uint8_t tile_c = get_tile_c(output);
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
@@ -121,6 +134,24 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     }
 }
 
+uint32_t alloc_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+    UNUSED(flags);
+
+    ParameterInfo *A = input[0], *B = input[1];
+    if (A->bitwidth != 16 || B->bitwidth != 16) {
+        // unsupported bitwidth
+        ERROR_OCCURRED();
+    }
+
+    output->params_len = A->params_len;
+    output->bitwidth = A->bitwidth;
+    output->slot = SLOT_INTERMEDIATE_VALUES;
+    output->dims[0] = 1;
+    output->dims[1] = A->dims[1];
+
+    return 0;
+}
+
 void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(model);
     UNUSED(flags);
@@ -128,16 +159,7 @@ void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
     /* Add: Y = X + W */
     my_printf_debug("Add!" NEWLINE);
 
-    if (input[0]->bitwidth != 16 || input[1]->bitwidth != 16) {
-        // unsupported bitwidth
-        ERROR_OCCURRED();
-    }
     ParameterInfo *A = input[0], *B = input[1];
-    output->params_len = input[0]->params_len;
-    output->bitwidth = input[0]->bitwidth;
-    output->slot = SLOT_INTERMEDIATE_VALUES;
-    output->dims[0] = 1;
-    output->dims[1] = A->dims[1];
 
     msp_add_q15_params params = { .length = A->dims[1] };
 
@@ -149,6 +171,22 @@ void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
     msp_checkStatus(status);
 
     my_memcpy(get_q15_param(output, 0), buffer_a, output->params_len);
+}
+
+uint32_t alloc_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+    UNUSED(flags);
+
+    ParameterInfo *A = input[0], *B = input[1];
+
+    uint16_t output_len = A->dims[0] * B->dims[1];
+
+    output->dims[0] = A->dims[0];
+    output->dims[1] = B->dims[1];
+    output->params_len = output_len * sizeof(int16_t);
+    output->bitwidth = 16;
+    output->slot = SLOT_INTERMEDIATE_VALUES;
+
+    return 0;
 }
 
 void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -166,13 +204,6 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     dump_params(B);
     my_printf_debug("MatMul! A: (%dx%d), B: (%dx%d)" NEWLINE,
               A->dims[0], A->dims[1], B->dims[0], B->dims[1]);
-
-    uint16_t output_len = (uint16_t)(A->dims[0] * B->dims[1]);
-    output->dims[0] = A->dims[0];
-    output->dims[1] = B->dims[1];
-    output->params_len = (uint16_t)(output_len * 2);
-    output->bitwidth = 16;
-    output->slot = SLOT_INTERMEDIATE_VALUES;
 
     if (A->dims[0] * A->dims[1] > 256) {
         // Matrix A too large!
@@ -234,7 +265,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         my_printf_debug("temp" NEWLINE);
         dump_matrix(buffer_temp, (size_t)(A->dims[0] * B->dims[1]));
 
-        msp_add_q15_params params2 = { .length = output_len };
+        msp_add_q15_params params2 = { .length = output->params_len / sizeof(int16_t) };
         status = msp_add_q15(&params2, buffer_matmul, buffer_temp, buffer_matmul);
         msp_checkStatus(status);
     }
@@ -316,6 +347,9 @@ void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output,
         output->dims[i] = (uint16_t)get_int64_param(shape, i);
         new_len *= output->dims[i];
     }
+    for (uint8_t i = shape->dims[0]; i < 4; i++) {
+        output->dims[i] = 0;
+    }
     MY_ASSERT(new_len * sizeof(int16_t) == output->params_len)
 }
 
@@ -337,6 +371,16 @@ void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output,
             j++;
         }
     }
+}
+
+uint32_t alloc_concat(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+    UNUSED(input);
+    UNUSED(output);
+    UNUSED(flags);
+
+    ERROR_OCCURRED();
+
+    return 0;
 }
 
 void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -379,9 +423,10 @@ void handle_transpose(Model *model, ParameterInfo *input[], ParameterInfo *outpu
     UNUSED(model);
     UNUSED(flags);
 
+    my_printf_debug("Transpose!" NEWLINE);
+
     ParameterInfo *X = input[0];
     // not actually transpose data as we happen to need NHWC
-    my_memcpy(output, X, sizeof(ParameterInfo));
     // XXX: assume NHWC -> NCHW
     output->dims[1] = X->dims[3];
     output->dims[2] = X->dims[1];

@@ -65,6 +65,8 @@ typedef struct ConvTaskParams {
     uint8_t pending_filter_idx;
 } ConvTaskParams;
 
+static ConvTaskParams conv_params_obj;
+
 int16_t * const matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
 
 uint8_t get_tile_c(ParameterInfo *param) {
@@ -338,39 +340,67 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
     TASK_FINISHED();
 }
 
-void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-#ifndef WITH_PROGRESS_EMBEDDING
-    UNUSED(model);
-#endif
-
-    ParameterInfo *conv_input = input[0], *conv_filter = input[1], *conv_bias = input[2];
-    my_printf_debug("Conv!" NEWLINE);
-
-    setOutputValue(1);
+uint32_t alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+    ParameterInfo *conv_input = input[0], *conv_filter = input[1];
 
     if (conv_input->bitwidth != 16 || conv_filter->bitwidth != 16) {
         // incorrect bitwidth
         ERROR_OCCURRED();
     }
+
     /* input: N x C x H x W, filter: M x C x kH x kW */
     const uint16_t H = conv_input->dims[2], W = conv_input->dims[3],
                    CHANNEL = conv_filter->dims[1],
                    OUTPUT_CHANNEL = conv_filter->dims[0];
 
-    ConvTaskParams conv_params_obj;
     ConvTaskParams *conv_params = &conv_params_obj;
 
     conv_params->stride = flags & 0x0f;
-    conv_params->kH = conv_filter->dims[2];
-    conv_params->kW = conv_filter->dims[3];
     if ((flags & 0xff00) >> 8 == AUTO_PAD_VALID) {
         conv_params->offset_h = conv_params->kH / 2;
         conv_params->offset_w = conv_params->kW / 2;
     } else {
         conv_params->offset_h = conv_params->offset_w = 0;
     }
-    conv_params->OUTPUT_H = (H - conv_params->offset_h * 2) / conv_params->stride;
-    conv_params->OUTPUT_W = (W - conv_params->offset_w * 2) / conv_params->stride;
+
+    /* XXX: extend flags; assume dilation=(1, 1) for now */
+    output->bitwidth = 16;
+    output->slot = SLOT_INTERMEDIATE_VALUES;
+    output->dims[0] = 1;
+    // Although handle_conv requires more memory than params_len, only the first OUTPUT_CHANNEL
+    // channels are useful after merging results from tiling
+    output->dims[1] = OUTPUT_CHANNEL;
+    output->dims[2] = conv_params->OUTPUT_H = (H - conv_params->offset_h * 2) / conv_params->stride;
+    output->dims[3] = conv_params->OUTPUT_W = (W - conv_params->offset_w * 2) / conv_params->stride;
+    output->params_len = OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W * sizeof(int16_t);
+
+    uint8_t tile_c = get_tile_c(conv_input);
+    conv_params->n_tiles_c = (CHANNEL + tile_c - 1) / tile_c;
+
+    return output->params_len * conv_params->n_tiles_c;
+}
+
+void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+#ifndef WITH_PROGRESS_EMBEDDING
+    UNUSED(model);
+#endif
+    // flags already handled in alloc_conv
+    UNUSED(flags);
+
+    ParameterInfo *conv_input = input[0], *conv_filter = input[1], *conv_bias = input[2];
+    my_printf_debug("Conv!" NEWLINE);
+
+    setOutputValue(1);
+
+    /* input: N x C x H x W, filter: M x C x kH x kW */
+    const uint16_t H = conv_input->dims[2], W = conv_input->dims[3],
+                   CHANNEL = conv_filter->dims[1],
+                   OUTPUT_CHANNEL = conv_filter->dims[0];
+
+    ConvTaskParams *conv_params = &conv_params_obj;
+
+    conv_params->kH = conv_filter->dims[2];
+    conv_params->kW = conv_filter->dims[3];
 
     uint8_t tile_c = get_tile_c(conv_input);
     conv_params->tile_h = H; // fallback value
@@ -382,19 +412,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 
     MY_ASSERT(conv_params->tile_h / conv_params->stride * conv_params->stride == conv_params->tile_h);
 
-    conv_params->n_tiles_c = (CHANNEL + tile_c - 1) / tile_c;
     my_printf_debug("n_tiles_c = %d" NEWLINE, conv_params->n_tiles_c);
-
-    /* XXX: extend flags; assume dilation=(1, 1) for now */
-    output->bitwidth = 16;
-    output->slot = SLOT_INTERMEDIATE_VALUES;
-    output->dims[0] = 1;
-    // Although handle_conv requires more memory than params_len, only the first OUTPUT_CHANNEL
-    // channels are useful after merging results from tiling
-    output->dims[1] = OUTPUT_CHANNEL;
-    output->dims[2] = conv_params->OUTPUT_H;
-    output->dims[3] = conv_params->OUTPUT_W;
-    output->params_len = OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W * sizeof(int16_t);
 
     conv_params->conv_input = conv_input;
     conv_params->conv_filter = conv_filter;
