@@ -2,3 +2,4 @@
 	path = data/SqueezeNet_vs_CIFAR10
 	url = ssh://git@github.com/yan12125/SqueezeNet_vs_CIFAR10.git
 	branch = tensorflow2
+	ignore = untracked
