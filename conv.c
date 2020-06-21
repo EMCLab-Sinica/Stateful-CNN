@@ -328,6 +328,7 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
             my_printf_debug("Filters starting from %d are not cached, append them to the pending list" NEWLINE, idx);
             conv_params->pending_filters[conv_params->pending_filter_idx] = idx;
             conv_params->pending_filter_idx++;
+            MY_ASSERT(conv_params->pending_filter_idx < NUM_FILTERS);
         }
     }
     for (uint8_t idx = 0; idx < conv_params->pending_filter_idx; idx++) {
