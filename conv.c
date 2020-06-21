@@ -355,6 +355,9 @@ uint32_t alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
 
     ConvTaskParams *conv_params = &conv_params_obj;
 
+    conv_params->kH = conv_filter->dims[2];
+    conv_params->kW = conv_filter->dims[3];
+
     conv_params->stride = flags & 0x0f;
     if ((flags & 0xff00) >> 8 == AUTO_PAD_VALID) {
         conv_params->offset_h = conv_params->kH / 2;
@@ -398,9 +401,6 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
                    OUTPUT_CHANNEL = conv_filter->dims[0];
 
     ConvTaskParams *conv_params = &conv_params_obj;
-
-    conv_params->kH = conv_filter->dims[2];
-    conv_params->kW = conv_filter->dims[3];
 
     uint8_t tile_c = get_tile_c(conv_input);
     conv_params->tile_h = H; // fallback value
