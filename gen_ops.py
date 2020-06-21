@@ -3,7 +3,7 @@
 ops = {
     'Add': [2, 0],
     # Concat actually accepts 1~infinity inputs. Use 2 to fit SqueezeNet
-    'Concat': [2, 0],
+    'Concat': [2, 1],
     'Conv': [3, 0],
     'Dropout': [1, 1],
     'GlobalAveragePool': [1, 1],

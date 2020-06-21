@@ -373,23 +373,15 @@ void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output,
     }
 }
 
-uint32_t alloc_concat(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(input);
-    UNUSED(output);
-    UNUSED(flags);
-
-    ERROR_OCCURRED();
-
-    return 0;
-}
-
 void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(model);
-    UNUSED(input);
-    UNUSED(output);
     UNUSED(flags);
 
-    ERROR_OCCURRED();
+    my_printf_debug("Concat!" NEWLINE);
+
+    ParameterInfo *A = input[0], *B = input[1];
+    MY_ASSERT(A->dims[1] == B->dims[1]);
+    output->tile_c = A->dims[1];
 }
 
 void handle_dropout(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {

@@ -43,7 +43,8 @@ typedef struct ParameterInfo {
      * SLOT_PARAMETERS and SLOT_INTERMEDIATE_VALUES.
      */
     uint8_t slot;
-    uint16_t dummy;
+    /* Values are grouped each tile_c channels */
+    uint16_t tile_c;
     // uint8_t is not enough. For example, fully connected layer in MNIST has dims 256x1
     uint16_t dims[4];
 } ParameterInfo;

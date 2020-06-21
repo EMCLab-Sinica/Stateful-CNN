@@ -241,8 +241,7 @@ for params in parameters:
         outputs['model'].write(to_bytes(input_channel* dimX * dimY * 2, size=32))  # A _q15 is 16-bit
         outputs['model'].write(to_bytes(16, size=8))                # bitwidth
         outputs['model'].write(to_bytes(SLOT_TEST_SET, size=8))     # slot
-        outputs['model'].write(to_bytes(0, size=8))                 # flag
-        outputs['model'].write(to_bytes(0, size=8))                 # dummy
+        outputs['model'].write(to_bytes(0, size=16))                # tile_c
         # extend_dims
         outputs['model'].write(to_bytes(1))
         outputs['model'].write(to_bytes(input_channel))
@@ -278,8 +277,7 @@ for params in parameters:
         else:
             assert False
         outputs['model'].write(to_bytes(SLOT_PARAMETERS, size=8))    # slot
-        outputs['model'].write(to_bytes(0, size=8))             # flag
-        outputs['model'].write(to_bytes(0, size=8))             # dummy
+        outputs['model'].write(to_bytes(0, size=16))             # tile_c
         print('dims = {}, length = {}'.format(params.dims, data_len))
         for dim in params.dims:
             outputs['model'].write(to_bytes(dim))
@@ -293,7 +291,7 @@ for idx, n in enumerate(nodes):
     outputs['model'].write(to_bytes(0, size=32))  # params_len
     outputs['model'].write(to_bytes(0, size=8))  # bitwidth
     outputs['model'].write(to_bytes(0, size=8))  # slot
-    outputs['model'].write(to_bytes(0, size=16))  # dummy
+    outputs['model'].write(to_bytes(0, size=16))  # tile_c
     for _ in range(4):  # dims[4]
         outputs['model'].write(to_bytes(0))
 
