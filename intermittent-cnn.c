@@ -41,19 +41,21 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
         needed_mem = output->params_len;
     }
     my_printf_debug("Needed mem = %d" NEWLINE, needed_mem);
-    for (int16_t prev_node_idx = node_idx - 1; prev_node_idx >= 0; prev_node_idx--) {
-        if (!inplace_update[nodes[prev_node_idx].op_type]) {
-            ParameterInfo *prev_node = &(parameter_info[prev_node_idx + model->n_input]);
-            if (prev_node->slot != SLOT_INTERMEDIATE_VALUES) {
-                continue;
+    if (needed_mem) {
+        for (int16_t prev_node_idx = node_idx - 1; prev_node_idx >= 0; prev_node_idx--) {
+            if (!inplace_update[nodes[prev_node_idx].op_type]) {
+                ParameterInfo *prev_node = &(parameter_info[prev_node_idx + model->n_input]);
+                if (prev_node->slot != SLOT_INTERMEDIATE_VALUES) {
+                    continue;
+                }
+                output->params_offset = prev_node->params_offset + prev_node->params_len;
+                if (output->params_offset + needed_mem >= INTERMEDIATE_VALUES_SIZE) {
+                    /* TODO: reuse the ring buffer */
+                    // too many immediate values
+                    ERROR_OCCURRED();
+                }
+                break;
             }
-            output->params_offset = prev_node->params_offset + prev_node->params_len;
-            if (output->params_offset + needed_mem >= INTERMEDIATE_VALUES_SIZE) {
-                /* TODO: reuse the ring buffer */
-                // too many immediate values
-                ERROR_OCCURRED();
-            }
-            break;
         }
     }
     if (output->slot == SLOT_INTERMEDIATE_VALUES) {

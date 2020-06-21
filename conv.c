@@ -76,6 +76,8 @@ uint8_t get_tile_c(ParameterInfo *param) {
         return 3;
     } else if (H == 28) {
         return 1;
+    } else if (param->tile_c) {
+        return param->tile_c;
     } else {
         return CHANNEL;
     }
