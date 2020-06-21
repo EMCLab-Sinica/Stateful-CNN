@@ -51,7 +51,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     uint16_t new_H = H / stride;
     uint16_t new_W = W / stride;
 
-    uint8_t tile_c = get_tile_c(output);
+    uint16_t tile_c = get_tile_c(output);
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
 
     int16_t *data_baseptr = get_q15_param(data, 0);

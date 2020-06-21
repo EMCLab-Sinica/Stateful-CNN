@@ -4,4 +4,4 @@
 
 struct ParameterInfo;
 
-uint8_t get_tile_c(struct ParameterInfo *param);
+uint16_t get_tile_c(struct ParameterInfo *param);
