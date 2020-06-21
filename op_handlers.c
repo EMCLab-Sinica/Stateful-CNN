@@ -380,8 +380,11 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     my_printf_debug("Concat!" NEWLINE);
 
     ParameterInfo *A = input[0], *B = input[1];
+    // XXX: assume concatenating 2 tensors at the CHANNEL dimension and they
+    // have the same number of channels.
     MY_ASSERT(A->dims[1] == B->dims[1]);
     output->tile_c = A->dims[1];
+    output->dims[1] *= 2;
 }
 
 void handle_dropout(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {

@@ -349,6 +349,8 @@ uint32_t alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
         ERROR_OCCURRED();
     }
 
+    MY_ASSERT(conv_input->dims[1] == conv_filter->dims[1]);
+
     /* input: N x C x H x W, filter: M x C x kH x kW */
     const uint16_t H = conv_input->dims[2], W = conv_input->dims[3],
                    CHANNEL = conv_filter->dims[1],
