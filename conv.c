@@ -85,7 +85,7 @@ uint16_t get_tile_c(ParameterInfo *param) {
 
 static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     /* put var declarations first to make the compiler happy */
-    int16_t *filter_addr;
+    int8_t *filter_addr;
     uint16_t n_filters = MIN_VAL(conv_params->filter_limit, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
     msp_matrix_mpy_q15_params *p_matrix_mpy_params = &(conv_params->matrix_mpy_params);
 
@@ -102,11 +102,10 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         msp_status status = msp_fill_q15(&fill_params, filter_tmp);
         msp_checkStatus(status);
 
-        uint16_t buffer_size = sizeof(int16_t) * conv_params->tile_c;
         uint16_t filter_src_offset = conv_params->kH * conv_params->kW * conv_params->CHANNEL;
         for (uint16_t idx = 0; idx < n_filters; idx++) {
             // TODO: cache reordered filters on NVM
-            filter_addr = get_q15_param(
+            filter_addr = get_q7_param(
                 conv_params->conv_filter,
                 (conv_params->conv_idx + idx) * filter_src_offset
             );
@@ -116,11 +115,12 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             }
             for (uint16_t h = 0; h < conv_params->kH; h++) {
                 int16_t *filter_dest_ptr = filter_tmp + h * conv_params->dest_offset;
-                int16_t *filter_src_ptr = filter_addr + h * conv_params->kW * conv_params->CHANNEL + conv_params->tile_c_offset;
+                int8_t *filter_src_ptr = filter_addr + h * conv_params->kW * conv_params->CHANNEL + conv_params->tile_c_offset;
                 for (uint16_t w = 0; w < conv_params->kW; w++) {
-                    my_memcpy(filter_dest_ptr,
-                              filter_src_ptr,
-                              buffer_size);
+                    // XXX: any way to utilize DMA here?
+                    for (uint16_t idx_c = 0; idx_c < conv_params->tile_c; idx_c++) {
+                        filter_dest_ptr[idx_c] = filter_src_ptr[idx_c] * 256;
+                    }
                     filter_dest_ptr += conv_params->tile_c;
                     filter_src_ptr += conv_params->CHANNEL;
                 }
@@ -346,7 +346,7 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
 uint32_t alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1];
 
-    if (conv_input->bitwidth != 16 || conv_filter->bitwidth != 16) {
+    if (conv_input->bitwidth != 16 || conv_filter->bitwidth != 8) {
         // incorrect bitwidth
         ERROR_OCCURRED();
     }
