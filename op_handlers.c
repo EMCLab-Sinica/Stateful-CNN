@@ -473,7 +473,8 @@ void handle_softmax(Model *model, ParameterInfo *input[], ParameterInfo *output,
     UNUSED(output);
     UNUSED(flags);
 
-    ERROR_OCCURRED();
+    // Do nothing - softmax does not change the relative order of values.
+    // Just let run_model determine the max value
 }
 
 void handle_transpose(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
