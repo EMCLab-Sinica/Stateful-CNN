@@ -50,9 +50,9 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
                 }
                 output->params_offset = prev_node->params_offset + prev_node->params_len;
                 if (output->params_offset + needed_mem >= INTERMEDIATE_VALUES_SIZE) {
-                    /* TODO: reuse the ring buffer */
-                    // too many immediate values
-                    ERROR_OCCURRED();
+                    // reuse the ring buffer
+                    // TODO: check if this is OK
+                    output->params_offset = 0;
                 }
                 break;
             }
