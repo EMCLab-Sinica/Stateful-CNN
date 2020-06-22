@@ -6,7 +6,7 @@
 
 //#define WITH_PROGRESS_EMBEDDING
 
-#define NUM_FILTERS 16
+#define NUM_FILTERS 128
 
 /**********************************
  *        Data structures         *
