@@ -6,7 +6,7 @@ ops = {
     'Concat': [2, 1],
     'Conv': [3, 0],
     'Dropout': [1, 1],
-    'GlobalAveragePool': [1, 1],
+    'GlobalAveragePool': [1, 0],
     'MatMul': [2, 0],
     'MaxPool': [1, 0],
     'Relu': [1, 1],

@@ -396,13 +396,47 @@ void handle_dropout(Model *model, ParameterInfo *input[], ParameterInfo *output,
     ERROR_OCCURRED();
 }
 
+uint32_t alloc_globalaveragepool(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+    UNUSED(flags);
+
+    ParameterInfo *data = input[0];
+
+    MY_ASSERT(data->dims[0] == 1);
+    uint16_t output_len = data->dims[1];
+
+    output->dims[0] = output->dims[2] = output->dims[3] = 1;
+    output->dims[1] = data->dims[1];
+    output->params_len = output_len * sizeof(int16_t);
+    output->bitwidth = 16;
+    output->slot = SLOT_INTERMEDIATE_VALUES;
+
+    return 0;
+}
+
 void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(model);
-    UNUSED(input);
     UNUSED(output);
     UNUSED(flags);
 
-    ERROR_OCCURRED();
+    my_printf_debug("GlobalAveragePool!" NEWLINE);
+
+    ParameterInfo *data = input[0];
+    uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
+    int16_t *input_baseptr = get_q15_param(data, 0),
+            *output_baseptr = get_q15_param(output, 0);
+    uint16_t len = H * W;
+    for (uint16_t c = 0; c < CHANNEL; c++) {
+        uint32_t total = 0;
+        for (uint16_t h = 0; h < H; h++) {
+            for (uint16_t w = 0; w < W; w++) {
+                // Input is from Conv, which uses NHWC
+                total += input_baseptr[h * W * CHANNEL + w * CHANNEL + c];
+            }
+        }
+        output_baseptr[c] = total / len;
+    }
+
+    dump_params(output);
 }
 
 void handle_softmax(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
