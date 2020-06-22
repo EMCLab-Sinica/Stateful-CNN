@@ -10,6 +10,8 @@
 DSPLIB_DATA(lea_buffer, 4)
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
+#define RESHAPE_AUTO_DIM (uint16_t)(-1)
+
 uint32_t alloc_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     uint16_t stride = flags & 0x0f;
 
@@ -342,13 +344,39 @@ void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output,
         // unsupported shape format
         ERROR_OCCURRED();
     }
+    /*
+     * At most one dimension of the new shape can be -1. In this case, the
+     * value is inferred from the size of the tensor and the remaining
+     * dimensions.
+     *
+     * A dimension could also be 0, in which case the actual dimension value
+     * is unchanged (i.e. taken from the input tensor).
+     * */
     uint32_t new_len = 1;
     for (uint8_t i = 0; i < 4 && i < shape->dims[0]; i++) {
         output->dims[i] = (uint16_t)get_int64_param(shape, i);
-        new_len *= output->dims[i];
+        if (!output->dims[i]) {
+            output->dims[i] = data->dims[i];
+        }
+        if (output->dims[i] != RESHAPE_AUTO_DIM) {
+            new_len *= output->dims[i];
+        }
     }
     for (uint8_t i = shape->dims[0]; i < 4; i++) {
         output->dims[i] = 0;
+    }
+    uint16_t inferred_dim = output->params_len / sizeof(int16_t);
+    int8_t auto_idx = -1;
+    for (uint8_t i = 0; i < 4; i++) {
+        if (output->dims[i] != RESHAPE_AUTO_DIM && output->dims[i] != 0) {
+            inferred_dim /= output->dims[i];
+        } else if (output->dims[i] == RESHAPE_AUTO_DIM) {
+            auto_idx = i;
+        }
+    }
+    if (auto_idx != -1) {
+        output->dims[auto_idx] = inferred_dim;
+        new_len *= inferred_dim;
     }
     MY_ASSERT(new_len * sizeof(int16_t) == output->params_len)
 }
