@@ -119,7 +119,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 for (uint16_t w = 0; w < conv_params->kW; w++) {
                     // XXX: any way to utilize DMA here?
                     for (uint16_t idx_c = 0; idx_c < conv_params->tile_c; idx_c++) {
-                        filter_dest_ptr[idx_c] = filter_src_ptr[idx_c] * 256;
+                        filter_dest_ptr[idx_c] = filter_src_ptr[idx_c] << 8;
                     }
                     filter_dest_ptr += conv_params->tile_c;
                     filter_src_ptr += conv_params->CHANNEL;
