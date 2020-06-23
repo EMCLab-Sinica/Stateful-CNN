@@ -49,21 +49,6 @@ def _Q15(num):
 
     return int(num * 2 ** 15)
 
-def _Q7(num):
-    """Transform a floating point number to _q7 format"""
-
-    lower = -1
-    upper = 127.0 / 128.0
-
-    if num < lower or num >= upper:
-        if num != 1.0:
-            warnings.warn(
-                'Number {} goes beyond the range of _q7 ({}, {})'.format(
-                    num, lower, upper))
-        num = max(min(num, upper), lower)
-
-    return int(num * 2 ** 7)
-
 
 class ONNXNodeWrapper:
     def __init__(self, orig_node: onnx.NodeProto, flags: int = 0):
@@ -190,7 +175,7 @@ pprint.pprint(model)
 
 def to_bytes(i, size=16):
     if size == 8:
-        return struct.pack('b', i)  # signed char
+        return struct.pack('B', i)  # unsigned char
     elif size == 16:
         return struct.pack('h', i)
     elif size == 32:
@@ -279,16 +264,9 @@ for params in parameters:
                 if len(params.dims) != 4:  # most likely biases
                     outputs['parameters'].write(to_bytes(_Q15(param / SCALE / SCALE)))
                 else:
-                    if params.name in conv_param_names:
-                        outputs['parameters'].write(to_bytes(_Q7(param / SCALE), size=8))
-                    else:
-                        outputs['parameters'].write(to_bytes(_Q15(param / SCALE)))
-            if params.name in conv_param_names:
-                bitwidth = 8
-            else:
-                bitwidth = 16
-            parameters_bin_offset += bitwidth // 8 * len(float_data)
-            outputs['model'].write(to_bytes(bitwidth, size=8))
+                    outputs['parameters'].write(to_bytes(_Q15(param / SCALE)))
+                parameters_bin_offset += 2
+            outputs['model'].write(to_bytes(16, size=8)) # bitwidth
         elif params.data_type == onnx.TensorProto.INT64:
             data_len = len(params.int64_data)
             outputs['model'].write(to_bytes(data_len * 8, size=32))

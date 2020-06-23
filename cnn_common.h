@@ -105,7 +105,6 @@ static inline int16_t int16_max(int16_t a, int16_t b) {
 /**********************************
  *       Helpers for nodes        *
  **********************************/
-int8_t* get_q7_param(ParameterInfo *param, size_t i);
 int16_t* get_q15_param(ParameterInfo *param, size_t i);
 int32_t* get_iq31_param(ParameterInfo *param, size_t i);
 int64_t get_int64_param(ParameterInfo *param, size_t i);

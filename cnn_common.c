@@ -30,16 +30,6 @@ static void get_param_base_pointer(ParameterInfo *param, uint8_t **baseptr_p, ui
     }
 }
 
-int8_t* get_q7_param(ParameterInfo *param, size_t i) {
-    MY_ASSERT(param->bitwidth == 8);
-    uint8_t *baseptr;
-    uint32_t limit;
-    get_param_base_pointer(param, &baseptr, &limit);
-    int8_t *ret = (int8_t*)(baseptr + param->params_offset) + i;
-    MY_ASSERT((uint8_t*)ret < baseptr + limit);
-    return ret;
-}
-
 int16_t* get_q15_param(ParameterInfo *param, size_t i) {
     if (param->bitwidth != 16) {
         // incorrect param passed
