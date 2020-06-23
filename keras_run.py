@@ -25,7 +25,8 @@ layer_outs = [func([images]) for func in functors]
 for idx in range(len(layer_outs)):
     layer_out = layer_outs[idx][0]
     shape = tf.shape(layer_out)
-    print(f'Layer: {model.layers[idx].name}')
+    print(model.layers[idx].__class__.__name__.split('.')[-1], end='')
+    print(f' layer: {model.layers[idx].name}')
     print(f'Shape: {shape}')
     if tf.shape(shape)[0] == 4:
         N, H, W, C = shape
