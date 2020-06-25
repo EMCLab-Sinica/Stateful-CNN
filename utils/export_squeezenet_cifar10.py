@@ -1,14 +1,13 @@
 import os.path
 import sys
 
-# argv[1] should be path to https://github.com/zshancock/SqueezeNet_vs_CIFAR10
-sys.path.append(sys.argv[1])
-
-from squeezenet_architecture import SqueezeNet
+import tensorflow as tf
 import onnx
 import keras2onnx
 
-model = SqueezeNet()
+with open(os.path.join(sys.argv[1], 'models', 'squeeze_net.json')) as f:
+    model_json = f.read()
+model = tf.keras.models.model_from_json(model_json)
 model.load_weights(os.path.join(sys.argv[1], 'models', 'squeeze_net.h5'))
 
 onnx_model = keras2onnx.convert_keras(model, model.name)
