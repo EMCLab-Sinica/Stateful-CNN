@@ -504,17 +504,15 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
             my_memcpy(to_add,
                       output_baseptr + tile_c_index * tiling_results_len + tiling_results_offset,
                       real_chunk_len * sizeof(int16_t));
-            msp_scale_q15_params params2 = {
-                .length = real_chunk_len,
-                .scale = _Q15(scale_q15),
-                .shift = scale_shift,
-            };
             // scale up results as in convolution values are scaled down twice (input & weights)
-            msp_status status = msp_scale_q15(&params2, to_add, to_add);
-            msp_checkStatus(status);
+            // XXX: not using msp_scale_q15 as it does not do saturation and overflowed
+            // values lead to incorrect prediction results.
+            for (uint16_t chunk_idx = 0; chunk_idx < real_chunk_len; chunk_idx++) {
+                to_add[chunk_idx] = __saturate(to_add[chunk_idx] * SCALE, INT16_MIN, INT16_MAX);
+            }
             if (tile_c_index != 0) {
                 msp_add_q15_params params3 = { .length = real_chunk_len };
-                status = msp_add_q15(&params3, lea_buffer, to_add, lea_buffer);
+                msp_status status = msp_add_q15(&params3, lea_buffer, to_add, lea_buffer);
                 msp_checkStatus(status);
             }
         }
