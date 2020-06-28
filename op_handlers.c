@@ -140,10 +140,7 @@ uint32_t alloc_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags
     UNUSED(flags);
 
     ParameterInfo *A = input[0], *B = input[1];
-    if (A->bitwidth != 16 || B->bitwidth != 16) {
-        // unsupported bitwidth
-        ERROR_OCCURRED();
-    }
+    MY_ASSERT(A->bitwidth == 16 && B->bitwidth == 16);
 
     output->params_len = A->params_len;
     output->bitwidth = A->bitwidth;
@@ -207,10 +204,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     my_printf_debug("MatMul! A: (%dx%d), B: (%dx%d)" NEWLINE,
               A->dims[0], A->dims[1], B->dims[0], B->dims[1]);
 
-    if (A->dims[0] * A->dims[1] > 256) {
-        // Matrix A too large!
-        ERROR_OCCURRED();
-    }
+    MY_ASSERT(A->dims[0] * A->dims[1] <= 256);
 
     int16_t A_len = A->dims[0] * A->dims[1];
 
@@ -291,10 +285,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 
     /* XXX: use LEA? */
     uint16_t bitwidth = X->bitwidth;
-    if (bitwidth != 16) {
-        // unsupported bitwidth for ReLu
-        ERROR_OCCURRED();
-    }
+    MY_ASSERT(bitwidth == 16);
     int16_t *data = get_q15_param(X, 0);
     int16_t data_len = X->params_len / (bitwidth / 8);
 
@@ -340,10 +331,7 @@ void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output,
     output->params_len = data->params_len;
     output->bitwidth = data->bitwidth;
     output->slot = data->slot;
-    if (shape->bitwidth != 64) {
-        // unsupported shape format
-        ERROR_OCCURRED();
-    }
+    MY_ASSERT(shape->bitwidth == 64);
     /*
      * At most one dimension of the new shape can be -1. In this case, the
      * value is inferred from the size of the tensor and the remaining

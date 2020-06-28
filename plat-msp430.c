@@ -1,13 +1,20 @@
 #include <driverlib.h>
 #include <stdint.h>
-#include "FreeRTOSConfig.h"
+#include "main.h"
 #include "cnn_common.h"
 #include "platform.h"
 
 /* on FRAM */
 
+#define EXTERNAL_FRAM
+
+#ifdef EXTERNAL_FRAM
 #pragma DATA_SECTION(_intermediate_values, ".nvm")
+// TODO
+static uint8_t *_intermediate_values;
+#else
 static uint8_t _intermediate_values[INTERMEDIATE_VALUES_SIZE];
+#endif
 uint8_t *intermediate_values(void) {
     return _intermediate_values;
 }
@@ -68,4 +75,7 @@ void my_memcpy(void* dest, const void* src, size_t n) {
     // _3 => increment
     DMA0CTL |= DMAEN + DMASRCINCR_3 + DMADSTINCR_3 + DMA_TRANSFER_BLOCK;
     DMA0CTL |= DMAREQ;
+}
+
+void plat_print_results(void) {
 }

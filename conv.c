@@ -179,9 +179,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     arm_mat_init_q15(&B, p_matrix_mpy_params->srcBRows, p_matrix_mpy_params->srcBCols, filter_buffer_addr);
     arm_mat_init_q15(&C, p_matrix_mpy_params->srcARows, p_matrix_mpy_params->srcBCols, matrix_mpy_results);
     arm_status status = arm_mat_mult_fast_q15(&A, &B, &C, NULL);
-    if (status != ARM_MATH_SUCCESS) {
-        ERROR_OCCURRED();
-    }
+    MY_ASSERT(status == ARM_MATH_SUCCESS);
 #endif
 
     /* START dump data */
@@ -233,7 +231,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     }
 }
 
-static inline void schedule_tile(uint16_t idx, ConvTaskParams *conv_params) {
+static void schedule_tile(uint16_t idx, ConvTaskParams *conv_params) {
     conv_params->conv_idx = idx;
     msp_matrix_mpy_q15_params *p_matrix_mpy_params = &(conv_params->matrix_mpy_params);
 
@@ -245,17 +243,13 @@ static inline void schedule_tile(uint16_t idx, ConvTaskParams *conv_params) {
     p_matrix_mpy_params->srcACols = p_matrix_mpy_params->srcBRows = conv_params->filter_offset;
     p_matrix_mpy_params->srcBCols = MIN_VAL(conv_params->filter_limit, conv_params->OUTPUT_CHANNEL - idx);
     MY_ASSERT(p_matrix_mpy_params->srcARows * p_matrix_mpy_params->srcBCols <= OUTPUT_LEN);
-    if ((p_matrix_mpy_params->srcACols & 1) || (p_matrix_mpy_params->srcBCols & 1)) {
-        ERROR_OCCURRED();
-    }
+    MY_ASSERT((p_matrix_mpy_params->srcACols & 1) || (p_matrix_mpy_params->srcBCols & 1) == 0);
     for (uint16_t j = 0; j < conv_params->H - conv_params->offset_h - conv_params->output_h; j += conv_params->stride) {
         convTask(j, conv_params);
     }
 }
 
-static inline void handle_conv_inner_loop(void *pvParameters) {
-    ConvTaskParams *conv_params = (ConvTaskParams*)pvParameters;
-
+static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
     int8_t field_size = (conv_params->kH - 1) / 2;
 
     /* copy input data, row by row */
@@ -346,10 +340,7 @@ static inline void handle_conv_inner_loop(void *pvParameters) {
 uint32_t alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1];
 
-    if (conv_input->bitwidth != 16 || conv_filter->bitwidth != 16) {
-        // incorrect bitwidth
-        ERROR_OCCURRED();
-    }
+    MY_ASSERT(conv_input->bitwidth == 16 && conv_filter->bitwidth == 16);
 
     MY_ASSERT(conv_input->dims[1] == conv_filter->dims[1]);
 

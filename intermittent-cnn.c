@@ -17,10 +17,7 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
 
     int16_t input_id[3];
     ParameterInfo *input[3];
-    if (cur_node->inputs_len != expected_inputs_len[cur_node->op_type]) {
-        // unexpected input length
-        ERROR_OCCURRED();
-    }
+    MY_ASSERT(cur_node->inputs_len == expected_inputs_len[cur_node->op_type]);
     for (uint16_t j = 0; j < cur_node->inputs_len; j++) {
         input_id[j] = node_input(cur_node, j);
         my_printf_debug("input_id[%d] = %d ", j, input_id[j]);
@@ -67,9 +64,7 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
     my_printf_debug("State bit=%d" NEWLINE, model->state_bit);
 
     counters()->counter_idx++;
-    if (counters()->counter_idx >= COUNTERS_LEN) {
-        ERROR_OCCURRED();
-    }
+    MY_ASSERT(counters()->counter_idx < COUNTERS_LEN);
 
     my_printf_debug("output dims: ");
     uint8_t has_dims = 0;
@@ -80,14 +75,8 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
         }
     }
     my_printf_debug(NEWLINE);
-    if (!has_dims) {
-        // missing dims
-        ERROR_OCCURRED();
-    }
-    if (output->bitwidth == 0) {
-        // invalid bitwidth
-        ERROR_OCCURRED();
-    }
+    MY_ASSERT(has_dims);
+    MY_ASSERT(output->bitwidth);
 
     if (node_idx == model->nodes_len - 1) {
         model->running = 0;
@@ -163,16 +152,7 @@ void print_results(Model *model, ParameterInfo *output_node) {
     for (uint8_t i = 0; i < counters()->counter_idx; i++) {
         my_printf("%d ", counters()->power_counters[i]);
     }
-#ifndef MY_NDEBUG
-    my_printf(NEWLINE "DMA invocations:" NEWLINE);
-    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
-        my_printf("% 8d", counters()->dma_invocations[i]);
-    }
-    my_printf(NEWLINE "DMA bytes:" NEWLINE);
-    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
-        my_printf("% 8d", counters()->dma_bytes[i]);
-    }
-#endif
+    plat_print_results();
     my_printf(NEWLINE "run_counter: %d", model->run_counter);
     my_printf(NEWLINE);
 }

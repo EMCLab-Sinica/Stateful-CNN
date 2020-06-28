@@ -40,9 +40,7 @@ static void check_params_len(ParameterInfo *cur_param) {
             expected_params_len *= cur_param->dims[i];
         }
     }
-    if (cur_param->params_len != expected_params_len) {
-        ERROR_OCCURRED();
-    }
+    MY_ASSERT(cur_param->params_len == expected_params_len);
 }
 
 // dump in NCHW format

@@ -17,7 +17,9 @@
 
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
-uint8_t *parameters_data, *samples_data, *model_data, *labels_data;
+uint8_t *parameters_data, *parameters2_data, *samples_data, *model_data, *labels_data;
+uint16_t dma_invocations[COUNTERS_LEN];
+uint16_t dma_bytes[COUNTERS_LEN];
 
 uint8_t *intermediate_values(void) {
     return nvm + CACHED_FILTERS_LEN;
@@ -44,7 +46,8 @@ int main(int argc, char* argv[]) {
     }
     // Keep the order consistent with `outputs` in transform.py
     parameters_data = intermediate_values() + INTERMEDIATE_VALUES_SIZE;
-    samples_data = parameters_data + PARAMETERS_DATA_LEN;
+    parameters2_data = parameters_data + PARAMETERS_DATA_LEN;
+    samples_data = parameters2_data + PARAMETERS2_DATA_LEN;
     model_data = samples_data + SAMPLES_DATA_LEN;
     labels_data = model_data + MODEL_DATA_LEN;
 
@@ -70,8 +73,8 @@ int main(int argc, char* argv[]) {
     }
 
     for (uint16_t counter_idx = 0; counter_idx < COUNTERS_LEN; counter_idx++) {
-        counters()->dma_invocations[counter_idx] = 0;
-        counters()->dma_bytes[counter_idx] = 0;
+        dma_invocations[counter_idx] = 0;
+        dma_bytes[counter_idx] = 0;
     }
 
 exit:
@@ -82,14 +85,25 @@ exit:
 void plat_reset_model(void) {
 }
 
+void plat_print_results(void) {
+    my_printf(NEWLINE "DMA invocations:" NEWLINE);
+    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
+        my_printf("% 8d", dma_invocations[i]);
+    }
+    my_printf(NEWLINE "DMA bytes:" NEWLINE);
+    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
+        my_printf("% 8d", dma_bytes[i]);
+    }
+}
+
 void setOutputValue(uint8_t value) {
     my_printf("Output set to %d" NEWLINE, value);
 }
 
 void my_memcpy(void* dest, const void* src, size_t n) {
     uint16_t counter_idx = counters()->counter_idx;
-    counters()->dma_invocations[counter_idx]++;
-    counters()->dma_bytes[counter_idx] += n;
+    dma_invocations[counter_idx]++;
+    dma_bytes[counter_idx] += n;
 #if MEMCPY_DELAY_US
     usleep(MEMCPY_DELAY_US);
 #endif

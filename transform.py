@@ -21,11 +21,12 @@ Indexing policy:
     len(g.input)~ : other (hidden) nodes
 """
 
-SCALE = 20
+SCALE = 30
+SLOT_PARAMETERS2 = 0b100
 SLOT_PARAMETERS = 0b11
 SLOT_TEST_SET = 0b10
 SLOT_INTERMEDIATE_VALUES = 0b01
-INTERMEDIATE_VALUES_SIZE = 76000
+INTERMEDIATE_VALUES_SIZE = 116000
 CACHED_FILTERS_LEN = 8000
 N_SAMPLES = 20
 COUNTERS_LEN = 64
@@ -200,6 +201,7 @@ def nchw2nhwc(arr, dims):
 inputs_data = io.BytesIO()
 outputs = {
     'parameters': io.BytesIO(),
+    'parameters2': io.BytesIO(),
     'samples': io.BytesIO(),
     'model': io.BytesIO(),
     'labels': io.BytesIO(),
@@ -213,7 +215,16 @@ outputs['model'].write(to_bytes(0))  # Model.recovery
 outputs['model'].write(to_bytes(0))  # Model.run_counter
 outputs['model'].write(to_bytes(0))  # Model.state_bit
 outputs['model'].write(to_bytes(0))  # Model.sample_idx
-parameters_bin_offset = 0
+
+@dataclasses.dataclass
+class ParametersSlot:
+    offset: int
+    target: io.BytesIO
+    slot_id: int
+
+parameters_slot = ParametersSlot(offset=0, target=outputs['parameters'], slot_id=SLOT_PARAMETERS)
+parameters2_slot = ParametersSlot(offset=0, target=outputs['parameters2'], slot_id=SLOT_PARAMETERS2)
+
 for node in model:
     outputs['model'].write(to_bytes(len(node.inputs)))
     outputs['model'].write(to_bytes(inputs_data.tell()))  # Node.inputs_offset
@@ -233,11 +244,17 @@ elif 'cifar10' in args.onnx_model:
 else:
     raise NotImplementedError
 
+def select_parameters_slot(data_len):
+    if data_len <= 8192:  # XXX: random heuristic
+        return parameters_slot
+    else:
+        return parameters2_slot
+
 for params in parameters:
-    outputs['model'].write(to_bytes(parameters_bin_offset, size=32))  # params_offset
     if params is None:  # input
         # Actual data for test samples are added last
         _, input_channel, dimX, dimY = images[0].shape
+        outputs['model'].write(to_bytes(parameters_slot.offset, size=32))  # params_offset
         outputs['model'].write(to_bytes(input_channel* dimX * dimY * 2, size=32))  # A _q15 is 16-bit
         outputs['model'].write(to_bytes(16, size=8))                # bitwidth
         outputs['model'].write(to_bytes(SLOT_TEST_SET, size=8))     # slot
@@ -256,27 +273,31 @@ for params in parameters:
                 float_data = list(map(lambda t: t[0], struct.iter_unpack('f', params.raw_data)))
             data_len = len(float_data)
             assert data_len > 0
+            slot = select_parameters_slot(data_len * 2)
+            outputs['model'].write(to_bytes(slot.offset, size=32))  # params_offset
             outputs['model'].write(to_bytes(data_len * 2, size=32))  # A _q15 is 16-bit
             if params.name in conv_param_names:
                 print(f'Reorder conv param {params.name}')
                 float_data, _ = nchw2nhwc(float_data, params.dims)
             for param in float_data:
                 if len(params.dims) != 4:  # most likely biases
-                    outputs['parameters'].write(to_bytes(_Q15(param / SCALE / SCALE)))
+                    slot.target.write(to_bytes(_Q15(param / SCALE / SCALE)))
                 else:
-                    outputs['parameters'].write(to_bytes(_Q15(param / SCALE)))
-                parameters_bin_offset += 2
+                    slot.target.write(to_bytes(_Q15(param / SCALE)))
+                slot.offset += 2
             outputs['model'].write(to_bytes(16, size=8)) # bitwidth
         elif params.data_type == onnx.TensorProto.INT64:
             data_len = len(params.int64_data)
+            slot = select_parameters_slot(data_len * 8)
+            outputs['model'].write(to_bytes(slot.offset, size=32))  # params_offset
             outputs['model'].write(to_bytes(data_len * 8, size=32))
             for param in params.int64_data:
-                outputs['parameters'].write(to_bytes(param, size=64))
-                parameters_bin_offset += 8
+                slot.target.write(to_bytes(param, size=64))
+                slot.offset += 8
             outputs['model'].write(to_bytes(64, size=8)) # bitwidth
         else:
             assert False
-        outputs['model'].write(to_bytes(SLOT_PARAMETERS, size=8))    # slot
+        outputs['model'].write(to_bytes(slot.slot_id, size=8))    # slot
         outputs['model'].write(to_bytes(0, size=16))             # tile_c
         print('dims = {}, length = {}'.format(params.dims, data_len))
         for dim in params.dims:
@@ -317,7 +338,7 @@ for label in labels:
 with open('images/ans.txt', 'w') as f:
     f.write(' '.join(map(str, labels)))
 
-outputs['counters'].write(b'\0' * (8 * COUNTERS_LEN + 2))
+outputs['counters'].write(b'\0' * (4 * COUNTERS_LEN + 2))
 
 with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
     output_c.write('''
@@ -329,6 +350,7 @@ with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
 #include "platform.h"
 
 #define SCALE {SCALE}
+#define SLOT_PARAMETERS2 {SLOT_PARAMETERS2}
 #define SLOT_PARAMETERS {SLOT_PARAMETERS}
 #define SLOT_TEST_SET {SLOT_TEST_SET}
 #define SLOT_INTERMEDIATE_VALUES {SLOT_INTERMEDIATE_VALUES}
@@ -347,9 +369,13 @@ extern uint8_t *{var_name};
 #define {var_name.upper()}_LEN {len(data)}
 ''')
         # #define with _Pragma seems to be broken :/
+        if var_name == 'parameters_data':
+            section = 'nvm'
+        else:
+            section = 'nvm2'
         output_c.write(f'''
 #ifdef __MSP430__
-#pragma DATA_SECTION(_{var_name}, ".nvm")
+#pragma DATA_SECTION(_{var_name}, ".{section}")
 #endif
 uint8_t _{var_name}[{len(data)}] = {{
 ''')
