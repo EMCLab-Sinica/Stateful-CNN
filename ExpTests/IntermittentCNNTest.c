@@ -3,10 +3,10 @@
 #include "data.h"
 #include "debug.h"
 
-#pragma NOINIT(delay_counter)
+#pragma DATA_SECTION(myFirstTime, ".nvm")
 static uint32_t delay_counter;
 
-#pragma DATA_SECTION(myFirstTime, ".map")
+#pragma DATA_SECTION(myFirstTime, ".nvm")
 static uint8_t myFirstTime;
 
 #define DELAY_START_SECONDS 0

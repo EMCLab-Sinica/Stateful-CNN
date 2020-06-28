@@ -1,6 +1,6 @@
+#include "main.h"
+
 #define BuadRate 9600
-extern unsigned int FreqLevel;
-extern int uartsetup;
 
 //#define DEBUG 1
 

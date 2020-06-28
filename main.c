@@ -3,25 +3,9 @@
  *
  *  Author: Meenchen
  */
-#define TestDB
 
-/* Scheduler include files. */
-#include <RecoveryHandler/Recovery.h>
 #include <Tools/myuart.h>
 #include <Tools/dvfs.h>
-#include <FreeRTOS.h>
-#include <task.h>
-#include <semphr.h>
-
-#ifdef TestStack
-#include "StackInVM.h"
-#endif
-#ifdef TestDB
-#include <DBTest.h>
-#endif
-#ifdef TestFail
-#include <FailureTest.h>
-#endif
 
 #include "ExpTests/IntermittentCNNTest.h"
 
@@ -30,42 +14,26 @@ functionality in an interrupt. */
 #include <driverlib.h>
 #include <main.h>
 
+unsigned int FreqLevel = 8;
+int uartsetup = 0;
+
 /*-----------------------------------------------------------*/
 /*
  * Configure the hardware as necessary.
  */
 static void prvSetupHardware( void );
+static void vApplicationSetupTimerInterrupt( void );
 
 /*-----------------------------------------------------------*/
 
 int main( void )
 {
-    int i;
-    //ADC's resource
-    ADCSemph = 0;
-
     /* Configure the hardware ready to run the demo. */
     prvSetupHardware();
 
     vApplicationSetupTimerInterrupt();
     IntermittentCNNTest();
 
-    /*
-	if(firstTime != 1){
-	    capID = -1;
-	    tempID = -1;
-	    avgtempID = -1;
-	    avgcapID = -1;
-	    timeCounter = 0;
-	    pvInitHeapVar();
-	    for(i = 0; i < NUMTASK;i++)
-	        information[i] = 0;
-        //main_DBtest();
-	}
-	else{
-	    failureRecovery();
-	}
-    */
 	return 0;
 }
 
@@ -164,64 +132,35 @@ __interrupt void Port_5(void)
     GPIO_clearInterrupt(GPIO_PORT_P5, GPIO_PIN5);
 }
 
-
-/* Temperature and voltage
- * ADC12 Interrupt Service Routine
- * Exits LPM3 when Temperature/Voltage data is ready
- */
-#pragma vector = ADC12_VECTOR
-__interrupt void ADC12_ISR(void)
+/* The MSP430X port uses this callback function to configure its tick interrupt.
+This allows the application to choose the tick interrupt source.
+configTICK_VECTOR must also be set in FreeRTOSConfig.h to the correct
+interrupt vector for the chosen tick interrupt source.  This implementation of
+vApplicationSetupTimerInterrupt() generates the tick from timer A0, so in this
+case configTICK_VECTOR is set to TIMER0_A0_VECTOR. */
+static void vApplicationSetupTimerInterrupt( void )
 {
-  switch(__even_in_range(ADC12IV,76))
-  {
-    case  ADC12IV_NONE: break;                // Vector  0:  No interrupt
-    case  ADC12IV_ADC12OVIFG: break;          // Vector  2:  ADC12MEMx Overflow
-    case  ADC12IV_ADC12TOVIFG: break;         // Vector  4:  Conversion time overflow
-    case  ADC12IV_ADC12HIIFG: break;          // Vector  6:  ADC12HI
-    case  ADC12IV_ADC12LOIFG: break;          // Vector  8:  ADC12LO
-    case ADC12IV_ADC12INIFG: break;           // Vector 10:  ADC12IN
-    case ADC12IV_ADC12IFG0:                   // Vector 12:  ADC12MEM0
-        ADC12IFGR0 &= ~ADC12IFG0;             // Clear interrupt flag
-        waitCap = 0;
-        __bic_SR_register_on_exit(LPM3_bits); // Exit active CPU
-        break;
-    case ADC12IV_ADC12IFG1:                   // Vector 14:  ADC12MEM1
-        break;
-    case ADC12IV_ADC12IFG2:
-        ADC12IFGR0 &= ~ADC12IFG2;
-        waitTemp = 0;
-        __bic_SR_register_on_exit(LPM3_bits); // Exit active CPU
-        break;            // Vector 16:  ADC12MEM2
-    case ADC12IV_ADC12IFG3: break;            // Vector 18:  ADC12MEM3
-    case ADC12IV_ADC12IFG4: break;            // Vector 20:  ADC12MEM4
-    case ADC12IV_ADC12IFG5: break;            // Vector 22:  ADC12MEM5
-    case ADC12IV_ADC12IFG6: break;            // Vector 24:  ADC12MEM6
-    case ADC12IV_ADC12IFG7: break;            // Vector 26:  ADC12MEM7
-    case ADC12IV_ADC12IFG8: break;            // Vector 28:  ADC12MEM8
-    case ADC12IV_ADC12IFG9: break;            // Vector 30:  ADC12MEM9
-    case ADC12IV_ADC12IFG10: break;           // Vector 32:  ADC12MEM10
-    case ADC12IV_ADC12IFG11: break;           // Vector 34:  ADC12MEM11
-    case ADC12IV_ADC12IFG12: break;           // Vector 36:  ADC12MEM12
-    case ADC12IV_ADC12IFG13: break;           // Vector 38:  ADC12MEM13
-    case ADC12IV_ADC12IFG14: break;           // Vector 40:  ADC12MEM14
-    case ADC12IV_ADC12IFG15: break;           // Vector 42:  ADC12MEM15
-    case ADC12IV_ADC12IFG16: break;           // Vector 44:  ADC12MEM16
-    case ADC12IV_ADC12IFG17: break;           // Vector 46:  ADC12MEM17
-    case ADC12IV_ADC12IFG18: break;           // Vector 48:  ADC12MEM18
-    case ADC12IV_ADC12IFG19: break;           // Vector 50:  ADC12MEM19
-    case ADC12IV_ADC12IFG20: break;           // Vector 52:  ADC12MEM20
-    case ADC12IV_ADC12IFG21: break;           // Vector 54:  ADC12MEM21
-    case ADC12IV_ADC12IFG22: break;           // Vector 56:  ADC12MEM22
-    case ADC12IV_ADC12IFG23: break;           // Vector 58:  ADC12MEM23
-    case ADC12IV_ADC12IFG24: break;           // Vector 60:  ADC12MEM24
-    case ADC12IV_ADC12IFG25: break;           // Vector 62:  ADC12MEM25
-    case ADC12IV_ADC12IFG26: break;           // Vector 64:  ADC12MEM26
-    case ADC12IV_ADC12IFG27: break;           // Vector 66:  ADC12MEM27
-    case ADC12IV_ADC12IFG28: break;           // Vector 68:  ADC12MEM28
-    case ADC12IV_ADC12IFG29: break;           // Vector 70:  ADC12MEM29
-    case ADC12IV_ADC12IFG30: break;           // Vector 72:  ADC12MEM30
-    case ADC12IV_ADC12IFG31: break;           // Vector 74:  ADC12MEM31
-    case ADC12IV_ADC12RDYIFG: break;          // Vector 76:  ADC12RDY
-    default: break;
-  }
+const unsigned short usACLK_Frequency_Hz = 32768;
+
+    /* Ensure the timer is stopped. */
+    TA0CTL = 0;
+
+    /* Run the timer from the ACLK. */
+    TA0CTL = TASSEL_1;
+
+    /* Clear everything to start with. */
+    TA0CTL |= TACLR;
+
+    /* Set the compare match value according to the tick rate we want. */
+    TA0CCR0 = usACLK_Frequency_Hz / configTICK_RATE_HZ;
+
+    /* Enable the interrupts. */
+    TA0CCTL0 = CCIE;
+
+    /* Start up clean. */
+    TA0CTL |= TACLR;
+
+    /* Up mode. */
+    TA0CTL |= MC_1;
 }
+/*-----------------------------------------------------------*/

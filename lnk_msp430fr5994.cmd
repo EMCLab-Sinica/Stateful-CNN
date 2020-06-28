@@ -1,6 +1,6 @@
 /******************************************************************************
 *
-* Copyright (C) 2012 - 2019 Texas Instruments Incorporated - http://www.ti.com/
+* Copyright (C) 2012 - 2020 Texas Instruments Incorporated - http://www.ti.com/
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions
@@ -47,7 +47,7 @@
 /* -heap   0x0100                                   HEAP AREA SIZE            */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
-/* 1.207 */
+/* 1.210 */
 /*----------------------------------------------------------------------------*/
 
 /****************************************************************************/
@@ -63,10 +63,8 @@ MEMORY
     INFOB                   : origin = 0x1900, length = 0x80
     INFOA                   : origin = 0x1980, length = 0x80
     RAM                     : origin = 0x1C00, length = 0x1000
-    FRAM                    : origin = 0x4000, length = 0xAE00
-    NOINI                   : origin = 0xEE00, length = 0x1000
-    MAP                     : origin = 0xFE00, length = 0x0180
-    FRAM2                   : origin = 0x10000,length = 0x34000
+    FRAM                    : origin = 0x4000, length = 0xBF80
+    FRAM2                   : origin = 0x10000,length = 0x33FF8 /* Boundaries changed to fix CPU47 */
     JTAGSIGNATURE           : origin = 0xFF80, length = 0x0004, fill = 0xFFFF
     BSLSIGNATURE            : origin = 0xFF84, length = 0x0004, fill = 0xFFFF
     IPESIGNATURE            : origin = 0xFF88, length = 0x0008, fill = 0xFFFF
@@ -209,9 +207,9 @@ SECTIONS
 
     .bss        : {} > RAM                  /* Global & static vars              */
     .data       : {} > RAM                  /* Global & static vars              */
-    .TI.noinit  : {} > NOINI type=NOINIT    /* For #pragma noinit                */
-    .map        : {} > MAP type=NOINIT
-    .nvm        : {} > FRAM2 type=NOINIT
+    .TI.noinit  : {} > RAM                  /* For #pragma noinit                */
+    .nvm        : {} > FRAM type=NOINIT
+    .nvm2       : {} > FRAM2 type=NOINIT
     .stack      : {} > RAM (HIGH)           /* Software system stack             */
 
     .tinyram    : {} > TINYRAM              /* Tiny RAM                          */

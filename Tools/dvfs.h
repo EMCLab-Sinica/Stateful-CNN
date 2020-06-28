@@ -9,7 +9,7 @@
 #define DVFS_H_
 
 #include "driverlib.h"
-extern unsigned int FreqLevel;
+#include "main.h"
 /*
  * 8 level of CPU frequency
  *
