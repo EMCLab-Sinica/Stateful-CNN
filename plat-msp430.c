@@ -1,4 +1,5 @@
 #include <driverlib.h>
+#include <msp430.h> /* __no_operation() */
 #include <stdint.h>
 #include "main.h"
 #include "cnn_common.h"
@@ -78,4 +79,10 @@ void my_memcpy(void* dest, const void* src, size_t n) {
 }
 
 void plat_print_results(void) {
+}
+
+_Noreturn void ERROR_OCCURRED(void) {
+    for (;;) {
+        __no_operation();
+    }
 }

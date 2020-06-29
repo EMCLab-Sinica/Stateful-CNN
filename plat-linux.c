@@ -15,6 +15,8 @@
 #include <sys/mman.h>
 #include <sys/time.h>
 
+#define MEMCPY_DELAY_US 0
+
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
 uint8_t *parameters_data, *parameters2_data, *samples_data, *model_data, *labels_data;
@@ -110,4 +112,8 @@ void my_memcpy(void* dest, const void* src, size_t n) {
     my_printf_debug(__func__);
     my_printf_debug(" copied %d bytes" NEWLINE, (int)n);
     memcpy(dest, src, n);
+}
+
+_Noreturn void ERROR_OCCURRED(void) {
+    abort();
 }

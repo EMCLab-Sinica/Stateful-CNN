@@ -333,8 +333,6 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
         my_printf_debug("Mark filter %d as processed" NEWLINE, filter_idx);
     }
     conv_params->pending_filter_idx = 0;
-
-    TASK_FINISHED();
 }
 
 uint32_t alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {

@@ -28,7 +28,6 @@ static uint8_t* get_param_base_pointer(ParameterInfo *param, uint32_t *limit_p) 
         default:
             ERROR_OCCURRED();
     }
-    return NULL;
 }
 
 int16_t* get_q15_param(ParameterInfo *param, size_t i) {
