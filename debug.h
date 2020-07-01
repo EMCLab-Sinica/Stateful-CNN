@@ -8,7 +8,7 @@
 #define MY_NDEBUG
 #define DUMP_INTEGERS
 
-#if defined(__MSP430__)
+#if defined(__MSP430__) || defined(__MSP432__)
 #  include "Tools/myuart.h"
 #  define PRId32 "L" // see print2uart() in Tools/myuart.c
 #  define PRId64 "L"

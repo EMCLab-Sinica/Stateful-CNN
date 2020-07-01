@@ -2,7 +2,7 @@
 #include "cnn_common.h"
 
 void print_q15(int16_t val) {
-#if defined(__MSP430__)
+#if defined(__MSP430__) || defined(__MSP432__)
     my_printf("%d ", val);
 #elif defined(DUMP_INTEGERS)
     my_printf("% 6d ", val);
@@ -13,7 +13,7 @@ void print_q15(int16_t val) {
 }
 
 void print_iq31(int32_t val) {
-#if defined(__MSP430__) || defined(DUMP_INTEGERS)
+#if defined(__MSP430__) || defined(__MSP432__) || defined(DUMP_INTEGERS)
     my_printf("%" PRId32 " ", val);
 #else
     // 2^31
