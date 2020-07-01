@@ -14,9 +14,6 @@ functionality in an interrupt. */
 #include <driverlib.h>
 #include <main.h>
 
-unsigned int FreqLevel = 8;
-int uartsetup = 0;
-
 /*-----------------------------------------------------------*/
 /*
  * Configure the hardware as necessary.

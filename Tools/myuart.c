@@ -10,7 +10,9 @@
 #include "driverlib.h"
 #include <Tools/dvfs.h>
 
+int uartsetup = 0;
 
+#ifdef __MSP430__
 // The following structure will configure the EUSCI_A port to run at 9600 baud from an 1~16MHz ACLK
 // The baud rate values were calculated at: http://software-dl.ti.com/msp430/msp430_public_sw/mcu/msp430/MSP430BaudRateConverter/index.html
 EUSCI_A_UART_initParam UartParams[8] = {
@@ -96,6 +98,37 @@ EUSCI_A_UART_initParam UartParams[8] = {
    EUSCI_A_UART_OVERSAMPLING_BAUDRATE_GENERATION
 }};
 
+#elif defined(__MSP432__)
+
+// https://dev.ti.com/tirex/explore/node?node=ACmvnDrzuRlhbVcxPmBGTQ__z-lQYNj__LATEST
+
+/* UART Configuration Parameter. These are the configuration parameters to
+ * make the eUSCI A UART module to operate with a 9600 baud rate. These
+ * values were calculated using the online calculator that TI provides
+ * at: http://software-dl.ti.com/msp430/msp430_public_sw/mcu/msp430/MSP430BaudRateConverter/index.html
+ * Modified to fit older driverlib
+ */
+const eUSCI_UART_Config UartParams[1] = {
+        EUSCI_A_UART_CLOCKSOURCE_SMCLK,          // SMCLK Clock Source
+        78,                                     // BRDIV = 78
+        2,                                       // UCxBRF = 2
+        0,                                       // UCxBRS = 0
+        EUSCI_A_UART_NO_PARITY,                  // No Parity
+        EUSCI_A_UART_LSB_FIRST,                  // LSB First
+        EUSCI_A_UART_ONE_STOP_BIT,               // One stop bit
+        EUSCI_A_UART_MODE,                       // UART mode
+        EUSCI_A_UART_OVERSAMPLING_BAUDRATE_GENERATION,  // Oversampling
+};
+
+#endif
+
+void uart_putc(char c) {
+#ifdef __MSP430__
+    EUSCI_A_UART_transmitData(EUSCI_A0_BASE, (uint8_t)c);
+#elif defined(__MSP432__)
+    MAP_UART_transmitData(EUSCI_A0_BASE, (uint8_t)c);
+#endif
+}
 
 void print2uart(char* format,...)
 {
@@ -113,7 +146,7 @@ void print2uart(char* format,...)
     {
         while( *traverse != '%' && *traverse != '\0' )
         {
-            EUSCI_A_UART_transmitData(EUSCI_A0_BASE, (uint8_t)*traverse);
+            uart_putc(*traverse);
             traverse++;
         }
 
@@ -127,14 +160,14 @@ void print2uart(char* format,...)
         {
             case 'c' :
                 i = va_arg(arg,int);        //Fetch char argument
-                EUSCI_A_UART_transmitData(EUSCI_A0_BASE, (uint8_t)i);
+                uart_putc(i);
                 break;
             case 'L' :
                 l = va_arg(arg,long);        //Fetch Decimal/Integer argument
                 if(l<0)
                 {
                     l = -l;
-                    EUSCI_A_UART_transmitData(EUSCI_A0_BASE, (uint8_t)'-');
+                    uart_putc('-');
                 }
                 print2uart(convertl(l,10));
                 break;
@@ -147,7 +180,7 @@ void print2uart(char* format,...)
                 if(i<0)
                 {
                     i = -i;
-                    EUSCI_A_UART_transmitData(EUSCI_A0_BASE, (uint8_t)'-');
+                    uart_putc('-');
                 }
                 print2uart(convert(i,10));
                 break;
@@ -177,7 +210,7 @@ void print2uartlength(char* str,int length)
 
     for(i = 0; i < length; i++)
     {
-        EUSCI_A_UART_transmitData(EUSCI_A0_BASE, (uint8_t)*(str+i));
+        uart_putc(*(str+i));
     }
 }
 
@@ -221,6 +254,7 @@ char *convertl(unsigned long num, int base)
 void uartinit()
 {
     if(uartsetup == 0){
+#ifdef __MSP430__
         // Configure UART
         EUSCI_A_UART_initParam param = UartParams[FreqLevel-1];
 
@@ -241,8 +275,24 @@ void uartinit()
 
         // Select UART TXD on P2.0
         GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_P2, GPIO_PIN0, GPIO_SECONDARY_MODULE_FUNCTION);
+#elif defined(__MSP432__)
+        /* Selecting P1.2 and P1.3 in UART mode */
+        MAP_GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P1,
+                GPIO_PIN2 | GPIO_PIN3, GPIO_PRIMARY_MODULE_FUNCTION);
+
+        eUSCI_UART_Config param = UartParams[FreqLevel-1];
+        /* Configuring UART Module */
+        MAP_UART_initModule(EUSCI_A0_BASE, &param);
+
+        /* Enable UART module */
+        MAP_UART_enableModule(EUSCI_A0_BASE);
+
+        /* Enabling interrupts */
+        MAP_UART_enableInterrupt(EUSCI_A0_BASE, EUSCI_A_UART_RECEIVE_INTERRUPT);
+        MAP_Interrupt_enableInterrupt(INT_EUSCIA0);
+        MAP_Interrupt_enableSleepOnIsrExit();
+        MAP_Interrupt_enableMaster();
+#endif
         uartsetup = 1;
     }
 }
-
-
