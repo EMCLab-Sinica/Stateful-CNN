@@ -7,7 +7,7 @@
 #include <Tools/myuart.h>
 #include <Tools/dvfs.h>
 
-#include "ExpTests/IntermittentCNNTest.h"
+#include "plat-msp430.h"
 
 /* Standard demo includes, used so the tick hook can exercise some FreeRTOS
 functionality in an interrupt. */
