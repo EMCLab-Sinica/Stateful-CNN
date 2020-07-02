@@ -107,14 +107,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/intermittent-cnn.dir"/>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/fake-msp430sdk.dir"/>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/dsplib.dir"/>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/arm_cmsis_dsp.dir"/>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/CMakeTmp"/>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/3.17.3"/>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/Progress"/>
-						<entry excluding="intermittent-cnn/plat-linux.c|intermittent-cnn/ARM-CMSIS|intermittent-cnn/fake-msp430sdk|intermittent-cnn/utils|ExpTests/intermittent-cnn/out|lnk_msp430fr5969" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="intermittent-cnn/plat-linux.c|intermittent-cnn/ARM-CMSIS|intermittent-cnn/fake-msp430sdk|intermittent-cnn/utils|lnk_msp430fr5969" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

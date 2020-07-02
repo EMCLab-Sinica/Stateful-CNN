@@ -1,3 +1,0 @@
-[submodule "ExpTests/intermittent-cnn"]
-	path = ExpTests/intermittent-cnn
-	url = git@gitlab.com:yan12125/intermittent-cnn.git
