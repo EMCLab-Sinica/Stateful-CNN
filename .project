@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-	<name>Intermittent_FreeRTOS</name>
+	<name>intermittent-cnn-msp430</name>
 	<comment></comment>
 	<projects>
 	</projects>

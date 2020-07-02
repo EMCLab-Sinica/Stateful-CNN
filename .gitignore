@@ -34,3 +34,8 @@
 # Debug files
 *.dSYM/
 /Large_Data/
+
+# External projects
+/Tools
+/driverlib
+/intermittent-cnn

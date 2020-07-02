@@ -49,8 +49,8 @@
 								<option id="com.ti.ccstudio.buildDefinitions.MSP430_20.2.compilerID.OPT_FOR_SPEED.1149274484" name="Speed vs. size trade-offs (--opt_for_speed, -mf)" superClass="com.ti.ccstudio.buildDefinitions.MSP430_20.2.compilerID.OPT_FOR_SPEED" value="com.ti.ccstudio.buildDefinitions.MSP430_20.2.compilerID.OPT_FOR_SPEED.5" valueType="enumerated"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.ti.ccstudio.buildDefinitions.MSP430_20.2.compilerID.INCLUDE_PATH.413097960" name="Add dir to #include search path (--include_path, -I)" superClass="com.ti.ccstudio.buildDefinitions.MSP430_20.2.compilerID.INCLUDE_PATH" valueType="includePath">
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}"/>
-									<listOptionValue builtIn="false" value="${PROJECT_LOC}/ExpTests/intermittent-cnn"/>
-									<listOptionValue builtIn="false" value="${PROJECT_LOC}/ExpTests/intermittent-cnn/TI-DSPLib/include"/>
+									<listOptionValue builtIn="false" value="${PROJECT_LOC}/intermittent-cnn"/>
+									<listOptionValue builtIn="false" value="${PROJECT_LOC}/intermittent-cnn/TI-DSPLib/include"/>
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}/driverlib/MSP430FR5xx_6xx"/>
 									<listOptionValue builtIn="false" value="${CCS_BASE_ROOT}/msp430/include"/>
 									<listOptionValue builtIn="false" value="${CG_TOOL_ROOT}/include"/>
@@ -107,8 +107,14 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="ExpTests/intermittent-cnn/utils|ExpTests/intermittent-cnn/ARM-CMSIS|ExpTests/intermittent-cnn/out|ExpTests/intermittent-cnn/fake-msp430sdk|ExpTests/intermittent-cnn/plat-linux.c|lnk_msp430fr5969" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/intermittent-cnn.dir"/>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/fake-msp430sdk.dir"/>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/dsplib.dir"/>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/arm_cmsis_dsp.dir"/>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/CMakeTmp"/>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/3.17.3"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="ExpTests/intermittent-cnn/out/CMakeFiles/Progress"/>
+						<entry excluding="intermittent-cnn/plat-linux.c|intermittent-cnn/ARM-CMSIS|intermittent-cnn/fake-msp430sdk|intermittent-cnn/utils|ExpTests/intermittent-cnn/out|lnk_msp430fr5969" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
