@@ -126,7 +126,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 }
             }
 #ifdef WITH_PROGRESS_EMBEDDING
-            filter_tmp[conv_params->filter_offset - (conv_params->truncated?2:1)] -= 0x4000;
+            filter_tmp[conv_params->filter_offset - 1] = -0x4000;
 #endif
 
             msp_interleave_q15_params params;
@@ -317,6 +317,9 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
         offset += conv_params->dest_offset;
     }
 
+    my_printf_debug("Loaded inputs" NEWLINE);
+    dump_matrix(lea_buffer, inputs_len);
+
     for (uint16_t idx = 0; idx < conv_params->OUTPUT_CHANNEL; idx += conv_params->filter_limit) {
         if (conv_params->cached_filter_idx == idx) {
             schedule_tile(idx, conv_params);
@@ -436,6 +439,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 
     for (uint16_t tile_c_offset = 0, tile_c_index = 0; tile_c_offset < CHANNEL ; tile_c_offset += tile_c, tile_c_index++) {
         conv_params->tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
+        my_printf_debug("tile_c = %d" NEWLINE, conv_params->tile_c);
         // +1 for bias
         conv_params->dest_offset = conv_params->kH * conv_params->tile_c + 1;
         /* MSP430 LEA requires length to be even */
@@ -468,22 +472,18 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         }
     }
 
-    my_printf_debug("handle_conv output" NEWLINE);
-
-    // XXX: handle state bits
     int16_t *output_baseptr = get_q15_param(conv_params->output, 0);
     uint16_t chunk_len = (LEA_BUFFER_SIZE - 1) / conv_params->n_tiles_c / 2 * 2;
     uint32_t tiling_results_len = OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W;
-    float scale_q15 = SCALE;
-    uint8_t scale_shift = 0;
-    while (scale_q15 >= 1) {
-        scale_q15 /= 2.0f;
-        scale_shift++;
-    }
 
+    my_printf_debug("handle_conv output" NEWLINE);
     for (uint16_t tile_c_index = 0; tile_c_index * tile_c < CHANNEL; tile_c_index++) {
         dump_params_nhwc(output, tile_c_index * tiling_results_len);
     }
+
+#ifdef WITH_PROGRESS_EMBEDDING
+    model->state_bit = conv_params->state_bit = 0;
+#endif
 
     for (uint32_t tiling_results_offset = 0; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
         uint32_t real_chunk_len = MIN_VAL(chunk_len, tiling_results_len - tiling_results_offset);
@@ -497,7 +497,14 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
             // XXX: not using msp_scale_q15 as it does not do saturation and overflowed
             // values lead to incorrect prediction results.
             for (uint16_t chunk_idx = 0; chunk_idx < real_chunk_len; chunk_idx++) {
+                my_printf_debug("chunk_idx = %d" NEWLINE, chunk_idx);
+#ifdef WITH_PROGRESS_EMBEDDING
+                my_printf_debug("to_add[chunk_idx] = %d" NEWLINE, to_add[chunk_idx]);
+                to_add[chunk_idx] -= 0x4000;
+                my_printf_debug("to_add[chunk_idx] = %d" NEWLINE, to_add[chunk_idx]);
+#endif
                 to_add[chunk_idx] = __saturate(to_add[chunk_idx] * SCALE, INT16_MIN, INT16_MAX);
+                my_printf_debug("to_add[chunk_idx] = %d" NEWLINE NEWLINE, to_add[chunk_idx]);
             }
             if (tile_c_index != 0) {
                 msp_add_q15_params params3 = { .length = real_chunk_len };
@@ -508,7 +515,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         my_memcpy(output_baseptr + tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));
     }
 
-    my_printf_debug("After scaling up back" NEWLINE);
+    my_printf_debug("After scaling up back and merging tiling results" NEWLINE);
 
     dump_params_nhwc(output, 0);
 

@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "data.h"
 
-//#define WITH_PROGRESS_EMBEDDING
+#define WITH_PROGRESS_EMBEDDING
 
 #define NUM_FILTERS 128
 
