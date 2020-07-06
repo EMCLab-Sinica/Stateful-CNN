@@ -40,6 +40,8 @@ void sig_handler(int sig_no) {
 int main(int argc, char* argv[]) {
     int nvm_fd, ret = 0;
 
+    chdir(MY_SOURCE_DIR);
+
     nvm_fd = open("nvm.bin", O_RDWR);
     nvm = mmap(NULL, NVM_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, nvm_fd, 0);
     if (nvm == MAP_FAILED) {

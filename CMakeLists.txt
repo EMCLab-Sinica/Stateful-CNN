@@ -56,6 +56,11 @@ add_executable(intermittent-cnn
 )
 target_link_libraries(intermittent-cnn dsplib arm_cmsis_dsp fake-msp430sdk)
 
+target_compile_definitions(intermittent-cnn
+    PRIVATE
+    MY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
 if (USE_ARM_CMSIS)
     target_compile_definitions(intermittent-cnn
         PRIVATE
