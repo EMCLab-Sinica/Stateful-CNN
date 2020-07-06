@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#ifdef __MSP430__
+#if defined(__MSP430__) || defined(__MSP432__)
 #  include "plat-msp430.h"
 #else
 #  include "plat-linux.h"
