@@ -209,27 +209,21 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #endif
     /* END dump data */
 
-    int16_t offset = conv_params->OUTPUT_W * conv_params->OUTPUT_CHANNEL;
-    int16_t *output_baseptr = get_q15_param(conv_params->output, conv_params->tile_c_index * conv_params->OUTPUT_H * offset);
+    int16_t *output_baseptr = get_q15_param(conv_params->output, conv_params->tile_c_index * conv_params->OUTPUT_H * conv_params->OUTPUT_W * conv_params->OUTPUT_CHANNEL);
     int16_t *output_data = output_baseptr +
             conv_params->conv_idx +
             (conv_params->output_h + offset_h) / conv_params->stride * conv_params->OUTPUT_W * conv_params->OUTPUT_CHANNEL +
             conv_params->output_w / conv_params->stride * conv_params->OUTPUT_CHANNEL;
-    int16_t *result_addr = matrix_mpy_results;
-    for (uint8_t idx = 0; idx < p_matrix_mpy_params->srcARows; idx++) {
-        my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - output_baseptr));
-        MY_ASSERT((uint8_t*)(output_data + n_filters) < intermediate_values() + INTERMEDIATE_VALUES_SIZE);
+    my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - output_baseptr));
+    MY_ASSERT((uint8_t*)(output_data + n_filters) < intermediate_values() + INTERMEDIATE_VALUES_SIZE);
 #if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
-        for (uint16_t idx2 = 0; idx2 < n_filters; idx2++) {
-            if (!conv_params->state_bit && *result_addr < 0x2000 && *result_addr >= -0x2000) {
-                ERROR_OCCURRED();
-            }
+    for (uint16_t idx2 = 0; idx2 < n_filters; idx2++) {
+        if (!conv_params->state_bit && matrix_mpy_results[idx2] < 0x2000 && matrix_mpy_results[idx2] >= -0x2000) {
+            ERROR_OCCURRED();
         }
-#endif
-        my_memcpy(output_data, result_addr, n_filters * sizeof(int16_t));
-        result_addr += n_filters;
-        output_data += conv_params->kH * offset;
     }
+#endif
+    my_memcpy(output_data, matrix_mpy_results, n_filters * sizeof(int16_t));
 }
 
 static void schedule_tile(uint16_t idx, ConvTaskParams *conv_params) {
