@@ -38,4 +38,6 @@ volatile uint16_t msp_lea_locked;
 
 volatile uint16_t msp_lea_ifg;
 
+_q15 lea_invokecommand_buf[LEA_INVOKECOMMAND_BUFLEN];
+
 #endif

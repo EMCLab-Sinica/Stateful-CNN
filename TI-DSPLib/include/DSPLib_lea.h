@@ -79,6 +79,9 @@ latest support package to use this version of DSPLib with LEA."
 //******************************************************************************
 #define MSP_USE_LEA                 1
 
+#define LEA_INVOKECOMMAND_BUFLEN 1000
+extern _q15 lea_invokecommand_buf[LEA_INVOKECOMMAND_BUFLEN];
+
 // LEA revision A.
 #define MSP_LEA_REVISION_A          0
 
@@ -1136,6 +1139,14 @@ static inline void msp_lea_invokeCommand(uint16_t cmdId)
     /* Clear interrupt flag and invoke the command. */
     msp_lea_ifg = 0;
     LEAPMCB = cmdId | LEAITFLG1;
+
+    if (cmdId == LEACMD__MPYMATRIXROW) {
+        MSP_LEA_MPYMATRIXROW_PARAMS *leaParams = (MSP_LEA_MPYMATRIXROW_PARAMS*)(LEAPMS1 << 2);
+        _q15 *dst = (_q15*)(leaParams->output << 2);
+        for (uint16_t idx = 0; idx < LEA_INVOKECOMMAND_BUFLEN; idx++) {
+            lea_invokecommand_buf[idx] = dst[4];
+        }
+    }
     
 #if defined(MSP_DISABLE_LPM0)
 #warning "DSPLib: LPM0 is disabled, undefine MSP_DISABLE_LPM0 to enable LPM0."

@@ -5,6 +5,7 @@
 #ifdef USE_ARM_CMSIS
 #include <arm_math.h>
 #endif
+#include <string.h>
 #include "cnn_common.h"
 #include "debug.h"
 #include "op_handlers.h"
@@ -166,6 +167,9 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     int16_t *input_buffer_addr = lea_buffer + offset_h * conv_params->dest_offset;
 
 #ifndef USE_ARM_CMSIS
+    if (conv_params->tile_c == 4) {
+        memset(matrix_mpy_results, 0, OUTPUT_LEN * sizeof(int16_t));
+    }
     msp_status status = msp_matrix_mpy_q15(
         p_matrix_mpy_params,
         input_buffer_addr,
@@ -173,6 +177,13 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         matrix_mpy_results
     );
     msp_checkStatus(status);
+
+#ifdef __MSP430__
+    if (conv_params->tile_c == 4) {
+        dump_matrix(lea_invokecommand_buf, LEA_INVOKECOMMAND_BUFLEN);
+    }
+#endif
+
 #else
     arm_matrix_instance_q15 A, B, C;
     arm_mat_init_q15(&A, p_matrix_mpy_params->srcARows, p_matrix_mpy_params->srcACols, input_buffer_addr);

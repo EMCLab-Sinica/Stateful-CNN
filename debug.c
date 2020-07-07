@@ -21,6 +21,16 @@ void print_iq31(int32_t val) {
 #endif
 }
 
+void dump_matrix(int16_t *mat, size_t len) {
+    for (size_t j = 0; j < len; j++) {
+        print_q15(mat[j]);
+        if (j && (j % 16 == 15)) {
+            my_printf(NEWLINE);
+        }
+    }
+    my_printf(NEWLINE);
+}
+
 #ifndef MY_NDEBUG
 
 static void dump_value(ParameterInfo *cur_param, size_t offset) {
@@ -100,16 +110,6 @@ void dump_params_nhwc(struct ParameterInfo *cur_param, size_t offset) {
         }
         my_printf_debug(NEWLINE);
     }
-}
-
-void dump_matrix(int16_t *mat, size_t len) {
-    for (size_t j = 0; j < len; j++) {
-        print_q15_debug(mat[j]);
-        if (j && (j % 16 == 15)) {
-            my_printf_debug(NEWLINE);
-        }
-    }
-    my_printf_debug(NEWLINE);
 }
 
 void dump_matrix2(int16_t *mat, size_t rows, size_t cols) {
