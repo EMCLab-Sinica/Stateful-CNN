@@ -245,7 +245,7 @@ else:
     raise NotImplementedError
 
 def select_parameters_slot(data_len):
-    if data_len <= 8192:  # XXX: random heuristic
+    if data_len <= 1024:  # XXX: random heuristic
         return parameters_slot
     else:
         return parameters2_slot
