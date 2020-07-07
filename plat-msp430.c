@@ -15,13 +15,13 @@
 
 /* on FRAM */
 
-#define EXTERNAL_FRAM
+//#define EXTERNAL_FRAM
 
 #ifdef EXTERNAL_FRAM
-#pragma DATA_SECTION(_intermediate_values, ".nvm")
 // TODO
 static uint8_t *_intermediate_values;
 #else
+#pragma DATA_SECTION(_intermediate_values, ".nvm")
 static uint8_t _intermediate_values[INTERMEDIATE_VALUES_SIZE];
 #endif
 uint8_t *intermediate_values(void) {
