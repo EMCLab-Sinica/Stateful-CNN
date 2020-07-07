@@ -187,3 +187,13 @@ void run_cnn_tests(uint16_t n_samples) {
 void set_sample_index(Model *model, uint8_t index) {
     model->sample_idx = index;
 }
+
+void flip_state_bit(Model *model) {
+#ifdef WITH_PROGRESS_EMBEDDING
+    if (model->state_bit) {
+        model->state_bit = 0;
+    } else {
+        model->state_bit = 1;
+    }
+#endif
+}

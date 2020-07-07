@@ -9,6 +9,7 @@
 #include "debug.h"
 #include "op_handlers.h"
 #include "ops.h"
+#include "intermittent-cnn.h"
 
 #define configCONV_STACK_SIZE 100
 
@@ -426,7 +427,6 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 #ifdef WITH_PROGRESS_EMBEDDING
     conv_params->state_bit = model->state_bit;
     // XXX
-    model->state_bit = 1;
     if (conv_params->state_bit) {
         int16_t *input_ptr = get_q15_param(conv_input, 0);
         uint32_t len = conv_input->params_len / sizeof(int16_t);
@@ -481,9 +481,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         dump_params_nhwc(output, tile_c_index * tiling_results_len);
     }
 
-#ifdef WITH_PROGRESS_EMBEDDING
-    model->state_bit = conv_params->state_bit = 0;
-#endif
+    flip_state_bit(model);
 
     for (uint32_t tiling_results_offset = 0; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
         uint32_t real_chunk_len = MIN_VAL(chunk_len, tiling_results_len - tiling_results_offset);
@@ -520,4 +518,6 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     dump_params_nhwc(output, 0);
 
     setOutputValue(0);
+
+    flip_state_bit(model);
 }

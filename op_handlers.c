@@ -6,6 +6,7 @@
 #include "debug.h"
 #include "platform.h"
 #include "conv.h"
+#include "intermittent-cnn.h"
 
 DSPLIB_DATA(lea_buffer, 4)
 int16_t lea_buffer[LEA_BUFFER_SIZE];
@@ -59,17 +60,13 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     int16_t *data_baseptr = get_q15_param(data, 0);
 
 #ifdef WITH_PROGRESS_EMBEDDING
-    int16_t state_bit = model->state_bit;
-    if (state_bit) {
-        model->state_bit = 0;
+    if (model->state_bit) {
         int16_t *data_ptr = data_baseptr;
         uint32_t len = data->params_len / sizeof(int16_t);
         for (uint32_t idx = 0; idx < len; idx++) {
             *data_ptr -= 0x4000;
             data_ptr++;
         }
-    } else {
-        model->state_bit = 1;
     }
 #endif
 
@@ -109,7 +106,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                     print_q15_debug(max_val);
                     my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
 #ifdef WITH_PROGRESS_EMBEDDING
-                    if (!state_bit) {
+                    if (!model->state_bit) {
                         max_val += 0x4000;
                     }
 #endif
@@ -134,6 +131,8 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     } else if (tile_c == CHANNEL) {
         dump_params(output);
     }
+
+    flip_state_bit(model);
 }
 
 uint32_t alloc_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -227,9 +226,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         for (uint16_t idx = 0; idx < A_len; idx++) {
             buffer_a[idx] -= 0x4000;
         }
-        model->state_bit = 0;
     }
-    // XXX: not further changing the state bits, assuming the last layer
 #endif
 
     /* LEA wants addresses to be 4-aligned */
@@ -269,6 +266,8 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 
     my_printf_debug("handle_matmul output" NEWLINE);
     dump_params(output);
+
+    flip_state_bit(model);
 }
 
 void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -289,18 +288,10 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     int16_t *data = get_q15_param(X, 0);
     int16_t data_len = X->params_len / (bitwidth / 8);
 
-#ifdef WITH_PROGRESS_EMBEDDING
-    uint16_t state_bit = model->state_bit;
-    if (state_bit) {
-        model->state_bit = 0;
-    } else {
-        model->state_bit = 1;
-    }
-#endif
     int16_t *data_ptr = data;
     int16_t threshold, offset;
 #ifdef WITH_PROGRESS_EMBEDDING
-    if (state_bit) {
+    if (model->state_bit) {
         threshold = 0x4000;
         offset = -0x4000;
     } else {
@@ -318,6 +309,8 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         data_ptr++;
     }
     dump_params_nhwc(output, 0);
+
+    flip_state_bit(model);
 }
 
 void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
