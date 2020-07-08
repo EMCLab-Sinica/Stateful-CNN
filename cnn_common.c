@@ -1,4 +1,5 @@
 #include "cnn_common.h"
+#include "debug.h"
 
 uint8_t *inputs_data;
 
@@ -22,11 +23,9 @@ static uint8_t* get_param_base_pointer(ParameterInfo *param, uint32_t *limit_p) 
         case SLOT_TEST_SET:
             *limit_p = SAMPLES_DATA_LEN;
             return samples_data;
-        case SLOT_INTERMEDIATE_VALUES:
-            *limit_p = INTERMEDIATE_VALUES_SIZE;
-            return intermediate_values();
         default:
-            ERROR_OCCURRED();
+            *limit_p = INTERMEDIATE_VALUES_SIZE;
+            return intermediate_values(slot_id);
     }
 }
 
@@ -55,4 +54,15 @@ int64_t get_int64_param(ParameterInfo *param, size_t i) {
     int64_t *ret = (int64_t*)(baseptr + param->params_offset) + i;
     MY_ASSERT((uint8_t*)ret < baseptr + limit);
     return *ret;
+}
+
+uint16_t get_next_slot(ParameterInfo *param) {
+    uint16_t slot_id = param->slot;
+    /* pick the next slot */
+    uint16_t next_slot_id = slot_id + 1;
+    if (next_slot_id >= NUM_SLOTS) {
+        next_slot_id = 0;
+    }
+    my_printf_debug("next_slot_id = %d" NEWLINE, next_slot_id);
+    return next_slot_id;
 }

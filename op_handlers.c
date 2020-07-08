@@ -24,7 +24,7 @@ uint32_t alloc_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t f
 
     output->params_len = new_H * new_W * CHANNEL * sizeof(int16_t);
     output->bitwidth = data->bitwidth;
-    output->slot = SLOT_INTERMEDIATE_VALUES;
+    output->slot = get_next_slot(data);
     output->dims[0] = 1;
     output->dims[1] = CHANNEL;
     output->dims[2] = new_H;
@@ -143,7 +143,7 @@ uint32_t alloc_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags
 
     output->params_len = A->params_len;
     output->bitwidth = A->bitwidth;
-    output->slot = SLOT_INTERMEDIATE_VALUES;
+    output->slot = get_next_slot(A);
     output->dims[0] = 1;
     output->dims[1] = A->dims[1];
 
@@ -182,7 +182,7 @@ uint32_t alloc_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t fl
     output->dims[1] = B->dims[1];
     output->params_len = output_len * sizeof(int16_t);
     output->bitwidth = 16;
-    output->slot = SLOT_INTERMEDIATE_VALUES;
+    output->slot = get_next_slot(A);
 
     return 0;
 }

@@ -22,10 +22,10 @@
 static uint8_t *_intermediate_values;
 #else
 #pragma DATA_SECTION(_intermediate_values, ".nvm")
-static uint8_t _intermediate_values[INTERMEDIATE_VALUES_SIZE];
+static uint8_t _intermediate_values[NUM_SLOTS * INTERMEDIATE_VALUES_SIZE];
 #endif
-uint8_t *intermediate_values(void) {
-    return _intermediate_values;
+uint8_t *intermediate_values(uint8_t slot_id) {
+    return _intermediate_values + slot_id * INTERMEDIATE_VALUES_SIZE;
 }
 
 Counters *counters() {

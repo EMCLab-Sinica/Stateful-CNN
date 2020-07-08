@@ -215,7 +215,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             (conv_params->output_h + offset_h) / conv_params->stride * conv_params->OUTPUT_W * conv_params->OUTPUT_CHANNEL +
             conv_params->output_w / conv_params->stride * conv_params->OUTPUT_CHANNEL;
     my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - output_baseptr));
-    MY_ASSERT((uint8_t*)(output_data + n_filters) < intermediate_values() + INTERMEDIATE_VALUES_SIZE);
+    MY_ASSERT((uint8_t*)(output_data + n_filters) < intermediate_values(NUM_SLOTS));
 #if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
     for (uint16_t idx2 = 0; idx2 < n_filters; idx2++) {
         if (!conv_params->state_bit && matrix_mpy_results[idx2] < 0x2000 && matrix_mpy_results[idx2] >= -0x2000) {
@@ -360,7 +360,7 @@ uint32_t alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
 
     /* XXX: extend flags; assume dilation=(1, 1) for now */
     output->bitwidth = 16;
-    output->slot = SLOT_INTERMEDIATE_VALUES;
+    output->slot = get_next_slot(conv_input);
     output->dims[0] = 1;
     // Although handle_conv requires more memory than params_len, only the first OUTPUT_CHANNEL
     // channels are useful after merging results from tiling
@@ -372,7 +372,11 @@ uint32_t alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
     uint16_t tile_c = get_tile_c(conv_input);
     conv_params->n_tiles_c = (CHANNEL + tile_c - 1) / tile_c;
 
-    return output->params_len * conv_params->n_tiles_c;
+    uint32_t actual_params_len = output->params_len * conv_params->n_tiles_c;
+
+    dump_matrix(get_q15_param(output, 0), actual_params_len / 2);
+
+    return actual_params_len;
 }
 
 void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -489,14 +493,10 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
             // XXX: not using msp_scale_q15 as it does not do saturation and overflowed
             // values lead to incorrect prediction results.
             for (uint16_t chunk_idx = 0; chunk_idx < real_chunk_len; chunk_idx++) {
-                my_printf_debug("chunk_idx = %d" NEWLINE, chunk_idx);
 #ifdef WITH_PROGRESS_EMBEDDING
-                my_printf_debug("to_add[chunk_idx] = %d" NEWLINE, to_add[chunk_idx]);
                 to_add[chunk_idx] -= 0x4000;
-                my_printf_debug("to_add[chunk_idx] = %d" NEWLINE, to_add[chunk_idx]);
 #endif
                 to_add[chunk_idx] = __saturate(to_add[chunk_idx] * SCALE, INT16_MIN, INT16_MAX);
-                my_printf_debug("to_add[chunk_idx] = %d" NEWLINE NEWLINE, to_add[chunk_idx]);
             }
             if (tile_c_index != 0) {
                 msp_add_q15_params params3 = { .length = real_chunk_len };

@@ -22,6 +22,7 @@ Indexing policy:
 """
 
 SCALE = 30
+NUM_SLOTS = 2
 SLOT_PARAMETERS2 = 0b100
 SLOT_PARAMETERS = 0b11
 SLOT_TEST_SET = 0b10
@@ -350,6 +351,7 @@ with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
 #include "platform.h"
 
 #define SCALE {SCALE}
+#define NUM_SLOTS {NUM_SLOTS}
 #define SLOT_PARAMETERS2 {SLOT_PARAMETERS2}
 #define SLOT_PARAMETERS {SLOT_PARAMETERS}
 #define SLOT_TEST_SET {SLOT_TEST_SET}
@@ -414,7 +416,7 @@ uint8_t *{var_name} = _{var_name};
 
 with open('nvm.bin', 'wb') as f:
     f.write(NVM_SIZE * b'\0')
-    f.seek(CACHED_FILTERS_LEN + INTERMEDIATE_VALUES_SIZE)
+    f.seek(CACHED_FILTERS_LEN + NUM_SLOTS * INTERMEDIATE_VALUES_SIZE)
     for data_obj in outputs.values():
         data_obj.seek(0)
         f.write(data_obj.read())

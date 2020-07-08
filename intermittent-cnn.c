@@ -45,12 +45,6 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
                 if (prev_node->slot != SLOT_INTERMEDIATE_VALUES) {
                     continue;
                 }
-                output->params_offset = prev_node->params_offset + prev_node->params_len;
-                if (output->params_offset + needed_mem >= INTERMEDIATE_VALUES_SIZE) {
-                    // reuse the ring buffer
-                    // TODO: check if this is OK
-                    output->params_offset = 0;
-                }
                 break;
             }
         }

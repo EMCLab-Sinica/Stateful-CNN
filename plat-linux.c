@@ -23,8 +23,8 @@ uint8_t *parameters_data, *parameters2_data, *samples_data, *model_data, *labels
 uint16_t dma_invocations[COUNTERS_LEN];
 uint16_t dma_bytes[COUNTERS_LEN];
 
-uint8_t *intermediate_values(void) {
-    return nvm + CACHED_FILTERS_LEN;
+uint8_t *intermediate_values(uint8_t slot_id) {
+    return nvm + CACHED_FILTERS_LEN + slot_id * INTERMEDIATE_VALUES_SIZE;
 }
 
 Counters *counters() {
@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
         goto exit;
     }
     // Keep the order consistent with `outputs` in transform.py
-    parameters_data = intermediate_values() + INTERMEDIATE_VALUES_SIZE;
+    parameters_data = intermediate_values(NUM_SLOTS);
     parameters2_data = parameters_data + PARAMETERS_DATA_LEN;
     samples_data = parameters2_data + PARAMETERS2_DATA_LEN;
     model_data = samples_data + SAMPLES_DATA_LEN;

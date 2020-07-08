@@ -17,4 +17,4 @@ void plat_print_results(void);
 void setOutputValue(uint8_t value);
 void registerCheckpointing(uint8_t *addr, size_t len);
 // similar to double buffering
-uint8_t *intermediate_values(void);
+uint8_t *intermediate_values(uint8_t slot_id);
