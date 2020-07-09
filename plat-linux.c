@@ -8,12 +8,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
-#include <signal.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
-#include <sys/time.h>
 
 #define MEMCPY_DELAY_US 0
 
@@ -29,12 +27,6 @@ uint8_t *intermediate_values(uint8_t slot_id) {
 
 Counters *counters() {
     return (Counters*)(labels_data + LABELS_DATA_LEN);
-}
-
-void sig_handler(int sig_no) {
-    if (sig_no == SIGALRM) {
-        counters()->time_counters[counters()->counter_idx]++;
-    }
 }
 
 int main(int argc, char* argv[]) {
@@ -54,12 +46,6 @@ int main(int argc, char* argv[]) {
     samples_data = parameters2_data + PARAMETERS2_DATA_LEN;
     model_data = samples_data + SAMPLES_DATA_LEN;
     labels_data = model_data + MODEL_DATA_LEN;
-
-    struct itimerval interval;
-    interval.it_value.tv_sec = interval.it_interval.tv_sec = 0;
-    interval.it_value.tv_usec = interval.it_interval.tv_usec = 1000;
-    setitimer(ITIMER_REAL, &interval, NULL);
-    signal(SIGALRM, sig_handler);
 
 #ifdef USE_ARM_CMSIS
     my_printf("Use DSP from ARM CMSIS pack" NEWLINE);
