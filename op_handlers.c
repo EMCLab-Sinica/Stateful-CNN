@@ -60,8 +60,8 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     int16_t *data_baseptr = get_q15_param(data, 0);
 
 #ifdef WITH_PROGRESS_EMBEDDING
-    uint8_t do_flip_state = model->state_bit[data->slot] == model->state_bit[output->slot];
-    if (do_flip_state && model->state_bit[data->slot]) {
+    uint8_t do_flip_state = get_state_bit(model, data->slot) == get_state_bit(model, output->slot);
+    if (do_flip_state && get_state_bit(model, data->slot)) {
         int16_t *data_ptr = data_baseptr;
         uint32_t len = data->params_len / sizeof(int16_t);
         for (uint32_t idx = 0; idx < len; idx++) {
@@ -107,7 +107,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                     print_q15_debug(max_val);
                     my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
 #ifdef WITH_PROGRESS_EMBEDDING
-                    if (do_flip_state && !model->state_bit[data->slot]) {
+                    if (do_flip_state && !get_state_bit(model, data->slot)) {
                         max_val += 0x4000;
                     }
 #endif
@@ -223,7 +223,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     my_memcpy(buffer_a, get_q15_param(A, 0), A->dims[0] * A->dims[1] * sizeof(uint16_t));
 
 #ifdef WITH_PROGRESS_EMBEDDING
-    if (model->state_bit[A->slot]) {
+    if (get_state_bit(model, A->slot)) {
         for (uint16_t idx = 0; idx < A_len; idx++) {
             buffer_a[idx] -= 0x4000;
         }
@@ -292,7 +292,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     int16_t *data_ptr = data;
     int16_t threshold, offset;
 #ifdef WITH_PROGRESS_EMBEDDING
-    if (model->state_bit[X->slot]) {
+    if (get_state_bit(model, X->slot)) {
         threshold = 0x4000;
         offset = -0x4000;
     } else {
@@ -314,7 +314,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 #ifdef WITH_PROGRESS_EMBEDDING
     // XXX: make it a function and use it in all handlers
     // XXX: reduce # of values to fill
-    if (!model->state_bit[output->slot]) {
+    if (!get_state_bit(model, output->slot)) {
         int16_t *output_ptr = get_q15_param(output, 0);
         uint16_t fill_offset = output->params_len / sizeof(int16_t),
                  end = INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);

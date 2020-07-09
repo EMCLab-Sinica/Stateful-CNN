@@ -53,9 +53,9 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
         my_printf_debug("New params_offset = %d" NEWLINE, output->params_offset);
     }
 
-    my_printf_debug("State bit=%d" NEWLINE, model->state_bit[output->slot]);
+    my_printf_debug("State bit=%d" NEWLINE, get_state_bit(model, output->slot));
     handlers[cur_node->op_type](model, input, output, cur_node->flags);
-    my_printf_debug("State bit=%d" NEWLINE, model->state_bit[output->slot]);
+    my_printf_debug("State bit=%d" NEWLINE, get_state_bit(model, output->slot));
 
     counters()->counter_idx++;
     MY_ASSERT(counters()->counter_idx < COUNTERS_LEN);
@@ -191,5 +191,25 @@ void flip_state_bit(Model *model, uint8_t slot_id) {
     } else {
         model->state_bit[slot_id] = 1;
     }
+#else
+    UNUSED(model);
+    UNUSED(slot_id);
+#endif
+}
+
+uint8_t get_state_bit(Model *model, uint8_t slot_id) {
+#ifdef WITH_PROGRESS_EMBEDDING
+    switch (slot_id) {
+        case SLOT_PARAMETERS:
+        case SLOT_PARAMETERS2:
+        case SLOT_TEST_SET:
+            return 0;
+        default:
+            return model->state_bit[slot_id];
+    }
+#else
+    UNUSED(model);
+    UNUSED(slot_id);
+    ERROR_OCCURRED();
 #endif
 }

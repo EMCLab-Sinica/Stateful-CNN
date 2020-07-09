@@ -433,7 +433,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     conv_params->pending_filter_idx = 0;
     conv_params->OUTPUT_CHANNEL = OUTPUT_CHANNEL;
 #ifdef WITH_PROGRESS_EMBEDDING
-    conv_params->state_bit = model->state_bit[conv_input->slot];
+    conv_params->state_bit = get_state_bit(model, conv_input->slot);
 #endif
 
     for (uint16_t tile_c_offset = 0, tile_c_index = 0; tile_c_offset < CHANNEL ; tile_c_offset += tile_c, tile_c_index++) {
@@ -496,7 +496,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
             // values lead to incorrect prediction results.
             for (uint16_t chunk_idx = 0; chunk_idx < real_chunk_len; chunk_idx++) {
 #ifdef WITH_PROGRESS_EMBEDDING
-                if (model->state_bit[output->slot]) {
+                if (get_state_bit(model, output->slot)) {
                     to_add[chunk_idx] -= 0x4000;
                 }
 #endif
@@ -509,7 +509,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
             }
 #ifdef WITH_PROGRESS_EMBEDDING
             for (uint16_t chunk_idx = 0; chunk_idx < real_chunk_len; chunk_idx++) {
-                if (!model->state_bit[output->slot]) {
+                if (!get_state_bit(model, output->slot)) {
                     to_add[chunk_idx] += 0x4000;
                 }
             }
