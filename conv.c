@@ -127,7 +127,9 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 }
             }
 #ifdef WITH_PROGRESS_EMBEDDING
-            filter_tmp[conv_params->filter_offset - 1] = -0x4000;
+            if (!conv_params->state_bit) {
+                filter_tmp[conv_params->filter_offset - 1] = -0x4000;
+            }
 #endif
 
             msp_interleave_q15_params params;
@@ -300,10 +302,18 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
                     (int)(dest - lea_buffer));
     for (int32_t h = h_start; h <= h_end; h++) {
         int16_t *input_src_addr = input_addr + (conv_params->output_h + h) * conv_params->W * conv_params->tile_c + (conv_params->output_w + w_start) * conv_params->tile_c;
+        int16_t *dest_addr = dest + (w_start + field_size) * conv_params->tile_c;
         my_memcpy(
-            dest + (w_start + field_size) * conv_params->tile_c,
+            dest_addr,
             input_src_addr,
             size * sizeof(int16_t));
+        if (conv_params->state_bit) {
+            int16_t *input_ptr = dest_addr;
+            for (uint16_t idx = 0; idx < size; idx++) {
+                *input_ptr -= 0x4000;
+                input_ptr++;
+            }
+        }
         dest += conv_params->dest_offset;
     }
     uint16_t offset = conv_params->dest_offset - 1;
@@ -423,16 +433,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     conv_params->pending_filter_idx = 0;
     conv_params->OUTPUT_CHANNEL = OUTPUT_CHANNEL;
 #ifdef WITH_PROGRESS_EMBEDDING
-    conv_params->state_bit = model->state_bit;
-    // XXX
-    if (conv_params->state_bit) {
-        int16_t *input_ptr = get_q15_param(conv_input, 0);
-        uint32_t len = conv_input->params_len / sizeof(int16_t);
-        for (uint16_t idx = 0; idx < len; idx++) {
-            *input_ptr -= 0x4000;
-            input_ptr++;
-        }
-    }
+    conv_params->state_bit = model->state_bit[conv_input->slot];
 #endif
 
     for (uint16_t tile_c_offset = 0, tile_c_index = 0; tile_c_offset < CHANNEL ; tile_c_offset += tile_c, tile_c_index++) {
@@ -479,7 +480,8 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         dump_params_nhwc(output, tile_c_index * tiling_results_len);
     }
 
-    flip_state_bit(model);
+    // TODO: separate handle_conv into handle_conv and handle_conv_merge
+    flip_state_bit(model, output->slot);
 
     for (uint32_t tiling_results_offset = 0; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
         uint32_t real_chunk_len = MIN_VAL(chunk_len, tiling_results_len - tiling_results_offset);
@@ -494,7 +496,9 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
             // values lead to incorrect prediction results.
             for (uint16_t chunk_idx = 0; chunk_idx < real_chunk_len; chunk_idx++) {
 #ifdef WITH_PROGRESS_EMBEDDING
-                to_add[chunk_idx] -= 0x4000;
+                if (model->state_bit[output->slot]) {
+                    to_add[chunk_idx] -= 0x4000;
+                }
 #endif
                 to_add[chunk_idx] = __saturate(to_add[chunk_idx] * SCALE, INT16_MIN, INT16_MAX);
             }
@@ -503,6 +507,13 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
                 msp_status status = msp_add_q15(&params3, lea_buffer, to_add, lea_buffer);
                 msp_checkStatus(status);
             }
+#ifdef WITH_PROGRESS_EMBEDDING
+            for (uint16_t chunk_idx = 0; chunk_idx < real_chunk_len; chunk_idx++) {
+                if (!model->state_bit[output->slot]) {
+                    to_add[chunk_idx] += 0x4000;
+                }
+            }
+#endif
         }
         my_memcpy(output_baseptr + tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));
     }
@@ -513,5 +524,5 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 
     setOutputValue(0);
 
-    flip_state_bit(model);
+    flip_state_bit(model, output->slot);
 }

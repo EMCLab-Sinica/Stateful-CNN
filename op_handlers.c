@@ -60,7 +60,8 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     int16_t *data_baseptr = get_q15_param(data, 0);
 
 #ifdef WITH_PROGRESS_EMBEDDING
-    if (model->state_bit) {
+    uint8_t do_flip_state = model->state_bit[data->slot] == model->state_bit[output->slot];
+    if (do_flip_state && model->state_bit[data->slot]) {
         int16_t *data_ptr = data_baseptr;
         uint32_t len = data->params_len / sizeof(int16_t);
         for (uint32_t idx = 0; idx < len; idx++) {
@@ -106,7 +107,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                     print_q15_debug(max_val);
                     my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
 #ifdef WITH_PROGRESS_EMBEDDING
-                    if (!model->state_bit) {
+                    if (do_flip_state && !model->state_bit[data->slot]) {
                         max_val += 0x4000;
                     }
 #endif
@@ -132,7 +133,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
         dump_params(output);
     }
 
-    flip_state_bit(model);
+    flip_state_bit(model, output->slot);
 }
 
 uint32_t alloc_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -222,7 +223,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     my_memcpy(buffer_a, get_q15_param(A, 0), A->dims[0] * A->dims[1] * sizeof(uint16_t));
 
 #ifdef WITH_PROGRESS_EMBEDDING
-    if (model->state_bit) {
+    if (model->state_bit[A->slot]) {
         for (uint16_t idx = 0; idx < A_len; idx++) {
             buffer_a[idx] -= 0x4000;
         }
@@ -267,7 +268,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     my_printf_debug("handle_matmul output" NEWLINE);
     dump_params(output);
 
-    flip_state_bit(model);
+    flip_state_bit(model, output->slot);
 }
 
 void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -291,7 +292,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     int16_t *data_ptr = data;
     int16_t threshold, offset;
 #ifdef WITH_PROGRESS_EMBEDDING
-    if (model->state_bit) {
+    if (model->state_bit[X->slot]) {
         threshold = 0x4000;
         offset = -0x4000;
     } else {
@@ -310,7 +311,22 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     }
     dump_params_nhwc(output, 0);
 
-    flip_state_bit(model);
+#ifdef WITH_PROGRESS_EMBEDDING
+    // XXX: make it a function and use it in all handlers
+    // XXX: reduce # of values to fill
+    if (!model->state_bit[output->slot]) {
+        int16_t *output_ptr = get_q15_param(output, 0);
+        uint16_t fill_offset = output->params_len / sizeof(int16_t),
+                 end = INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);
+        my_printf_debug("Fill 0x4000 from %d", fill_offset);
+        my_printf_debug(" to %d" NEWLINE, end);
+        for (; fill_offset < end; fill_offset++) {
+            output_ptr[fill_offset] = 0x4000;
+        }
+    }
+#endif
+
+    flip_state_bit(model, output->slot);
 }
 
 void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {

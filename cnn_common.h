@@ -57,11 +57,11 @@ typedef struct Model {
     uint16_t running;
     uint16_t recovery;
     uint16_t run_counter;
-    uint16_t state_bit;
+    uint16_t state_bit[NUM_SLOTS];
     uint16_t sample_idx;
 } Model;
 
-_Static_assert(sizeof(Model) == 14, "Unexpected size for Model");
+_Static_assert(sizeof(Model) == 16, "Unexpected size for Model");
 
 typedef struct {
     uint16_t time_counters[COUNTERS_LEN];

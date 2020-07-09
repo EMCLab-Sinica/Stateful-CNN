@@ -53,9 +53,9 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
         my_printf_debug("New params_offset = %d" NEWLINE, output->params_offset);
     }
 
-    my_printf_debug("State bit=%d" NEWLINE, model->state_bit);
+    my_printf_debug("State bit=%d" NEWLINE, model->state_bit[output->slot]);
     handlers[cur_node->op_type](model, input, output, cur_node->flags);
-    my_printf_debug("State bit=%d" NEWLINE, model->state_bit);
+    my_printf_debug("State bit=%d" NEWLINE, model->state_bit[output->slot]);
 
     counters()->counter_idx++;
     MY_ASSERT(counters()->counter_idx < COUNTERS_LEN);
@@ -94,7 +94,9 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
         }
         counters()->counter_idx = 0;
         model->running = 1;
-        model->state_bit = 0;
+        for (uint8_t idx = 0; idx < NUM_SLOTS; idx++) {
+            model->state_bit[idx] = 0;
+        }
     } else {
         model->recovery = 1;
     }
@@ -182,12 +184,12 @@ void set_sample_index(Model *model, uint8_t index) {
     model->sample_idx = index;
 }
 
-void flip_state_bit(Model *model) {
+void flip_state_bit(Model *model, uint8_t slot_id) {
 #ifdef WITH_PROGRESS_EMBEDDING
-    if (model->state_bit) {
-        model->state_bit = 0;
+    if (model->state_bit[slot_id]) {
+        model->state_bit[slot_id] = 0;
     } else {
-        model->state_bit = 1;
+        model->state_bit[slot_id] = 1;
     }
 #endif
 }
