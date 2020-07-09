@@ -211,11 +211,13 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #endif
     /* END dump data */
 
-    int16_t *output_baseptr = get_q15_param(conv_params->output, conv_params->tile_c_index * conv_params->OUTPUT_H * conv_params->OUTPUT_W * conv_params->OUTPUT_CHANNEL);
+    // use NWHC so that output is written continuously on the address space
+    int16_t *output_baseptr = get_q15_param(conv_params->output, 0);
     int16_t *output_data = output_baseptr +
-            conv_params->conv_idx +
-            (conv_params->output_h + offset_h) / conv_params->stride * conv_params->OUTPUT_W * conv_params->OUTPUT_CHANNEL +
-            conv_params->output_w / conv_params->stride * conv_params->OUTPUT_CHANNEL;
+            conv_params->tile_c_index * conv_params->OUTPUT_W * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL +   // n
+            conv_params->output_w / conv_params->stride * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL +         // w
+            (conv_params->output_h + offset_h) / conv_params->stride * conv_params->OUTPUT_CHANNEL +                    // h
+            conv_params->conv_idx;                                                                                      // c
     my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - output_baseptr));
     MY_ASSERT((uint8_t*)(output_data + n_filters) < intermediate_values(NUM_SLOTS));
 #if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
@@ -378,6 +380,7 @@ uint32_t alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
     output->dims[2] = conv_params->OUTPUT_H = (H - conv_params->offset_h * 2) / conv_params->stride;
     output->dims[3] = conv_params->OUTPUT_W = (W - conv_params->offset_w * 2) / conv_params->stride;
     output->params_len = OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W * sizeof(int16_t);
+    output->flags = TRANSPOSED;
 
     uint16_t tile_c = get_tile_c(conv_input);
     conv_params->n_tiles_c = (CHANNEL + tile_c - 1) / tile_c;

@@ -47,9 +47,11 @@ typedef struct ParameterInfo {
     uint16_t tile_c;
     // uint8_t is not enough. For example, fully connected layer in MNIST has dims 256x1
     uint16_t dims[4];
+    uint8_t flags;
+    uint8_t dummy[3]; /* for explicit memory alignment */
 } ParameterInfo;
 
-_Static_assert(sizeof(ParameterInfo) == 20, "Unexpected size for ParameterInfo");
+_Static_assert(sizeof(ParameterInfo) == 24, "Unexpected size for ParameterInfo");
 
 typedef struct Model {
     uint16_t nodes_len;

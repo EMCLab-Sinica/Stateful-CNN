@@ -20,6 +20,7 @@ ops = {
 other_flags = [
     'AUTO_PAD_VALID',
     'NHWC2NCHW',
+    'TRANSPOSED',
 ]
 
 with open('ops.py', 'w') as f_py, open('ops.h', 'w') as f_h, open('ops.c', 'w') as f_c:

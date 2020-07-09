@@ -13,3 +13,4 @@ ops["Squeeze"] = 10
 ops["Transpose"] = 11
 AUTO_PAD_VALID = 1
 NHWC2NCHW = 2
+TRANSPOSED = 4

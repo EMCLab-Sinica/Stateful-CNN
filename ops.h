@@ -40,3 +40,4 @@ void handle_transpose(struct Model *model, struct ParameterInfo *input[], struct
 uint32_t alloc_transpose(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
 #define AUTO_PAD_VALID 1
 #define NHWC2NCHW 2
+#define TRANSPOSED 4

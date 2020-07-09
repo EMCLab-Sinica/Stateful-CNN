@@ -71,7 +71,14 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     }
 #endif
 
-    int16_t offset_h = W * CHANNEL, offset_w = CHANNEL;
+    int16_t offset_h, offset_w;
+    if (data->flags & TRANSPOSED) {
+        offset_h = CHANNEL;
+        offset_w = H * CHANNEL;
+    } else {
+        offset_h = W * CHANNEL;
+        offset_w = CHANNEL;
+    }
     int16_t *output_baseptr = get_q15_param(output, 0);
     for (uint16_t tile_c_offset = 0; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
         uint16_t real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);

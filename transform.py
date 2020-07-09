@@ -299,14 +299,19 @@ for params in parameters:
             outputs['model'].write(to_bytes(64, size=8)) # bitwidth
         else:
             assert False
-        outputs['model'].write(to_bytes(slot.slot_id, size=8))    # slot
-        outputs['model'].write(to_bytes(0, size=16))             # tile_c
+        outputs['model'].write(to_bytes(slot.slot_id, size=8))  # slot
+        outputs['model'].write(to_bytes(0, size=16))            # tile_c
         print('dims = {}, length = {}'.format(params.dims, data_len))
         for dim in params.dims:
             outputs['model'].write(to_bytes(dim))
         # dims are always 4 uint16_t's in C
         for _ in range(4 - len(params.dims)):
             outputs['model'].write(to_bytes(0))
+
+    # common to input and non-inputs
+    outputs['model'].write(to_bytes(0, size=8))                 # flags
+    for _ in range(3):
+        outputs['model'].write(to_bytes(0, size=8))             # dummy
 
 # Placeholder for ParameterInfo of intermediate values
 for idx, n in enumerate(nodes):
@@ -317,6 +322,9 @@ for idx, n in enumerate(nodes):
     outputs['model'].write(to_bytes(0, size=16))  # tile_c
     for _ in range(4):  # dims[4]
         outputs['model'].write(to_bytes(0))
+    outputs['model'].write(to_bytes(0, size=8))     # flags
+    for _ in range(3):
+        outputs['model'].write(to_bytes(0, size=8)) # dummy
 
 inputs_data.seek(0)
 outputs['model'].write(inputs_data.read())
