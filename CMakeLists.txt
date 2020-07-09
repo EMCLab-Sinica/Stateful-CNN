@@ -4,8 +4,7 @@ project(intermittent-cnn)
 
 option(USE_ARM_CMSIS "Use DSP from ARM CMSIS pack" OFF)
 
-set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wstrict-prototypes -Wshadow -Wundef -g -O0")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wstrict-prototypes -Wshadow -Wundef -g -O0 -std=c11 -pedantic")
 
 set(DSPLIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/TI-DSPLib)
 set(ARM_CMSIS_DSP_PATH ${CMAKE_CURRENT_SOURCE_DIR}/ARM-CMSIS)
