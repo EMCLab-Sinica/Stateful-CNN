@@ -102,6 +102,12 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         };
         msp_status status = msp_fill_q15(&fill_params, filter_tmp);
         msp_checkStatus(status);
+#else
+        int16_t *filter_tmp = conv_params->filter_buffer_addr;
+
+        arm_fill_q15(0, filter_tmp, n_filters * conv_params->filter_offset);
+#endif
+
 
         uint16_t buffer_size = sizeof(int16_t) * conv_params->tile_c;
         uint16_t filter_src_offset = conv_params->kH * conv_params->kW * conv_params->CHANNEL;
@@ -132,6 +138,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             }
 #endif
 
+#ifndef USE_ARM_CMSIS
             msp_interleave_q15_params params;
             params.length = p_matrix_mpy_params->srcBRows;
             params.numChannels = n_filters;
@@ -142,22 +149,11 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 conv_params->filter_buffer_addr /* dst */
             );
             msp_checkStatus(status);
-        }
 #else
-        filter_addr = get_q15_param(
-            conv_params->conv_filter,
-            conv_params->conv_idx * conv_params->filter_offset);
-        uint16_t buffer_size = sizeof(int16_t) * conv_params->filter_offset * conv_params->filter_limit;
-        my_memcpy(conv_params->filter_buffer_addr, filter_addr, buffer_size);
-#ifdef WITH_PROGRESS_EMBEDDING
-        for (uint16_t idx = 0; idx < conv_params->filter_limit; idx++) {
-            uint16_t offset = (idx + 1) * conv_params->filter_offset - (conv_params->truncated?2:1);
-            my_printf_debug("offset for the bias with embedded progress = %d" NEWLINE, offset);
-            conv_params->filter_buffer_addr[offset] -= 0x4000;
+            filter_tmp += conv_params->filter_offset;
+#endif
         }
-#endif // WITH_PROGRESS_EMBEDDING
 
-#endif // USE_ARM_CMSIS
         conv_params->cached_filter_idx = conv_params->conv_idx;
         conv_params->cached_tile_c_offset = conv_params->tile_c_offset;
     }
