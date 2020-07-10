@@ -507,7 +507,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         }
         for (; output_w < W - conv_params->offset_w; output_w += conv_params->stride) {
             uint16_t output_h = conv_params->offset_h;
-            if (output_w == conv_params->offset_w + initial_w) {
+            if (tile_c_index == initial_n && output_w == conv_params->offset_w + initial_w) {
                 output_h += initial_h;
             }
             for (; output_h < H - conv_params->offset_h; output_h += conv_params->tile_h) {
