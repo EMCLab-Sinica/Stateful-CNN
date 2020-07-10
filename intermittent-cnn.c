@@ -213,3 +213,11 @@ uint8_t get_state_bit(Model *model, uint8_t slot_id) {
     ERROR_OCCURRED();
 #endif
 }
+
+uint8_t get_value_state_bit(int16_t val) {
+    if (val < 0x2000 && val >= -0x2000) {
+        return 0;
+    } else {
+        return 1;
+    }
+}
