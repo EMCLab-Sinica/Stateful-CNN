@@ -1,5 +1,6 @@
 #include "debug.h"
 #include "cnn_common.h"
+#include "ops.h"
 
 void print_q15(int16_t val) {
 #if defined(__MSP430__) || defined(__MSP432__)
@@ -85,14 +86,20 @@ void dump_params_nhwc(struct ParameterInfo *cur_param, size_t offset) {
     H = cur_param->dims[2];
     W = cur_param->dims[3];
     // check_params_len(cur_param);
-    for (uint16_t i = 0; i < NUM; i++) {
-        my_printf_debug("Matrix %d" NEWLINE, i);
-        for (uint16_t j = 0; j < CHANNEL; j++) {
-            my_printf_debug("Channel %d" NEWLINE, j);
-            for (uint16_t k = 0; k < H; k++) {
-                for (uint16_t l = 0; l < W; l++) {
-                    // internal format is NHWC
-                    dump_value(cur_param, offset + i * H * W * CHANNEL + k * W * CHANNEL + l * CHANNEL + j);
+    for (uint16_t n = 0; n < NUM; n++) {
+        my_printf_debug("Matrix %d" NEWLINE, n);
+        for (uint16_t c = 0; c < CHANNEL; c++) {
+            my_printf_debug("Channel %d" NEWLINE, c);
+            for (uint16_t h = 0; h < H; h++) {
+                for (uint16_t w = 0; w < W; w++) {
+                    // internal format is NWHC (transposed) or NHWC
+                    size_t offset2;
+                    if (cur_param->flags & TRANSPOSED) {
+                        offset2 = n * W * H * CHANNEL + w * H * CHANNEL + h * CHANNEL + c;
+                    } else {
+                        offset2 = n * H * W * CHANNEL + h * W * CHANNEL + w * CHANNEL + c;
+                    }
+                    dump_value(cur_param, offset + offset2);
                 }
                 my_printf_debug(NEWLINE);
             }
