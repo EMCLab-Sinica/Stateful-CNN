@@ -89,7 +89,20 @@ for n in g.node:
         replaced_squeeze_map[n.output[0]] = input_name
         break
 
-new_nodes = [n for n in g.node if n.output[0] not in replaced_squeeze_map.keys()]
+# Split Conv into Conv and ConvMerge (for OFM scaling up and merge of OFMs from  channel tiling)
+new_nodes = []
+for idx, n in enumerate(g.node):
+    new_nodes.append(n)
+    if n.op_type != 'Conv':
+        continue
+    output_name = n.output[0]
+    new_node = onnx.NodeProto()
+    new_node.op_type = 'ConvMerge'
+    new_node.input[:] = n.output[:] = [output_name + '_before_merge']
+    new_node.output[:] = [output_name]
+    new_nodes.append(new_node)
+
+new_nodes = [n for n in new_nodes if n.output[0] not in replaced_squeeze_map.keys()]
 for n in new_nodes:
     for idx, inp in enumerate(n.input):
         n.input[idx] = replaced_squeeze_map.get(inp, inp)

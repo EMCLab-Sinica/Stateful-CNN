@@ -5,21 +5,24 @@ struct ParameterInfo;
 #define Add 0
 #define Concat 1
 #define Conv 2
-#define Dropout 3
-#define GlobalAveragePool 4
-#define MatMul 5
-#define MaxPool 6
-#define Relu 7
-#define Reshape 8
-#define Softmax 9
-#define Squeeze 10
-#define Transpose 11
+#define ConvMerge 3
+#define Dropout 4
+#define GlobalAveragePool 5
+#define MatMul 6
+#define MaxPool 7
+#define Relu 8
+#define Reshape 9
+#define Softmax 10
+#define Squeeze 11
+#define Transpose 12
 void handle_add(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
 uint32_t alloc_add(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
 void handle_concat(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
 uint32_t alloc_concat(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
 void handle_conv(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
 uint32_t alloc_conv(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
+void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
+uint32_t alloc_convmerge(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
 void handle_dropout(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
 uint32_t alloc_dropout(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
 void handle_globalaveragepool(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);
