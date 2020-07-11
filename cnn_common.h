@@ -115,7 +115,7 @@ uint16_t get_next_slot(ParameterInfo *param);
  *       Operation handlers       *
  **********************************/
 typedef void (*handler)(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
-typedef uint32_t (*allocator)(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
+typedef void (*allocator)(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
 // below are defined in ops.c
 extern uint8_t expected_inputs_len[];
 extern uint8_t inplace_update[];

@@ -13,7 +13,7 @@ int16_t lea_buffer[LEA_BUFFER_SIZE];
 
 #define RESHAPE_AUTO_DIM (uint16_t)(-1)
 
-uint32_t alloc_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void alloc_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     uint16_t stride = flags & 0x0f;
 
     ParameterInfo *data = input[0];
@@ -29,8 +29,6 @@ uint32_t alloc_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t f
     output->dims[1] = CHANNEL;
     output->dims[2] = new_H;
     output->dims[3] = new_W;
-
-    return 0;
 }
 
 void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -143,7 +141,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     flip_state_bit(model, output->slot);
 }
 
-uint32_t alloc_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void alloc_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(flags);
 
     ParameterInfo *A = input[0], *B = input[1];
@@ -154,8 +152,6 @@ uint32_t alloc_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags
     output->slot = get_next_slot(A);
     output->dims[0] = 1;
     output->dims[1] = A->dims[1];
-
-    return 0;
 }
 
 void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -179,7 +175,7 @@ void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
     my_memcpy(get_q15_param(output, 0), buffer_a, output->params_len);
 }
 
-uint32_t alloc_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void alloc_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(flags);
 
     ParameterInfo *A = input[0], *B = input[1];
@@ -191,8 +187,6 @@ uint32_t alloc_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t fl
     output->params_len = output_len * sizeof(int16_t);
     output->bitwidth = 16;
     output->slot = get_next_slot(A);
-
-    return 0;
 }
 
 void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -428,7 +422,7 @@ void handle_dropout(Model *model, ParameterInfo *input[], ParameterInfo *output,
     ERROR_OCCURRED();
 }
 
-uint32_t alloc_globalaveragepool(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void alloc_globalaveragepool(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(flags);
 
     ParameterInfo *data = input[0];
@@ -441,8 +435,6 @@ uint32_t alloc_globalaveragepool(ParameterInfo *input[], ParameterInfo *output, 
     output->params_len = output_len * sizeof(int16_t);
     output->bitwidth = 16;
     output->slot = SLOT_INTERMEDIATE_VALUES;
-
-    return 0;
 }
 
 void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {

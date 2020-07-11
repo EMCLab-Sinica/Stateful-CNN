@@ -4,8 +4,6 @@
 
 uint8_t expected_inputs_len[] = {2, 2, 3, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, };
 
-uint8_t inplace_update[] = {0, 1, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, };
-
 handler handlers[] = {
 	handle_add,
 	handle_concat,
@@ -36,51 +34,38 @@ allocator allocators[] = {
 	alloc_squeeze,
 	alloc_transpose,
 };
-uint32_t alloc_concat(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)
+void alloc_concat(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)
 {
 	UNUSED(flags);
 	my_memcpy(output, input[0], sizeof(struct ParameterInfo));
-	return 0;
 }
-uint32_t alloc_convmerge(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)
+void alloc_dropout(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)
 {
 	UNUSED(flags);
 	my_memcpy(output, input[0], sizeof(struct ParameterInfo));
-	return 0;
 }
-uint32_t alloc_dropout(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)
+void alloc_relu(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)
 {
 	UNUSED(flags);
 	my_memcpy(output, input[0], sizeof(struct ParameterInfo));
-	return 0;
 }
-uint32_t alloc_relu(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)
+void alloc_reshape(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)
 {
 	UNUSED(flags);
 	my_memcpy(output, input[0], sizeof(struct ParameterInfo));
-	return 0;
 }
-uint32_t alloc_reshape(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)
+void alloc_softmax(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)
 {
 	UNUSED(flags);
 	my_memcpy(output, input[0], sizeof(struct ParameterInfo));
-	return 0;
 }
-uint32_t alloc_softmax(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)
+void alloc_squeeze(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)
 {
 	UNUSED(flags);
 	my_memcpy(output, input[0], sizeof(struct ParameterInfo));
-	return 0;
 }
-uint32_t alloc_squeeze(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)
+void alloc_transpose(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)
 {
 	UNUSED(flags);
 	my_memcpy(output, input[0], sizeof(struct ParameterInfo));
-	return 0;
-}
-uint32_t alloc_transpose(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)
-{
-	UNUSED(flags);
-	my_memcpy(output, input[0], sizeof(struct ParameterInfo));
-	return 0;
 }

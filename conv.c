@@ -342,7 +342,7 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
     conv_params->pending_filter_idx = 0;
 }
 
-uint32_t alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1];
 
     MY_ASSERT(conv_input->bitwidth == 16 && conv_filter->bitwidth == 16);
@@ -366,6 +366,8 @@ uint32_t alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
     } else {
         conv_params->offset_h = conv_params->offset_w = 0;
     }
+    conv_params->tile_c = get_tile_c(conv_input);
+    conv_params->n_tiles_c = (CHANNEL + conv_params->tile_c - 1) / conv_params->tile_c;
 
     /* XXX: extend flags; assume dilation=(1, 1) for now */
     output->bitwidth = 16;
@@ -376,15 +378,10 @@ uint32_t alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flag
     output->dims[1] = OUTPUT_CHANNEL;
     output->dims[2] = conv_params->OUTPUT_H = (H - conv_params->offset_h * 2) / conv_params->stride;
     output->dims[3] = conv_params->OUTPUT_W = (W - conv_params->offset_w * 2) / conv_params->stride;
-    output->params_len = OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W * sizeof(int16_t);
+    output->params_len = conv_params->n_tiles_c * OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W * sizeof(int16_t);
     output->flags = TRANSPOSED;
 
-    conv_params->tile_c = get_tile_c(conv_input);
-    conv_params->n_tiles_c = (CHANNEL + conv_params->tile_c - 1) / conv_params->tile_c;
-
     output->flags |= conv_params->n_tiles_c << 4;
-
-    return output->params_len * conv_params->n_tiles_c;
 }
 
 void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -436,7 +433,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     // recovery from state bits
     int16_t *baseptr = get_q15_param(output, 0);
     int16_t *start = baseptr;
-    int16_t *end = baseptr + output->params_len * conv_params->n_tiles_c / 2;
+    int16_t *end = baseptr + output->params_len / 2;
     uint8_t new_output_state_bit = get_state_bit(model, output->slot) ? 0 : 1;
     uint32_t first_unfinished_value_offset;
     my_printf_debug("new_output_state_bit = %d" NEWLINE, new_output_state_bit);
@@ -533,6 +530,20 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 #endif
 
     flip_state_bit(model, output->slot);
+}
+
+void alloc_convmerge(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags) {
+    UNUSED(flags);
+
+    ParameterInfo *data = input[0];
+
+    my_memcpy(output, data, sizeof(struct ParameterInfo));
+
+    uint16_t OUTPUT_CHANNEL = data->dims[1],
+             OUTPUT_H = data->dims[2],
+             OUTPUT_W = data->dims[3];
+
+    output->params_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W * sizeof(int16_t);
 }
 
 void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags) {

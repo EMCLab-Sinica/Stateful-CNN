@@ -33,22 +33,8 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
      * individual operation handlers */
     ParameterInfo *output = &(parameter_info[node_idx + model->n_input]);
     output->params_offset = 0;
-    uint32_t needed_mem = allocators[cur_node->op_type](input, output, cur_node->flags);
-    if (!needed_mem && !inplace_update[cur_node->op_type]) {
-        needed_mem = output->params_len;
-    }
-    my_printf_debug("Needed mem = %d" NEWLINE, needed_mem);
-    if (needed_mem) {
-        for (int16_t prev_node_idx = node_idx - 1; prev_node_idx >= 0; prev_node_idx--) {
-            if (!inplace_update[nodes[prev_node_idx].op_type]) {
-                ParameterInfo *prev_node = &(parameter_info[prev_node_idx + model->n_input]);
-                if (prev_node->slot != SLOT_INTERMEDIATE_VALUES) {
-                    continue;
-                }
-                break;
-            }
-        }
-    }
+    allocators[cur_node->op_type](input, output, cur_node->flags);
+    my_printf_debug("Needed mem = %d" NEWLINE, output->params_len);
     if (output->slot == SLOT_INTERMEDIATE_VALUES) {
         my_printf_debug("New params_offset = %d" NEWLINE, output->params_offset);
     }

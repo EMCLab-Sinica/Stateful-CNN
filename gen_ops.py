@@ -5,7 +5,9 @@ ops = {
     # Concat actually accepts 1~infinity inputs. Use 2 to fit SqueezeNet
     'Concat': [2, 1],
     'Conv': [3, 0],
-    'ConvMerge': [1, 1],
+    # ConvMerge updates OFM in-place, but set inplace_update=0 here so that we
+    # can use customized alloc_convmerge.
+    'ConvMerge': [1, 0],
     'Dropout': [1, 1],
     'GlobalAveragePool': [1, 0],
     'MatMul': [2, 0],
@@ -39,14 +41,10 @@ with open('ops.py', 'w') as f_py, open('ops.h', 'w') as f_h, open('ops.c', 'w') 
     for op in keys:
         f_c.write(f'{ops[op][0]}, ')
     f_c.write('};\n\n')
-    f_c.write('uint8_t inplace_update[] = {')
-    for op in keys:
-        f_c.write(f'{ops[op][1]}, ')
-    f_c.write('};\n\n')
 
     for op in keys:
         f_h.write('void handle_{}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
-        f_h.write('uint32_t alloc_{}(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
+        f_h.write('void alloc_{}(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
     f_c.write('handler handlers[] = {\n')
     for op in keys:
         f_c.write(f'\thandle_{op},\n'.lower())
@@ -57,11 +55,10 @@ with open('ops.py', 'w') as f_py, open('ops.h', 'w') as f_h, open('ops.c', 'w') 
     f_c.write('};\n')
     for op in keys:
         if ops[op][1]:
-            f_c.write(f'uint32_t alloc_{op.lower()}(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)\n')
+            f_c.write(f'void alloc_{op.lower()}(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)\n')
             f_c.write('{\n')
             f_c.write('\tUNUSED(flags);\n')
             f_c.write('\tmy_memcpy(output, input[0], sizeof(struct ParameterInfo));\n')
-            f_c.write('\treturn 0;\n')
             f_c.write('}\n')
 
     for idx, name in enumerate(other_flags):
