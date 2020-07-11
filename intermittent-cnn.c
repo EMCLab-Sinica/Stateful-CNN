@@ -39,9 +39,13 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
         my_printf_debug("New params_offset = %d" NEWLINE, output->params_offset);
     }
 
+#ifdef WITH_PROGRESS_EMBEDDING
     my_printf_debug("State bit=%d" NEWLINE, get_state_bit(model, output->slot));
+#endif
     handlers[cur_node->op_type](model, input, output, cur_node->flags);
+#ifdef WITH_PROGRESS_EMBEDDING
     my_printf_debug("State bit=%d" NEWLINE, get_state_bit(model, output->slot));
+#endif
 
     counters()->counter_idx++;
     MY_ASSERT(counters()->counter_idx < COUNTERS_LEN);
@@ -249,6 +253,8 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
 
     return first_unfinished_value_offset;
 #else
+    UNUSED(model);
+    UNUSED(output);
     return 0;
 #endif
 }
