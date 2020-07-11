@@ -430,38 +430,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     conv_params->state_bit = get_state_bit(model, conv_input->slot);
 #endif
 
-    // recovery from state bits
-    int16_t *baseptr = get_q15_param(output, 0);
-    int16_t *start = baseptr;
-    int16_t *end = baseptr + output->params_len / 2;
-    uint8_t new_output_state_bit = get_state_bit(model, output->slot) ? 0 : 1;
-    uint32_t first_unfinished_value_offset;
-    my_printf_debug("new_output_state_bit = %d" NEWLINE, new_output_state_bit);
-
-    while (1) {
-        // dump_matrix(start, end - start);
-        int16_t *middle = start + (end - start) / 2;
-        if (middle == start || middle == end) {
-            if (get_value_state_bit(*start) != new_output_state_bit) {
-                first_unfinished_value_offset = start - baseptr;
-            } else if (get_value_state_bit(*end) != new_output_state_bit) {
-                first_unfinished_value_offset = end - baseptr;
-            } else {
-                ERROR_OCCURRED();
-            }
-            break;
-        }
-        if (get_value_state_bit(*middle) == new_output_state_bit) {
-            start = middle;
-        } else {
-            end = middle;
-        }
-        my_printf_debug("offset of start = %" PRId64, start - baseptr);
-        my_printf_debug(", offset of end = %" PRId64 NEWLINE, end - baseptr);
-    }
-
-    my_printf_debug("first_unfinished_value_offset = %d" NEWLINE, first_unfinished_value_offset);
-
+    uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
     // Dimensions: NWHC
     uint16_t initial_c = first_unfinished_value_offset % OUTPUT_CHANNEL;
     first_unfinished_value_offset /= OUTPUT_CHANNEL;
@@ -548,6 +517,8 @@ void alloc_convmerge(struct ParameterInfo *input[], struct ParameterInfo *output
 
 void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags) {
     UNUSED(flags);
+
+    // XXX: make this function idempotent
 
     // Do not use conv_params here as its intialization in alloc_conv and
     // handle_conv might be skipped if the Conv node has finished.

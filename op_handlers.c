@@ -273,16 +273,13 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 }
 
 void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-#ifndef WITH_PROGRESS_EMBEDDING
-    UNUSED(model);
-#endif
-
     UNUSED(flags);
 
     my_printf_debug("ReLu!" NEWLINE);
 
+    uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
+
     ParameterInfo *X = input[0];
-    my_memcpy(output, X, sizeof(ParameterInfo));
 
     /* XXX: use LEA? */
     uint16_t bitwidth = X->bitwidth;
@@ -303,7 +300,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 #else
     threshold = offset = 0;
 #endif
-    for (uint16_t i = 0; i < data_len; i++) {
+    for (uint16_t i = first_unfinished_value_offset; i < data_len; i++) {
         if (*data_ptr < threshold) {
             *data_ptr = threshold;
         }
