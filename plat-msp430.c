@@ -21,7 +21,7 @@
 // TODO
 static uint8_t *_intermediate_values;
 #else
-#pragma DATA_SECTION(_intermediate_values, ".nvm")
+#pragma DATA_SECTION(_intermediate_values, ".nvm2")
 static uint8_t _intermediate_values[NUM_SLOTS * INTERMEDIATE_VALUES_SIZE];
 #endif
 uint8_t *intermediate_values(uint8_t slot_id) {
