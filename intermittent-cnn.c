@@ -251,6 +251,15 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
 
     my_printf_debug("first_unfinished_value_offset = %d" NEWLINE, first_unfinished_value_offset);
 
+#ifndef MY_NDEBUG
+    for (uint32_t idx = 0; idx < first_unfinished_value_offset; idx++) {
+        MY_ASSERT(get_value_state_bit(baseptr[idx]) == new_output_state_bit);
+    }
+    for (uint32_t idx = first_unfinished_value_offset; idx < output->params_len / 2; idx++) {
+        MY_ASSERT(get_value_state_bit(baseptr[idx]) != new_output_state_bit);
+    }
+#endif
+
     return first_unfinished_value_offset;
 #else
     UNUSED(model);

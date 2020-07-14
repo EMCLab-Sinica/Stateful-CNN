@@ -21,7 +21,7 @@ Indexing policy:
     len(g.input)~ : other (hidden) nodes
 """
 
-SCALE = 30
+SCALE = 60
 NUM_SLOTS = 2
 SLOT_PARAMETERS2 = 0b100
 SLOT_PARAMETERS = 0b11
