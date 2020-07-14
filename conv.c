@@ -489,7 +489,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         }
     }
 
-#ifdef NDEBUG
+#ifndef MY_NDEBUG
     uint32_t tiling_results_len = OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W;
 
     my_printf_debug("handle_conv output" NEWLINE);
