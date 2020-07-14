@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <getopt.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -30,12 +31,26 @@ Counters *counters() {
 }
 
 int main(int argc, char* argv[]) {
-    int nvm_fd, ret = 0;
+    int ret = 0, opt_ch, read_only = 0, n_samples = 0;
+
+    while((opt_ch = getopt(argc, argv, "r")) != -1) {
+        switch (opt_ch) {
+            case 'r':
+                read_only = 1;
+                break;
+            default:
+                printf("Usage: %s [-r] [n_samples]\n", argv[0]);
+                return 1;
+        }
+    }
+    if (argv[optind]) {
+        n_samples = atoi(argv[optind]);
+    }
 
     chdir(MY_SOURCE_DIR);
 
-    nvm_fd = open("nvm.bin", O_RDWR);
-    nvm = mmap(NULL, NVM_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, nvm_fd, 0);
+    int nvm_fd = open("nvm.bin", O_RDWR);
+    nvm = mmap(NULL, NVM_SIZE, PROT_READ|PROT_WRITE, read_only ? MAP_PRIVATE : MAP_SHARED, nvm_fd, 0);
     if (nvm == MAP_FAILED) {
         perror("mmap() failed");
         goto exit;
@@ -53,14 +68,7 @@ int main(int argc, char* argv[]) {
     my_printf("Use TI DSPLib" NEWLINE);
 #endif
 
-    if (argc >= 3) {
-        printf("Usage: %s [n_samples]\n", argv[0]);
-        ret = 1;
-    } else if (argc == 2) {
-        run_cnn_tests(atoi(argv[1]));
-    } else {
-        run_cnn_tests(0);
-    }
+    run_cnn_tests(n_samples);
 
     for (uint16_t counter_idx = 0; counter_idx < COUNTERS_LEN; counter_idx++) {
         dma_invocations[counter_idx] = 0;
