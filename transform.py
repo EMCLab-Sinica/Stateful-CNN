@@ -10,7 +10,6 @@ import onnx
 import onnx.helper
 import numpy as np
 
-import ops
 from utils import load_data, load_data_cifar10
 
 """
@@ -33,6 +32,34 @@ N_SAMPLES = 20
 COUNTERS_LEN = 64
 NVM_SIZE = 512 * 1024
 
+# https://github.com/onnx/onnx/blob/master/docs/Operators.md
+# [expected_inputs_len, inplace_update]
+ops = {
+    'Add': [2, 0],
+    # Concat actually accepts 1~infinity inputs. Use 2 to fit SqueezeNet
+    'Concat': [2, 1],
+    'Conv': [3, 0],
+    'ConvMerge': [1, 0],
+    'Dropout': [1, 1],
+    'GlobalAveragePool': [1, 0],
+    'MatMul': [2, 0],
+    'MaxPool': [1, 0],
+    'Relu': [1, 1],
+    'Reshape': [2, 1],
+    'Softmax': [1, 1],
+    'Squeeze': [1, 1],
+    # XXX: Transpose does nothing as we happens to need NHWC
+    'Transpose': [1, 1],
+}
+
+other_flags = [
+    'AUTO_PAD_VALID',
+    'NHWC2NCHW',
+    'TRANSPOSED',
+]
+
+def op_flag(flag):
+    return 2 ** other_flags.index(flag)
 
 def _Q15(num):
     """Transform a floating point number to TI's fixed point _q15 format"""
@@ -145,7 +172,7 @@ for idx, n in enumerate(nodes):
         conv_param_names.add(n.input[1])
         auto_pad = get_attr(n, 'auto_pad')
         if auto_pad == b'VALID':
-            n.flags += ops.AUTO_PAD_VALID * 0x100
+            n.flags += op_flag('AUTO_PAD_VALID') * 0x100
     if n.op_type == 'MaxPool':
         kernel_shape = get_attr(n, 'kernel_shape')
         if kernel_shape is not None:
@@ -154,7 +181,7 @@ for idx, n in enumerate(nodes):
         stride = get_attr(n, 'strides')[0]
         n.flags += stride
     if n.op_type == 'Reshape' and prev_node and prev_node.op_type == 'MaxPool':
-        prev_node.flags += ops.NHWC2NCHW * 0x100
+        prev_node.flags += op_flag('NHWC2NCHW') * 0x100
     names[output[0]] = idx + n_input
     prev_node = n
 
@@ -247,7 +274,7 @@ for node in model:
     for inp in node.inputs:
         # the lowest bit is used as a flag in topological sort
         inputs_data.write(to_bytes(inp * 2))
-    outputs['model'].write(to_bytes(ops.ops[node.op_type]))
+    outputs['model'].write(to_bytes(list(ops.keys()).index(node.op_type)))
     outputs['model'].write(to_bytes(node.flags))
     outputs['model'].write(to_bytes(0))  # Node.scheduled
 
@@ -368,13 +395,14 @@ with open('images/ans.txt', 'w') as f:
 outputs['counters'].write(b'\0' * (4 * COUNTERS_LEN + 2))
 
 with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
-    output_c.write('''
-#include "data.h"
-''')
     output_h.write(f'''
 #pragma once
+
 #include <stdint.h>
 #include "platform.h"
+
+struct ParameterInfo;
+struct Model;
 
 #define SCALE {SCALE}
 #define NUM_SLOTS {NUM_SLOTS}
@@ -386,7 +414,45 @@ with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
 #define CACHED_FILTERS_LEN {CACHED_FILTERS_LEN}
 #define COUNTERS_LEN {COUNTERS_LEN}
 #define NVM_SIZE {NVM_SIZE}
+
 ''')
+    output_c.write('''
+#include "data.h"
+#include "cnn_common.h"
+''')
+
+    # ops
+    keys = list(ops.keys())
+    for idx, op in enumerate(keys):
+        output_h.write(f'#define {op} {idx}\n')
+
+    output_c.write('uint8_t expected_inputs_len[] = {')
+    for op in keys:
+        output_c.write(f'{ops[op][0]}, ')
+    output_c.write('};\n\n')
+
+    for op in keys:
+        output_h.write('void handle_{}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
+        output_h.write('void alloc_{}(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
+    output_c.write('handler handlers[] = {\n')
+    for op in keys:
+        output_c.write(f'\thandle_{op},\n'.lower())
+    output_c.write('};\n')
+    output_c.write('allocator allocators[] = {\n')
+    for op in keys:
+        output_c.write(f'\talloc_{op},\n'.lower())
+    output_c.write('};\n')
+    for op in keys:
+        if ops[op][1]:
+            output_c.write(f'void alloc_{op.lower()}(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)\n')
+            output_c.write('{\n')
+            output_c.write('\tUNUSED(flags);\n')
+            output_c.write('\tmy_memcpy(output, input[0], sizeof(struct ParameterInfo));\n')
+            output_c.write('}\n')
+
+    # data
+    for idx, name in enumerate(other_flags):
+        output_h.write(f'#define {name} {2**idx}\n')
 
     def hex_str(arr):
         return '  ' + ', '.join([f'0x{num:02x}' for num in arr]) + ',\n'
@@ -404,7 +470,6 @@ extern uint8_t *{var_name};
         output_c.write(f'''
 #ifdef __MSP430__
 #pragma DATA_SECTION(_{var_name}, ".{section}")
-#endif
 uint8_t _{var_name}[{len(data)}] = {{
 ''')
         n_pieces, remaining = divmod(len(data), 16)
@@ -414,6 +479,7 @@ uint8_t _{var_name}[{len(data)}] = {{
             output_c.write(hex_str(data[len(data) - remaining:len(data)]))
         output_c.write(f'''}};
 uint8_t *{var_name} = _{var_name};
+#endif
 ''')
 
     for var_name, data_obj in outputs.items():
@@ -428,17 +494,17 @@ uint8_t *{var_name} = _{var_name};
     outputs['labels'].seek(0)
     labels_data = outputs['labels'].read()
 
-    output_h.write('\n#if USE_ALL_SAMPLES\n')
-    output_c.write('\n#if USE_ALL_SAMPLES\n')
-    define_var('samples_data', samples_data)
-    define_var('labels_data', labels_data)
-    output_h.write('\n#else\n')
-    output_c.write('\n#else\n')
     define_var('samples_data', samples_data[:len(samples_data)//len(labels)])
     define_var('labels_data', labels_data[:len(labels_data)//len(labels)])
-    output_h.write('\n#endif\n')
-    output_c.write('\n#endif\n')
 
+    output_h.write(f'''
+#ifdef USE_ALL_SAMPLES
+#undef SAMPLES_DATA_LEN
+#undef LABELS_DATA_LEN
+#define SAMPLES_DATA_LEN {len(samples_data)}
+#define LABELS_DATA_LEN {len(labels_data)}
+#endif
+''')
 
 with open('nvm.bin', 'wb') as f:
     f.write(NVM_SIZE * b'\0')

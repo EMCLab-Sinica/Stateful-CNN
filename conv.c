@@ -8,7 +8,6 @@
 #include "cnn_common.h"
 #include "debug.h"
 #include "op_handlers.h"
-#include "ops.h"
 #include "intermittent-cnn.h"
 
 #define configCONV_STACK_SIZE 100

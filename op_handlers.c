@@ -1,7 +1,6 @@
 #include <DSPLib.h>
 
 #include "cnn_common.h"
-#include "ops.h"
 #include "op_handlers.h"
 #include "debug.h"
 #include "platform.h"

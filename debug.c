@@ -1,6 +1,5 @@
 #include "debug.h"
 #include "cnn_common.h"
-#include "ops.h"
 
 void print_q15(int16_t val) {
 #if defined(__MSP430__) || defined(__MSP432__)

@@ -47,7 +47,7 @@ target_compile_definitions(arm_cmsis_dsp
 
 add_executable(intermittent-cnn
     intermittent-cnn.c
-    ops.c
+    data.c
     op_handlers.c
     conv.c
     cnn_common.c
