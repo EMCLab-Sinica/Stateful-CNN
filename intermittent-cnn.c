@@ -87,7 +87,7 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
             model->state_bit[idx] = 0;
         }
 #ifdef WITH_PROGRESS_EMBEDDING
-        memset(intermediate_values(0), 0, NUM_SLOTS * INTERMEDIATE_VALUES_SIZE);
+        fill_int16((int16_t*)intermediate_values(0), NUM_SLOTS * INTERMEDIATE_VALUES_SIZE / sizeof(int16_t), 0);
 #endif
         model->running = 1;
     } else {
@@ -180,7 +180,6 @@ void set_sample_index(Model *model, uint8_t index) {
 void flip_state_bit(Model *model, ParameterInfo *output) {
 #ifdef WITH_PROGRESS_EMBEDDING
     // XXX: reduce # of values to fill
-    // TODO: use DMA on MSP430?
     int16_t fill_value;
     if (!get_state_bit(model, output->slot)) {
         fill_value = 0x4000;
@@ -193,9 +192,7 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
     my_printf_debug("Fill %d", fill_value);
     my_printf_debug(" from %d", fill_offset);
     my_printf_debug(" to %d" NEWLINE, end);
-    for (; fill_offset < end; fill_offset++) {
-        output_ptr[fill_offset] = fill_value;
-    }
+    fill_int16(output_ptr + fill_offset, end - fill_offset, fill_value);
 
     uint8_t slot_id = output->slot;
     if (model->state_bit[slot_id]) {

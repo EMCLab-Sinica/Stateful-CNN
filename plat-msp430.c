@@ -97,6 +97,24 @@ void my_memcpy(void* dest, const void* src, size_t n) {
 #endif
 }
 
+// broken if n has type size_t
+void fill_int16(int16_t *dest, uint16_t n, int16_t val) {
+#ifdef __MSP430__
+    DMA_init(&dma_params);
+    DMA0SA = &val;
+    DMA0DA = dest;
+    /* transfer size is in words (2 bytes) */
+    DMA0SZ = n;
+    // DMA_enableInterrupt(MY_DMA_CHANNEL);
+    // _0 => unchanged
+    // _3 => increment
+    DMA0CTL |= DMAEN + DMASRCINCR_0 + DMADSTINCR_3 + DMA_TRANSFER_BLOCK;
+    DMA0CTL |= DMAREQ;
+#else
+#error "TODO: implement fill_int16 for MSP432"
+#endif
+}
+
 void plat_print_results(void) {
 }
 

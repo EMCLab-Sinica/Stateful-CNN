@@ -110,6 +110,12 @@ void my_memcpy(void* dest, const void* src, size_t n) {
     memcpy(dest, src, n);
 }
 
+void fill_int16(int16_t *dest, uint16_t n, int16_t val) {
+    for (size_t idx = 0; idx < n; idx++) {
+        dest[idx] = val;
+    }
+}
+
 _Noreturn void ERROR_OCCURRED(void) {
     abort();
 }

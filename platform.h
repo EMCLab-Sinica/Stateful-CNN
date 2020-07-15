@@ -13,6 +13,7 @@
 
 _Noreturn void ERROR_OCCURRED(void);
 void my_memcpy(void* dest, const void* src, size_t n);
+void fill_int16(int16_t *dest, uint16_t n, int16_t val);
 void plat_print_results(void);
 void setOutputValue(uint8_t value);
 void registerCheckpointing(uint8_t *addr, size_t len);
