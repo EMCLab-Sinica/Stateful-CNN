@@ -512,6 +512,7 @@ void alloc_convmerge(struct ParameterInfo *input[], struct ParameterInfo *output
              OUTPUT_H = data->dims[2],
              OUTPUT_W = data->dims[3];
 
+    output->slot = get_next_slot(data);
     output->params_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W * sizeof(int16_t);
 }
 
@@ -535,7 +536,8 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 
     uint32_t tiling_results_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
 
-    int16_t *output_baseptr = get_q15_param(data, 0);
+    int16_t *data_baseptr = get_q15_param(data, 0);
+    int16_t *output_baseptr = get_q15_param(output, 0);
     uint16_t chunk_len = (LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2;
 
     for (uint32_t tiling_results_offset = 0; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
@@ -544,7 +546,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
         for (uint16_t tile_c_index = 0; tile_c_index < n_tiles_c; tile_c_index++) {
             int16_t *to_add = lea_buffer + tile_c_index * chunk_len;
             my_memcpy(to_add,
-                      output_baseptr + tile_c_index * tiling_results_len + tiling_results_offset,
+                      data_baseptr + tile_c_index * tiling_results_len + tiling_results_offset,
                       real_chunk_len * sizeof(int16_t));
             // scale up results as in convolution values are scaled down twice (input & weights)
             // XXX: not using msp_scale_q15 as it does not do saturation and overflowed
@@ -576,6 +578,8 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
     my_printf_debug("After scaling up back and merging tiling results" NEWLINE);
 
     dump_params_nhwc(output, 0);
+
+    fill_remaining_range(model, output);
 
     setOutputValue(0);
 

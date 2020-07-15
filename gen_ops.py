@@ -5,8 +5,6 @@ ops = {
     # Concat actually accepts 1~infinity inputs. Use 2 to fit SqueezeNet
     'Concat': [2, 1],
     'Conv': [3, 0],
-    # ConvMerge updates OFM in-place, but set inplace_update=0 here so that we
-    # can use customized alloc_convmerge.
     'ConvMerge': [1, 0],
     'Dropout': [1, 1],
     'GlobalAveragePool': [1, 0],

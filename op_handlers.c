@@ -309,20 +309,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     }
     dump_params_nhwc(output, 0);
 
-#ifdef WITH_PROGRESS_EMBEDDING
-    // XXX: make it a function and use it in all handlers
-    // XXX: reduce # of values to fill
-    if (!get_state_bit(model, output->slot)) {
-        int16_t *output_ptr = get_q15_param(output, 0);
-        uint16_t fill_offset = output->params_len / sizeof(int16_t),
-                 end = INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);
-        my_printf_debug("Fill 0x4000 from %d", fill_offset);
-        my_printf_debug(" to %d" NEWLINE, end);
-        for (; fill_offset < end; fill_offset++) {
-            output_ptr[fill_offset] = 0x4000;
-        }
-    }
-#endif
+    fill_remaining_range(model, output);
 
     flip_state_bit(model, output->slot);
 }

@@ -267,3 +267,26 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
     return 0;
 #endif
 }
+
+void fill_remaining_range(Model *model, ParameterInfo *output) {
+#ifdef WITH_PROGRESS_EMBEDDING
+    // XXX: reduce # of values to fill
+    // TODO: use DMA on MSP430?
+    // XXX: use this in all handlers
+    int16_t fill_value;
+    if (!get_state_bit(model, output->slot)) {
+        fill_value = 0x4000;
+    } else {
+        fill_value = 0;
+    }
+    int16_t *output_ptr = get_q15_param(output, 0);
+    uint16_t fill_offset = output->params_len / sizeof(int16_t),
+             end = INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);
+    my_printf_debug("Fill %d", fill_value);
+    my_printf_debug(" from %d", fill_offset);
+    my_printf_debug(" to %d" NEWLINE, end);
+    for (; fill_offset < end; fill_offset++) {
+        output_ptr[fill_offset] = fill_value;
+    }
+#endif
+}
