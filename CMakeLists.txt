@@ -20,6 +20,7 @@ target_include_directories(fake-msp430sdk
 add_library(dsplib
     ${DSPLIB_PATH}/source/matrix/msp_matrix_mpy_q15.c
     ${DSPLIB_PATH}/source/vector/msp_add_q15.c
+    ${DSPLIB_PATH}/source/vector/msp_offset_q15.c
     ${DSPLIB_PATH}/source/utility/msp_interleave_q15.c
     ${DSPLIB_PATH}/source/utility/msp_fill_q15.c
 )

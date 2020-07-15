@@ -54,7 +54,9 @@ typedef struct ConvTaskParams {
     uint16_t filter_offset;
     uint16_t filter_limit;
     uint8_t truncated;
+#ifdef WITH_PROGRESS_EMBEDDING
     uint16_t state_bit;
+#endif
 
     uint16_t conv_idx;
     uint16_t output_h;
@@ -306,13 +308,13 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
             dest_addr,
             input_src_addr,
             size * sizeof(int16_t));
+#ifdef WITH_PROGRESS_EMBEDDING
         if (conv_params->state_bit) {
-            int16_t *input_ptr = dest_addr;
-            for (uint16_t idx = 0; idx < size; idx++) {
-                *input_ptr -= 0x4000;
-                input_ptr++;
-            }
+            msp_offset_q15_params offset_params = { .length = size, .offset = -0x4000 };
+            status = msp_offset_q15(&offset_params, dest_addr, dest_addr);
+            msp_checkStatus(status);
         }
+#endif
         dest += conv_params->dest_offset;
     }
     uint16_t offset = conv_params->dest_offset - 1;
@@ -540,8 +542,18 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
     int16_t *output_baseptr = get_q15_param(output, 0);
     uint16_t chunk_len = (LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2;
 
+#ifdef WITH_PROGRESS_EMBEDDING
+    int16_t input_offset = get_state_bit(model, data->slot) ? -0x4000 : 0;
+    int16_t output_offset = get_state_bit(model, output->slot) ? 0 : 0x4000;
+    msp_offset_q15_params offset_params;
+#endif
+    msp_status status;
+
     for (uint32_t tiling_results_offset = 0; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
         uint32_t real_chunk_len = MIN_VAL(chunk_len, tiling_results_len - tiling_results_offset);
+#ifdef WITH_PROGRESS_EMBEDDING
+        offset_params.length = real_chunk_len;
+#endif
         my_printf_debug("real_chunk_len = %d" NEWLINE, real_chunk_len);
         for (uint16_t tile_c_index = 0; tile_c_index < n_tiles_c; tile_c_index++) {
             int16_t *to_add = lea_buffer + tile_c_index * chunk_len;
@@ -551,25 +563,23 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
             // scale up results as in convolution values are scaled down twice (input & weights)
             // XXX: not using msp_scale_q15 as it does not do saturation and overflowed
             // values lead to incorrect prediction results.
-            for (uint16_t chunk_idx = 0; chunk_idx < real_chunk_len; chunk_idx++) {
 #ifdef WITH_PROGRESS_EMBEDDING
-                if (get_state_bit(model, data->slot)) {
-                    to_add[chunk_idx] -= 0x4000;
-                }
+            offset_params.offset = input_offset;
+            status = msp_offset_q15(&offset_params, to_add, to_add);
+            msp_checkStatus(status);
 #endif
+            for (uint16_t chunk_idx = 0; chunk_idx < real_chunk_len; chunk_idx++) {
                 to_add[chunk_idx] = __saturate(to_add[chunk_idx] * SCALE, INT16_MIN, INT16_MAX);
             }
             if (tile_c_index != 0) {
                 msp_add_q15_params params3 = { .length = real_chunk_len };
-                msp_status status = msp_add_q15(&params3, lea_buffer, to_add, lea_buffer);
+                status = msp_add_q15(&params3, lea_buffer, to_add, lea_buffer);
                 msp_checkStatus(status);
             }
 #ifdef WITH_PROGRESS_EMBEDDING
-            for (uint16_t chunk_idx = 0; chunk_idx < real_chunk_len; chunk_idx++) {
-                if (!get_state_bit(model, output->slot)) {
-                    to_add[chunk_idx] += 0x4000;
-                }
-            }
+            offset_params.offset = output_offset;
+            status = msp_offset_q15(&offset_params, to_add, to_add);
+            msp_checkStatus(status);
 #endif
         }
         my_memcpy(output_baseptr + tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));

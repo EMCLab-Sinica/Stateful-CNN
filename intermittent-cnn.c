@@ -234,7 +234,9 @@ uint8_t get_value_state_bit(int16_t val) {
     }
 }
 
+#ifdef WITH_PROGRESS_EMBEDDING
 static uint8_t after_recovery = 1;
+#endif
 
 uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -273,11 +275,13 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
         my_printf_debug(", offset of end = %" PRId64 NEWLINE, end - baseptr);
     }
 
+#ifdef WITH_PROGRESS_EMBEDDING
     if (!after_recovery) {
         MY_ASSERT(first_unfinished_value_offset == 0);
     } else {
         after_recovery = 0;
     }
+#endif
 
     my_printf_debug("first_unfinished_value_offset = %d" NEWLINE, first_unfinished_value_offset);
 
