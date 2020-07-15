@@ -64,8 +64,6 @@ typedef struct ConvTaskParams {
     int16_t *filter_buffer_addr;
     int16_t cached_filter_idx;
     uint16_t cached_tile_c_offset;
-    uint16_t pending_filters[NUM_FILTERS];
-    uint16_t pending_filter_idx;
 } ConvTaskParams;
 
 static ConvTaskParams conv_params_obj;
@@ -326,21 +324,8 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
     dump_matrix(lea_buffer, inputs_len);
 
     for (uint16_t idx = 0; idx < conv_params->OUTPUT_CHANNEL; idx += conv_params->filter_limit) {
-        if (conv_params->cached_filter_idx == idx) {
-            schedule_tile(idx, conv_params);
-        } else {
-            my_printf_debug("Filters starting from %d are not cached, append them to the pending list" NEWLINE, idx);
-            conv_params->pending_filters[conv_params->pending_filter_idx] = idx;
-            conv_params->pending_filter_idx++;
-            MY_ASSERT(conv_params->pending_filter_idx < NUM_FILTERS);
-        }
+        schedule_tile(idx, conv_params);
     }
-    for (uint16_t idx = 0; idx < conv_params->pending_filter_idx; idx++) {
-        uint16_t filter_idx = conv_params->pending_filters[idx];
-        schedule_tile(filter_idx, conv_params);
-        my_printf_debug("Mark filter %d as processed" NEWLINE, filter_idx);
-    }
-    conv_params->pending_filter_idx = 0;
 }
 
 void alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -425,7 +410,6 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     conv_params->W = W;
 
     conv_params->CHANNEL = CHANNEL;
-    conv_params->pending_filter_idx = 0;
     conv_params->OUTPUT_CHANNEL = OUTPUT_CHANNEL;
 #ifdef WITH_PROGRESS_EMBEDDING
     conv_params->state_bit = get_state_bit(model, conv_input->slot);
