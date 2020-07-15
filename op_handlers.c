@@ -138,7 +138,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
         dump_params(output);
     }
 
-    flip_state_bit(model, output->slot);
+    flip_state_bit(model, output);
 }
 
 void alloc_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -269,7 +269,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     my_printf_debug("handle_matmul output" NEWLINE);
     dump_params(output);
 
-    flip_state_bit(model, output->slot);
+    flip_state_bit(model, output);
 }
 
 void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -280,6 +280,8 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
 
     ParameterInfo *X = input[0];
+    my_printf_debug("handle_relu input" NEWLINE);
+    dump_params_nhwc(X, 0);
 
     /* XXX: use LEA? */
     uint16_t bitwidth = X->bitwidth;
@@ -287,7 +289,6 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     int16_t *data = get_q15_param(X, 0);
     int16_t data_len = X->params_len / (bitwidth / 8);
 
-    int16_t *data_ptr = data;
     int16_t threshold, offset;
 #ifdef WITH_PROGRESS_EMBEDDING
     if (get_state_bit(model, X->slot)) {
@@ -300,6 +301,11 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 #else
     threshold = offset = 0;
 #endif
+
+    my_printf_debug("threshold = %d" NEWLINE, threshold);
+    my_printf_debug("offset = %d" NEWLINE, offset);
+
+    int16_t *data_ptr = data + first_unfinished_value_offset;
     for (uint16_t i = first_unfinished_value_offset; i < data_len; i++) {
         if (*data_ptr < threshold) {
             *data_ptr = threshold;
@@ -307,11 +313,10 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         *data_ptr += offset;
         data_ptr++;
     }
+    my_printf_debug("handle_relu output" NEWLINE);
     dump_params_nhwc(output, 0);
 
-    fill_remaining_range(model, output);
-
-    flip_state_bit(model, output->slot);
+    flip_state_bit(model, output);
 }
 
 void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {

@@ -498,7 +498,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     }
 #endif
 
-    flip_state_bit(model, output->slot);
+    flip_state_bit(model, output);
 }
 
 void alloc_convmerge(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags) {
@@ -579,9 +579,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 
     dump_params_nhwc(output, 0);
 
-    fill_remaining_range(model, output);
-
     setOutputValue(0);
 
-    flip_state_bit(model, output->slot);
+    flip_state_bit(model, output);
 }

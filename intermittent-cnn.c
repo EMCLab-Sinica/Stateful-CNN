@@ -83,10 +83,13 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
             cur_node->scheduled = 0;
         }
         counters()->counter_idx = 0;
-        model->running = 1;
         for (uint8_t idx = 0; idx < NUM_SLOTS; idx++) {
             model->state_bit[idx] = 0;
         }
+#ifdef WITH_PROGRESS_EMBEDDING
+        memset(intermediate_values(0), 0, NUM_SLOTS * INTERMEDIATE_VALUES_SIZE);
+#endif
+        model->running = 1;
     } else {
         model->recovery = 1;
     }
@@ -174,8 +177,27 @@ void set_sample_index(Model *model, uint8_t index) {
     model->sample_idx = index;
 }
 
-void flip_state_bit(Model *model, uint8_t slot_id) {
+void flip_state_bit(Model *model, ParameterInfo *output) {
 #ifdef WITH_PROGRESS_EMBEDDING
+    // XXX: reduce # of values to fill
+    // TODO: use DMA on MSP430?
+    int16_t fill_value;
+    if (!get_state_bit(model, output->slot)) {
+        fill_value = 0x4000;
+    } else {
+        fill_value = 0;
+    }
+    int16_t *output_ptr = get_q15_param(output, 0);
+    uint16_t fill_offset = output->params_len / sizeof(int16_t),
+             end = INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);
+    my_printf_debug("Fill %d", fill_value);
+    my_printf_debug(" from %d", fill_offset);
+    my_printf_debug(" to %d" NEWLINE, end);
+    for (; fill_offset < end; fill_offset++) {
+        output_ptr[fill_offset] = fill_value;
+    }
+
+    uint8_t slot_id = output->slot;
     if (model->state_bit[slot_id]) {
         model->state_bit[slot_id] = 0;
     } else {
@@ -183,7 +205,7 @@ void flip_state_bit(Model *model, uint8_t slot_id) {
     }
 #else
     UNUSED(model);
-    UNUSED(slot_id);
+    UNUSED(output);
 #endif
 }
 
@@ -211,6 +233,8 @@ uint8_t get_value_state_bit(int16_t val) {
         return 1;
     }
 }
+
+static uint8_t after_recovery = 1;
 
 uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -249,6 +273,12 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
         my_printf_debug(", offset of end = %" PRId64 NEWLINE, end - baseptr);
     }
 
+    if (!after_recovery) {
+        MY_ASSERT(first_unfinished_value_offset == 0);
+    } else {
+        after_recovery = 0;
+    }
+
     my_printf_debug("first_unfinished_value_offset = %d" NEWLINE, first_unfinished_value_offset);
 
 #ifndef MY_NDEBUG
@@ -265,28 +295,5 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
     UNUSED(model);
     UNUSED(output);
     return 0;
-#endif
-}
-
-void fill_remaining_range(Model *model, ParameterInfo *output) {
-#ifdef WITH_PROGRESS_EMBEDDING
-    // XXX: reduce # of values to fill
-    // TODO: use DMA on MSP430?
-    // XXX: use this in all handlers
-    int16_t fill_value;
-    if (!get_state_bit(model, output->slot)) {
-        fill_value = 0x4000;
-    } else {
-        fill_value = 0;
-    }
-    int16_t *output_ptr = get_q15_param(output, 0);
-    uint16_t fill_offset = output->params_len / sizeof(int16_t),
-             end = INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);
-    my_printf_debug("Fill %d", fill_value);
-    my_printf_debug(" from %d", fill_offset);
-    my_printf_debug(" to %d" NEWLINE, end);
-    for (; fill_offset < end; fill_offset++) {
-        output_ptr[fill_offset] = fill_value;
-    }
 #endif
 }
