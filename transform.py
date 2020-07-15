@@ -6,7 +6,6 @@ import struct
 import warnings
 from typing import List
 
-import cv2
 import onnx
 import onnx.helper
 import numpy as np
@@ -349,12 +348,16 @@ for idx, im in enumerate(images):
         for idx_h in range(im.shape[2]):
             for idx_w in range(im.shape[3]):
                 outputs['samples'].write(to_bytes(_Q15(im[0, idx_c, idx_h, idx_w] / SCALE)))
-    # Restore conanical image format (H, W, C)
-    im = np.squeeze(im * 256)
-    if 'mnist' in args.onnx_model:
-        im = np.expand_dims(im, axis=-1)
-        im = 255 - im
-    cv2.imwrite(f'images/test{idx:02d}.png', im)
+    try:
+        import cv2
+        # Restore conanical image format (H, W, C)
+        im = np.squeeze(im * 256)
+        if 'mnist' in args.onnx_model:
+            im = np.expand_dims(im, axis=-1)
+            im = 255 - im
+        cv2.imwrite(f'images/test{idx:02d}.png', im)
+    except ImportError:
+        pass
 
 for label in labels:
     outputs['labels'].write(to_bytes(label, size=8))

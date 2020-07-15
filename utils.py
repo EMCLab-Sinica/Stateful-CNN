@@ -2,7 +2,6 @@ import pickle
 import re
 from typing import Optional
 
-import cv2
 import numpy as np
 
 def load_data(filename, limit=None):
@@ -19,6 +18,7 @@ def load_data(filename, limit=None):
 
     if filename.endswith('.png'):
         # images from https://github.com/tensorflow/models/tree/master/official/mnist
+        import cv2
         im = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
         im = 255 - im
         print(im)
