@@ -226,24 +226,6 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     my_memcpy(output_data, matrix_mpy_results, n_filters * sizeof(int16_t));
 }
 
-static void schedule_tile(uint16_t idx, ConvTaskParams *conv_params) {
-    conv_params->conv_idx = idx;
-    msp_matrix_mpy_q15_params *p_matrix_mpy_params = &(conv_params->matrix_mpy_params);
-
-    // XXX: LEA doc requires all matrix dimensions to be even, while LEA
-    // appears to still give correct results when srcARows is odd
-    // srcBCols should really be even, though
-    // http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/716353?MSP430FR5992-MSP-DSPLib-msp-matrix-mpy-q15
-    p_matrix_mpy_params->srcARows = 1;
-    p_matrix_mpy_params->srcACols = p_matrix_mpy_params->srcBRows = conv_params->filter_offset;
-    p_matrix_mpy_params->srcBCols = MIN_VAL(conv_params->filter_limit, conv_params->OUTPUT_CHANNEL - idx);
-    MY_ASSERT(p_matrix_mpy_params->srcARows * p_matrix_mpy_params->srcBCols <= OUTPUT_LEN);
-    MY_ASSERT((p_matrix_mpy_params->srcACols & 1) || (p_matrix_mpy_params->srcBCols & 1) == 0);
-    for (uint16_t j = 0; j < conv_params->H - conv_params->offset_h - conv_params->output_h; j += conv_params->stride) {
-        convTask(j, conv_params);
-    }
-}
-
 static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
     int8_t field_size = (conv_params->kH - 1) / 2;
 
@@ -323,8 +305,23 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
     my_printf_debug("Loaded inputs" NEWLINE);
     dump_matrix(lea_buffer, inputs_len);
 
-    for (uint16_t idx = 0; idx < conv_params->OUTPUT_CHANNEL; idx += conv_params->filter_limit) {
-        schedule_tile(idx, conv_params);
+    msp_matrix_mpy_q15_params *p_matrix_mpy_params = &(conv_params->matrix_mpy_params);
+
+    // XXX: LEA doc requires all matrix dimensions to be even, while LEA
+    // appears to still give correct results when srcARows is odd
+    // srcBCols should really be even, though
+    // http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/716353?MSP430FR5992-MSP-DSPLib-msp-matrix-mpy-q15
+    p_matrix_mpy_params->srcARows = 1;
+    p_matrix_mpy_params->srcACols = p_matrix_mpy_params->srcBRows = conv_params->filter_offset;
+
+    for (uint16_t j = 0; j < conv_params->H - conv_params->offset_h - conv_params->output_h; j += conv_params->stride) {
+        for (uint16_t idx = 0; idx < conv_params->OUTPUT_CHANNEL; idx += conv_params->filter_limit) {
+            conv_params->conv_idx = idx;
+            p_matrix_mpy_params->srcBCols = MIN_VAL(conv_params->filter_limit, conv_params->OUTPUT_CHANNEL - idx);
+            MY_ASSERT(p_matrix_mpy_params->srcARows * p_matrix_mpy_params->srcBCols <= OUTPUT_LEN);
+            MY_ASSERT((p_matrix_mpy_params->srcACols & 1) || (p_matrix_mpy_params->srcBCols & 1) == 0);
+            convTask(j, conv_params);
+        }
     }
 }
 
