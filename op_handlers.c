@@ -86,9 +86,6 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
 }
 
 void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-#ifndef WITH_PROGRESS_EMBEDDING
-    UNUSED(model);
-#endif
 
     my_printf_debug("MaxPool!" NEWLINE);
 
@@ -108,14 +105,46 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     uint16_t tile_c = get_tile_c(output);
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
 
+    uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
+    uint16_t initial_n, initial_c, initial_h, initial_w;
+    initial_n = first_unfinished_value_offset / (new_H * new_W * tile_c);
+
+    my_printf_debug("initial_n = %d" NEWLINE, initial_n);
+
     int16_t *output_baseptr = get_q15_param(output, 0);
-    for (uint16_t tile_c_offset = 0; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
+    for (uint16_t tile_c_offset = initial_n * tile_c; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
         uint16_t real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
         int16_t *output_ptr = output_baseptr + tile_c_offset * new_H * new_W;
         if (!need_nhwc2nchw) {
-            for (uint16_t output_h = 0; output_h < new_H; output_h++) {
-                for (uint16_t output_w = 0; output_w < new_W; output_w++) {
-                    for (uint16_t c = 0; c < real_tile_c; c++) {
+            // NHWC
+            initial_c = first_unfinished_value_offset % real_tile_c;
+            first_unfinished_value_offset /= real_tile_c;
+            initial_w = first_unfinished_value_offset % new_W;
+            first_unfinished_value_offset /= new_W;
+            initial_h = first_unfinished_value_offset % new_H;
+
+            my_printf_debug("initial_h = %d" NEWLINE, initial_h);
+            my_printf_debug("initial_w = %d" NEWLINE, initial_w);
+            my_printf_debug("initial_c = %d" NEWLINE, initial_c);
+
+            uint16_t output_h = 0;
+            if (tile_c_offset == initial_n * tile_c) {
+                output_h = initial_h;
+                output_ptr += initial_h * new_W * real_tile_c;
+            }
+            for (; output_h < new_H; output_h++) {
+                uint16_t output_w = 0;
+                if (tile_c_offset == initial_n * tile_c && output_h == initial_h) {
+                    output_w = initial_w;
+                    output_ptr += initial_w * real_tile_c;
+                }
+                for (; output_w < new_W; output_w++) {
+                    uint16_t c = 0;
+                    if (tile_c_offset == initial_n * tile_c && output_h == initial_h && output_w == initial_w) {
+                        c = initial_c;
+                        output_ptr += initial_c;
+                    }
+                    for (; c < real_tile_c; c++) {
                         int16_t max_val = maxpool_patch(output_h, output_w, c, tile_c_offset, flags, data, output, model);
                         my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
                         *output_ptr = max_val;
@@ -124,9 +153,35 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                 }
             }
         } else {
-            for (uint16_t c = 0; c < real_tile_c; c++) {
-                for (uint16_t output_h = 0; output_h < new_H; output_h++) {
-                    for (uint16_t output_w = 0; output_w < new_W; output_w++) {
+            // NCHW
+            initial_w = first_unfinished_value_offset % new_W;
+            first_unfinished_value_offset /= new_W;
+            initial_h = first_unfinished_value_offset % new_H;
+            first_unfinished_value_offset /= new_H;
+            initial_c = first_unfinished_value_offset % real_tile_c;
+
+            my_printf_debug("initial_h = %d" NEWLINE, initial_h);
+            my_printf_debug("initial_w = %d" NEWLINE, initial_w);
+            my_printf_debug("initial_c = %d" NEWLINE, initial_c);
+
+            uint16_t c = 0;
+            if (tile_c_offset == initial_n * tile_c) {
+                c = initial_c;
+                output_ptr += initial_c * new_H * new_W;
+            }
+            for (; c < real_tile_c; c++) {
+                uint16_t output_h = 0;
+                if (tile_c_offset == initial_n * tile_c && c == initial_c) {
+                    output_h = initial_h;
+                    output_ptr += initial_h * new_W;
+                }
+                for (; output_h < new_H; output_h++) {
+                    uint16_t output_w = 0;
+                    if (tile_c_offset == initial_n * tile_c && c == initial_c && output_h == initial_h) {
+                        output_w = initial_w;
+                        output_ptr += initial_w;
+                    }
+                    for (; output_w < new_W; output_w++) {
                         int16_t max_val = maxpool_patch(output_h, output_w, c, tile_c_offset, flags, data, output, model);
                         my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
                         *output_ptr = max_val;
