@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import argparse
 import dataclasses
 import io
@@ -8,6 +9,7 @@ from typing import List
 
 import onnx
 import onnx.helper
+import onnx.optimizer
 import numpy as np
 
 from utils import load_data, load_data_cifar10
@@ -91,11 +93,32 @@ class ONNXNodeWrapper:
 def get_prev_node(n):
     return nodes[names[n.input[0]] - n_input]
 
+configs = {
+    'mnist': {
+        # https://github.com/onnx/models/raw/master/vision/classification/mnist/model/mnist-8.onnx
+        'onnx_model': 'data/mnist-8.onnx',
+        'input_file': 'data/Test-28x28_cntk_text.txt',
+        'data_loader': load_data,
+    },
+    'cifar10': {
+        'onnx_model': 'data/squeezenet_cifar10.onnx',
+        'input_file': 'data/cifar10-test_batch',
+        'data_loader': load_data_cifar10,
+    },
+}
+
 parser = argparse.ArgumentParser()
-parser.add_argument('onnx_model')
-parser.add_argument('input_file')
+parser.add_argument('config', choices=configs.keys())
 args = parser.parse_args()
-onnx_model = onnx.load(args.onnx_model)
+config = configs[args.config]
+
+original_model = onnx.load(config['onnx_model'])
+try:
+    # https://zhuanlan.zhihu.com/p/41255090
+    onnx_model = onnx.optimizer.optimize(original_model, ['fuse_add_bias_into_conv'])
+except IndexError:
+    # Somehow the optimizer cannot handle models transformed from keras2onnx
+    onnx_model = original_model
 g = onnx_model.graph
 names = {}
 
@@ -279,12 +302,7 @@ for node in model:
     outputs['model'].write(to_bytes(0))  # Node.scheduled
 
 
-if 'mnist' in args.onnx_model:
-    labels, images = load_data(args.input_file, limit=N_SAMPLES)
-elif 'cifar10' in args.onnx_model:
-    labels, images = load_data_cifar10(args.input_file, limit=N_SAMPLES)
-else:
-    raise NotImplementedError
+labels, images = config['data_loader'](config['input_file'], limit=N_SAMPLES)
 
 def select_parameters_slot(data_len):
     if data_len <= 1024:  # XXX: random heuristic
@@ -379,7 +397,7 @@ for idx, im in enumerate(images):
         import cv2
         # Restore conanical image format (H, W, C)
         im = np.squeeze(im * 256)
-        if 'mnist' in args.onnx_model:
+        if args.config == 'mnist':
             im = np.expand_dims(im, axis=-1)
             im = 255 - im
         cv2.imwrite(f'images/test{idx:02d}.png', im)
