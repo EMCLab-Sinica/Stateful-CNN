@@ -30,6 +30,61 @@ void alloc_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flags
     output->dims[3] = new_W;
 }
 
+static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, uint16_t tile_c_offset, uint16_t flags, ParameterInfo *data, ParameterInfo *output, Model *model) {
+    const uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
+    uint16_t stride = flags & 0x0f;
+    uint16_t kernel_size = (flags & 0xf0) >> 4;
+    int16_t *data_baseptr = get_q15_param(data, 0);
+#ifdef WITH_PROGRESS_EMBEDDING
+    uint8_t do_flip_state = get_state_bit(model, data->slot) == get_state_bit(model, output->slot);
+#else
+    UNUSED(output);
+    UNUSED(model);
+#endif
+
+    int16_t offset_h, offset_w;
+    // Output from handle_conv - NHWC or NWHC (transposed)?
+    if (data->flags & TRANSPOSED) {
+        offset_h = CHANNEL;
+        offset_w = H * CHANNEL;
+    } else {
+        offset_h = W * CHANNEL;
+        offset_w = CHANNEL;
+    }
+
+    my_printf_debug("output_h=%d ", output_h);
+    my_printf_debug("output_w=%d ", output_w);
+    my_printf_debug("c=%d" NEWLINE, tile_c_offset + c);
+
+    int16_t max_val = INT16_MIN;
+    for (uint16_t sH = 0; sH < kernel_size; sH++) {
+        for (uint16_t sW = 0; sW < kernel_size; sW++) {
+            int16_t val;
+            // XXX: use a moving pointer instead of data_baseptr makes it slower. Why!?
+            val = data_baseptr[(output_h*stride+sH) * offset_h + (output_w*stride+sW) * offset_w + tile_c_offset + c];
+#ifdef WITH_PROGRESS_EMBEDDING
+            if (do_flip_state && get_state_bit(model, data->slot)) {
+                val -= 0x4000;
+            }
+#endif
+            print_q15_debug(val);
+            // XXX: use LEA?
+            if (val > max_val) {
+                max_val = val;
+            }
+        }
+    }
+#ifdef WITH_PROGRESS_EMBEDDING
+    if (do_flip_state && !get_state_bit(model, data->slot)) {
+        max_val += 0x4000;
+    }
+#endif
+    // need a space as print_q15_debug does not append spaces when DUMP_INTEGERS is not defined
+    my_printf_debug(" max=");
+    print_q15_debug(max_val);
+    return max_val;
+}
+
 void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
 #ifndef WITH_PROGRESS_EMBEDDING
     UNUSED(model);
@@ -38,7 +93,6 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     my_printf_debug("MaxPool!" NEWLINE);
 
     uint16_t stride = flags & 0x0f;
-    uint16_t kernel_size = (flags & 0xf0) >> 4;
     uint8_t need_nhwc2nchw = ((flags & 0xff00) >> 8 == NHWC2NCHW);
 
     /* XXX: add flags; assume no padding for now */
@@ -54,72 +108,29 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     uint16_t tile_c = get_tile_c(output);
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
 
-    int16_t *data_baseptr = get_q15_param(data, 0);
-
-#ifdef WITH_PROGRESS_EMBEDDING
-    uint8_t do_flip_state = get_state_bit(model, data->slot) == get_state_bit(model, output->slot);
-    if (do_flip_state && get_state_bit(model, data->slot)) {
-        int16_t *data_ptr = data_baseptr;
-        uint32_t len = data->params_len / sizeof(int16_t);
-        for (uint32_t idx = 0; idx < len; idx++) {
-            *data_ptr -= 0x4000;
-            data_ptr++;
-        }
-    }
-#endif
-
-    int16_t offset_h, offset_w;
-    if (data->flags & TRANSPOSED) {
-        offset_h = CHANNEL;
-        offset_w = H * CHANNEL;
-    } else {
-        offset_h = W * CHANNEL;
-        offset_w = CHANNEL;
-    }
     int16_t *output_baseptr = get_q15_param(output, 0);
     for (uint16_t tile_c_offset = 0; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
         uint16_t real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
-        int16_t *output_ptr;
-        if (need_nhwc2nchw) {
-            output_ptr = output_baseptr;
-        } else {
-            output_ptr = output_baseptr + tile_c_offset * new_H * new_W;
-        }
-        for (uint16_t h = 0; h + stride <= H; h += stride) {
-            for (uint16_t w = 0; w + stride <= W; w += stride) {
-                for (uint16_t c = 0; c < real_tile_c; c++) {
-                    my_printf_debug("h=%d ", h);
-                    my_printf_debug("w=%d ", w);
-                    my_printf_debug("c=%d" NEWLINE, tile_c_offset + c);
-
-                    int16_t max_val = INT16_MIN;
-                    for (uint16_t sH = 0; sH < kernel_size; sH++) {
-                        for (uint16_t sW = 0; sW < kernel_size; sW++) {
-                            int16_t val;
-                            // XXX: use a moving pointer instead of data_baseptr makes it slower. Why!?
-                            // Output from handle_conv uses NHWC
-                            val = data_baseptr[(h+sH) * offset_h + (w+sW) * offset_w + tile_c_offset + c];
-                            print_q15_debug(val);
-                            // XXX: use LEA?
-                            if (val > max_val) {
-                                max_val = val;
-                            }
-                        }
-                    }
-                    // need a space as print_q15_debug does not append spaces when DUMP_INTEGERS is not defined
-                    my_printf_debug(" max=");
-                    print_q15_debug(max_val);
-                    my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
-#ifdef WITH_PROGRESS_EMBEDDING
-                    if (do_flip_state && !get_state_bit(model, data->slot)) {
-                        max_val += 0x4000;
-                    }
-#endif
-                    if (!need_nhwc2nchw) {
+        int16_t *output_ptr = output_baseptr + tile_c_offset * new_H * new_W;
+        if (!need_nhwc2nchw) {
+            for (uint16_t output_h = 0; output_h < new_H; output_h++) {
+                for (uint16_t output_w = 0; output_w < new_W; output_w++) {
+                    for (uint16_t c = 0; c < real_tile_c; c++) {
+                        int16_t max_val = maxpool_patch(output_h, output_w, c, tile_c_offset, flags, data, output, model);
+                        my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
                         *output_ptr = max_val;
                         output_ptr++;
-                    } else {
-                        *(output_ptr + (tile_c_offset + c) * new_H * new_W + h / stride * new_W + w / stride) = max_val;
+                    }
+                }
+            }
+        } else {
+            for (uint16_t c = 0; c < real_tile_c; c++) {
+                for (uint16_t output_h = 0; output_h < new_H; output_h++) {
+                    for (uint16_t output_w = 0; output_w < new_W; output_w++) {
+                        int16_t max_val = maxpool_patch(output_h, output_w, c, tile_c_offset, flags, data, output, model);
+                        my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
+                        *output_ptr = max_val;
+                        output_ptr++;
                     }
                 }
             }
