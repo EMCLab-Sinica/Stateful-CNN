@@ -231,9 +231,18 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
 
     /* copy input data, row by row */
 
-    int16_t *input_addr = get_q15_param(
-        conv_params->conv_input,
-        conv_params->tile_c_offset * conv_params->H * conv_params->W);
+    ParameterInfo *conv_input = conv_params->conv_input;
+    int16_t *input_addr = get_q15_param(conv_input, 0);
+    if (conv_input->flags & SEPARATE_TILING) {
+        if (conv_input->slot == NUM_SLOTS - 1) {
+            // next slot is 0
+            input_addr -= conv_params->tile_c_index * (NUM_SLOTS - 1) * INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);
+        } else {
+            input_addr += conv_params->tile_c_index * INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);
+        }
+    } else {
+        input_addr += conv_params->tile_c_offset * conv_params->H * conv_params->W;
+    }
 
     /* int32_t instead of int16_t as TI's compiler cannot handle negative
      * offsets correctly. The expression `input_addr + (int16_t)(-2)` is

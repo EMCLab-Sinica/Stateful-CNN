@@ -55,6 +55,8 @@ other_flags = [
     'AUTO_PAD_VALID',
     'NHWC2NCHW',
     'TRANSPOSED',
+    # Tiles in different channels are actually in different slots
+    'SEPARATE_TILING',
 ]
 
 def op_flag(flag):

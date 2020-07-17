@@ -484,6 +484,8 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     MY_ASSERT(A->dims[1] == B->dims[1]);
     output->tile_c = A->dims[1];
     output->dims[1] *= 2;
+    output->flags |= SEPARATE_TILING;
+    MY_ASSERT(B->slot == (A->slot + 1) % NUM_SLOTS);
 }
 
 void handle_dropout(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
