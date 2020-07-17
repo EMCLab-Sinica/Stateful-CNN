@@ -6,8 +6,6 @@
 
 #define WITH_PROGRESS_EMBEDDING
 
-#define NUM_FILTERS 128
-
 /**********************************
  *        Data structures         *
  **********************************/
@@ -63,7 +61,7 @@ typedef struct Model {
     uint16_t sample_idx;
 } Model;
 
-_Static_assert(sizeof(Model) == 16, "Unexpected size for Model");
+_Static_assert(sizeof(Model) == 12 + NUM_SLOTS * 2, "Unexpected size for Model");
 
 typedef struct {
     uint16_t time_counters[COUNTERS_LEN];

@@ -21,18 +21,13 @@ Indexing policy:
     len(g.input)~ : other (hidden) nodes
 """
 
-SCALE = 70
-NUM_SLOTS = 2
-SLOT_PARAMETERS2 = 0b100
-SLOT_PARAMETERS = 0b11
-SLOT_TEST_SET = 0b10
+SLOT_PARAMETERS2 = 0xf1
+SLOT_PARAMETERS = 0xf0
+SLOT_TEST_SET = 0xff
 SLOT_INTERMEDIATE_VALUES = 0b01
-# NUM_SLOTS * INTERMEDIATE_VALUES_SIZE should < 65536, or TI's compiler gets confused
-INTERMEDIATE_VALUES_SIZE = 31000
 CACHED_FILTERS_LEN = 8000
 N_SAMPLES = 20
 COUNTERS_LEN = 64
-NVM_SIZE = 512 * 1024
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
@@ -98,11 +93,19 @@ configs = {
         # https://github.com/onnx/models/raw/master/vision/classification/mnist/model/mnist-8.onnx
         'onnx_model': 'data/mnist-8.onnx',
         'input_file': 'data/Test-28x28_cntk_text.txt',
+        'scale': 70,
+        'num_slots': 2,
+        'intermediate_values_size': 31000,
+        'nvm_size_kb': 256,
         'data_loader': load_data,
     },
     'cifar10': {
         'onnx_model': 'data/squeezenet_cifar10.onnx',
         'input_file': 'data/cifar10-test_batch',
+        'scale': 30,
+        'num_slots': 3,
+        'intermediate_values_size': 116000,
+        'nvm_size_kb': 1024,
         'data_loader': load_data_cifar10,
     },
 }
@@ -111,6 +114,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument('config', choices=configs.keys())
 args = parser.parse_args()
 config = configs[args.config]
+SCALE = config['scale']
+# NUM_SLOTS * INTERMEDIATE_VALUES_SIZE should < 65536, or TI's compiler gets confused
+NUM_SLOTS = config['num_slots']
+INTERMEDIATE_VALUES_SIZE = config['intermediate_values_size']
+NVM_SIZE = config['nvm_size_kb'] * 1024
 
 original_model = onnx.load(config['onnx_model'])
 try:
