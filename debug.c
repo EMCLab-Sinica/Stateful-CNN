@@ -132,7 +132,7 @@ void dump_model(Model *model, Node *nodes) {
     uint16_t i, j;
     for (i = 0; i < model->nodes_len; i++) {
         Node *cur_node = &(nodes[i]);
-        my_printf(cur_node->scheduled ? "scheduled     " : "not scheduled ");
+        my_printf(model->layer_idx > i ? "scheduled     " : "not scheduled ");
         my_printf("(");
         for (j = 0; j < cur_node->inputs_len; j++) {
             my_printf("%d", node_input(cur_node, j));

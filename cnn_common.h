@@ -21,7 +21,6 @@ typedef struct Node {
      * 03-00 stride (used in Conv and MaxPool)
      **/
     uint16_t flags;
-    uint16_t scheduled;  /* 16 bits for aligned memory */
 } Node;
 
 // _Static_assert in C11 requires the message
@@ -58,10 +57,11 @@ typedef struct Model {
     uint16_t recovery;
     uint16_t run_counter;
     uint16_t state_bit[NUM_SLOTS];
+    uint16_t layer_idx;
     uint16_t sample_idx;
 } Model;
 
-_Static_assert(sizeof(Model) == 12 + NUM_SLOTS * 2, "Unexpected size for Model");
+_Static_assert(sizeof(Model) == 14 + NUM_SLOTS * 2, "Unexpected size for Model");
 
 typedef struct {
     uint16_t time_counters[COUNTERS_LEN];

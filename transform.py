@@ -29,7 +29,7 @@ CACHED_FILTERS_LEN = 8000
 N_SAMPLES = 20
 COUNTERS_LEN = 64
 # To make the Node struct exactly 64 bytes
-NODE_NAME_LEN = 52
+NODE_NAME_LEN = 54
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
@@ -291,6 +291,7 @@ outputs['model'].write(to_bytes(0))  # Model.recovery
 outputs['model'].write(to_bytes(0))  # Model.run_counter
 for _ in range(NUM_SLOTS):
     outputs['model'].write(to_bytes(0))  # Model.state_bit
+outputs['model'].write(to_bytes(0))  # Model.layer_idx
 outputs['model'].write(to_bytes(0))  # Model.sample_idx
 
 @dataclasses.dataclass
@@ -313,7 +314,6 @@ for node in model:
         inputs_data.write(to_bytes(inp * 2))
     outputs['model'].write(to_bytes(list(ops.keys()).index(node.op_type)))
     outputs['model'].write(to_bytes(node.flags))
-    outputs['model'].write(to_bytes(0))  # Node.scheduled
 
 
 labels, images = config['data_loader'](config['input_file'], limit=N_SAMPLES)

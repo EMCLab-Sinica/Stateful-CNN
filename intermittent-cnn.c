@@ -66,7 +66,6 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
         model->running = 0;
         model->run_counter++;
     }
-    cur_node->scheduled = 1;
 }
 
 int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
@@ -77,12 +76,9 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
     my_printf_debug("model->n_input = %d" NEWLINE, model->n_input);
 
     if (!model->running) {
-        // reset model
-        for (uint16_t i = 0; i < model->nodes_len; i++) {
-            Node *cur_node = &(nodes[i]);
-            cur_node->scheduled = 0;
-        }
         counters()->counter_idx = 0;
+        // reset model
+        model->layer_idx = 0;
         for (uint8_t idx = 0; idx < NUM_SLOTS; idx++) {
             model->state_bit[idx] = 0;
         }
@@ -98,14 +94,11 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
 
     dump_model(model, nodes);
 
-    for (uint16_t node_idx = 0; node_idx < model->nodes_len; node_idx++) {
+    for (uint16_t node_idx = model->layer_idx; node_idx < model->nodes_len; node_idx++) {
         Node *cur_node = &(nodes[node_idx]);
 
-        if (cur_node->scheduled) {
-            continue;
-        }
-
         handle_node(model, nodes, parameter_info, node_idx);
+        model->layer_idx++;
 
         dump_model(model, nodes);
     }
