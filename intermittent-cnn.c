@@ -8,10 +8,11 @@
 #include "debug.h"
 
 static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info, uint16_t node_idx) {
-    my_printf_debug("Current node: %d ", node_idx);
+    my_printf_debug("Current node: %d, ", node_idx);
 
     /* schedule it */
     Node *cur_node = &(nodes[node_idx]);
+    my_printf_debug("name = %s, ", cur_node->name);
     my_printf_debug("op_type = %d" NEWLINE, cur_node->op_type);
 
     int16_t input_id[3];

@@ -28,6 +28,8 @@ SLOT_INTERMEDIATE_VALUES = 0b01
 CACHED_FILTERS_LEN = 8000
 N_SAMPLES = 20
 COUNTERS_LEN = 64
+# To make the Node struct exactly 64 bytes
+NODE_NAME_LEN = 52
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
@@ -155,6 +157,7 @@ for idx, n in enumerate(g.node):
         continue
     output_name = n.output[0]
     new_node = onnx.NodeProto()
+    new_node.name = n.name + ':merge'
     new_node.op_type = 'ConvMerge'
     new_node.input[:] = n.output[:] = [output_name + '_before_merge']
     new_node.output[:] = [output_name]
@@ -220,6 +223,7 @@ pprint.pprint(names)
 
 @dataclasses.dataclass
 class Node:
+    name: str
     inputs: List[int]
     op_type: str
     flags: int
@@ -227,7 +231,7 @@ class Node:
 
 model = []
 for n in nodes:
-    model.append(Node([names[i] for i in n.input], n.op_type, n.flags, 0))
+    model.append(Node(n.name, [names[i] for i in n.input], n.op_type, n.flags, 0))
 
 for idx, node in enumerate(model):
     for inp in node.inputs:
@@ -299,6 +303,8 @@ parameters_slot = ParametersSlot(offset=0, target=outputs['parameters'], slot_id
 parameters2_slot = ParametersSlot(offset=0, target=outputs['parameters2'], slot_id=SLOT_PARAMETERS2)
 
 for node in model:
+    assert len(node.name) < NODE_NAME_LEN
+    outputs['model'].write(node.name.encode('ascii') + b'\0' * (NODE_NAME_LEN - len(node.name)))
     outputs['model'].write(to_bytes(len(node.inputs)))
     outputs['model'].write(to_bytes(inputs_data.tell()))  # Node.inputs_offset
     outputs['model'].write(to_bytes(node.max_output_id))
@@ -440,6 +446,7 @@ struct Model;
 #define CACHED_FILTERS_LEN {CACHED_FILTERS_LEN}
 #define COUNTERS_LEN {COUNTERS_LEN}
 #define NVM_SIZE {NVM_SIZE}
+#define NODE_NAME_LEN {NODE_NAME_LEN}
 
 ''')
     output_c.write('''
