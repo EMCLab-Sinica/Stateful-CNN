@@ -140,7 +140,7 @@ void print_results(Model *model, ParameterInfo *output_node) {
     my_printf(NEWLINE);
 }
 
-void run_cnn_tests(uint16_t n_samples) {
+uint8_t run_cnn_tests(uint16_t n_samples) {
     int8_t label = -1, predicted = -1;
     uint32_t correct = 0, total = 0;
     if (!n_samples) {
@@ -165,6 +165,12 @@ void run_cnn_tests(uint16_t n_samples) {
     my_printf("correct=%" PRId32 " ", correct);
     my_printf("total=%" PRId32 " ", total);
     my_printf("rate=%f" NEWLINE, 1.0*correct/total);
+
+    if (correct < 0.7 * total) {
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 void set_sample_index(Model *model, uint8_t index) {

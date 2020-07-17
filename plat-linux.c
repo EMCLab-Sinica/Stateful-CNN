@@ -68,7 +68,7 @@ int main(int argc, char* argv[]) {
     my_printf("Use TI DSPLib" NEWLINE);
 #endif
 
-    run_cnn_tests(n_samples);
+    ret = run_cnn_tests(n_samples);
 
     for (uint16_t counter_idx = 0; counter_idx < COUNTERS_LEN; counter_idx++) {
         dma_invocations[counter_idx] = 0;
