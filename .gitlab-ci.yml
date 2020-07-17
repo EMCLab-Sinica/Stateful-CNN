@@ -1,0 +1,25 @@
+image: archlinux:latest
+
+mnist_baseline:
+    variables:
+        CONFIG: mnist
+        WITH_PROGRESS_EMBEDDING: 0
+    script: bash ./.ci/test.sh
+
+mnist_stateful:
+    variables:
+        CONFIG: mnist
+        WITH_PROGRESS_EMBEDDING: 1
+    script: bash ./.ci/test.sh
+
+cifar10_baseline:
+    variables:
+        CONFIG: cifar10
+        WITH_PROGRESS_EMBEDDING: 0
+    script: bash ./.ci/test.sh
+
+cifar10_stateful:
+    variables:
+        CONFIG: cifar10
+        WITH_PROGRESS_EMBEDDING: 1
+    script: bash ./.ci/test.sh
