@@ -12,7 +12,7 @@ int16_t lea_buffer[LEA_BUFFER_SIZE];
 
 #define RESHAPE_AUTO_DIM (uint16_t)(-1)
 
-void alloc_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void alloc_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     uint16_t stride = flags & 0x0f;
 
     ParameterInfo *data = input[0];
@@ -23,7 +23,7 @@ void alloc_maxpool(ParameterInfo *input[], ParameterInfo *output, uint16_t flags
 
     output->params_len = new_H * new_W * CHANNEL * sizeof(int16_t);
     output->bitwidth = data->bitwidth;
-    output->slot = get_next_slot(data);
+    output->slot = get_next_slot(model, data);
     output->dims[0] = 1;
     output->dims[1] = CHANNEL;
     output->dims[2] = new_H;
@@ -206,7 +206,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     flip_state_bit(model, output);
 }
 
-void alloc_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void alloc_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(flags);
 
     ParameterInfo *A = input[0], *B = input[1];
@@ -214,7 +214,7 @@ void alloc_add(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
 
     output->params_len = A->params_len;
     output->bitwidth = A->bitwidth;
-    output->slot = get_next_slot(A);
+    output->slot = get_next_slot(model, A);
     output->dims[0] = 1;
     output->dims[1] = A->dims[1];
 }
@@ -240,7 +240,7 @@ void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
     my_memcpy(get_q15_param(output, 0), buffer_a, output->params_len);
 }
 
-void alloc_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void alloc_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(flags);
 
     ParameterInfo *A = input[0], *B = input[1];
@@ -251,7 +251,7 @@ void alloc_matmul(ParameterInfo *input[], ParameterInfo *output, uint16_t flags)
     output->dims[1] = B->dims[1];
     output->params_len = output_len * sizeof(int16_t);
     output->bitwidth = 16;
-    output->slot = get_next_slot(A);
+    output->slot = get_next_slot(model, A);
 }
 
 void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -395,6 +395,7 @@ void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output,
     output->params_len = data->params_len;
     output->bitwidth = data->bitwidth;
     output->slot = data->slot;
+    model->slot_users[output->slot] = model->layer_idx;
     MY_ASSERT(shape->bitwidth == 64);
     /*
      * At most one dimension of the new shape can be -1. In this case, the
@@ -445,6 +446,7 @@ void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output,
     output->params_len = data->params_len;
     output->bitwidth = data->bitwidth;
     output->slot = data->slot;
+    model->slot_users[output->slot] = model->layer_idx;
     for (uint8_t i = 0, j = 0; i < 4; i++) {
         if (input[0]->dims[i] != 1) {
             output->dims[j] = input[0]->dims[i];
@@ -476,7 +478,7 @@ void handle_dropout(Model *model, ParameterInfo *input[], ParameterInfo *output,
     ERROR_OCCURRED();
 }
 
-void alloc_globalaveragepool(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void alloc_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(flags);
 
     ParameterInfo *data = input[0];
@@ -488,7 +490,7 @@ void alloc_globalaveragepool(ParameterInfo *input[], ParameterInfo *output, uint
     output->dims[1] = data->dims[1];
     output->params_len = output_len * sizeof(int16_t);
     output->bitwidth = 16;
-    output->slot = SLOT_INTERMEDIATE_VALUES;
+    output->slot = get_next_slot(model, data);
 }
 
 void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {

@@ -325,7 +325,7 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
     }
 }
 
-void alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void alloc_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1];
 
     MY_ASSERT(conv_input->bitwidth == 16 && conv_filter->bitwidth == 16);
@@ -354,7 +354,7 @@ void alloc_conv(ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
 
     /* XXX: extend flags; assume dilation=(1, 1) for now */
     output->bitwidth = 16;
-    output->slot = get_next_slot(conv_input);
+    output->slot = get_next_slot(model, conv_input);
     output->dims[0] = 1;
     // Although handle_conv requires more memory than params_len, only the first OUTPUT_CHANNEL
     // channels are useful after merging results from tiling
@@ -483,7 +483,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     flip_state_bit(model, output);
 }
 
-void alloc_convmerge(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags) {
+void alloc_convmerge(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(flags);
 
     ParameterInfo *data = input[0];
@@ -494,7 +494,7 @@ void alloc_convmerge(struct ParameterInfo *input[], struct ParameterInfo *output
              OUTPUT_H = data->dims[2],
              OUTPUT_W = data->dims[3];
 
-    output->slot = get_next_slot(data);
+    output->slot = get_next_slot(model, data);
     output->params_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W * sizeof(int16_t);
 }
 

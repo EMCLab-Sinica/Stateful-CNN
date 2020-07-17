@@ -33,7 +33,7 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
      * individual operation handlers */
     ParameterInfo *output = &(parameter_info[node_idx + model->n_input]);
     output->params_offset = 0;
-    allocators[cur_node->op_type](input, output, cur_node->flags);
+    allocators[cur_node->op_type](model, input, output, cur_node->flags);
     my_printf_debug("Needed mem = %d" NEWLINE, output->params_len);
     if (output->slot == SLOT_INTERMEDIATE_VALUES) {
         my_printf_debug("New params_offset = %d" NEWLINE, output->params_offset);
@@ -81,6 +81,7 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
         model->layer_idx = 0;
         for (uint8_t idx = 0; idx < NUM_SLOTS; idx++) {
             model->state_bit[idx] = 0;
+            model->slot_users[idx] = -1;
         }
 #ifdef WITH_PROGRESS_EMBEDDING
         fill_int16((int16_t*)intermediate_values(0), NUM_SLOTS * INTERMEDIATE_VALUES_SIZE / sizeof(int16_t), 0);

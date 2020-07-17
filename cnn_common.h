@@ -57,11 +57,12 @@ typedef struct Model {
     uint16_t recovery;
     uint16_t run_counter;
     uint16_t state_bit[NUM_SLOTS];
+    int16_t slot_users[NUM_SLOTS];
     uint16_t layer_idx;
     uint16_t sample_idx;
 } Model;
 
-_Static_assert(sizeof(Model) == 14 + NUM_SLOTS * 2, "Unexpected size for Model");
+_Static_assert(sizeof(Model) == 14 + NUM_SLOTS * 4, "Unexpected size for Model");
 
 typedef struct {
     uint16_t time_counters[COUNTERS_LEN];
@@ -107,13 +108,13 @@ int16_t* get_q15_param(ParameterInfo *param, size_t i);
 int32_t* get_iq31_param(ParameterInfo *param, size_t i);
 int64_t get_int64_param(ParameterInfo *param, size_t i);
 int16_t node_input(Node *node, size_t i);
-uint16_t get_next_slot(ParameterInfo *param);
+uint16_t get_next_slot(Model *model, ParameterInfo *param);
 
 /**********************************
  *       Operation handlers       *
  **********************************/
 typedef void (*handler)(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
-typedef void (*allocator)(ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
+typedef void (*allocator)(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
 // below are defined in ops.c
 extern uint8_t expected_inputs_len[];
 extern uint8_t inplace_update[];

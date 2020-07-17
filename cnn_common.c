@@ -56,13 +56,34 @@ int64_t get_int64_param(ParameterInfo *param, size_t i) {
     return *ret;
 }
 
-uint16_t get_next_slot(ParameterInfo *param) {
+uint16_t get_next_slot(Model *model, ParameterInfo *param) {
+    Node *nodes = (Node*)(model + 1);
     uint16_t slot_id = param->slot;
-    /* pick the next slot */
-    uint16_t next_slot_id = slot_id + 1;
-    if (next_slot_id >= NUM_SLOTS) {
-        next_slot_id = 0;
+    /* pick the next unused slot */
+    uint16_t next_slot_id = slot_id;
+    uint8_t cycle_count = 0;
+    while (1) {
+        next_slot_id++;
+        // Fail if the loop has run a cycle
+        if (next_slot_id >= NUM_SLOTS) {
+            next_slot_id = 0;
+            cycle_count++;
+            MY_ASSERT(cycle_count <= 1);
+        }
+        int16_t slot_user_id = model->slot_users[next_slot_id];
+        if (slot_user_id < 0) {
+            break;
+        }
+        // previously allocated, most likely in a previous power cycle
+        if (slot_user_id == model->layer_idx) {
+            break;
+        }
+        Node *slot_user = &(nodes[slot_user_id]);
+        if (slot_user->max_output_id < model->layer_idx) {
+            break;
+        }
     }
     my_printf_debug("next_slot_id = %d" NEWLINE, next_slot_id);
+    model->slot_users[next_slot_id] = model->layer_idx;
     return next_slot_id;
 }

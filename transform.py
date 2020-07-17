@@ -239,6 +239,17 @@ for idx, node in enumerate(model):
             continue
         used_node = model[inp - n_input]
         used_node.max_output_id = max([idx, used_node.max_output_id])
+
+# Inputs of Concat should be kept until Concat is processed
+for idx, node in enumerate(model):
+    if node.op_type != 'Concat':
+        continue
+    for inp in node.inputs:
+        if inp < n_input:
+            continue
+        used_node = model[inp - n_input]
+        used_node.max_output_id = max([used_node.max_output_id, node.max_output_id])
+
 parameters = [None for _ in range(n_input)]
 
 for params in g.initializer:
@@ -291,6 +302,8 @@ outputs['model'].write(to_bytes(0))  # Model.recovery
 outputs['model'].write(to_bytes(0))  # Model.run_counter
 for _ in range(NUM_SLOTS):
     outputs['model'].write(to_bytes(0))  # Model.state_bit
+for _ in range(NUM_SLOTS):
+    outputs['model'].write(to_bytes(-1))  # Model.slot_users
 outputs['model'].write(to_bytes(0))  # Model.layer_idx
 outputs['model'].write(to_bytes(0))  # Model.sample_idx
 
@@ -466,7 +479,7 @@ struct Model;
 
     for op in keys:
         output_h.write('void handle_{}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
-        output_h.write('void alloc_{}(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
+        output_h.write('void alloc_{}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
     output_c.write('handler handlers[] = {\n')
     for op in keys:
         output_c.write(f'\thandle_{op},\n'.lower())
@@ -477,10 +490,11 @@ struct Model;
     output_c.write('};\n')
     for op in keys:
         if ops[op][1]:
-            output_c.write(f'void alloc_{op.lower()}(struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)\n')
+            output_c.write(f'void alloc_{op.lower()}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)\n')
             output_c.write('{\n')
             output_c.write('\tUNUSED(flags);\n')
             output_c.write('\tmy_memcpy(output, input[0], sizeof(struct ParameterInfo));\n')
+            output_c.write('\tmodel->slot_users[output->slot] = model->layer_idx;\n')
             output_c.write('}\n')
 
     # data
