@@ -31,7 +31,7 @@ void alloc_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 }
 
 static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, uint16_t tile_c_offset, uint16_t flags, ParameterInfo *data, ParameterInfo *output, Model *model) {
-    const uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
+    const uint16_t CHANNEL = data->dims[1], W = data->dims[3];
     uint16_t stride = flags & 0x0f;
     uint16_t kernel_size = (flags & 0xf0) >> 4;
     int16_t *data_baseptr = get_q15_param(data, 0);
@@ -43,14 +43,8 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
 #endif
 
     int16_t offset_h, offset_w;
-    // Output from handle_conv - NHWC or NWHC (transposed)?
-    if (data->flags & TRANSPOSED) {
-        offset_h = CHANNEL;
-        offset_w = H * CHANNEL;
-    } else {
-        offset_h = W * CHANNEL;
-        offset_w = CHANNEL;
-    }
+    offset_h = W * CHANNEL;
+    offset_w = CHANNEL;
 
     my_printf_debug("output_h=%d ", output_h);
     my_printf_debug("output_w=%d ", output_w);
@@ -337,6 +331,15 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     flip_state_bit(model, output);
 }
 
+void alloc_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+    UNUSED(flags);
+
+    ParameterInfo *data = input[0];
+    my_memcpy(output, data, sizeof(struct ParameterInfo));
+    output->slot = get_next_slot(model, data);
+    output->flags &= ~TRANSPOSED;
+}
+
 void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(flags);
 
@@ -351,7 +354,8 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     /* XXX: use LEA? */
     uint16_t bitwidth = X->bitwidth;
     MY_ASSERT(bitwidth == 16);
-    int16_t *data = get_q15_param(X, 0);
+    int16_t *data_baseptr = get_q15_param(X, 0);
+    int16_t *output_baseptr = get_q15_param(output, 0);
     int16_t data_len = X->params_len / (bitwidth / 8);
 
     int16_t threshold, offset;
@@ -370,13 +374,26 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     my_printf_debug("threshold = %d" NEWLINE, threshold);
     my_printf_debug("offset = %d" NEWLINE, offset);
 
-    int16_t *data_ptr = data + first_unfinished_value_offset;
-    for (uint16_t i = first_unfinished_value_offset; i < data_len; i++) {
-        if (*data_ptr < threshold) {
-            *data_ptr = threshold;
+    int16_t *data_ptr = data_baseptr + first_unfinished_value_offset;
+    int16_t *output_ptr = output_baseptr + first_unfinished_value_offset;
+    if (X->flags & TRANSPOSED) {
+        // input is in NWHC
+        // TODO: state-aware recovery
+        uint16_t CHANNEL = X->dims[1], H = X->dims[2], W = X->dims[3];
+        for (uint16_t output_h = 0; output_h < H; output_h++) {
+            for (uint16_t output_w = 0; output_w < W; output_w++) {
+                for (uint16_t c = 0; c < CHANNEL; c++) {
+                    int16_t val = *(data_baseptr + output_w * H * CHANNEL + output_h * CHANNEL + c);
+                    *(output_baseptr + output_h * W * CHANNEL + output_w * CHANNEL + c) = MAX_VAL(val, threshold) + offset;
+                }
+            }
         }
-        *data_ptr += offset;
-        data_ptr++;
+    } else {
+        for (uint16_t i = first_unfinished_value_offset; i < data_len; i++) {
+            *output_ptr = MAX_VAL(*data_ptr, threshold) + offset;
+            data_ptr++;
+            output_ptr++;
+        }
     }
     my_printf_debug("handle_relu output" NEWLINE);
     dump_params_nhwc(output, 0);

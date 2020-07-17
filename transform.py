@@ -43,7 +43,7 @@ ops = {
     'GlobalAveragePool': [1, 0],
     'MatMul': [2, 0],
     'MaxPool': [1, 0],
-    'Relu': [1, 1],
+    'Relu': [1, 0],
     'Reshape': [2, 1],
     'Softmax': [1, 1],
     'Squeeze': [1, 1],
