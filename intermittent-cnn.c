@@ -82,10 +82,10 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
         for (uint8_t idx = 0; idx < NUM_SLOTS; idx++) {
             model->state_bit[idx] = 0;
             model->slot_users[idx] = -1;
-        }
 #ifdef WITH_PROGRESS_EMBEDDING
-        fill_int16((int16_t*)intermediate_values(0), NUM_SLOTS * INTERMEDIATE_VALUES_SIZE / sizeof(int16_t), 0);
+            fill_int16((int16_t*)intermediate_values(idx), INTERMEDIATE_VALUES_SIZE / sizeof(int16_t), 0);
 #endif
+        }
         model->running = 1;
     } else {
         model->recovery = 1;

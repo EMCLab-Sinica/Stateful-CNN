@@ -36,7 +36,8 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
     uint16_t kernel_size = (flags & 0xf0) >> 4;
     int16_t *data_baseptr = get_q15_param(data, 0);
 #ifdef WITH_PROGRESS_EMBEDDING
-    uint8_t do_flip_state = get_state_bit(model, data->slot) == get_state_bit(model, output->slot);
+    uint8_t input_state_bit = get_state_bit(model, data->slot);
+    uint8_t old_output_state_bit = get_state_bit(model, output->slot);
 #else
     UNUSED(output);
     UNUSED(model);
@@ -57,7 +58,7 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
             // XXX: use a moving pointer instead of data_baseptr makes it slower. Why!?
             val = data_baseptr[(output_h*stride+sH) * offset_h + (output_w*stride+sW) * offset_w + tile_c_offset + c];
 #ifdef WITH_PROGRESS_EMBEDDING
-            if (do_flip_state && get_state_bit(model, data->slot)) {
+            if (input_state_bit) {
                 val -= 0x4000;
             }
 #endif
@@ -69,7 +70,7 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
         }
     }
 #ifdef WITH_PROGRESS_EMBEDDING
-    if (do_flip_state && !get_state_bit(model, data->slot)) {
+    if (!old_output_state_bit) {
         max_val += 0x4000;
     }
 #endif
@@ -358,17 +359,15 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     int16_t *output_baseptr = get_q15_param(output, 0);
     int16_t data_len = X->params_len / (bitwidth / 8);
 
-    int16_t threshold, offset;
+    int16_t threshold = 0, offset = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
     if (get_state_bit(model, X->slot)) {
         threshold = 0x4000;
         offset = -0x4000;
-    } else {
-        threshold = 0;
-        offset = 0x4000;
     }
-#else
-    threshold = offset = 0;
+    if (!get_state_bit(model, output->slot)) {
+        offset += 0x4000;
+    }
 #endif
 
     my_printf_debug("threshold = %d" NEWLINE, threshold);

@@ -108,7 +108,7 @@ configs = {
         'input_file': 'data/cifar10-test_batch',
         'scale': 30,
         'num_slots': 3,
-        'intermediate_values_size': 116000,
+        'intermediate_values_size': 30000,
         'nvm_size_kb': 1024,
         'data_loader': load_data_cifar10,
     },

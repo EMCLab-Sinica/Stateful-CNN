@@ -54,7 +54,8 @@ typedef struct ConvTaskParams {
     uint16_t filter_limit;
     uint8_t truncated;
 #ifdef WITH_PROGRESS_EMBEDDING
-    uint16_t state_bit;
+    uint8_t input_state_bit;
+    uint8_t old_output_state_bit;
 #endif
 
     uint16_t conv_idx;
@@ -133,7 +134,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 }
             }
 #ifdef WITH_PROGRESS_EMBEDDING
-            if (!conv_params->state_bit) {
+            if (!conv_params->old_output_state_bit) {
                 filter_tmp[conv_params->filter_offset - 1] = -0x4000;
             }
 #endif
@@ -218,7 +219,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     MY_ASSERT((uint8_t*)(output_data + n_filters) < intermediate_values(NUM_SLOTS));
 #if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
     for (uint16_t idx2 = 0; idx2 < n_filters; idx2++) {
-        if (!conv_params->state_bit && !get_value_state_bit(matrix_mpy_results[idx2])) {
+        if (!conv_params->old_output_state_bit && !get_value_state_bit(matrix_mpy_results[idx2])) {
             ERROR_OCCURRED();
         }
     }
@@ -297,7 +298,7 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
             input_src_addr,
             size * sizeof(int16_t));
 #ifdef WITH_PROGRESS_EMBEDDING
-        if (conv_params->state_bit) {
+        if (conv_params->input_state_bit) {
             msp_offset_q15_params offset_params = { .length = size, .offset = -0x4000 };
             status = msp_offset_q15(&offset_params, dest_addr, dest_addr);
             msp_checkStatus(status);
@@ -418,7 +419,8 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     conv_params->CHANNEL = CHANNEL;
     conv_params->OUTPUT_CHANNEL = OUTPUT_CHANNEL;
 #ifdef WITH_PROGRESS_EMBEDDING
-    conv_params->state_bit = get_state_bit(model, conv_input->slot);
+    conv_params->input_state_bit = get_state_bit(model, conv_input->slot);
+    conv_params->old_output_state_bit = get_state_bit(model, output->slot);
 #endif
 
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
