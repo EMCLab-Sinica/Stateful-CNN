@@ -484,6 +484,8 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     output->tile_c = A->dims[1];
     output->dims[1] *= 2;
     output->flags |= SEPARATE_TILING;
+    output->extra_info[0] = A->slot;
+    output->extra_info[1] = B->slot;
     MY_ASSERT(B->slot == (A->slot + 1) % NUM_SLOTS);
 }
 

@@ -54,7 +54,8 @@ typedef struct ConvTaskParams {
     uint16_t filter_limit;
     uint8_t truncated;
 #ifdef WITH_PROGRESS_EMBEDDING
-    uint8_t input_state_bit;
+    // Needs multiple input state bits as IFM may be from different slots (separate tiling)
+    uint8_t input_state_bits[3]; // should be larger than any possible n_tiles_c
     uint8_t old_output_state_bit;
 #endif
 
@@ -298,7 +299,13 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
             input_src_addr,
             size * sizeof(int16_t));
 #ifdef WITH_PROGRESS_EMBEDDING
-        if (conv_params->input_state_bit) {
+        uint8_t input_state_bit;
+        if (conv_params->conv_input->flags & SEPARATE_TILING) {
+            input_state_bit = conv_params->input_state_bits[conv_params->tile_c_index];
+        } else {
+            input_state_bit = conv_params->input_state_bits[0];
+        }
+        if (input_state_bit) {
             msp_offset_q15_params offset_params = { .length = size, .offset = -0x4000 };
             status = msp_offset_q15(&offset_params, dest_addr, dest_addr);
             msp_checkStatus(status);
@@ -419,7 +426,12 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     conv_params->CHANNEL = CHANNEL;
     conv_params->OUTPUT_CHANNEL = OUTPUT_CHANNEL;
 #ifdef WITH_PROGRESS_EMBEDDING
-    conv_params->input_state_bit = get_state_bit(model, conv_input->slot);
+    if (conv_input->flags & SEPARATE_TILING) {
+        conv_params->input_state_bits[0] = get_state_bit(model, conv_input->extra_info[0]);
+        conv_params->input_state_bits[1] = get_state_bit(model, conv_input->extra_info[1]);
+    } else {
+        conv_params->input_state_bits[0] = get_state_bit(model, conv_input->slot);
+    }
     conv_params->old_output_state_bit = get_state_bit(model, output->slot);
 #endif
 
@@ -536,6 +548,8 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 #ifdef WITH_PROGRESS_EMBEDDING
     int16_t input_offset = get_state_bit(model, data->slot) ? -0x4000 : 0;
     int16_t output_offset = get_state_bit(model, output->slot) ? 0 : 0x4000;
+    my_printf_debug("input_offset = %d, ", input_offset);
+    my_printf_debug("output_offset = %d" NEWLINE, output_offset);
     msp_offset_q15_params offset_params;
 #endif
     msp_status status;
