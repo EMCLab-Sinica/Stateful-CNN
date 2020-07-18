@@ -4,8 +4,6 @@
 #include <stdint.h>
 #include "data.h"
 
-#define WITH_PROGRESS_EMBEDDING
-
 /**********************************
  *        Data structures         *
  **********************************/

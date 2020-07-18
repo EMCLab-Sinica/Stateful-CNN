@@ -97,7 +97,7 @@ configs = {
         # https://github.com/onnx/models/raw/master/vision/classification/mnist/model/mnist-8.onnx
         'onnx_model': 'data/mnist-8.onnx',
         'input_file': 'data/Test-28x28_cntk_text.txt',
-        'scale': 70,
+        'scale': 35,
         'num_slots': 2,
         'intermediate_values_size': 31000,
         'nvm_size_kb': 256,
@@ -106,7 +106,7 @@ configs = {
     'cifar10': {
         'onnx_model': 'data/squeezenet_cifar10.onnx',
         'input_file': 'data/cifar10-test_batch',
-        'scale': 30,
+        'scale': 40,
         'num_slots': 3,
         'intermediate_values_size': 30000,
         'nvm_size_kb': 1024,
@@ -116,9 +116,12 @@ configs = {
 
 parser = argparse.ArgumentParser()
 parser.add_argument('config', choices=configs.keys())
+parser.add_argument('--without-progress-embedding', action='store_true')
 args = parser.parse_args()
 config = configs[args.config]
 SCALE = config['scale']
+if not args.without_progress_embedding:
+    SCALE *= 2
 # NUM_SLOTS * INTERMEDIATE_VALUES_SIZE should < 65536, or TI's compiler gets confused
 NUM_SLOTS = config['num_slots']
 INTERMEDIATE_VALUES_SIZE = config['intermediate_values_size']
@@ -462,7 +465,11 @@ struct Model;
 #define COUNTERS_LEN {COUNTERS_LEN}
 #define NVM_SIZE {NVM_SIZE}
 #define NODE_NAME_LEN {NODE_NAME_LEN}
+''')
 
+    if not args.without_progress_embedding:
+        output_h.write('''
+#define WITH_PROGRESS_EMBEDDING
 ''')
     output_c.write('''
 #include "data.h"
@@ -471,6 +478,7 @@ struct Model;
 
     # ops
     keys = list(ops.keys())
+    output_h.write('\n')
     for idx, op in enumerate(keys):
         output_h.write(f'#define {op} {idx}\n')
 
