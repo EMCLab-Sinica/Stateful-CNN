@@ -10,7 +10,7 @@ def main():
             except TimeoutExpired:
                 proc.send_signal(signal.SIGINT)
             proc.wait()
-            if proc.returncode in (-signal.SIGABRT, -signal.SIGFPE):
+            if proc.returncode in (1, -signal.SIGFPE):
                 raise Exception('Crashed')
             if proc.returncode == 0:
                 break

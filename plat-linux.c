@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 1 // for kill()
+
 #include "intermittent-cnn.h"
 #include "cnn_common.h"
 #include "debug.h"
@@ -10,9 +12,11 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <unistd.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/ptrace.h>
 
 #define MEMCPY_DELAY_US 0
 
@@ -117,5 +121,10 @@ void fill_int16(int16_t *dest, uint16_t n, int16_t val) {
 }
 
 _Noreturn void ERROR_OCCURRED(void) {
-    abort();
+    if (ptrace(PTRACE_TRACEME, 0, NULL, 0) == -1) {
+        // Let the debugger break
+        kill(getpid(), SIGINT);
+    }
+    // give up otherwise
+    exit(1);
 }
