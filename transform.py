@@ -569,4 +569,5 @@ with open('nvm.bin', 'wb') as f:
     for data_obj in outputs.values():
         data_obj.seek(0)
         f.write(data_obj.read())
-        assert f.tell() < NVM_SIZE
+        needed_nvm_size = f.tell()
+        assert needed_nvm_size < NVM_SIZE, f'Need NVM size {needed_nvm_size}'
