@@ -99,7 +99,8 @@ void plat_print_results(void) {
 }
 
 void setOutputValue(uint8_t value) {
-    my_printf("Output set to %d" NEWLINE, value);
+    // my_printf("Output set to %d" NEWLINE, value);
+    UNUSED(value);
 }
 
 void my_memcpy(void* dest, const void* src, size_t n) {
