@@ -4,7 +4,9 @@ project(intermittent-cnn)
 
 option(USE_ARM_CMSIS "Use DSP from ARM CMSIS pack" OFF)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wstrict-prototypes -Wshadow -Wundef -g -O0 -std=c11 -pedantic")
+set(COMMON_FLAGS "-Wall -Wextra -Wshadow -Wundef -g -O0 -pedantic")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS} -Wstrict-prototypes -std=c11")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -std=c++11")
 
 set(DSPLIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/TI-DSPLib)
 set(ARM_CMSIS_DSP_PATH ${CMAKE_CURRENT_SOURCE_DIR}/ARM-CMSIS)
@@ -21,6 +23,9 @@ add_library(dsplib
     ${DSPLIB_PATH}/source/matrix/msp_matrix_mpy_q15.c
     ${DSPLIB_PATH}/source/vector/msp_add_q15.c
     ${DSPLIB_PATH}/source/vector/msp_offset_q15.c
+    ${DSPLIB_PATH}/source/vector/msp_max_q15.c
+    ${DSPLIB_PATH}/source/vector/msp_min_q15.c
+    ${DSPLIB_PATH}/source/vector/msp_scale_q15.c
     ${DSPLIB_PATH}/source/utility/msp_interleave_q15.c
     ${DSPLIB_PATH}/source/utility/msp_fill_q15.c
 )
@@ -46,13 +51,13 @@ target_compile_definitions(arm_cmsis_dsp
 )
 
 add_executable(intermittent-cnn
-    intermittent-cnn.c
-    data.c
-    op_handlers.c
-    conv.c
-    cnn_common.c
-    debug.c
-    plat-linux.c
+    intermittent-cnn.cpp
+    data.cpp
+    op_handlers.cpp
+    conv.cpp
+    cnn_common.cpp
+    debug.cpp
+    plat-linux.cpp
 )
 target_link_libraries(intermittent-cnn dsplib arm_cmsis_dsp fake-msp430sdk)
 

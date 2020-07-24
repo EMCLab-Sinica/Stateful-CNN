@@ -53,11 +53,8 @@ typedef struct ConvTaskParams {
     uint16_t filter_offset;
     uint16_t filter_limit;
     uint8_t truncated;
-#ifdef WITH_PROGRESS_EMBEDDING
-    // Needs multiple input state bits as IFM may be from different slots (separate tiling)
-    uint8_t input_state_bits[3]; // should be larger than any possible n_tiles_c
+    uint8_t input_state_bit;
     uint8_t old_output_state_bit;
-#endif
 
     uint16_t conv_idx;
     uint16_t output_h;
@@ -98,10 +95,9 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #ifndef USE_ARM_CMSIS
         int16_t *filter_tmp = matrix_mpy_results - conv_params->filter_offset; // before transpose
 
-        msp_fill_q15_params fill_params = {
-            .length = conv_params->filter_offset,
-            .value = 0,
-        };
+        msp_fill_q15_params fill_params;
+        fill_params.length = conv_params->filter_offset;
+        fill_params.value = 0;
         msp_status status = msp_fill_q15(&fill_params, filter_tmp);
         msp_checkStatus(status);
 #else
@@ -120,9 +116,6 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 (conv_params->conv_idx + idx) * filter_src_offset
             );
             my_printf_debug("Copying filter %d" NEWLINE, conv_params->conv_idx + idx);
-            if (conv_params->tile_c_index == 0) {
-                *(filter_tmp + conv_params->dest_offset - 1) = -*get_q15_param(conv_params->conv_bias, conv_params->conv_idx + idx);
-            }
             for (uint16_t h = 0; h < conv_params->kH; h++) {
                 int16_t *filter_dest_ptr = filter_tmp + h * conv_params->dest_offset;
                 int16_t *filter_src_ptr = filter_addr + h * conv_params->kW * conv_params->CHANNEL + conv_params->tile_c_offset;
@@ -137,8 +130,16 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #ifdef WITH_PROGRESS_EMBEDDING
             if (!conv_params->old_output_state_bit) {
                 filter_tmp[conv_params->filter_offset - 1] = -0x4000;
+            } else {
+#endif
+                // XXX: why is this needed? Should already be zero with msp_fill_q15 above
+                filter_tmp[conv_params->filter_offset - 1] = 0;
+#ifdef WITH_PROGRESS_EMBEDDING
             }
 #endif
+            if (conv_params->tile_c_index == 0) {
+                filter_tmp[conv_params->filter_offset - 1] += -*get_q15_param(conv_params->conv_bias, conv_params->conv_idx + idx) / conv_params->conv_input->scale;
+            }
 
 #ifndef USE_ARM_CMSIS
             msp_interleave_q15_params params;
@@ -194,17 +195,27 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
     my_printf_debug("input_buffer_addr = lea_buffer + %d" NEWLINE, (int)(input_buffer_addr - lea_buffer));
     my_printf_debug("input" NEWLINE);
-    dump_matrix2(input_buffer_addr, p_matrix_mpy_params->srcARows, p_matrix_mpy_params->srcACols);
+    dump_matrix2(input_buffer_addr, p_matrix_mpy_params->srcARows, p_matrix_mpy_params->srcACols, conv_params->conv_input->scale, 0);
     my_printf_debug("filter_buffer_addr = lea_buffer + LEA_BUFFER_SIZE - %d" NEWLINE, (int)(lea_buffer + LEA_BUFFER_SIZE - filter_buffer_addr));
     my_printf_debug("filter" NEWLINE);
 #ifndef USE_ARM_CMSIS
-    dump_matrix2(filter_buffer_addr, p_matrix_mpy_params->srcBRows, p_matrix_mpy_params->srcBCols);
+    dump_matrix2(filter_buffer_addr, p_matrix_mpy_params->srcBRows, p_matrix_mpy_params->srcBCols, conv_params->conv_filter->scale, 0);
 #else
-    dump_matrix2(filter_buffer_addr, p_matrix_mpy_params->srcBCols, p_matrix_mpy_params->srcBRows);
+    dump_matrix2(filter_buffer_addr, p_matrix_mpy_params->srcBCols, p_matrix_mpy_params->srcBRows, conv_params->conv_filter->scale, 0);
 #endif
 
     my_printf_debug("matrix_mpy_results" NEWLINE);
-    dump_matrix2(matrix_mpy_results, p_matrix_mpy_params->srcARows, p_matrix_mpy_params->srcBCols);
+    dump_matrix2(
+        matrix_mpy_results,
+        p_matrix_mpy_params->srcARows,
+        p_matrix_mpy_params->srcBCols,
+        conv_params->conv_input->scale * conv_params->conv_filter->scale,
+#ifdef WITH_PROGRESS_EMBEDDING
+        !conv_params->old_output_state_bit
+#else
+        0
+#endif
+    );
     my_printf_debug(NEWLINE);
 #endif
     /* END dump data */
@@ -236,12 +247,8 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
     ParameterInfo *conv_input = conv_params->conv_input;
     int16_t *input_addr = get_q15_param(conv_input, 0);
     if (conv_input->flags & SEPARATE_TILING) {
-        if (conv_input->slot == NUM_SLOTS - 1) {
-            // next slot is 0
-            input_addr -= conv_params->tile_c_index * (NUM_SLOTS - 1) * INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);
-        } else {
-            input_addr += conv_params->tile_c_index * INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);
-        }
+        int8_t slot_difference = conv_params->conv_input->extra_info[conv_params->tile_c_index] - conv_params->conv_input->extra_info[0];
+        input_addr += slot_difference * INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);
     } else {
         input_addr += conv_params->tile_c_offset * conv_params->H * conv_params->W;
     }
@@ -273,10 +280,9 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
     my_printf_debug("Reinitialize input buffer" NEWLINE "inputs_len = %d" NEWLINE, inputs_len);
 
 #ifndef USE_ARM_CMSIS
-    msp_fill_q15_params fill_params = {
-        .length = inputs_len,
-        .value = 0,
-    };
+    msp_fill_q15_params fill_params;
+    fill_params.length = inputs_len;
+    fill_params.value = 0;
     msp_status status = msp_fill_q15(&fill_params, lea_buffer);
     msp_checkStatus(status);
 #else
@@ -299,14 +305,10 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
             input_src_addr,
             size * sizeof(int16_t));
 #ifdef WITH_PROGRESS_EMBEDDING
-        uint8_t input_state_bit;
-        if (conv_params->conv_input->flags & SEPARATE_TILING) {
-            input_state_bit = conv_params->input_state_bits[conv_params->tile_c_index];
-        } else {
-            input_state_bit = conv_params->input_state_bits[0];
-        }
-        if (input_state_bit) {
-            msp_offset_q15_params offset_params = { .length = size, .offset = -0x4000 };
+        if (conv_params->input_state_bit) {
+            msp_offset_q15_params offset_params;
+            offset_params.length = size;
+            offset_params.offset = -0x4000;
             status = msp_offset_q15(&offset_params, dest_addr, dest_addr);
             msp_checkStatus(status);
         }
@@ -320,7 +322,8 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
     }
 
     my_printf_debug("Loaded inputs" NEWLINE);
-    dump_matrix(lea_buffer, inputs_len);
+    // state = 0 as state bits are already removed by msp_offset_q15 above
+    dump_matrix(lea_buffer, inputs_len, conv_params->conv_input->scale, 0);
 
     msp_matrix_mpy_q15_params *p_matrix_mpy_params = &(conv_params->matrix_mpy_params);
 
@@ -380,14 +383,11 @@ void alloc_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
     output->dims[3] = conv_params->OUTPUT_W = (W - conv_params->offset_w * 2) / conv_params->stride;
     output->params_len = conv_params->n_tiles_c * OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W * sizeof(int16_t);
     output->flags = TRANSPOSED;
-
     output->flags |= conv_params->n_tiles_c << 4;
+    output->scale = conv_input->scale * conv_filter->scale;
 }
 
 void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-#ifndef WITH_PROGRESS_EMBEDDING
-    UNUSED(model);
-#endif
     // flags already handled in alloc_conv
     UNUSED(flags);
 
@@ -426,11 +426,13 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     conv_params->CHANNEL = CHANNEL;
     conv_params->OUTPUT_CHANNEL = OUTPUT_CHANNEL;
 #ifdef WITH_PROGRESS_EMBEDDING
+    // Needs to handle multiple input state bits as IFM may be from different slots (separate tiling)
+    uint8_t input_state_bits[3]; // should accomodate n_tiles_c
     if (conv_input->flags & SEPARATE_TILING) {
-        conv_params->input_state_bits[0] = get_state_bit(model, conv_input->extra_info[0]);
-        conv_params->input_state_bits[1] = get_state_bit(model, conv_input->extra_info[1]);
+        input_state_bits[0] = get_state_bit(model, conv_input->extra_info[0]);
+        input_state_bits[1] = get_state_bit(model, conv_input->extra_info[1]);
     } else {
-        conv_params->input_state_bits[0] = get_state_bit(model, conv_input->slot);
+        input_state_bits[0] = get_state_bit(model, conv_input->slot);
     }
     conv_params->old_output_state_bit = get_state_bit(model, output->slot);
 #endif
@@ -452,6 +454,13 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     UNUSED(initial_c);
 
     for (uint16_t tile_c_offset = initial_n * conv_params->tile_c, tile_c_index = initial_n; tile_c_offset < CHANNEL ; tile_c_offset += conv_params->tile_c, tile_c_index++) {
+#ifdef WITH_PROGRESS_EMBEDDING
+        if (conv_params->conv_input->flags & SEPARATE_TILING) {
+            conv_params->input_state_bit = input_state_bits[tile_c_index];
+        } else {
+            conv_params->input_state_bit = input_state_bits[0];
+        }
+#endif
         conv_params->cur_tile_c = MIN_VAL(conv_params->tile_c, CHANNEL - tile_c_offset);
         my_printf_debug("cur_tile_c = %d" NEWLINE, conv_params->cur_tile_c);
         // +1 for bias
@@ -494,16 +503,16 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         }
     }
 
+    flip_state_bit(model, output);
+
 #ifndef MY_NDEBUG
     uint32_t tiling_results_len = OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W;
 
     my_printf_debug("handle_conv output" NEWLINE);
     for (uint16_t tile_c_index = 0; tile_c_index * conv_params->tile_c < CHANNEL; tile_c_index++) {
-        dump_params_nhwc(output, tile_c_index * tiling_results_len);
+        dump_params_nhwc(model, output, tile_c_index * tiling_results_len);
     }
 #endif
-
-    flip_state_bit(model, output);
 }
 
 void alloc_convmerge(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -545,6 +554,16 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
     int16_t *output_baseptr = get_q15_param(output, 0);
     uint16_t chunk_len = (LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2;
 
+    int16_t cur_scale = SCALE / find_overflow_factor(model, data);
+    msp_scale_q15_params scale_params;
+    scale_params.shift = 0;
+    float cur_scale_f = cur_scale;
+    while (cur_scale_f >= 1) {
+        cur_scale_f /= 2;
+        scale_params.shift++;
+    }
+    scale_params.scale = _Q15(cur_scale_f);
+
 #ifdef WITH_PROGRESS_EMBEDDING
     int16_t input_offset = get_state_bit(model, data->slot) ? -0x4000 : 0;
     int16_t output_offset = get_state_bit(model, output->slot) ? 0 : 0x4000;
@@ -554,6 +573,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 #endif
     msp_status status;
 
+    // XXX: use iterate_chunks() ?
     for (uint32_t tiling_results_offset = 0; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
         uint32_t real_chunk_len = MIN_VAL(chunk_len, tiling_results_len - tiling_results_offset);
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -566,18 +586,17 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
                       data_baseptr + tile_c_index * tiling_results_len + tiling_results_offset,
                       real_chunk_len * sizeof(int16_t));
             // scale up results as in convolution values are scaled down twice (input & weights)
-            // XXX: not using msp_scale_q15 as it does not do saturation and overflowed
-            // values lead to incorrect prediction results.
 #ifdef WITH_PROGRESS_EMBEDDING
             offset_params.offset = input_offset;
             status = msp_offset_q15(&offset_params, to_add, to_add);
             msp_checkStatus(status);
 #endif
-            for (uint16_t chunk_idx = 0; chunk_idx < real_chunk_len; chunk_idx++) {
-                to_add[chunk_idx] = __saturate(to_add[chunk_idx] * SCALE, INT16_MIN, INT16_MAX);
-            }
+            scale_params.length = real_chunk_len;
+            status = msp_scale_q15(&scale_params, to_add, to_add);
+            msp_checkStatus(status);
             if (tile_c_index != 0) {
-                msp_add_q15_params params3 = { .length = real_chunk_len };
+                msp_add_q15_params params3;
+                params3.length = real_chunk_len;
                 status = msp_add_q15(&params3, lea_buffer, to_add, lea_buffer);
                 msp_checkStatus(status);
             }
@@ -592,9 +611,11 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 
     my_printf_debug("After scaling up back and merging tiling results" NEWLINE);
 
-    dump_params_nhwc(output, 0);
+    output->scale /= cur_scale;
 
     setOutputValue(0);
 
     flip_state_bit(model, output);
+
+    dump_params_nhwc(model, output, 0);
 }

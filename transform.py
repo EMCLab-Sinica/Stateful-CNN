@@ -106,7 +106,7 @@ configs = {
     'cifar10': {
         'onnx_model': 'data/squeezenet_cifar10.onnx',
         'input_file': 'data/cifar10-test_batch',
-        'scale': 40,
+        'scale': 8,
         'num_slots': 3,
         'intermediate_values_size': 30000,
         'nvm_size_kb': 1024,
@@ -120,8 +120,6 @@ parser.add_argument('--without-progress-embedding', action='store_true')
 args = parser.parse_args()
 config = configs[args.config]
 SCALE = config['scale']
-if not args.without_progress_embedding:
-    SCALE *= 2
 # NUM_SLOTS * INTERMEDIATE_VALUES_SIZE should < 65536, or TI's compiler gets confused
 NUM_SLOTS = config['num_slots']
 INTERMEDIATE_VALUES_SIZE = config['intermediate_values_size']
@@ -372,10 +370,7 @@ for params in parameters:
                 print(f'Reorder conv param {params.name}')
                 float_data, _ = nchw2nhwc(float_data, params.dims)
             for param in float_data:
-                if len(params.dims) != 4:  # most likely biases
-                    slot.target.write(to_bytes(_Q15(param / SCALE / SCALE)))
-                else:
-                    slot.target.write(to_bytes(_Q15(param / SCALE)))
+                slot.target.write(to_bytes(_Q15(param / SCALE)))
                 slot.offset += 2
             outputs['model'].write(to_bytes(16, size=8)) # bitwidth
         elif params.data_type == onnx.TensorProto.INT64:
@@ -401,6 +396,9 @@ for params in parameters:
     # common to input and non-inputs
     outputs['model'].write(to_bytes(0, size=8))                 # flags
     for _ in range(3):
+        outputs['model'].write(to_bytes(0, size=8))             # extra_info
+    outputs['model'].write(to_bytes(SCALE))                     # scale
+    for _ in range(2):
         outputs['model'].write(to_bytes(0, size=8))             # dummy
 
 # Placeholder for ParameterInfo of intermediate values
@@ -414,7 +412,10 @@ for idx, n in enumerate(nodes):
         outputs['model'].write(to_bytes(0))
     outputs['model'].write(to_bytes(0, size=8))     # flags
     for _ in range(3):
-        outputs['model'].write(to_bytes(0, size=8)) # dummy
+        outputs['model'].write(to_bytes(0, size=8)) # extra_info
+    outputs['model'].write(to_bytes(SCALE))         # scale
+    for _ in range(2):
+        outputs['model'].write(to_bytes(0, size=8))             # dummy
 
 inputs_data.seek(0)
 outputs['model'].write(inputs_data.read())
@@ -444,7 +445,7 @@ with open('images/ans.txt', 'w') as f:
 
 outputs['counters'].write(b'\0' * (4 * COUNTERS_LEN + 2))
 
-with open('data.c', 'w') as output_c, open('data.h', 'w') as output_h:
+with open('data.cpp', 'w') as output_c, open('data.h', 'w') as output_h:
     output_h.write(f'''
 #pragma once
 
@@ -502,8 +503,8 @@ struct Model;
         if ops[op][1]:
             output_c.write(f'void alloc_{op.lower()}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)\n')
             output_c.write('{\n')
+            output_c.write('\tUNUSED(input);\n')
             output_c.write('\tUNUSED(flags);\n')
-            output_c.write('\tmy_memcpy(output, input[0], sizeof(struct ParameterInfo));\n')
             output_c.write('\tmodel->slot_users[output->slot] = model->layer_idx;\n')
             output_c.write('}\n')
 
@@ -525,8 +526,8 @@ extern uint8_t *{var_name};
         else:
             section = 'nvm2'
         output_c.write(f'''
-#ifdef __MSP430__
-#pragma DATA_SECTION(_{var_name}, ".{section}")
+#ifdef NEED_DATA_VARS
+#pragma DATA_SECTION(".{section}")
 uint8_t _{var_name}[{len(data)}] = {{
 ''')
         n_pieces, remaining = divmod(len(data), 16)

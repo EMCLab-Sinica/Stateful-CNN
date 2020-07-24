@@ -21,7 +21,7 @@
 // TODO
 static uint8_t *_intermediate_values;
 #else
-#pragma DATA_SECTION(_intermediate_values, ".nvm2")
+#pragma DATA_SECTION(".nvm2")
 static uint8_t _intermediate_values[NUM_SLOTS * INTERMEDIATE_VALUES_SIZE];
 #endif
 uint8_t *intermediate_values(uint8_t slot_id) {
@@ -83,13 +83,13 @@ void setOutputValue(uint8_t value)
 void my_memcpy(void* dest, const void* src, size_t n) {
 #ifdef __MSP430__
     DMA_init(&dma_params); // XXX: DMA not working without this
-    DMA0SA = src;
-    DMA0DA = dest;
+    DMA_setSrcAddress(MY_DMA_CHANNEL, (uint32_t)src, DMA_DIRECTION_INCREMENT);
+    DMA_setDstAddress(MY_DMA_CHANNEL, (uint32_t)dest, DMA_DIRECTION_INCREMENT);
     /* transfer size is in words (2 bytes) */
     DMA0SZ = n >> 1;
     // DMA_enableInterrupt(MY_DMA_CHANNEL);
     // _3 => increment
-    DMA0CTL |= DMAEN + DMASRCINCR_3 + DMADSTINCR_3 + DMA_TRANSFER_BLOCK;
+    DMA0CTL |= DMAEN + DMA_TRANSFER_BLOCK;
     DMA0CTL |= DMAREQ;
 #elif defined(__MSP432__)
     // TODO: use DMA
@@ -101,14 +101,14 @@ void my_memcpy(void* dest, const void* src, size_t n) {
 void fill_int16(int16_t *dest, uint16_t n, int16_t val) {
 #ifdef __MSP430__
     DMA_init(&dma_params);
-    DMA0SA = &val;
-    DMA0DA = dest;
+    DMA_setSrcAddress(MY_DMA_CHANNEL, (uint32_t)&val, DMA_DIRECTION_UNCHANGED);
+    DMA_setDstAddress(MY_DMA_CHANNEL, (uint32_t)dest, DMA_DIRECTION_INCREMENT);
     /* transfer size is in words (2 bytes) */
     DMA0SZ = n;
     // DMA_enableInterrupt(MY_DMA_CHANNEL);
     // _0 => unchanged
     // _3 => increment
-    DMA0CTL |= DMAEN + DMASRCINCR_0 + DMADSTINCR_3 + DMA_TRANSFER_BLOCK;
+    DMA0CTL |= DMAEN + DMA_TRANSFER_BLOCK;
     DMA0CTL |= DMAREQ;
 #else
 #error "TODO: implement fill_int16 for MSP432"
@@ -118,7 +118,7 @@ void fill_int16(int16_t *dest, uint16_t n, int16_t val) {
 void plat_print_results(void) {
 }
 
-_Noreturn void ERROR_OCCURRED(void) {
+[[ noreturn ]] void ERROR_OCCURRED(void) {
     for (;;) {
         __no_operation();
     }
@@ -139,13 +139,13 @@ short __saturated_add_signed_short(short src1, short src2) {
 }
 #endif
 
-#pragma DATA_SECTION(myFirstTime, ".nvm")
+#pragma DATA_SECTION(".nvm")
 static uint8_t myFirstTime;
 
 #define DELAY_START_SECONDS 0
 
 #if DELAY_START_SECONDS > 0
-#pragma DATA_SECTION(myFirstTime, ".nvm")
+#pragma DATA_SECTION(".nvm")
 static uint32_t delay_counter;
 #endif
 
@@ -175,7 +175,9 @@ void IntermittentCNNTest() {
 #endif
 
     if (!model->run_counter) {
-        run_cnn_tests(1);
+        while (1) {
+            run_cnn_tests(1);
+        }
     }
 
     while (1) {
@@ -185,6 +187,10 @@ void IntermittentCNNTest() {
 
 void button_pushed(void) {
     static uint8_t push_counter = 0;
+
+    Model *model = (Model*)model_data;
+    my_printf("%d" NEWLINE, model->run_counter);
+
     // XXX: somehow the ISR for button is triggered immediately after recovery
     if (push_counter >= 1) {
         myFirstTime = 0;

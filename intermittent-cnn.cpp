@@ -32,6 +32,7 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
     /* Allocate an ParameterInfo for output. Details are filled by
      * individual operation handlers */
     ParameterInfo *output = &(parameter_info[node_idx + model->n_input]);
+    my_memcpy(output, input[0], sizeof(ParameterInfo));
     output->params_offset = 0;
     allocators[cur_node->op_type](model, input, output, cur_node->flags);
     my_printf_debug("Needed mem = %d" NEWLINE, output->params_len);
@@ -43,6 +44,8 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
     my_printf_debug("State bit=%d" NEWLINE, get_state_bit(model, output->slot));
 #endif
     handlers[cur_node->op_type](model, input, output, cur_node->flags);
+    // For some operations (e.g., ConvMerge), scale is determined in the handlers
+    my_printf_debug("Scale = %d" NEWLINE, output->scale);
 #ifdef WITH_PROGRESS_EMBEDDING
     my_printf_debug("State bit=%d" NEWLINE, get_state_bit(model, output->slot));
 #endif
@@ -123,7 +126,7 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
 
 void print_results(Model *model, ParameterInfo *output_node) {
     for (uint16_t i = 0; i < output_node->dims[1]; i++) {
-        print_q15(*get_q15_param(output_node, i));
+        dump_value(model, output_node, i);
     }
     my_printf(NEWLINE);
 
@@ -222,7 +225,7 @@ uint8_t get_state_bit(Model *model, uint8_t slot_id) {
 #else
     UNUSED(model);
     UNUSED(slot_id);
-    ERROR_OCCURRED();
+    return 0;
 #endif
 }
 
@@ -250,7 +253,7 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
     my_printf_debug("new_output_state_bit = %d" NEWLINE, new_output_state_bit);
 
     while (1) {
-        // dump_matrix(start, end - start);
+        // dump_matrix(start, end - start, output->scale, !new_output_state_bit);
         int16_t *middle = start + (end - start) / 2;
         if (middle == start || middle == end) {
             if (get_value_state_bit(*start) != new_output_state_bit) {

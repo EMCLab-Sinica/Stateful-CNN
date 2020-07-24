@@ -21,8 +21,8 @@ typedef struct Node {
     uint16_t flags;
 } Node;
 
-// _Static_assert in C11 requires the message
-_Static_assert(sizeof(Node) == 64, "Unexpected size for Node");
+// _Static_assert in C11 or static_assert in C++11 requires the message
+static_assert(sizeof(Node) == 64, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct ParameterInfo {
@@ -44,9 +44,13 @@ typedef struct ParameterInfo {
     uint16_t dims[4];
     uint8_t flags;
     uint8_t extra_info[3];
+    // use signed type for scale as TI's compiler does not handle
+    // multiplication/division with mixed signed and unsigned numbers correctly
+    int16_t scale;
+    uint8_t dummy[2]; // for memory alignment
 } ParameterInfo;
 
-_Static_assert(sizeof(ParameterInfo) == 24, "Unexpected size for ParameterInfo");
+static_assert(sizeof(ParameterInfo) == 28, "Unexpected size for ParameterInfo");
 
 typedef struct Model {
     uint16_t nodes_len;
@@ -60,7 +64,7 @@ typedef struct Model {
     uint16_t sample_idx;
 } Model;
 
-_Static_assert(sizeof(Model) == 14 + NUM_SLOTS * 4, "Unexpected size for Model");
+static_assert(sizeof(Model) == 14 + NUM_SLOTS * 4, "Unexpected size for Model");
 
 typedef struct {
     uint16_t time_counters[COUNTERS_LEN];
@@ -69,7 +73,7 @@ typedef struct {
 } Counters;
 
 // Keep the following coefficients synced with transform.py
-_Static_assert(sizeof(Counters) == 4 * COUNTERS_LEN + 2, "Unexpected size of Counters");
+static_assert(sizeof(Counters) == 4 * COUNTERS_LEN + 2, "Unexpected size of Counters");
 
 /**********************************
  *          Global data           *

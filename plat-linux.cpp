@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
     chdir(MY_SOURCE_DIR);
 
     int nvm_fd = open("nvm.bin", O_RDWR);
-    nvm = mmap(NULL, NVM_SIZE, PROT_READ|PROT_WRITE, read_only ? MAP_PRIVATE : MAP_SHARED, nvm_fd, 0);
+    nvm = (uint8_t*)mmap(NULL, NVM_SIZE, PROT_READ|PROT_WRITE, read_only ? MAP_PRIVATE : MAP_SHARED, nvm_fd, 0);
     if (nvm == MAP_FAILED) {
         perror("mmap() failed");
         goto exit;
@@ -121,7 +121,7 @@ void fill_int16(int16_t *dest, uint16_t n, int16_t val) {
     }
 }
 
-_Noreturn void ERROR_OCCURRED(void) {
+[[ noreturn ]] void ERROR_OCCURRED(void) {
     if (ptrace(PTRACE_TRACEME, 0, NULL, 0) == -1) {
         // Let the debugger break
         kill(getpid(), SIGINT);

@@ -252,8 +252,14 @@ static inline const void *__circular_increment( const void *ptr,
 #if defined(__TI_COMPILER_VERSION__)
 #define _PRAGMA(x) _Pragma (#x)
 #if defined(MSP_USE_LEA)
+// https://processors.wiki.ti.com/index.php/Pragmas_in_C++
+#ifdef __cplusplus
+#define DSPLIB_DATA(var,align)  _PRAGMA(DATA_SECTION(".leaRAM"))\
+                                _PRAGMA(DATA_ALIGN(var,(align)))
+#else
 #define DSPLIB_DATA(var,align)  _PRAGMA(DATA_SECTION(var,".leaRAM"))\
                                 _PRAGMA(DATA_ALIGN(var,(align)))
+#endif
 #else
 #define DSPLIB_DATA(var,align)  _PRAGMA(DATA_ALIGN(var,(align)))
 #endif

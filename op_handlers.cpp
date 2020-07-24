@@ -1,4 +1,5 @@
 #include <DSPLib.h>
+#include <functional>
 
 #include "cnn_common.h"
 #include "op_handlers.h"
@@ -7,7 +8,10 @@
 #include "conv.h"
 #include "intermittent-cnn.h"
 
-DSPLIB_DATA(lea_buffer, 4)
+// Not using DSPLIB_DATA here as it does not work under C++ (?)
+#ifdef __MSP430__
+#pragma DATA_SECTION(".leaRAM")
+#endif
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
 #define RESHAPE_AUTO_DIM (uint16_t)(-1)
@@ -22,7 +26,6 @@ void alloc_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     uint16_t new_W = W / stride;
 
     output->params_len = new_H * new_W * CHANNEL * sizeof(int16_t);
-    output->bitwidth = data->bitwidth;
     output->slot = get_next_slot(model, data);
     output->dims[0] = 1;
     output->dims[1] = CHANNEL;
@@ -62,7 +65,7 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
                 val -= 0x4000;
             }
 #endif
-            print_q15_debug(val);
+            print_q15_debug(val, data->scale, get_state_bit(model, data->slot));
             // XXX: use LEA?
             if (val > max_val) {
                 max_val = val;
@@ -76,7 +79,7 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
 #endif
     // need a space as print_q15_debug does not append spaces when DUMP_INTEGERS is not defined
     my_printf_debug(" max=");
-    print_q15_debug(max_val);
+    print_q15_debug(max_val, data->scale, get_state_bit(model, data->slot));
     return max_val;
 }
 
@@ -91,7 +94,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     ParameterInfo *data = input[0];
 
     my_printf_debug("handle_maxpool input" NEWLINE);
-    dump_params(data);
+    dump_params(model, data);
 
     const uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
     uint16_t new_H = H / stride;
@@ -187,18 +190,18 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
         }
     }
 
+    flip_state_bit(model, output);
+
     my_printf_debug("handle_maxpool output" NEWLINE);
     if (!need_nhwc2nchw) {
         for (uint16_t c = 0; c < CHANNEL; c += tile_c) {
             output->dims[1] = MIN_VAL(tile_c, CHANNEL - c);
-            dump_params_nhwc(output, c * new_H * new_W);
+            dump_params_nhwc(model, output, c * new_H * new_W);
         }
         output->dims[1] = CHANNEL;
     } else if (tile_c == CHANNEL) {
-        dump_params(output);
+        dump_params(model, output);
     }
-
-    flip_state_bit(model, output);
 }
 
 void alloc_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -207,11 +210,7 @@ void alloc_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uint
     ParameterInfo *A = input[0], *B = input[1];
     MY_ASSERT(A->bitwidth == 16 && B->bitwidth == 16);
 
-    output->params_len = A->params_len;
-    output->bitwidth = A->bitwidth;
     output->slot = get_next_slot(model, A);
-    output->dims[0] = 1;
-    output->dims[1] = A->dims[1];
 }
 
 void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -223,7 +222,8 @@ void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
 
     ParameterInfo *A = input[0], *B = input[1];
 
-    msp_add_q15_params params = { .length = A->dims[1] };
+    msp_add_q15_params params;
+    params.length = A->dims[1];
 
     int16_t *buffer_a = lea_buffer,
             *buffer_b = lea_buffer + output->params_len / sizeof(int16_t);
@@ -247,21 +247,18 @@ void alloc_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, u
     output->params_len = output_len * sizeof(int16_t);
     output->bitwidth = 16;
     output->slot = get_next_slot(model, A);
+    output->scale = A->scale * B->scale;
 }
 
 void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-#ifndef WITH_PROGRESS_EMBEDDING
-    UNUSED(model);
-#endif
-
     UNUSED(flags);
 
     ParameterInfo *A = input[0], *B = input[1];
 
     my_printf_debug("handle_matmul inputs" NEWLINE);
-    // dump_params(A);
+    // dump_params(model, A);
     my_printf_debug("B" NEWLINE);
-    dump_params(B);
+    dump_params(model, B);
     my_printf_debug("MatMul! A: (%dx%d), B: (%dx%d)" NEWLINE,
               A->dims[0], A->dims[1], B->dims[0], B->dims[1]);
 
@@ -274,10 +271,9 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
             *buffer_matmul = buffer_temp + A->dims[0] * B->dims[1],
             *buffer_b = buffer_matmul + A->dims[0] * B->dims[1];
 
-    msp_fill_q15_params fill_params = {
-        .length = 256,
-        .value = 0,
-    };
+    msp_fill_q15_params fill_params;
+    fill_params.length = 256;
+    fill_params.value = 0;
     msp_status status = msp_fill_q15(&fill_params, buffer_matmul);
     msp_checkStatus(status);
 
@@ -306,9 +302,9 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
                   current_width * B->dims[1] * sizeof(uint16_t));
 
         my_printf_debug("strip for A" NEWLINE);
-        dump_matrix(buffer_a + A->dims[0] * i, (size_t)(A->dims[0] * current_width));
+        dump_matrix(buffer_a + A->dims[0] * i, (size_t)(A->dims[0] * current_width), A->scale, get_state_bit(model, A->slot));
         my_printf_debug("B" NEWLINE);
-        dump_matrix(buffer_b, (size_t)(current_width * B->dims[1]));
+        dump_matrix(buffer_b, (size_t)(current_width * B->dims[1]), B->scale, get_state_bit(model, B->slot));
 
         status = msp_matrix_mpy_q15(
             &params,
@@ -318,16 +314,17 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         msp_checkStatus(status);
 
         my_printf_debug("temp" NEWLINE);
-        dump_matrix(buffer_temp, (size_t)(A->dims[0] * B->dims[1]));
+        dump_matrix(buffer_temp, (size_t)(A->dims[0] * B->dims[1]), output->scale, get_state_bit(model, output->slot));
 
-        msp_add_q15_params params2 = { .length = output->params_len / sizeof(int16_t) };
+        msp_add_q15_params params2;
+        params2.length = output->params_len / sizeof(int16_t);
         status = msp_add_q15(&params2, buffer_matmul, buffer_temp, buffer_matmul);
         msp_checkStatus(status);
     }
     my_memcpy(get_q15_param(output, 0), buffer_matmul, output->params_len);
 
     my_printf_debug("handle_matmul output" NEWLINE);
-    dump_params(output);
+    dump_params(model, output);
 
     flip_state_bit(model, output);
 }
@@ -336,7 +333,6 @@ void alloc_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
     UNUSED(flags);
 
     ParameterInfo *data = input[0];
-    my_memcpy(output, data, sizeof(struct ParameterInfo));
     output->slot = get_next_slot(model, data);
     output->flags &= ~TRANSPOSED;
 }
@@ -350,7 +346,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 
     ParameterInfo *X = input[0];
     my_printf_debug("handle_relu input" NEWLINE);
-    dump_params_nhwc(X, 0);
+    dump_params_nhwc(model, X, 0);
 
     /* XXX: use LEA? */
     uint16_t bitwidth = X->bitwidth;
@@ -394,10 +390,11 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
             output_ptr++;
         }
     }
-    my_printf_debug("handle_relu output" NEWLINE);
-    dump_params_nhwc(output, 0);
 
     flip_state_bit(model, output);
+
+    my_printf_debug("handle_relu output" NEWLINE);
+    dump_params_nhwc(model, output, 0);
 }
 
 void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -471,6 +468,16 @@ void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output,
     }
 }
 
+static void iterate_chunks(ParameterInfo *param, std::function<void(uint32_t, uint16_t)> callback) {
+    uint16_t params_len = param->params_len / sizeof(int16_t);
+    uint16_t chunk_len = (LEA_BUFFER_SIZE - 1) / 2 * 2;
+
+    for (uint32_t offset = 0; offset < params_len; offset += chunk_len) {
+        uint16_t real_chunk_len = MIN_VAL(chunk_len, params_len - offset);
+        callback(offset, real_chunk_len);
+    }
+}
+
 void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(model);
     UNUSED(flags);
@@ -484,9 +491,67 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     output->tile_c = A->dims[1];
     output->dims[1] *= 2;
     output->flags |= SEPARATE_TILING;
-    output->extra_info[0] = A->slot;
+
+    float scale;
+    ParameterInfo *scaled = NULL;
+    int16_t *scaled_srcptr, *scaled_dstptr;
+    // The one with smaller `scale` (with larger values) is scaled down
+    if (A->scale < B->scale) {
+        scale = 1.0f * A->scale / B->scale;
+        scaled = A;
+        scaled_srcptr = get_q15_param(A, 0);
+        output->scale = A->scale = B->scale;
+    } else if (A->scale > B->scale) {
+        scale = 1.0f * B->scale / A->scale;
+        scaled = B;
+        scaled_srcptr = get_q15_param(B, 0);
+        output->scale = B->scale = A->scale;
+    }
+    if (scaled) {
+        msp_status status;
+        // TODO: make the scaling step idempotent
+        uint8_t orig_slot = scaled->slot;
+        uint8_t new_slot = get_next_slot(model, scaled);
+        uint8_t old_output_state_bit = get_state_bit(model, new_slot);
+        ParameterInfo tmp_param;
+        my_memcpy(&tmp_param, scaled, sizeof(struct ParameterInfo));
+        tmp_param.slot = new_slot;
+        scaled_dstptr = get_q15_param(&tmp_param, 0);
+
+        iterate_chunks(scaled, [&] (uint32_t offset, uint16_t real_chunk_len) {
+            my_memcpy(lea_buffer, scaled_srcptr + offset, real_chunk_len * sizeof(int16_t));
+#ifdef WITH_PROGRESS_EMBEDDING
+            msp_offset_q15_params offset_params;
+            offset_params.length = real_chunk_len;
+            offset_params.offset = model->state_bit[orig_slot] ? -0x4000 : 0;
+            status = msp_offset_q15(&offset_params, lea_buffer, lea_buffer);
+            msp_checkStatus(status);
+#endif
+            msp_scale_q15_params scale_params;
+            scale_params.length = real_chunk_len;
+            scale_params.scale = _Q15(scale);
+            scale_params.shift = 0;
+            status = msp_scale_q15(&scale_params, lea_buffer, lea_buffer);
+            msp_checkStatus(status);
+#ifdef WITH_PROGRESS_EMBEDDING
+            offset_params.offset = old_output_state_bit ? 0 : 0x4000;
+            status = msp_offset_q15(&offset_params, lea_buffer, lea_buffer);
+            msp_checkStatus(status);
+#endif
+            my_memcpy(scaled_dstptr + offset, lea_buffer, real_chunk_len * sizeof(int16_t));
+        });
+        model->slot_users[orig_slot] = -1;
+
+        scaled->slot = new_slot;
+        flip_state_bit(model, scaled);
+    }
+
+    // saving slots here as it might be changed during the downscaling loop above
+    output->extra_info[0] = output->slot = A->slot;
     output->extra_info[1] = B->slot;
-    MY_ASSERT(B->slot == (A->slot + 1) % NUM_SLOTS);
+
+    dump_params_nhwc(model, A, 0);
+    dump_params_nhwc(model, B, 0);
 }
 
 void handle_dropout(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -536,7 +601,7 @@ void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInf
         output_baseptr[c] = total / len;
     }
 
-    dump_params(output);
+    dump_params(model, output);
 }
 
 void handle_softmax(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
@@ -561,4 +626,55 @@ void handle_transpose(Model *model, ParameterInfo *input[], ParameterInfo *outpu
     output->dims[1] = X->dims[3];
     output->dims[2] = X->dims[1];
     output->dims[3] = X->dims[2];
+}
+
+uint16_t find_overflow_factor(Model *model, ParameterInfo *param) {
+    uint16_t overflow_factor = 1;
+    int16_t max_val, min_val;
+    uint16_t index;
+#ifndef WITH_PROGRESS_EMBEDDING
+    int16_t min_bound = -32768 / SCALE;
+    int16_t max_bound = 32767 / SCALE;
+    UNUSED(model);
+#else
+    int16_t min_bound = -8192 / SCALE;
+    int16_t max_bound = 8191 / SCALE;
+    int16_t val_offset = get_state_bit(model, param->slot) ? -16384 : 0;
+#endif
+
+    msp_status status;
+
+    iterate_chunks(param, [&] (uint32_t offset, uint16_t real_chunk_len) {
+        my_memcpy(lea_buffer, get_q15_param(param, offset), real_chunk_len * sizeof(int16_t));
+
+        msp_max_q15_params max_params;
+        max_params.length = real_chunk_len;
+        status = msp_max_q15(&max_params, lea_buffer, &max_val, &index);
+        msp_checkStatus(status);
+#ifdef WITH_PROGRESS_EMBEDDING
+        max_val += val_offset;
+#endif
+        my_printf_debug("Max value %d", max_val);
+        my_printf_debug(" occurs at index %d" NEWLINE, index);
+        while (max_val && max_val >= max_bound * overflow_factor) {
+            overflow_factor *= 2;
+        }
+
+        msp_min_q15_params min_params;
+        min_params.length = real_chunk_len;
+        status = msp_min_q15(&min_params, lea_buffer, &min_val, &index);
+        msp_checkStatus(status);
+#ifdef WITH_PROGRESS_EMBEDDING
+        min_val += val_offset;
+#endif
+        my_printf_debug("Min value %d", min_val);
+        my_printf_debug(" occurs at index %d" NEWLINE, index);
+        while (min_val && min_val <= min_bound * overflow_factor) {
+            overflow_factor *= 2;
+        }
+    });
+
+    my_printf_debug("Overflow factor = %d" NEWLINE, overflow_factor);
+
+    return overflow_factor;
 }

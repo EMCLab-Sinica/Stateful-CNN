@@ -2,5 +2,5 @@ nvm.bin
 *.pyc
 /images/*
 !/images/.keep
-data.c
+data.cpp
 data.h

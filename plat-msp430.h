@@ -4,5 +4,15 @@
 
 #define USE_ALL_SAMPLES 0
 
+#define NEED_DATA_VARS
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void IntermittentCNNTest(void);
 void button_pushed(void);
+
+#ifdef __cplusplus
+}
+#endif
