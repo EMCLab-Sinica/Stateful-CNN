@@ -42,6 +42,7 @@ def load_data(filename, limit=None):
 
 def load_data_cifar10(filename: str, limit: Optional[int] = None):
     if filename.endswith('.png'):
+        import cv2
         im = cv2.imread(filename, cv2.IMREAD_COLOR)
         im = np.expand_dims(im, 0)
         im = im / 256

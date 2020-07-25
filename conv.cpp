@@ -554,10 +554,10 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
     int16_t *output_baseptr = get_q15_param(output, 0);
     uint16_t chunk_len = (LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2;
 
-    int16_t cur_scale = SCALE / find_overflow_factor(model, data);
+    uint16_t overflow_factor = find_overflow_factor(model, data);
     msp_scale_q15_params scale_params;
     scale_params.shift = 0;
-    float cur_scale_f = cur_scale;
+    float cur_scale_f = 1.0f * SCALE / overflow_factor;
     while (cur_scale_f >= 1) {
         cur_scale_f /= 2;
         scale_params.shift++;
@@ -611,7 +611,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 
     my_printf_debug("After scaling up back and merging tiling results" NEWLINE);
 
-    output->scale /= cur_scale;
+    output->scale = output->scale * overflow_factor / SCALE;
 
     setOutputValue(0);
 
