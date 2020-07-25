@@ -26,7 +26,6 @@ SLOT_PARAMETERS = 0xf0
 SLOT_TEST_SET = 0xff
 SLOT_INTERMEDIATE_VALUES = 0b01
 CACHED_FILTERS_LEN = 8000
-N_SAMPLES = 20
 COUNTERS_LEN = 64
 # To make the Node struct exactly 64 bytes
 NODE_NAME_LEN = 54
@@ -117,6 +116,7 @@ configs = {
 parser = argparse.ArgumentParser()
 parser.add_argument('config', choices=configs.keys())
 parser.add_argument('--without-progress-embedding', action='store_true')
+parser.add_argument('--all-samples', action='store_true')
 args = parser.parse_args()
 config = configs[args.config]
 SCALE = config['scale']
@@ -124,6 +124,10 @@ SCALE = config['scale']
 NUM_SLOTS = config['num_slots']
 INTERMEDIATE_VALUES_SIZE = config['intermediate_values_size']
 NVM_SIZE = config['nvm_size_kb'] * 1024
+n_samples = 20
+if args.all_samples:
+    n_samples = 10000
+    NVM_SIZE *= 64
 
 original_model = onnx.load(config['onnx_model'])
 try:
@@ -332,7 +336,7 @@ for node in model:
     outputs['model'].write(to_bytes(node.flags))
 
 
-labels, images = config['data_loader'](config['input_file'], limit=N_SAMPLES)
+labels, images = config['data_loader'](config['input_file'], limit=n_samples)
 
 def select_parameters_slot(data_len):
     if data_len <= 1024:  # XXX: random heuristic
