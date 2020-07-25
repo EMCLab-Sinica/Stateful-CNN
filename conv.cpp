@@ -556,14 +556,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 
     uint16_t overflow_factor = find_overflow_factor(model, data);
     msp_scale_q15_params scale_params;
-    scale_params.shift = 0;
-    float cur_scale_f = 1.0f * SCALE / overflow_factor;
-    while (cur_scale_f >= 1) {
-        cur_scale_f /= 2;
-        scale_params.shift++;
-    }
-    scale_params.scale = _Q15(cur_scale_f);
-
+    float_to_scale_params(&scale_params, 1.0f * SCALE / overflow_factor);
 #ifdef WITH_PROGRESS_EMBEDDING
     int16_t input_offset = get_state_bit(model, data->slot) ? -0x4000 : 0;
     int16_t output_offset = get_state_bit(model, output->slot) ? 0 : 0x4000;

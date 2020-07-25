@@ -97,7 +97,7 @@ configs = {
         # https://github.com/onnx/models/raw/master/vision/classification/mnist/model/mnist-8.onnx
         'onnx_model': 'data/mnist-8.onnx',
         'input_file': 'data/Test-28x28_cntk_text.txt',
-        'scale': 35,
+        'scale': 8,
         'num_slots': 2,
         'intermediate_values_size': 31000,
         'nvm_size_kb': 256,

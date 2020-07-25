@@ -26,10 +26,12 @@ print(onnx.helper.printable_graph(model.graph))
 rep = backend.prepare(model)
 correct = 0
 
+limit = 1
+
 if 'mnist' in args.onnx_model:
-    labels, images = load_data(args.input_file)
+    labels, images = load_data(args.input_file, limit=limit)
 elif 'cifar10' in args.onnx_model:
-    labels, images = load_data_cifar10(args.input_file)
+    labels, images = load_data_cifar10(args.input_file, limit=limit)
 else:
     raise NotImplementedError
 

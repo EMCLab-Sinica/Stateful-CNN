@@ -222,14 +222,26 @@ void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
 
     ParameterInfo *A = input[0], *B = input[1];
 
-    msp_add_q15_params params;
-    params.length = A->dims[1];
+    msp_add_q15_params add_params;
+    add_params.length = A->dims[1];
 
     int16_t *buffer_a = lea_buffer,
             *buffer_b = lea_buffer + output->params_len / sizeof(int16_t);
     my_memcpy(buffer_a, get_q15_param(A, 0), output->params_len);
     my_memcpy(buffer_b, get_q15_param(B, 0), output->params_len);
-    msp_status status = msp_add_q15(&params, buffer_a, buffer_b, buffer_a);
+    msp_status status;
+    msp_scale_q15_params scale_params;
+    scale_params.length = add_params.length;
+    if (A->scale > B->scale) {
+        float_to_scale_params(&scale_params, 1.0f * B->scale / A->scale);
+        status = msp_scale_q15(&scale_params, buffer_b, buffer_b);
+        msp_checkStatus(status);
+    } else if (B->scale > A->scale) {
+        float_to_scale_params(&scale_params, 1.0f * A->scale / B->scale);
+        status = msp_scale_q15(&scale_params, buffer_a, buffer_a);
+        msp_checkStatus(status);
+    }
+    status = msp_add_q15(&add_params, buffer_a, buffer_b, buffer_a);
     msp_checkStatus(status);
 
     my_memcpy(get_q15_param(output, 0), buffer_a, output->params_len);
@@ -677,4 +689,13 @@ uint16_t find_overflow_factor(Model *model, ParameterInfo *param) {
     my_printf_debug("Overflow factor = %d" NEWLINE, overflow_factor);
 
     return overflow_factor;
+}
+
+void float_to_scale_params(msp_scale_q15_params *scale_params, float scale) {
+    scale_params->shift = 0;
+    while (scale >= 1) {
+        scale /= 2;
+        scale_params->shift++;
+    }
+    scale_params->scale = _Q15(scale);
 }
