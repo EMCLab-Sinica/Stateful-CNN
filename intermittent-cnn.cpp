@@ -174,11 +174,11 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
     my_printf("total=%" PRId32 " ", total);
     my_printf("rate=%f" NEWLINE, 1.0*correct/total);
 
-    if (correct < 0.7 * total) {
+    // Allow only 1% of accuracy drop
+    if (N_SAMPLES == N_ALL_SAMPLES && correct < (FP32_ACCURACY - 0.01) * total) {
         return 1;
-    } else {
-        return 0;
     }
+    return 0;
 }
 
 void set_sample_index(Model *model, uint8_t index) {

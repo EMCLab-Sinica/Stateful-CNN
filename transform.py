@@ -2,6 +2,7 @@
 import argparse
 import dataclasses
 import io
+import itertools
 import pprint
 import struct
 import warnings
@@ -21,14 +22,15 @@ Indexing policy:
     len(g.input)~ : other (hidden) nodes
 """
 
-SLOT_PARAMETERS2 = 0xf1
-SLOT_PARAMETERS = 0xf0
-SLOT_TEST_SET = 0xff
-SLOT_INTERMEDIATE_VALUES = 0b01
-CACHED_FILTERS_LEN = 8000
-COUNTERS_LEN = 64
-# To make the Node struct exactly 64 bytes
-NODE_NAME_LEN = 54
+class Constants:
+    SLOT_PARAMETERS2 = 0xf1
+    SLOT_PARAMETERS = 0xf0
+    SLOT_TEST_SET = 0xff
+    SLOT_INTERMEDIATE_VALUES = 0b01
+    CACHED_FILTERS_LEN = 8000
+    COUNTERS_LEN = 64
+    # To make the Node struct exactly 64 bytes
+    NODE_NAME_LEN = 54
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
@@ -91,6 +93,7 @@ class ONNXNodeWrapper:
 def get_prev_node(n):
     return nodes[names[n.input[0]] - n_input]
 
+# intermediate_values_size should < 65536, or TI's compiler gets confused
 configs = {
     'mnist': {
         # https://github.com/onnx/models/raw/master/vision/classification/mnist/model/mnist-8.onnx
@@ -99,8 +102,11 @@ configs = {
         'scale': 8,
         'num_slots': 2,
         'intermediate_values_size': 31000,
-        'nvm_size_kb': 256,
+        'nvm_size': 256 * 1024,
         'data_loader': load_data,
+        'n_samples': 20,
+        'n_all_samples': 10000,
+        'fp32_accuracy': 0.9889,
     },
     'cifar10': {
         'onnx_model': 'data/squeezenet_cifar10.onnx',
@@ -108,8 +114,11 @@ configs = {
         'scale': 8,
         'num_slots': 3,
         'intermediate_values_size': 30000,
-        'nvm_size_kb': 1024,
+        'nvm_size': 1024 * 1024,
         'data_loader': load_data_cifar10,
+        'n_samples': 20,
+        'n_all_samples': 10000,
+        'fp32_accuracy': 0.7553,
     },
 }
 
@@ -119,15 +128,9 @@ parser.add_argument('--without-progress-embedding', action='store_true')
 parser.add_argument('--all-samples', action='store_true')
 args = parser.parse_args()
 config = configs[args.config]
-SCALE = config['scale']
-# NUM_SLOTS * INTERMEDIATE_VALUES_SIZE should < 65536, or TI's compiler gets confused
-NUM_SLOTS = config['num_slots']
-INTERMEDIATE_VALUES_SIZE = config['intermediate_values_size']
-NVM_SIZE = config['nvm_size_kb'] * 1024
-n_samples = 20
 if args.all_samples:
-    n_samples = 10000
-    NVM_SIZE *= 64
+    config['nvm_size'] *= 64
+    config['n_samples'] = config['n_all_samples']
 
 original_model = onnx.load(config['onnx_model'])
 try:
@@ -307,9 +310,9 @@ outputs['model'].write(to_bytes(n_input))
 outputs['model'].write(to_bytes(0))  # Model.running
 outputs['model'].write(to_bytes(0))  # Model.recovery
 outputs['model'].write(to_bytes(0))  # Model.run_counter
-for _ in range(NUM_SLOTS):
+for _ in range(config['num_slots']):
     outputs['model'].write(to_bytes(0))  # Model.state_bit
-for _ in range(NUM_SLOTS):
+for _ in range(config['num_slots']):
     outputs['model'].write(to_bytes(-1))  # Model.slot_users
 outputs['model'].write(to_bytes(0))  # Model.layer_idx
 outputs['model'].write(to_bytes(0))  # Model.sample_idx
@@ -320,12 +323,12 @@ class ParametersSlot:
     target: io.BytesIO
     slot_id: int
 
-parameters_slot = ParametersSlot(offset=0, target=outputs['parameters'], slot_id=SLOT_PARAMETERS)
-parameters2_slot = ParametersSlot(offset=0, target=outputs['parameters2'], slot_id=SLOT_PARAMETERS2)
+parameters_slot = ParametersSlot(offset=0, target=outputs['parameters'], slot_id=Constants.SLOT_PARAMETERS)
+parameters2_slot = ParametersSlot(offset=0, target=outputs['parameters2'], slot_id=Constants.SLOT_PARAMETERS2)
 
 for node in model:
-    assert len(node.name) < NODE_NAME_LEN
-    outputs['model'].write(node.name.encode('ascii') + b'\0' * (NODE_NAME_LEN - len(node.name)))
+    assert len(node.name) < Constants.NODE_NAME_LEN
+    outputs['model'].write(node.name.encode('ascii') + b'\0' * (Constants.NODE_NAME_LEN - len(node.name)))
     outputs['model'].write(to_bytes(len(node.inputs)))
     outputs['model'].write(to_bytes(inputs_data.tell()))  # Node.inputs_offset
     outputs['model'].write(to_bytes(node.max_output_id))
@@ -336,7 +339,7 @@ for node in model:
     outputs['model'].write(to_bytes(node.flags))
 
 
-labels, images = config['data_loader'](config['input_file'], limit=n_samples)
+labels, images = config['data_loader'](config['input_file'], limit=config['n_samples'])
 
 def select_parameters_slot(data_len):
     if data_len <= 1024:  # XXX: random heuristic
@@ -351,7 +354,7 @@ for params in parameters:
         outputs['model'].write(to_bytes(parameters_slot.offset, size=32))  # params_offset
         outputs['model'].write(to_bytes(input_channel* dimX * dimY * 2, size=32))  # A _q15 is 16-bit
         outputs['model'].write(to_bytes(16, size=8))                # bitwidth
-        outputs['model'].write(to_bytes(SLOT_TEST_SET, size=8))     # slot
+        outputs['model'].write(to_bytes(Constants.SLOT_TEST_SET, size=8))     # slot
         outputs['model'].write(to_bytes(0, size=16))                # tile_c
         # extend_dims
         outputs['model'].write(to_bytes(1))
@@ -374,7 +377,7 @@ for params in parameters:
                 print(f'Reorder conv param {params.name}')
                 float_data, _ = nchw2nhwc(float_data, params.dims)
             for param in float_data:
-                slot.target.write(to_bytes(_Q15(param / SCALE)))
+                slot.target.write(to_bytes(_Q15(param / config['scale'])))
                 slot.offset += 2
             outputs['model'].write(to_bytes(16, size=8)) # bitwidth
         elif params.data_type == onnx.TensorProto.INT64:
@@ -401,7 +404,7 @@ for params in parameters:
     outputs['model'].write(to_bytes(0, size=8))                 # flags
     for _ in range(3):
         outputs['model'].write(to_bytes(0, size=8))             # extra_info
-    outputs['model'].write(to_bytes(SCALE))                     # scale
+    outputs['model'].write(to_bytes(config['scale']))           # scale
     for _ in range(2):
         outputs['model'].write(to_bytes(0, size=8))             # dummy
 
@@ -417,7 +420,7 @@ for idx, n in enumerate(nodes):
     outputs['model'].write(to_bytes(0, size=8))     # flags
     for _ in range(3):
         outputs['model'].write(to_bytes(0, size=8)) # extra_info
-    outputs['model'].write(to_bytes(SCALE))         # scale
+    outputs['model'].write(to_bytes(config['scale']))   # scale
     for _ in range(2):
         outputs['model'].write(to_bytes(0, size=8))             # dummy
 
@@ -429,7 +432,7 @@ for idx, im in enumerate(images):
     for idx_c in range(im.shape[1]):
         for idx_h in range(im.shape[2]):
             for idx_w in range(im.shape[3]):
-                outputs['samples'].write(to_bytes(_Q15(im[0, idx_c, idx_h, idx_w] / SCALE)))
+                outputs['samples'].write(to_bytes(_Q15(im[0, idx_c, idx_h, idx_w] / config['scale'])))
     try:
         import cv2
         # Restore conanical image format (H, W, C)
@@ -447,10 +450,10 @@ for label in labels:
 with open('images/ans.txt', 'w') as f:
     f.write(' '.join(map(str, labels)))
 
-outputs['counters'].write(b'\0' * (4 * COUNTERS_LEN + 2))
+outputs['counters'].write(b'\0' * (4 * Constants.COUNTERS_LEN + 2))
 
 with open('data.cpp', 'w') as output_c, open('data.h', 'w') as output_h:
-    output_h.write(f'''
+    output_h.write('''
 #pragma once
 
 #include <stdint.h>
@@ -459,18 +462,17 @@ with open('data.cpp', 'w') as output_c, open('data.h', 'w') as output_h:
 struct ParameterInfo;
 struct Model;
 
-#define SCALE {SCALE}
-#define NUM_SLOTS {NUM_SLOTS}
-#define SLOT_PARAMETERS2 {SLOT_PARAMETERS2}
-#define SLOT_PARAMETERS {SLOT_PARAMETERS}
-#define SLOT_TEST_SET {SLOT_TEST_SET}
-#define SLOT_INTERMEDIATE_VALUES {SLOT_INTERMEDIATE_VALUES}
-#define INTERMEDIATE_VALUES_SIZE {INTERMEDIATE_VALUES_SIZE}
-#define CACHED_FILTERS_LEN {CACHED_FILTERS_LEN}
-#define COUNTERS_LEN {COUNTERS_LEN}
-#define NVM_SIZE {NVM_SIZE}
-#define NODE_NAME_LEN {NODE_NAME_LEN}
 ''')
+    for item in itertools.chain(dir(Constants), config.keys()):
+        if hasattr(Constants, item):
+            if item.startswith('__'):
+                continue
+            val = getattr(Constants, item)
+        else:
+            val = config[item]
+            if not isinstance(val, (int, float)):
+                continue
+        output_h.write(f'#define {item.upper()} {val}\n')
 
     if not args.without_progress_embedding:
         output_h.write('''
@@ -569,10 +571,10 @@ uint8_t *{var_name} = _{var_name};
 ''')
 
 with open('nvm.bin', 'wb') as f:
-    f.write(NVM_SIZE * b'\0')
-    f.seek(CACHED_FILTERS_LEN + NUM_SLOTS * INTERMEDIATE_VALUES_SIZE)
+    f.write(config['nvm_size'] * b'\0')
+    f.seek(Constants.CACHED_FILTERS_LEN + config['num_slots'] * config['intermediate_values_size'])
     for data_obj in outputs.values():
         data_obj.seek(0)
         f.write(data_obj.read())
         needed_nvm_size = f.tell()
-        assert needed_nvm_size < NVM_SIZE, f'Need NVM size {needed_nvm_size}'
+        assert needed_nvm_size < config['nvm_size'], f'Need NVM size {needed_nvm_size}'
