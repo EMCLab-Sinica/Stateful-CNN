@@ -35,14 +35,4 @@
 			</matcher>
 		</filter>
 	</filteredResources>
-	<variableList>
-		<variable>
-			<name>FREERTOS_ROOT</name>
-			<value>$%7BPARENT-3-PROJECT_LOC%7D</value>
-		</variable>
-		<variable>
-			<name>FREERTOS_ROOT1</name>
-			<value>$%7BFREERTOS_ROOT%7D/Google%20drive/CCSWork/FreeRTOS_MSP430FR5994</value>
-		</variable>
-	</variableList>
 </projectDescription>
