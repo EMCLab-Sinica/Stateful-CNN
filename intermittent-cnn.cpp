@@ -162,6 +162,8 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
         }
         if (i % 100 == 0) {
             my_printf("Sample %d finished" NEWLINE, model->sample_idx);
+            // stdout is not flushed at \n if it is not a terminal
+            my_flush();
         }
         my_printf_debug("label=%d predicted=%d correct=%d" NEWLINE, label, predicted, label == predicted);
     }

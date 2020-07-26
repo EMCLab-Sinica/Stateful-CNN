@@ -14,23 +14,15 @@
 #  define PRId64 "L"
 #  define PRIsize_t "l"
 #  define my_printf print2uart
+#  define my_flush()
 #  define NEWLINE "\r\n"
 #else
 #  include <stdio.h>
 #  include <inttypes.h> // for PRId32
 #  define PRIsize_t "zu"
+#  define my_printf printf
+#  define my_flush() do { fflush(stdout); } while (0);
 #  define NEWLINE "\n"
-static inline int my_printf(const char *format) {
-    int ret = printf(format);
-    fflush(stdout);
-    return ret;
-}
-template<typename T>
-static inline int my_printf(const char *format, const T& arg) {
-    int ret = printf(format, arg);
-    fflush(stdout);
-    return ret;
-}
 #endif
 
 // XXX: get rid of `state` variables if WITH_PROGRESS_EMBEDDING is not defined?
