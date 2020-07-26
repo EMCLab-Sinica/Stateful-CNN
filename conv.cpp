@@ -307,10 +307,13 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
 #ifdef WITH_PROGRESS_EMBEDDING
         if (conv_params->input_state_bit) {
             msp_offset_q15_params offset_params;
-            offset_params.length = size;
+            offset_params.length = size / 2 * 2;
             offset_params.offset = -0x4000;
             status = msp_offset_q15(&offset_params, dest_addr, dest_addr);
             msp_checkStatus(status);
+            if (size % 2) {
+                dest_addr[size - 1] -= 0x4000;
+            }
         }
 #endif
         dest += conv_params->dest_offset;
