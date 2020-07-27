@@ -31,13 +31,14 @@ class Constants:
     COUNTERS_LEN = 64
     # To make the Node struct exactly 64 bytes
     NODE_NAME_LEN = 54
+    MAX_OUTPUT_ID_INVALID = 0x8000
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
 ops = {
     'Add': [2, 0],
     # Concat actually accepts 1~infinity inputs. Use 2 to fit SqueezeNet
-    'Concat': [2, 1],
+    'Concat': [2, 0],
     'Conv': [3, 0],
     'ConvMerge': [1, 0],
     'Dropout': [1, 1],
@@ -495,23 +496,22 @@ struct Model;
     output_c.write('};\n\n')
 
     for op in keys:
-        output_h.write('void handle_{}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
         output_h.write('void alloc_{}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
+        output_h.write('void handle_{}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
     output_c.write('handler handlers[] = {\n')
     for op in keys:
-        output_c.write(f'\thandle_{op},\n'.lower())
+        output_c.write(f'    handle_{op},\n'.lower())
     output_c.write('};\n')
     output_c.write('allocator allocators[] = {\n')
     for op in keys:
-        output_c.write(f'\talloc_{op},\n'.lower())
+        output_c.write(f'    alloc_{op},\n'.lower())
     output_c.write('};\n')
     for op in keys:
         if ops[op][1]:
-            output_c.write(f'void alloc_{op.lower()}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags)\n')
-            output_c.write('{\n')
-            output_c.write('\tUNUSED(input);\n')
-            output_c.write('\tUNUSED(flags);\n')
-            output_c.write('\tmodel->slot_users[output->slot] = model->layer_idx;\n')
+            output_c.write(f'void alloc_{op.lower()}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags) {{\n')
+            output_c.write('    UNUSED(input);\n')
+            output_c.write('    UNUSED(flags);\n')
+            output_c.write('    model->slot_users[output->slot] = model->layer_idx;\n')
             output_c.write('}\n')
 
     # data

@@ -79,7 +79,7 @@ uint16_t get_next_slot(Model *model, ParameterInfo *param) {
             break;
         }
         Node *slot_user = &(nodes[slot_user_id]);
-        if (slot_user->max_output_id < model->layer_idx) {
+        if ((slot_user->max_output_id & MAX_OUTPUT_ID_INVALID) || (slot_user->max_output_id < model->layer_idx)) {
             break;
         }
     }

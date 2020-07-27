@@ -89,6 +89,9 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
             fill_int16((int16_t*)intermediate_values(idx), INTERMEDIATE_VALUES_SIZE / sizeof(int16_t), 0);
 #endif
         }
+        for (uint16_t node_idx = 0; node_idx < model->nodes_len; node_idx++) {
+            nodes[node_idx].max_output_id &= ~MAX_OUTPUT_ID_INVALID;
+        }
         model->running = 1;
     } else {
         model->recovery = 1;

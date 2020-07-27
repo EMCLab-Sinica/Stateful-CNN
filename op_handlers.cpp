@@ -490,6 +490,13 @@ static void iterate_chunks(ParameterInfo *param, std::function<void(uint32_t, ui
     }
 }
 
+void alloc_concat(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags) {
+    UNUSED(model);
+    UNUSED(input);
+    UNUSED(output);
+    UNUSED(flags);
+}
+
 void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     UNUSED(model);
     UNUSED(flags);
@@ -521,7 +528,6 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     }
     if (scaled) {
         msp_status status;
-        // TODO: make the scaling step idempotent
         uint8_t orig_slot = scaled->slot;
         uint8_t new_slot = get_next_slot(model, scaled);
         uint8_t old_output_state_bit = get_state_bit(model, new_slot);
@@ -552,8 +558,10 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 #endif
             my_memcpy(scaled_dstptr + offset, lea_buffer, real_chunk_len * sizeof(int16_t));
         });
-        model->slot_users[orig_slot] = -1;
 
+        // XXX: touching nodes is dirty :(
+        Node *nodes = (Node*)(model + 1);
+        nodes[model->slot_users[scaled->slot]].max_output_id |= MAX_OUTPUT_ID_INVALID; // no longer used
         scaled->slot = new_slot;
         flip_state_bit(model, scaled);
     }

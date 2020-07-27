@@ -119,6 +119,5 @@ typedef void (*handler)(Model *model, ParameterInfo *input[], ParameterInfo *out
 typedef void (*allocator)(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
 // below are defined in ops.c
 extern uint8_t expected_inputs_len[];
-extern uint8_t inplace_update[];
 extern handler handlers[];
 extern allocator allocators[];
