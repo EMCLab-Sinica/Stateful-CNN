@@ -338,13 +338,15 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
     p_matrix_mpy_params->srcACols = p_matrix_mpy_params->srcBRows = conv_params->filter_offset;
 
     for (uint16_t j = 0; j < conv_params->H - conv_params->offset_h - conv_params->input_h; j += conv_params->stride) {
-        for (uint16_t idx = 0; idx < conv_params->OUTPUT_CHANNEL; idx += conv_params->filter_limit) {
-            conv_params->conv_idx = idx;
-            p_matrix_mpy_params->srcBCols = MIN_VAL(conv_params->filter_limit, conv_params->OUTPUT_CHANNEL - idx);
+        // conv_idx is set to initial_c in handle_conv
+        for (; conv_params->conv_idx < conv_params->OUTPUT_CHANNEL; conv_params->conv_idx += conv_params->filter_limit) {
+            p_matrix_mpy_params->srcBCols = MIN_VAL(conv_params->filter_limit, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
             MY_ASSERT(p_matrix_mpy_params->srcARows * p_matrix_mpy_params->srcBCols <= OUTPUT_LEN);
             MY_ASSERT((p_matrix_mpy_params->srcACols & 1) || (p_matrix_mpy_params->srcBCols & 1) == 0);
             convTask(j, conv_params);
         }
+        // reset here for further processing
+        conv_params->conv_idx = 0;
     }
 }
 
@@ -453,8 +455,10 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     my_printf_debug("initial_w = %d" NEWLINE, initial_w);
     my_printf_debug("initial_c = %d" NEWLINE, initial_c);
 
+    uint16_t initial_input_w = conv_params->offset_w + initial_w * conv_params->stride;
+    uint16_t initial_input_h = conv_params->offset_h + initial_h * conv_params->stride;
+
     // TODO: state recovery with partially done MM
-    UNUSED(initial_c);
 
     for (uint16_t tile_c_offset = initial_n * conv_params->tile_c, tile_c_index = initial_n; tile_c_offset < CHANNEL ; tile_c_offset += conv_params->tile_c, tile_c_index++) {
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -491,16 +495,20 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         conv_params->tile_c_index = tile_c_index;
         uint16_t input_w = conv_params->offset_w;
         if (tile_c_index == initial_n) {
-            input_w += initial_w * conv_params->stride;
+            input_w = initial_input_w;
         }
         for (; input_w < W - conv_params->offset_w; input_w += conv_params->stride) {
             uint16_t input_h = conv_params->offset_h;
-            if (tile_c_index == initial_n && input_w == conv_params->offset_w + initial_w * conv_params->stride) {
-                input_h += initial_h * conv_params->stride;
+            if (tile_c_index == initial_n && input_w == initial_input_w) {
+                input_h = initial_input_h;
             }
             for (; input_h < H - conv_params->offset_h; input_h += conv_params->tile_h) {
                 conv_params->input_h = input_h;
                 conv_params->input_w = input_w;
+                conv_params->conv_idx = 0;
+                if (tile_c_index == initial_n && input_w == initial_input_w && input_h == initial_input_h) {
+                    conv_params->conv_idx = initial_c;
+                }
                 handle_conv_inner_loop(conv_params);
             }
         }
