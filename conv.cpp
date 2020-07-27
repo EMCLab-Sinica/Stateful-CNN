@@ -491,12 +491,12 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         conv_params->tile_c_index = tile_c_index;
         uint16_t input_w = conv_params->offset_w;
         if (tile_c_index == initial_n) {
-            input_w += initial_w;
+            input_w += initial_w * conv_params->stride;
         }
         for (; input_w < W - conv_params->offset_w; input_w += conv_params->stride) {
             uint16_t input_h = conv_params->offset_h;
-            if (tile_c_index == initial_n && input_w == conv_params->offset_w + initial_w) {
-                input_h += initial_h;
+            if (tile_c_index == initial_n && input_w == conv_params->offset_w + initial_w * conv_params->stride) {
+                input_h += initial_h * conv_params->stride;
             }
             for (; input_h < H - conv_params->offset_h; input_h += conv_params->tile_h) {
                 conv_params->input_h = input_h;
