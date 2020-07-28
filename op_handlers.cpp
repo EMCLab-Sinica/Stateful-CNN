@@ -33,7 +33,7 @@ void alloc_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     output->dims[3] = new_W;
 }
 
-static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, uint16_t tile_c_offset, uint16_t flags, ParameterInfo *data, ParameterInfo *output, Model *model) {
+static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, uint16_t flags, ParameterInfo *data, ParameterInfo *output, Model *model) {
     const uint16_t CHANNEL = data->dims[1], W = data->dims[3];
     uint16_t stride = flags & 0x0f;
     uint16_t kernel_size = (flags & 0xf0) >> 4;
@@ -52,14 +52,14 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
 
     my_printf_debug("output_h=%d ", output_h);
     my_printf_debug("output_w=%d ", output_w);
-    my_printf_debug("c=%d" NEWLINE, tile_c_offset + c);
+    my_printf_debug("c=%d" NEWLINE, c);
 
     int16_t max_val = INT16_MIN;
     for (uint16_t sH = 0; sH < kernel_size; sH++) {
         for (uint16_t sW = 0; sW < kernel_size; sW++) {
             int16_t val;
             // XXX: use a moving pointer instead of data_baseptr makes it slower. Why!?
-            val = data_baseptr[(output_h*stride+sH) * offset_h + (output_w*stride+sW) * offset_w + tile_c_offset + c];
+            val = data_baseptr[(output_h*stride+sH) * offset_h + (output_w*stride+sW) * offset_w + c];
 #ifdef WITH_PROGRESS_EMBEDDING
             if (input_state_bit) {
                 val -= 0x4000;
@@ -84,7 +84,6 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
 }
 
 void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-
     my_printf_debug("MaxPool!" NEWLINE);
 
     uint16_t stride = flags & 0x0f;
@@ -144,7 +143,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                         output_ptr += initial_c;
                     }
                     for (; c < real_tile_c; c++) {
-                        int16_t max_val = maxpool_patch(output_h, output_w, c, tile_c_offset, flags, data, output, model);
+                        int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, output, model);
                         my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
                         *output_ptr = max_val;
                         output_ptr++;
@@ -181,7 +180,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                         output_ptr += initial_w;
                     }
                     for (; output_w < new_W; output_w++) {
-                        int16_t max_val = maxpool_patch(output_h, output_w, c, tile_c_offset, flags, data, output, model);
+                        int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, output, model);
                         my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
                         *output_ptr = max_val;
                         output_ptr++;
@@ -357,6 +356,8 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     my_printf_debug("handle_relu input" NEWLINE);
     dump_params_nhwc(model, X, 0);
 
+    uint16_t CHANNEL = X->dims[1];
+
     /* XXX: use LEA? */
     uint16_t bitwidth = X->bitwidth;
     MY_ASSERT(bitwidth == 16);
@@ -383,11 +384,19 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     if (X->flags & TRANSPOSED) {
         // input is in NWHC
         // TODO: state-aware recovery
-        uint16_t CHANNEL = X->dims[1], H = X->dims[2], W = X->dims[3];
+        uint16_t H = X->dims[2], W = X->dims[3];
         for (uint16_t output_h = 0; output_h < H; output_h++) {
             for (uint16_t output_w = 0; output_w < W; output_w++) {
                 for (uint16_t c = 0; c < CHANNEL; c++) {
-                    int16_t val = *(data_baseptr + output_w * H * CHANNEL + output_h * CHANNEL + c);
+                    int16_t input_tile_c_index = c / X->tile_c;
+                    int16_t input_tile_c_offset = c % X->tile_c;
+                    int16_t val_offset = input_tile_c_index * W * H * X->tile_c + output_w * H * X->tile_c + output_h * X->tile_c + input_tile_c_offset;
+                    int16_t val = *(data_baseptr + val_offset);
+                    my_printf_debug("output_h = %d, ", output_h);
+                    my_printf_debug("output_w = %d, ", output_w);
+                    my_printf_debug("c = %d, ", c);
+                    my_printf_debug("offset = %d, ", val_offset);
+                    my_printf_debug("input val = %d" NEWLINE, val);
                     *(output_baseptr + output_h * W * CHANNEL + output_w * CHANNEL + c) = MAX_VAL(val, threshold) + offset;
                 }
             }
@@ -399,6 +408,8 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
             output_ptr++;
         }
     }
+
+    output->tile_c = CHANNEL;
 
     flip_state_bit(model, output);
 
