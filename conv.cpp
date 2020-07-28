@@ -455,6 +455,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     // TODO: state recovery with partially done MM
 
     uint16_t input_tile_c = conv_input->tile_c;
+    output->tile_c = OUTPUT_CHANNEL;
     for (uint16_t input_tile_c_offset = initial_n * input_tile_c, input_tile_c_index = initial_n; input_tile_c_offset < CHANNEL ; input_tile_c_offset += input_tile_c, input_tile_c_index++) {
 #ifdef WITH_PROGRESS_EMBEDDING
         if (conv_params->conv_input->flags & SEPARATE_TILING) {
