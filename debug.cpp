@@ -92,27 +92,31 @@ void dump_params_nhwc(Model *model, ParameterInfo *cur_param, size_t offset) {
     CHANNEL = cur_param->dims[1];
     H = cur_param->dims[2];
     W = cur_param->dims[3];
+    // XXX: re-enable this check
     // check_params_len(cur_param);
     my_printf("Slot: %d" NEWLINE, cur_param->slot);
     my_printf("Scale: %d" NEWLINE, cur_param->scale);
     for (uint16_t n = 0; n < NUM; n++) {
         my_printf_debug("Matrix %d" NEWLINE, n);
-        for (uint16_t c = 0; c < CHANNEL; c++) {
-            my_printf_debug("Channel %d" NEWLINE, c);
-            for (uint16_t h = 0; h < H; h++) {
-                for (uint16_t w = 0; w < W; w++) {
-                    // internal format is NWHC (transposed) or NHWC
-                    size_t offset2;
-                    if (cur_param->flags & TRANSPOSED) {
-                        offset2 = n * W * H * CHANNEL + w * H * CHANNEL + h * CHANNEL + c;
-                    } else {
-                        offset2 = n * H * W * CHANNEL + h * W * CHANNEL + w * CHANNEL + c;
+        for (uint16_t tile_c_base = 0; tile_c_base < CHANNEL; tile_c_base += cur_param->tile_c) {
+            uint16_t cur_tile_c = MIN_VAL(cur_param->tile_c, CHANNEL - tile_c_base);
+            for (uint16_t c = 0; c < cur_tile_c; c++) {
+                my_printf_debug("Channel %d" NEWLINE, tile_c_base + c);
+                for (uint16_t h = 0; h < H; h++) {
+                    for (uint16_t w = 0; w < W; w++) {
+                        // internal format is NWHC (transposed) or NHWC
+                        size_t offset2 = n * W * H * CHANNEL + W * H * tile_c_base;
+                        if (cur_param->flags & TRANSPOSED) {
+                            offset2 += w * H * cur_tile_c + h * cur_tile_c + c;
+                        } else {
+                            offset2 += h * W * cur_tile_c + w * cur_tile_c + c;
+                        }
+                        dump_value(model, cur_param, offset + offset2);
                     }
-                    dump_value(model, cur_param, offset + offset2);
+                    my_printf_debug(NEWLINE);
                 }
                 my_printf_debug(NEWLINE);
             }
-            my_printf_debug(NEWLINE);
         }
         my_printf_debug(NEWLINE);
     }

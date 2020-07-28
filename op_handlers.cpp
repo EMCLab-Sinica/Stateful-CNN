@@ -195,11 +195,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 
     my_printf_debug("handle_maxpool output" NEWLINE);
     if (!need_nhwc2nchw) {
-        for (uint16_t c = 0; c < CHANNEL; c += tile_c) {
-            output->dims[1] = MIN_VAL(tile_c, CHANNEL - c);
-            dump_params_nhwc(model, output, c * new_H * new_W);
-        }
-        output->dims[1] = CHANNEL;
+        dump_params_nhwc(model, output, 0);
     } else if (tile_c == CHANNEL) {
         dump_params(model, output);
     }
