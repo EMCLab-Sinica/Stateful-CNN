@@ -58,7 +58,6 @@ typedef struct ConvTaskParams {
     uint16_t conv_idx;
     uint16_t input_h;
     uint16_t input_w;
-    msp_matrix_mpy_q15_params matrix_mpy_params;
     int16_t *filter_buffer_addr;
     int16_t cached_filter_idx;
     uint16_t cached_tile_c_offset;
@@ -70,11 +69,9 @@ int16_t * const matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
 
 void determine_tile_c(ParameterInfo *param) {
     // TODO: determine these values automatically
-    uint16_t H = param->dims[2];
-    if (H == 14) {
+    uint16_t CHANNEL = param->dims[1], H = param->dims[2];
+    if (H == 14 && CHANNEL == 8) {
         param->tile_c = 3;
-    } else if (H == 28) {
-        param->tile_c = 1;
     }
 }
 
@@ -82,7 +79,6 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     /* put var declarations first to make the compiler happy */
     int16_t *filter_addr;
     uint16_t n_filters = MIN_VAL(conv_params->filter_limit, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
-    msp_matrix_mpy_q15_params *p_matrix_mpy_params = &(conv_params->matrix_mpy_params);
 
     /* copy filter data */
     if (conv_params->cached_filter_idx != conv_params->conv_idx || conv_params->cached_tile_c_offset != conv_params->tile_c_offset) {
@@ -138,7 +134,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
 #ifndef USE_ARM_CMSIS
             msp_interleave_q15_params params;
-            params.length = p_matrix_mpy_params->srcBRows;
+            params.length = conv_params->filter_offset;
             params.numChannels = n_filters;
             params.channel = idx;
             status = msp_interleave_q15(
@@ -162,9 +158,24 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
     int16_t *input_buffer_addr = lea_buffer + offset_h * conv_params->dest_offset;
 
+    // XXX: LEA doc requires all matrix dimensions to be even, while LEA
+    // appears to still give correct results when srcARows is odd
+    // srcBCols should really be even, though
+    // http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/716353?MSP430FR5992-MSP-DSPLib-msp-matrix-mpy-q15
+    uint16_t A_rows, A_cols, B_rows, B_cols;
+    A_rows = 1;
+    A_cols = B_rows = conv_params->filter_offset;
+    B_cols = n_filters;
+    MY_ASSERT(A_rows * B_cols <= OUTPUT_LEN);
+    MY_ASSERT((A_cols & 1) || (B_cols & 1) == 0);
 #ifndef USE_ARM_CMSIS
+    msp_matrix_mpy_q15_params matrix_mpy_params;
+    matrix_mpy_params.srcARows = A_rows;
+    matrix_mpy_params.srcACols = A_cols;
+    matrix_mpy_params.srcBRows = B_rows;
+    matrix_mpy_params.srcBCols = B_cols;
     msp_status status = msp_matrix_mpy_q15(
-        p_matrix_mpy_params,
+        &matrix_mpy_params,
         input_buffer_addr,
         filter_buffer_addr,
         matrix_mpy_results
@@ -172,9 +183,9 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     msp_checkStatus(status);
 #else
     arm_matrix_instance_q15 A, B, C;
-    arm_mat_init_q15(&A, p_matrix_mpy_params->srcARows, p_matrix_mpy_params->srcACols, input_buffer_addr);
-    arm_mat_init_q15(&B, p_matrix_mpy_params->srcBRows, p_matrix_mpy_params->srcBCols, filter_buffer_addr);
-    arm_mat_init_q15(&C, p_matrix_mpy_params->srcARows, p_matrix_mpy_params->srcBCols, matrix_mpy_results);
+    arm_mat_init_q15(&A, A_rows, A_cols, input_buffer_addr);
+    arm_mat_init_q15(&B, B_rows, B_cols, filter_buffer_addr);
+    arm_mat_init_q15(&C, A_rows, B_cols, matrix_mpy_results);
     arm_status status = arm_mat_mult_fast_q15(&A, &B, &C, NULL);
     MY_ASSERT(status == ARM_MATH_SUCCESS);
 #endif
@@ -182,7 +193,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     /* START dump data */
 #ifndef MY_NDEBUG
     my_printf_debug("conv_idx=");
-    for (uint16_t idx = 0; idx < MIN_VAL(conv_params->filter_limit, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx); idx++) {
+    for (uint16_t idx = 0; idx < n_filters; idx++) {
         my_printf_debug("%d ", conv_params->conv_idx + idx);
     }
     my_printf_debug("output_h=%d ", (conv_params->input_h + offset_h) / conv_params->stride);
@@ -190,20 +201,20 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
     my_printf_debug("input_buffer_addr = lea_buffer + %d" NEWLINE, (int)(input_buffer_addr - lea_buffer));
     my_printf_debug("input" NEWLINE);
-    dump_matrix2(input_buffer_addr, p_matrix_mpy_params->srcARows, p_matrix_mpy_params->srcACols, conv_params->conv_input->scale, 0);
+    dump_matrix2(input_buffer_addr, A_rows, A_cols, conv_params->conv_input->scale, 0);
     my_printf_debug("filter_buffer_addr = lea_buffer + LEA_BUFFER_SIZE - %d" NEWLINE, (int)(lea_buffer + LEA_BUFFER_SIZE - filter_buffer_addr));
     my_printf_debug("filter" NEWLINE);
 #ifndef USE_ARM_CMSIS
-    dump_matrix2(filter_buffer_addr, p_matrix_mpy_params->srcBRows, p_matrix_mpy_params->srcBCols, conv_params->conv_filter->scale, 0);
+    dump_matrix2(filter_buffer_addr, B_rows, B_cols, conv_params->conv_filter->scale, 0);
 #else
-    dump_matrix2(filter_buffer_addr, p_matrix_mpy_params->srcBCols, p_matrix_mpy_params->srcBRows, conv_params->conv_filter->scale, 0);
+    dump_matrix2(filter_buffer_addr, B_cols, B_rows, conv_params->conv_filter->scale, 0);
 #endif
 
     my_printf_debug("matrix_mpy_results" NEWLINE);
     dump_matrix2(
         matrix_mpy_results,
-        p_matrix_mpy_params->srcARows,
-        p_matrix_mpy_params->srcBCols,
+        A_rows,
+        B_cols,
         conv_params->conv_input->scale * conv_params->conv_filter->scale,
 #ifdef WITH_PROGRESS_EMBEDDING
         !conv_params->old_output_state_bit
@@ -323,21 +334,9 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
     // state = 0 as state bits are already removed by msp_offset_q15 above
     dump_matrix(lea_buffer, inputs_len, conv_params->conv_input->scale, 0);
 
-    msp_matrix_mpy_q15_params *p_matrix_mpy_params = &(conv_params->matrix_mpy_params);
-
-    // XXX: LEA doc requires all matrix dimensions to be even, while LEA
-    // appears to still give correct results when srcARows is odd
-    // srcBCols should really be even, though
-    // http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/716353?MSP430FR5992-MSP-DSPLib-msp-matrix-mpy-q15
-    p_matrix_mpy_params->srcARows = 1;
-    p_matrix_mpy_params->srcACols = p_matrix_mpy_params->srcBRows = conv_params->filter_offset;
-
     for (uint16_t j = 0; j < conv_params->H - conv_params->offset_h - conv_params->input_h; j += conv_params->stride) {
         // conv_idx is set to initial_c in handle_conv
-        for (; conv_params->conv_idx < conv_params->OUTPUT_CHANNEL; conv_params->conv_idx += conv_params->filter_limit) {
-            p_matrix_mpy_params->srcBCols = MIN_VAL(conv_params->filter_limit, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
-            MY_ASSERT(p_matrix_mpy_params->srcARows * p_matrix_mpy_params->srcBCols <= OUTPUT_LEN);
-            MY_ASSERT((p_matrix_mpy_params->srcACols & 1) || (p_matrix_mpy_params->srcBCols & 1) == 0);
+        for (; conv_params->conv_idx < conv_params->output->tile_c; conv_params->conv_idx += conv_params->filter_limit) {
             convTask(j, conv_params);
         }
         // reset here for further processing
