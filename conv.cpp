@@ -498,20 +498,20 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         conv_params->input_tile_c_index = input_tile_c_index;
         for (uint16_t conv_idx_base = 0; conv_idx_base < OUTPUT_CHANNEL; conv_idx_base += output_tile_c) {
             uint16_t input_w = conv_params->offset_w;
-            if (input_tile_c_index == initial_n) {
+            if (conv_idx_base == 0 && input_tile_c_index == initial_n) {
                 input_w = initial_input_w;
             }
             conv_params->conv_idx_base = conv_idx_base;
             for (; input_w < W - conv_params->offset_w; input_w += conv_params->stride) {
                 uint16_t input_h = conv_params->offset_h;
-                if (input_tile_c_index == initial_n && input_w == initial_input_w) {
+                if (conv_idx_base == 0 && input_tile_c_index == initial_n && input_w == initial_input_w) {
                     input_h = initial_input_h;
                 }
                 for (; input_h < H - conv_params->offset_h; input_h += conv_params->tile_h) {
                     conv_params->input_h = input_h;
                     conv_params->input_w = input_w;
                     conv_params->conv_idx = conv_idx_base;
-                    if (input_tile_c_index == initial_n && input_w == initial_input_w && input_h == initial_input_h) {
+                    if (conv_idx_base == 0 && input_tile_c_index == initial_n && input_w == initial_input_w && input_h == initial_input_h) {
                         conv_params->conv_idx = initial_c;
                     }
                     handle_conv_inner_loop(conv_params);
