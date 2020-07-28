@@ -356,7 +356,7 @@ for params in parameters:
         outputs['model'].write(to_bytes(input_channel* dimX * dimY * 2, size=32))  # A _q15 is 16-bit
         outputs['model'].write(to_bytes(16, size=8))                # bitwidth
         outputs['model'].write(to_bytes(Constants.SLOT_TEST_SET, size=8))     # slot
-        outputs['model'].write(to_bytes(0, size=16))                # tile_c
+        outputs['model'].write(to_bytes(input_channel, size=16))    # tile_c
         # extend_dims
         outputs['model'].write(to_bytes(1))
         outputs['model'].write(to_bytes(input_channel))
@@ -393,11 +393,15 @@ for params in parameters:
         else:
             assert False
         outputs['model'].write(to_bytes(slot.slot_id, size=8))  # slot
-        outputs['model'].write(to_bytes(0, size=16))            # tile_c
+        if len(params.dims) == 4:
+            tile_c = params.dims[1]
+        else:
+            tile_c = 0
+        outputs['model'].write(to_bytes(tile_c, size=16))       # tile_c
         print('dims = {}, length = {}'.format(params.dims, data_len))
         for dim in params.dims:
             outputs['model'].write(to_bytes(dim))
-        # dims are always 4 uint16_t's in C
+        # dims are always 4 uint16_t's in C++
         for _ in range(4 - len(params.dims)):
             outputs['model'].write(to_bytes(0))
 

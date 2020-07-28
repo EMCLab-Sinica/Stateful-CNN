@@ -100,7 +100,8 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     uint16_t new_H = H / stride;
     uint16_t new_W = W / stride;
 
-    uint16_t tile_c = get_tile_c(output);
+    determine_tile_c(output);
+    uint16_t tile_c = output->tile_c;
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
 
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);

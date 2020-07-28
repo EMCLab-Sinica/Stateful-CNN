@@ -46,7 +46,6 @@ typedef struct ConvTaskParams {
     uint16_t tile_c_offset;
     uint16_t tile_c_index;
     uint16_t tile_h;
-    uint16_t tile_c;
     uint16_t cur_tile_c;
     uint16_t n_tiles_c;
     uint16_t dest_offset;
@@ -69,17 +68,13 @@ static ConvTaskParams conv_params_obj;
 
 int16_t * const matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
 
-uint16_t get_tile_c(ParameterInfo *param) {
+void determine_tile_c(ParameterInfo *param) {
     // TODO: determine these values automatically
-    uint16_t CHANNEL = param->dims[1], H = param->dims[2];
+    uint16_t H = param->dims[2];
     if (H == 14) {
-        return 3;
+        param->tile_c = 3;
     } else if (H == 28) {
-        return 1;
-    } else if (param->tile_c) {
-        return param->tile_c;
-    } else {
-        return CHANNEL;
+        param->tile_c = 1;
     }
 }
 
@@ -374,8 +369,8 @@ void alloc_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
     } else {
         conv_params->offset_h = conv_params->offset_w = 0;
     }
-    conv_params->tile_c = get_tile_c(conv_input);
-    conv_params->n_tiles_c = (CHANNEL + conv_params->tile_c - 1) / conv_params->tile_c;
+    uint16_t tile_c = conv_input->tile_c;
+    conv_params->n_tiles_c = (CHANNEL + tile_c - 1) / tile_c;
 
     /* XXX: extend flags; assume dilation=(1, 1) for now */
     output->bitwidth = 16;
@@ -460,7 +455,8 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 
     // TODO: state recovery with partially done MM
 
-    for (uint16_t tile_c_offset = initial_n * conv_params->tile_c, tile_c_index = initial_n; tile_c_offset < CHANNEL ; tile_c_offset += conv_params->tile_c, tile_c_index++) {
+    uint16_t tile_c = conv_input->tile_c;
+    for (uint16_t tile_c_offset = initial_n * tile_c, tile_c_index = initial_n; tile_c_offset < CHANNEL ; tile_c_offset += tile_c, tile_c_index++) {
 #ifdef WITH_PROGRESS_EMBEDDING
         if (conv_params->conv_input->flags & SEPARATE_TILING) {
             conv_params->input_state_bit = input_state_bits[tile_c_index];
@@ -468,7 +464,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
             conv_params->input_state_bit = input_state_bits[0];
         }
 #endif
-        conv_params->cur_tile_c = MIN_VAL(conv_params->tile_c, CHANNEL - tile_c_offset);
+        conv_params->cur_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
         my_printf_debug("cur_tile_c = %d" NEWLINE, conv_params->cur_tile_c);
         // +1 for bias
         conv_params->dest_offset = conv_params->kH * conv_params->cur_tile_c + 1;
@@ -520,7 +516,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     uint32_t tiling_results_len = OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W;
 
     my_printf_debug("handle_conv output" NEWLINE);
-    for (uint16_t tile_c_index = 0; tile_c_index * conv_params->tile_c < CHANNEL; tile_c_index++) {
+    for (uint16_t tile_c_index = 0; tile_c_index * tile_c < CHANNEL; tile_c_index++) {
         dump_params_nhwc(model, output, tile_c_index * tiling_results_len);
     }
 #endif
