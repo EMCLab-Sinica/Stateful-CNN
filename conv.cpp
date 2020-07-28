@@ -56,6 +56,7 @@ typedef struct ConvTaskParams {
     uint8_t old_output_state_bit;
 
     uint16_t conv_idx;
+    uint16_t conv_idx_base;
     uint16_t input_h;
     uint16_t input_w;
     int16_t *filter_buffer_addr;
@@ -72,13 +73,16 @@ void determine_tile_c(ParameterInfo *param) {
     uint16_t CHANNEL = param->dims[1], H = param->dims[2];
     if (H == 14 && CHANNEL == 8) {
         param->tile_c = 3;
+    } else if (H == 15 && CHANNEL == 64) {
+        param->tile_c = 32;
     }
 }
 
 static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     /* put var declarations first to make the compiler happy */
     int16_t *filter_addr;
-    uint16_t n_filters = MIN_VAL(conv_params->filter_limit, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
+    uint16_t output_tile_c = conv_params->output->tile_c;
+    uint16_t n_filters = MIN_VAL(conv_params->filter_limit, output_tile_c - (conv_params->conv_idx - conv_params->conv_idx_base));
 
     /* copy filter data */
     if (conv_params->cached_filter_idx != conv_params->conv_idx || conv_params->cached_input_tile_c_offset != conv_params->input_tile_c_offset) {
@@ -229,10 +233,10 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     // use NWHC so that output is written continuously on the address space
     int16_t *output_baseptr = get_q15_param(conv_params->output, 0);
     int16_t *output_data = output_baseptr +
-            conv_params->input_tile_c_index * conv_params->OUTPUT_W * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL +   // n
-            conv_params->input_w / conv_params->stride * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL +         // w
-            (conv_params->input_h + offset_h) / conv_params->stride * conv_params->OUTPUT_CHANNEL +                    // h
-            conv_params->conv_idx;                                                                                      // c
+            conv_params->OUTPUT_W * conv_params->OUTPUT_H * (conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL + conv_params->conv_idx_base) +   // n
+            conv_params->input_w / conv_params->stride * conv_params->OUTPUT_H * output_tile_c +         // w
+            (conv_params->input_h + offset_h) / conv_params->stride * output_tile_c +                    // h
+            conv_params->conv_idx - conv_params->conv_idx_base;                                          // c
     my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - output_baseptr));
     MY_ASSERT((uint8_t*)(output_data + n_filters) < intermediate_values(NUM_SLOTS));
 #if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
@@ -336,11 +340,11 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
 
     for (uint16_t j = 0; j < conv_params->H - conv_params->offset_h - conv_params->input_h; j += conv_params->stride) {
         // conv_idx is set to initial_c in handle_conv
-        for (; conv_params->conv_idx < conv_params->output->tile_c; conv_params->conv_idx += conv_params->filter_limit) {
+        for (; conv_params->conv_idx - conv_params->conv_idx_base < conv_params->output->tile_c; conv_params->conv_idx += conv_params->filter_limit) {
             convTask(j, conv_params);
         }
         // reset here for further processing
-        conv_params->conv_idx = 0;
+        conv_params->conv_idx = conv_params->conv_idx_base;
     }
 }
 
@@ -456,6 +460,9 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 
     uint16_t input_tile_c = conv_input->tile_c;
     output->tile_c = OUTPUT_CHANNEL;
+    determine_tile_c(output);
+    uint16_t output_tile_c = output->tile_c;
+
     for (uint16_t input_tile_c_offset = initial_n * input_tile_c, input_tile_c_index = initial_n; input_tile_c_offset < CHANNEL ; input_tile_c_offset += input_tile_c, input_tile_c_index++) {
 #ifdef WITH_PROGRESS_EMBEDDING
         if (conv_params->conv_input->flags & SEPARATE_TILING) {
@@ -480,7 +487,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         conv_params->filter_offset = conv_params->kH * conv_params->dest_offset;
 
         conv_params->filter_limit = MIN_VAL(
-            conv_params->OUTPUT_CHANNEL,
+            output_tile_c,
             // `/ 2 * 2` as LEA requires matrix dimensions to be even
             ((LEA_BUFFER_SIZE - OUTPUT_LEN - conv_params->dest_offset * (conv_params->kH + conv_params->tile_h - 1)) / (conv_params->dest_offset * conv_params->kH) - TEMP_FILTER_WIDTH) / 2 * 2
         );
@@ -489,23 +496,26 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 
         conv_params->input_tile_c_offset = input_tile_c_offset;
         conv_params->input_tile_c_index = input_tile_c_index;
-        uint16_t input_w = conv_params->offset_w;
-        if (input_tile_c_index == initial_n) {
-            input_w = initial_input_w;
-        }
-        for (; input_w < W - conv_params->offset_w; input_w += conv_params->stride) {
-            uint16_t input_h = conv_params->offset_h;
-            if (input_tile_c_index == initial_n && input_w == initial_input_w) {
-                input_h = initial_input_h;
+        for (uint16_t conv_idx_base = 0; conv_idx_base < OUTPUT_CHANNEL; conv_idx_base += output_tile_c) {
+            uint16_t input_w = conv_params->offset_w;
+            if (input_tile_c_index == initial_n) {
+                input_w = initial_input_w;
             }
-            for (; input_h < H - conv_params->offset_h; input_h += conv_params->tile_h) {
-                conv_params->input_h = input_h;
-                conv_params->input_w = input_w;
-                conv_params->conv_idx = 0;
-                if (input_tile_c_index == initial_n && input_w == initial_input_w && input_h == initial_input_h) {
-                    conv_params->conv_idx = initial_c;
+            conv_params->conv_idx_base = conv_idx_base;
+            for (; input_w < W - conv_params->offset_w; input_w += conv_params->stride) {
+                uint16_t input_h = conv_params->offset_h;
+                if (input_tile_c_index == initial_n && input_w == initial_input_w) {
+                    input_h = initial_input_h;
                 }
-                handle_conv_inner_loop(conv_params);
+                for (; input_h < H - conv_params->offset_h; input_h += conv_params->tile_h) {
+                    conv_params->input_h = input_h;
+                    conv_params->input_w = input_w;
+                    conv_params->conv_idx = conv_idx_base;
+                    if (input_tile_c_index == initial_n && input_w == initial_input_w && input_h == initial_input_h) {
+                        conv_params->conv_idx = initial_c;
+                    }
+                    handle_conv_inner_loop(conv_params);
+                }
             }
         }
     }
