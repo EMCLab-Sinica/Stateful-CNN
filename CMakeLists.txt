@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.10)
+cmake_minimum_required(VERSION 2.8)
 
 project(intermittent-cnn)
 
