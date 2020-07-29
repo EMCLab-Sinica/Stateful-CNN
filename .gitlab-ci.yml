@@ -26,4 +26,4 @@ cifar10_stateful:
 
 old_system:
     image: 'centos:7'
-    script: bash ./.ci/centos7.sh
+    script: bash ./.ci/test-centos7.sh
