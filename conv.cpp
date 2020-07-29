@@ -468,8 +468,11 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     uint16_t output_tile_c = output->tile_c;
     my_printf_debug("output_tile_c = %d" NEWLINE, output_tile_c);
 
+    conv_params->input_tile_c_offset = 0;
+    conv_params->input_tile_c_index = 0;
     conv_params->input_w = conv_params->offset_w;
     conv_params->input_h = conv_params->offset_h;
+    conv_params->conv_idx_base = 0;
     conv_params->conv_idx = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
     conv_params->input_tile_c_offset = initial_n * input_tile_c;
