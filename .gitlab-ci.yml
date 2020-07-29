@@ -23,3 +23,7 @@ cifar10_stateful:
         CONFIG: cifar10
         WITH_PROGRESS_EMBEDDING: 1
     script: bash ./.ci/test.sh
+
+old_system:
+    image: 'centos:7'
+    script: bash ./.ci/centos7.sh
