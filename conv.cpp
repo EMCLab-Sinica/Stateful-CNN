@@ -99,6 +99,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     int16_t *filter_addr;
     uint16_t remaining_filters = conv_params->OUTPUT_CHANNEL - conv_params->conv_idx;
     uint16_t cur_output_tile_c = MIN_VAL(conv_params->output->tile_c, remaining_filters);
+    MY_ASSERT(cur_output_tile_c);
 
     /* copy filter data */
     if (conv_params->cached_filter_idx != conv_params->conv_idx || conv_params->cached_input_tile_c_offset != conv_params->input_tile_c_offset) {
@@ -457,9 +458,6 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     my_printf_debug("initial_h = %d" NEWLINE, initial_h);
     my_printf_debug("initial_w = %d" NEWLINE, initial_w);
     my_printf_debug("initial_c = %d" NEWLINE, initial_c);
-
-    uint16_t initial_input_w = conv_params->offset_w + initial_w * conv_params->stride;
-    uint16_t initial_input_h = conv_params->offset_h + initial_h * conv_params->stride;
 #endif
 
     // TODO: state recovery with partially done MM
@@ -470,20 +468,26 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     uint16_t output_tile_c = output->tile_c;
     my_printf_debug("output_tile_c = %d" NEWLINE, output_tile_c);
 
-    uint16_t input_tile_c_offset = 0, input_tile_c_index = 0;
+    conv_params->input_w = conv_params->offset_w;
+    conv_params->input_h = conv_params->offset_h;
+    conv_params->conv_idx = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
-    input_tile_c_offset = initial_n * input_tile_c;
-    input_tile_c_index = initial_n;
+    conv_params->input_tile_c_offset = initial_n * input_tile_c;
+    conv_params->input_tile_c_index = initial_n;
+    conv_params->input_w += initial_w * conv_params->stride;
+    conv_params->input_h += initial_h * conv_params->stride;
+    conv_params->conv_idx_base = initial_c / output_tile_c * output_tile_c;
+    conv_params->conv_idx = initial_c;
 #endif
-    for (; input_tile_c_offset < CHANNEL ; input_tile_c_offset += input_tile_c, input_tile_c_index++) {
+    for (; conv_params->input_tile_c_offset < CHANNEL; conv_params->input_tile_c_offset += input_tile_c, conv_params->input_tile_c_index++) {
 #ifdef WITH_PROGRESS_EMBEDDING
         if (conv_params->conv_input->flags & SEPARATE_TILING) {
-            conv_params->input_state_bit = input_state_bits[input_tile_c_index];
+            conv_params->input_state_bit = input_state_bits[conv_params->input_tile_c_index];
         } else {
             conv_params->input_state_bit = input_state_bits[0];
         }
 #endif
-        conv_params->cur_input_tile_c = MIN_VAL(input_tile_c, CHANNEL - input_tile_c_offset);
+        conv_params->cur_input_tile_c = MIN_VAL(input_tile_c, CHANNEL - conv_params->input_tile_c_offset);
         my_printf_debug("cur_input_tile_c = %d" NEWLINE, conv_params->cur_input_tile_c);
         // +1 for bias
         conv_params->dest_offset = conv_params->kH * conv_params->cur_input_tile_c + 1;
@@ -503,36 +507,18 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         my_printf_debug("filter_limit: %d" NEWLINE, filter_limit);
         MY_ASSERT(filter_limit >= output_tile_c);
 
-        conv_params->input_tile_c_offset = input_tile_c_offset;
-        conv_params->input_tile_c_index = input_tile_c_index;
-        for (uint16_t conv_idx_base = 0; conv_idx_base < OUTPUT_CHANNEL; conv_idx_base += output_tile_c) {
-            uint16_t input_w = conv_params->offset_w;
-#ifdef WITH_PROGRESS_EMBEDDING
-            if (conv_idx_base == 0 && input_tile_c_index == initial_n) {
-                input_w = initial_input_w;
-            }
-#endif
-            conv_params->conv_idx_base = conv_idx_base;
-            for (; input_w < W - conv_params->offset_w; input_w += conv_params->stride) {
-                uint16_t input_h = conv_params->offset_h;
-#ifdef WITH_PROGRESS_EMBEDDING
-                if (conv_idx_base == 0 && input_tile_c_index == initial_n && input_w == initial_input_w) {
-                    input_h = initial_input_h;
-                }
-#endif
-                for (; input_h < H - conv_params->offset_h; input_h += conv_params->tile_h) {
-                    conv_params->input_h = input_h;
-                    conv_params->input_w = input_w;
-                    conv_params->conv_idx = conv_idx_base;
-#ifdef WITH_PROGRESS_EMBEDDING
-                    if (conv_idx_base == 0 && input_tile_c_index == initial_n && input_w == initial_input_w && input_h == initial_input_h) {
-                        conv_params->conv_idx = initial_c;
-                    }
-#endif
+        while (conv_params->conv_idx_base < OUTPUT_CHANNEL) {
+            for (; conv_params->input_w < W - conv_params->offset_w; conv_params->input_w += conv_params->stride) {
+                for (; conv_params->input_h < H - conv_params->offset_h; conv_params->input_h += conv_params->tile_h) {
                     handle_conv_inner_loop(conv_params);
                 }
+                conv_params->input_h = conv_params->offset_h;
             }
+            conv_params->input_w = conv_params->offset_w;
+            conv_params->conv_idx_base += output_tile_c;
+            conv_params->conv_idx = conv_params->conv_idx_base;
         }
+        conv_params->conv_idx = conv_params->conv_idx_base = 0;
     }
 
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -543,7 +529,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     uint32_t tiling_results_len = OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W;
 
     my_printf_debug("handle_conv output" NEWLINE);
-    for (input_tile_c_index = 0; input_tile_c_index * input_tile_c < CHANNEL; input_tile_c_index++) {
+    for (uint16_t input_tile_c_index = 0; input_tile_c_index * input_tile_c < CHANNEL; input_tile_c_index++) {
         dump_params_nhwc(model, output, input_tile_c_index * tiling_results_len);
     }
 #endif
