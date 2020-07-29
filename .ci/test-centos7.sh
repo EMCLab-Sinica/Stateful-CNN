@@ -5,6 +5,8 @@ python3.6 -m ensurepip --user
 pip3 install --user dataclasses numpy onnx
 
 python3.6 transform.py mnist
-cmake -B build
-make -C build
-./build/intermittent-cnn
+mkdir build
+cd build
+cmake ..
+make
+./intermittent-cnn
