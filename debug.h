@@ -25,13 +25,19 @@
 #  define NEWLINE "\n"
 #endif
 
-// XXX: get rid of `state` variables if WITH_PROGRESS_EMBEDDING is not defined?
-void print_q15(int16_t val, uint16_t scale, uint8_t state);
-void print_iq31(int32_t val, uint16_t scale);
-
 struct ParameterInfo;
 struct Model;
 struct Node;
+
+struct ValueInfo {
+    ValueInfo(ParameterInfo *cur_param, Model *model = nullptr);
+    ValueInfo() {}
+
+    uint16_t scale;
+#ifdef WITH_PROGRESS_EMBEDDING
+    uint8_t state;
+#endif
+};
 
 void dump_value(struct Model *model, struct ParameterInfo *cur_param, size_t offset);
 
@@ -39,20 +45,18 @@ void dump_value(struct Model *model, struct ParameterInfo *cur_param, size_t off
 
 void dump_params(struct Model *model, struct ParameterInfo *cur_param);
 void dump_params_nhwc(struct Model *model, struct ParameterInfo *cur_param, size_t offset);
-void dump_matrix(int16_t *mat, size_t len, uint16_t scale, uint8_t state);
-void dump_matrix2(int16_t *mat, size_t rows, size_t cols, uint16_t scale, uint8_t state);
-#define print_q15_debug print_q15
-#define print_iq31_debug print_iq31
+void dump_matrix(int16_t *mat, size_t len, const ValueInfo& val_info);
+void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_info);
+#define dump_value_debug dump_value
 #define my_printf_debug my_printf
 
 #else
 
 #define dump_params(model, cur_param)
 #define dump_params_nhwc(model, cur_param, offset)
-#define dump_matrix(mat, len, scale, state)
-#define dump_matrix2(mat, rows, cols, scale, state)
-#define print_q15_debug(val, scale, state)
-#define print_iq31_debug(val, scale)
+#define dump_matrix(...)
+#define dump_matrix2(...)
+#define dump_value_debug(...)
 #define my_printf_debug(...)
 
 #endif

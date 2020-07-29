@@ -2,38 +2,39 @@
 #include "cnn_common.h"
 #include "intermittent-cnn.h"
 
-void print_q15(int16_t val, uint16_t scale, uint8_t state) {
-#if defined(__MSP430__) || defined(__MSP432__)
-    UNUSED(scale);
-    UNUSED(state);
-    my_printf("%d ", val);
-#elif defined(DUMP_INTEGERS)
-    UNUSED(scale);
-    UNUSED(state);
-    my_printf("% 6d ", val);
-#else
-    // 2^15
-    my_printf("% 13.6f", scale * (val - (state ? 0x4000 : 0)) / 32768.0);
+ValueInfo::ValueInfo(ParameterInfo *cur_param, Model *model) {
+    this->scale = cur_param->scale;
+#ifdef WITH_PROGRESS_EMBEDDING
+    if (model) {
+        this->state = get_state_bit(model, cur_param->slot);
+    }
 #endif
 }
 
-void print_iq31(int32_t val, uint16_t scale) {
-#if defined(__MSP430__) || defined(__MSP432__) || defined(DUMP_INTEGERS)
-    UNUSED(scale);
-    my_printf("%" PRId32 " ", val);
+static void print_q15(int16_t val, const ValueInfo& val_info) {
+#if defined(__MSP430__) || defined(__MSP432__)
+    my_printf("%d ", val);
+#elif defined(DUMP_INTEGERS)
+    my_printf("% 6d ", val);
 #else
-    // 2^31
-    my_printf("% f ", scale * val / 2147483648.0);
+    // 2^15
+    int16_t offset = 0;
+#ifdef WITH_PROGRESS_EMBEDDING
+    if (val_info->state) {
+        offset = 0x4000;
+    }
+#endif
+    my_printf("% 13.6f", info.scale * (val - ) / 32768.0);
 #endif
 }
 
 void dump_value(Model *model, ParameterInfo *cur_param, size_t offset) {
     if (cur_param->bitwidth == 16) {
-        print_q15(*get_q15_param(cur_param, offset), cur_param->scale, get_state_bit(model, cur_param->slot));
-    } else if (cur_param->bitwidth == 32) {
-        print_iq31(*get_iq31_param(cur_param, offset), cur_param->scale);
+        print_q15(*get_q15_param(cur_param, offset), ValueInfo(cur_param, model));
     } else if (cur_param->bitwidth == 64) {
         my_printf("%" PRId64 " ", get_int64_param(cur_param, offset));
+    } else {
+        ERROR_OCCURRED();
     }
 }
 
@@ -122,10 +123,10 @@ void dump_params_nhwc(Model *model, ParameterInfo *cur_param, size_t offset) {
     }
 }
 
-void dump_matrix(int16_t *mat, size_t len, uint16_t scale, uint8_t state) {
-    my_printf("Scale: %d" NEWLINE, scale);
+void dump_matrix(int16_t *mat, size_t len, const ValueInfo& val_info) {
+    my_printf("Scale: %d" NEWLINE, val_info.scale);
     for (size_t j = 0; j < len; j++) {
-        print_q15_debug(mat[j], scale, state);
+        print_q15(mat[j], val_info);
         if (j && (j % 16 == 15)) {
             my_printf_debug(NEWLINE);
         }
@@ -133,10 +134,10 @@ void dump_matrix(int16_t *mat, size_t len, uint16_t scale, uint8_t state) {
     my_printf_debug(NEWLINE);
 }
 
-void dump_matrix2(int16_t *mat, size_t rows, size_t cols, uint16_t scale, uint8_t state) {
-    my_printf("Scale: %d" NEWLINE, scale);
+void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_info) {
+    my_printf("Scale: %d" NEWLINE, val_info.scale);
     for (size_t j = 0; j < rows * cols; j++) {
-        print_q15_debug(mat[j], scale, state);
+        print_q15(mat[j], val_info);
         if ((j+1) % cols == 0) {
             my_printf_debug(NEWLINE);
         }
@@ -166,9 +167,6 @@ void dump_model(Model *model, Node *nodes) {
 
 #else
 
-void dump_model(Model *model, Node *nodes) {
-    UNUSED(model);
-    UNUSED(nodes);
-}
+void dump_model(Model*, Node*) {}
 
 #endif

@@ -511,9 +511,7 @@ struct Model;
     output_c.write('};\n')
     for op in keys:
         if ops[op][1]:
-            output_c.write(f'void alloc_{op.lower()}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags) {{\n')
-            output_c.write('    UNUSED(input);\n')
-            output_c.write('    UNUSED(flags);\n')
+            output_c.write(f'void alloc_{op.lower()}(Model *model, ParameterInfo *[], struct ParameterInfo *output, uint16_t) {{\n')
             output_c.write('    model->slot_users[output->slot] = model->layer_idx;\n')
             output_c.write('}\n')
 

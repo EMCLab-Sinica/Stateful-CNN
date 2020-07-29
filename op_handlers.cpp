@@ -41,9 +41,6 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
 #ifdef WITH_PROGRESS_EMBEDDING
     uint8_t input_state_bit = get_state_bit(model, data->slot);
     uint8_t old_output_state_bit = get_state_bit(model, output->slot);
-#else
-    UNUSED(output);
-    UNUSED(model);
 #endif
 
     int16_t offset_h, offset_w;
@@ -55,20 +52,27 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
     my_printf_debug("c=%d" NEWLINE, c);
 
     int16_t max_val = INT16_MIN;
+#ifndef MY_NDEBUG
+    uint16_t max_val_offset;
+#endif
     for (uint16_t sH = 0; sH < kernel_size; sH++) {
         for (uint16_t sW = 0; sW < kernel_size; sW++) {
             int16_t val;
             // XXX: use a moving pointer instead of data_baseptr makes it slower. Why!?
-            val = data_baseptr[(output_h*stride+sH) * offset_h + (output_w*stride+sW) * offset_w + c];
+            uint16_t val_offset = (output_h*stride+sH) * offset_h + (output_w*stride+sW) * offset_w + c;
+            val = data_baseptr[val_offset];
 #ifdef WITH_PROGRESS_EMBEDDING
             if (input_state_bit) {
                 val -= 0x4000;
             }
 #endif
-            print_q15_debug(val, data->scale, get_state_bit(model, data->slot));
+            dump_value_debug(model, data, val_offset);
             // XXX: use LEA?
             if (val > max_val) {
                 max_val = val;
+#ifndef MY_NDEBUG
+                max_val_offset = val_offset;
+#endif
             }
         }
     }
@@ -77,9 +81,9 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
         max_val += 0x4000;
     }
 #endif
-    // need a space as print_q15_debug does not append spaces when DUMP_INTEGERS is not defined
+    // need a space as dump_value does not append spaces when DUMP_INTEGERS is not defined
     my_printf_debug(" max=");
-    print_q15_debug(max_val, data->scale, get_state_bit(model, data->slot));
+    dump_value_debug(model, data, max_val_offset);
     return max_val;
 }
 
@@ -103,18 +107,26 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     uint16_t tile_c = output->tile_c;
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
 
+#ifdef WITH_PROGRESS_EMBEDDING
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
     uint16_t initial_n, initial_c, initial_h, initial_w;
     initial_n = first_unfinished_value_offset / (new_H * new_W * tile_c);
 
     my_printf_debug("initial_n = %d" NEWLINE, initial_n);
+#endif
 
     int16_t *output_baseptr = get_q15_param(output, 0);
-    for (uint16_t tile_c_offset = initial_n * tile_c; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
+    uint16_t tile_c_offset = 0;
+#ifdef WITH_PROGRESS_EMBEDDING
+    tile_c_offset = initial_n * tile_c;
+#endif
+    for (; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
         uint16_t real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
         int16_t *output_ptr = output_baseptr + tile_c_offset * new_H * new_W;
         if (!need_nhwc2nchw) {
             // NHWC
+            uint16_t output_h = 0;
+#ifdef WITH_PROGRESS_EMBEDDING
             initial_c = first_unfinished_value_offset % real_tile_c;
             first_unfinished_value_offset /= real_tile_c;
             initial_w = first_unfinished_value_offset % new_W;
@@ -125,23 +137,27 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
             my_printf_debug("initial_w = %d" NEWLINE, initial_w);
             my_printf_debug("initial_c = %d" NEWLINE, initial_c);
 
-            uint16_t output_h = 0;
             if (tile_c_offset == initial_n * tile_c) {
                 output_h = initial_h;
                 output_ptr += initial_h * new_W * real_tile_c;
             }
+#endif
             for (; output_h < new_H; output_h++) {
                 uint16_t output_w = 0;
+#ifdef WITH_PROGRESS_EMBEDDING
                 if (tile_c_offset == initial_n * tile_c && output_h == initial_h) {
                     output_w = initial_w;
                     output_ptr += initial_w * real_tile_c;
                 }
+#endif
                 for (; output_w < new_W; output_w++) {
                     uint16_t c = 0;
+#ifdef WITH_PROGRESS_EMBEDDING
                     if (tile_c_offset == initial_n * tile_c && output_h == initial_h && output_w == initial_w) {
                         c = initial_c;
                         output_ptr += initial_c;
                     }
+#endif
                     for (; c < real_tile_c; c++) {
                         int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, output, model);
                         my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
@@ -152,6 +168,8 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
             }
         } else {
             // NCHW
+            uint16_t c = 0;
+#ifdef WITH_PROGRESS_EMBEDDING
             initial_w = first_unfinished_value_offset % new_W;
             first_unfinished_value_offset /= new_W;
             initial_h = first_unfinished_value_offset % new_H;
@@ -162,23 +180,27 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
             my_printf_debug("initial_w = %d" NEWLINE, initial_w);
             my_printf_debug("initial_c = %d" NEWLINE, initial_c);
 
-            uint16_t c = 0;
             if (tile_c_offset == initial_n * tile_c) {
                 c = initial_c;
                 output_ptr += initial_c * new_H * new_W;
             }
+#endif
             for (; c < real_tile_c; c++) {
                 uint16_t output_h = 0;
+#ifdef WITH_PROGRESS_EMBEDDING
                 if (tile_c_offset == initial_n * tile_c && c == initial_c) {
                     output_h = initial_h;
                     output_ptr += initial_h * new_W;
                 }
+#endif
                 for (; output_h < new_H; output_h++) {
                     uint16_t output_w = 0;
+#ifdef WITH_PROGRESS_EMBEDDING
                     if (tile_c_offset == initial_n * tile_c && c == initial_c && output_h == initial_h) {
                         output_w = initial_w;
                         output_ptr += initial_w;
                     }
+#endif
                     for (; output_w < new_W; output_w++) {
                         int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, output, model);
                         my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
@@ -190,7 +212,9 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
         }
     }
 
+#ifdef WITH_PROGRESS_EMBEDDING
     flip_state_bit(model, output);
+#endif
 
     my_printf_debug("handle_maxpool output" NEWLINE);
     if (!need_nhwc2nchw) {
@@ -200,19 +224,14 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     }
 }
 
-void alloc_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(flags);
-
+void alloc_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
     ParameterInfo *A = input[0], *B = input[1];
     MY_ASSERT(A->bitwidth == 16 && B->bitwidth == 16);
 
     output->slot = get_next_slot(model, A);
 }
 
-void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(model);
-    UNUSED(flags);
-
+void handle_add(Model*, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
     /* Add: Y = X + W */
     my_printf_debug("Add!" NEWLINE);
 
@@ -243,9 +262,7 @@ void handle_add(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
     my_memcpy(get_q15_param(output, 0), buffer_a, output->params_len);
 }
 
-void alloc_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(flags);
-
+void alloc_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
     ParameterInfo *A = input[0], *B = input[1];
 
     uint16_t output_len = A->dims[0] * B->dims[1];
@@ -258,9 +275,7 @@ void alloc_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, u
     output->scale = A->scale * B->scale;
 }
 
-void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(flags);
-
+void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
     ParameterInfo *A = input[0], *B = input[1];
 
     my_printf_debug("handle_matmul inputs" NEWLINE);
@@ -310,9 +325,9 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
                   current_width * B->dims[1] * sizeof(uint16_t));
 
         my_printf_debug("strip for A" NEWLINE);
-        dump_matrix(buffer_a + A->dims[0] * i, (size_t)(A->dims[0] * current_width), A->scale, get_state_bit(model, A->slot));
+        dump_matrix(buffer_a + A->dims[0] * i, (size_t)(A->dims[0] * current_width), ValueInfo(A, model));
         my_printf_debug("B" NEWLINE);
-        dump_matrix(buffer_b, (size_t)(current_width * B->dims[1]), B->scale, get_state_bit(model, B->slot));
+        dump_matrix(buffer_b, (size_t)(current_width * B->dims[1]), ValueInfo(B, model));
 
         status = msp_matrix_mpy_q15(
             &params,
@@ -322,7 +337,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         msp_checkStatus(status);
 
         my_printf_debug("temp" NEWLINE);
-        dump_matrix(buffer_temp, (size_t)(A->dims[0] * B->dims[1]), output->scale, get_state_bit(model, output->slot));
+        dump_matrix(buffer_temp, (size_t)(A->dims[0] * B->dims[1]), ValueInfo(output, model));
 
         msp_add_q15_params params2;
         params2.length = output->params_len / sizeof(int16_t);
@@ -334,23 +349,19 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     my_printf_debug("handle_matmul output" NEWLINE);
     dump_params(model, output);
 
+#ifdef WITH_PROGRESS_EMBEDDING
     flip_state_bit(model, output);
+#endif
 }
 
-void alloc_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(flags);
-
+void alloc_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
     ParameterInfo *data = input[0];
     output->slot = get_next_slot(model, data);
     output->flags &= ~TRANSPOSED;
 }
 
-void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(flags);
-
+void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
     my_printf_debug("ReLu!" NEWLINE);
-
-    uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
 
     ParameterInfo *X = input[0];
     my_printf_debug("handle_relu input" NEWLINE);
@@ -379,8 +390,14 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     my_printf_debug("threshold = %d" NEWLINE, threshold);
     my_printf_debug("offset = %d" NEWLINE, offset);
 
-    int16_t *data_ptr = data_baseptr + first_unfinished_value_offset;
-    int16_t *output_ptr = output_baseptr + first_unfinished_value_offset;
+    int16_t *data_ptr = data_baseptr;
+    int16_t *output_ptr = output_baseptr;
+#ifdef WITH_PROGRESS_EMBEDDING
+    uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
+    data_ptr += first_unfinished_value_offset;
+    output_ptr += first_unfinished_value_offset;
+#endif
+
     if (X->flags & TRANSPOSED) {
         // input is in NWHC
         // TODO: state-aware recovery
@@ -403,7 +420,11 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
             }
         }
     } else {
-        for (uint16_t i = first_unfinished_value_offset; i < data_len; i++) {
+        uint16_t i = 0;
+#ifdef WITH_PROGRESS_EMBEDDING
+        i = first_unfinished_value_offset;
+#endif
+        for (; i < data_len; i++) {
             *output_ptr = MAX_VAL(*data_ptr, threshold) + offset;
             data_ptr++;
             output_ptr++;
@@ -412,16 +433,15 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 
     output->tile_c = CHANNEL;
 
+#ifdef WITH_PROGRESS_EMBEDDING
     flip_state_bit(model, output);
+#endif
 
     my_printf_debug("handle_relu output" NEWLINE);
     dump_params_nhwc(model, output, 0);
 }
 
-void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(model);
-    UNUSED(flags);
-
+void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
     my_printf_debug("Reshape!" NEWLINE);
 
     ParameterInfo *data = input[0], *shape = input[1];
@@ -468,10 +488,7 @@ void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output,
     MY_ASSERT(new_len * sizeof(int16_t) == output->params_len)
 }
 
-void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(model);
-    UNUSED(flags);
-
+void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
     my_printf_debug("Squeeze!" NEWLINE);
 
     ParameterInfo *data = input[0];
@@ -499,17 +516,10 @@ static void iterate_chunks(ParameterInfo *param, std::function<void(uint32_t, ui
     }
 }
 
-void alloc_concat(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags) {
-    UNUSED(model);
-    UNUSED(input);
-    UNUSED(output);
-    UNUSED(flags);
+void alloc_concat(Model *, ParameterInfo *[], ParameterInfo*, uint16_t) {
 }
 
-void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(model);
-    UNUSED(flags);
-
+void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
     my_printf_debug("Concat!" NEWLINE);
 
     ParameterInfo *A = input[0], *B = input[1];
@@ -537,9 +547,13 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     }
     if (scaled) {
         msp_status status;
+#ifdef WITH_PROGRESS_EMBEDDING
         uint8_t orig_slot = scaled->slot;
+#endif
         uint8_t new_slot = get_next_slot(model, scaled);
+#ifdef WITH_PROGRESS_EMBEDDING
         uint8_t old_output_state_bit = get_state_bit(model, new_slot);
+#endif
         ParameterInfo tmp_param;
         my_memcpy(&tmp_param, scaled, sizeof(struct ParameterInfo));
         tmp_param.slot = new_slot;
@@ -572,7 +586,9 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         Node *nodes = (Node*)(model + 1);
         nodes[model->slot_users[scaled->slot]].max_output_id |= MAX_OUTPUT_ID_INVALID; // no longer used
         scaled->slot = new_slot;
+#ifdef WITH_PROGRESS_EMBEDDING
         flip_state_bit(model, scaled);
+#endif
     }
 
     // saving slots here as it might be changed during the downscaling loop above
@@ -583,18 +599,11 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     dump_params_nhwc(model, B, 0);
 }
 
-void handle_dropout(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(model);
-    UNUSED(input);
-    UNUSED(output);
-    UNUSED(flags);
-
+void handle_dropout(Model*, ParameterInfo*[], ParameterInfo*, uint16_t) {
     ERROR_OCCURRED();
 }
 
-void alloc_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(flags);
-
+void alloc_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
     ParameterInfo *data = input[0];
 
     MY_ASSERT(data->dims[0] == 1);
@@ -607,11 +616,7 @@ void alloc_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInfo
     output->slot = get_next_slot(model, data);
 }
 
-void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(model);
-    UNUSED(output);
-    UNUSED(flags);
-
+void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
     my_printf_debug("GlobalAveragePool!" NEWLINE);
 
     ParameterInfo *data = input[0];
@@ -633,20 +638,12 @@ void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInf
     dump_params(model, output);
 }
 
-void handle_softmax(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(model);
-    UNUSED(input);
-    UNUSED(output);
-    UNUSED(flags);
-
+void handle_softmax(Model*, ParameterInfo*[], ParameterInfo*, uint16_t) {
     // Do nothing - softmax does not change the relative order of values.
     // Just let run_model determine the max value
 }
 
-void handle_transpose(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(model);
-    UNUSED(flags);
-
+void handle_transpose(Model*, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
     my_printf_debug("Transpose!" NEWLINE);
 
     ParameterInfo *X = input[0];
@@ -664,7 +661,6 @@ uint16_t find_overflow_factor(Model *model, ParameterInfo *param) {
 #ifndef WITH_PROGRESS_EMBEDDING
     int16_t min_bound = -32768 / SCALE;
     int16_t max_bound = 32767 / SCALE;
-    UNUSED(model);
 #else
     int16_t min_bound = -8192 / SCALE;
     int16_t max_bound = 8191 / SCALE;

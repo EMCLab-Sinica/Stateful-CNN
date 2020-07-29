@@ -83,9 +83,9 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
         // reset model
         model->layer_idx = 0;
         for (uint8_t idx = 0; idx < NUM_SLOTS; idx++) {
-            model->state_bit[idx] = 0;
             model->slot_users[idx] = -1;
 #ifdef WITH_PROGRESS_EMBEDDING
+            model->state_bit[idx] = 0;
             fill_int16((int16_t*)intermediate_values(idx), INTERMEDIATE_VALUES_SIZE / sizeof(int16_t), 0);
 #endif
         }
@@ -186,8 +186,8 @@ void set_sample_index(Model *model, uint8_t index) {
     model->sample_idx = index;
 }
 
-void flip_state_bit(Model *model, ParameterInfo *output) {
 #ifdef WITH_PROGRESS_EMBEDDING
+void flip_state_bit(Model *model, ParameterInfo *output) {
     // XXX: reduce # of values to fill
     int16_t fill_value;
     if (!get_state_bit(model, output->slot)) {
@@ -209,14 +209,9 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
     } else {
         model->state_bit[slot_id] = 1;
     }
-#else
-    UNUSED(model);
-    UNUSED(output);
-#endif
 }
 
 uint8_t get_state_bit(Model *model, uint8_t slot_id) {
-#ifdef WITH_PROGRESS_EMBEDDING
     switch (slot_id) {
         case SLOT_PARAMETERS:
         case SLOT_PARAMETERS2:
@@ -225,11 +220,6 @@ uint8_t get_state_bit(Model *model, uint8_t slot_id) {
         default:
             return model->state_bit[slot_id];
     }
-#else
-    UNUSED(model);
-    UNUSED(slot_id);
-    return 0;
-#endif
 }
 
 uint8_t get_value_state_bit(int16_t val) {
@@ -240,12 +230,10 @@ uint8_t get_value_state_bit(int16_t val) {
     }
 }
 
-#ifdef WITH_PROGRESS_EMBEDDING
+// XXX: run recovery only once for each power cycle
 static uint8_t after_recovery = 1;
-#endif
 
 uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
-#ifdef WITH_PROGRESS_EMBEDDING
     // recovery from state bits
     int16_t *baseptr = get_q15_param(output, 0);
     int16_t *baseptr_end = baseptr + output->params_len / 2;
@@ -281,13 +269,11 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
         my_printf_debug(", offset of end = %" PRId64 NEWLINE, end - baseptr);
     }
 
-#ifdef WITH_PROGRESS_EMBEDDING
     if (!after_recovery) {
         MY_ASSERT(first_unfinished_value_offset == 0);
     } else {
         after_recovery = 0;
     }
-#endif
 
     my_printf_debug("first_unfinished_value_offset = %d" NEWLINE, first_unfinished_value_offset);
 
@@ -301,9 +287,6 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
 #endif
 
     return first_unfinished_value_offset;
-#else
-    UNUSED(model);
-    UNUSED(output);
-    return 0;
-#endif
 }
+
+#endif

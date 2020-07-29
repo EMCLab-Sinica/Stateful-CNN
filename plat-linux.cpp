@@ -98,10 +98,7 @@ void plat_print_results(void) {
     }
 }
 
-void setOutputValue(uint8_t value) {
-    // my_printf("Output set to %d" NEWLINE, value);
-    UNUSED(value);
-}
+void setOutputValue(uint8_t) {}
 
 void my_memcpy(void* dest, const void* src, size_t n) {
     uint16_t counter_idx = counters()->counter_idx;

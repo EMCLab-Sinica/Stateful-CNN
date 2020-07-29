@@ -51,8 +51,10 @@ typedef struct ConvTaskParams {
     uint16_t dest_offset;
     uint16_t filter_offset;
     uint8_t truncated;
+#ifdef WITH_PROGRESS_EMBEDDING
     uint8_t input_state_bit;
     uint8_t old_output_state_bit;
+#endif
 
     uint16_t conv_idx;
     uint16_t conv_idx_base;
@@ -139,13 +141,12 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #ifdef WITH_PROGRESS_EMBEDDING
             if (!conv_params->old_output_state_bit) {
                 filter_tmp[conv_params->filter_offset - 1] = -0x4000;
-            } else {
+            } else
 #endif
+            {
                 // XXX: why is this needed? Should already be zero with msp_fill_q15 above
                 filter_tmp[conv_params->filter_offset - 1] = 0;
-#ifdef WITH_PROGRESS_EMBEDDING
             }
-#endif
             if (conv_params->input_tile_c_index == 0) {
                 filter_tmp[conv_params->filter_offset - 1] += -*get_q15_param(conv_params->conv_bias, conv_params->conv_idx + idx) / conv_params->conv_input->scale;
             }
@@ -220,27 +221,22 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
     my_printf_debug("input_buffer_addr = lea_buffer + %d" NEWLINE, (int)(input_buffer_addr - lea_buffer));
     my_printf_debug("input" NEWLINE);
-    dump_matrix2(input_buffer_addr, A_rows, A_cols, conv_params->conv_input->scale, 0);
+    dump_matrix2(input_buffer_addr, A_rows, A_cols, ValueInfo(conv_params->conv_input));
     my_printf_debug("filter_buffer_addr = lea_buffer + LEA_BUFFER_SIZE - %d" NEWLINE, (int)(lea_buffer + LEA_BUFFER_SIZE - filter_buffer_addr));
     my_printf_debug("filter" NEWLINE);
 #ifndef USE_ARM_CMSIS
-    dump_matrix2(filter_buffer_addr, B_rows, B_cols, conv_params->conv_filter->scale, 0);
+    dump_matrix2(filter_buffer_addr, B_rows, B_cols, ValueInfo(conv_params->conv_filter));
 #else
-    dump_matrix2(filter_buffer_addr, B_cols, B_rows, conv_params->conv_filter->scale, 0);
+    dump_matrix2(filter_buffer_addr, B_cols, B_rows, ValueInfo(conv_params->conv_filter));
 #endif
 
     my_printf_debug("matrix_mpy_results" NEWLINE);
-    dump_matrix2(
-        matrix_mpy_results,
-        A_rows,
-        B_cols,
-        conv_params->conv_input->scale * conv_params->conv_filter->scale,
+    ValueInfo val_info;
+    val_info.scale = conv_params->conv_input->scale * conv_params->conv_filter->scale;
 #ifdef WITH_PROGRESS_EMBEDDING
-        !conv_params->old_output_state_bit
-#else
-        0
+    val_info.state = !conv_params->old_output_state_bit;
 #endif
-    );
+    dump_matrix2(matrix_mpy_results, A_rows, B_cols, val_info);
     my_printf_debug(NEWLINE);
 #endif
     /* END dump data */
@@ -351,7 +347,7 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
 
     my_printf_debug("Loaded inputs" NEWLINE);
     // state = 0 as state bits are already removed by msp_offset_q15 above
-    dump_matrix(lea_buffer, inputs_len, conv_params->conv_input->scale, 0);
+    dump_matrix(lea_buffer, inputs_len, ValueInfo(conv_params->conv_input));
 
     for (uint16_t j = 0; j < conv_params->H - conv_params->offset_h - conv_params->input_h; j += conv_params->stride) {
         // conv_idx is set to initial_c in handle_conv
@@ -403,10 +399,7 @@ void alloc_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
     output->scale = conv_input->scale * conv_filter->scale;
 }
 
-void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    // flags already handled in alloc_conv
-    UNUSED(flags);
-
+void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1], *conv_bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 
@@ -451,7 +444,6 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         input_state_bits[0] = get_state_bit(model, conv_input->slot);
     }
     conv_params->old_output_state_bit = get_state_bit(model, output->slot);
-#endif
 
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
     // Dimensions: NWHC
@@ -468,6 +460,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 
     uint16_t initial_input_w = conv_params->offset_w + initial_w * conv_params->stride;
     uint16_t initial_input_h = conv_params->offset_h + initial_h * conv_params->stride;
+#endif
 
     // TODO: state recovery with partially done MM
 
@@ -477,7 +470,12 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     uint16_t output_tile_c = output->tile_c;
     my_printf_debug("output_tile_c = %d" NEWLINE, output_tile_c);
 
-    for (uint16_t input_tile_c_offset = initial_n * input_tile_c, input_tile_c_index = initial_n; input_tile_c_offset < CHANNEL ; input_tile_c_offset += input_tile_c, input_tile_c_index++) {
+    uint16_t input_tile_c_offset = 0, input_tile_c_index = 0;
+#ifdef WITH_PROGRESS_EMBEDDING
+    input_tile_c_offset = initial_n * input_tile_c;
+    input_tile_c_index = initial_n;
+#endif
+    for (; input_tile_c_offset < CHANNEL ; input_tile_c_offset += input_tile_c, input_tile_c_index++) {
 #ifdef WITH_PROGRESS_EMBEDDING
         if (conv_params->conv_input->flags & SEPARATE_TILING) {
             conv_params->input_state_bit = input_state_bits[input_tile_c_index];
@@ -509,43 +507,49 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         conv_params->input_tile_c_index = input_tile_c_index;
         for (uint16_t conv_idx_base = 0; conv_idx_base < OUTPUT_CHANNEL; conv_idx_base += output_tile_c) {
             uint16_t input_w = conv_params->offset_w;
+#ifdef WITH_PROGRESS_EMBEDDING
             if (conv_idx_base == 0 && input_tile_c_index == initial_n) {
                 input_w = initial_input_w;
             }
+#endif
             conv_params->conv_idx_base = conv_idx_base;
             for (; input_w < W - conv_params->offset_w; input_w += conv_params->stride) {
                 uint16_t input_h = conv_params->offset_h;
+#ifdef WITH_PROGRESS_EMBEDDING
                 if (conv_idx_base == 0 && input_tile_c_index == initial_n && input_w == initial_input_w) {
                     input_h = initial_input_h;
                 }
+#endif
                 for (; input_h < H - conv_params->offset_h; input_h += conv_params->tile_h) {
                     conv_params->input_h = input_h;
                     conv_params->input_w = input_w;
                     conv_params->conv_idx = conv_idx_base;
+#ifdef WITH_PROGRESS_EMBEDDING
                     if (conv_idx_base == 0 && input_tile_c_index == initial_n && input_w == initial_input_w && input_h == initial_input_h) {
                         conv_params->conv_idx = initial_c;
                     }
+#endif
                     handle_conv_inner_loop(conv_params);
                 }
             }
         }
     }
 
+#ifdef WITH_PROGRESS_EMBEDDING
     flip_state_bit(model, output);
+#endif
 
 #ifndef MY_NDEBUG
     uint32_t tiling_results_len = OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W;
 
     my_printf_debug("handle_conv output" NEWLINE);
-    for (uint16_t input_tile_c_index = 0; input_tile_c_index * input_tile_c < CHANNEL; input_tile_c_index++) {
+    for (input_tile_c_index = 0; input_tile_c_index * input_tile_c < CHANNEL; input_tile_c_index++) {
         dump_params_nhwc(model, output, input_tile_c_index * tiling_results_len);
     }
 #endif
 }
 
-void alloc_convmerge(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
-    UNUSED(flags);
-
+void alloc_convmerge(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
     ParameterInfo *data = input[0];
 
     my_memcpy(output, data, sizeof(struct ParameterInfo));
@@ -558,9 +562,7 @@ void alloc_convmerge(Model *model, ParameterInfo *input[], ParameterInfo *output
     output->params_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W * sizeof(int16_t);
 }
 
-void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags) {
-    UNUSED(flags);
-
+void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t) {
     // XXX: make this function idempotent
 
     // Do not use conv_params here as its intialization in alloc_conv and
@@ -636,7 +638,9 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 
     setOutputValue(0);
 
+#ifdef WITH_PROGRESS_EMBEDDING
     flip_state_bit(model, output);
+#endif
 
     dump_params_nhwc(model, output, 0);
 }

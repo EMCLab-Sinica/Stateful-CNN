@@ -58,7 +58,11 @@ typedef struct Model {
     uint16_t running;
     uint16_t recovery;
     uint16_t run_counter;
+#ifdef WITH_PROGRESS_EMBEDDING
     uint16_t state_bit[NUM_SLOTS];
+#else
+    uint16_t dummy[NUM_SLOTS];
+#endif
     int16_t slot_users[NUM_SLOTS];
     uint16_t layer_idx;
     uint16_t sample_idx;
@@ -100,8 +104,6 @@ static inline int16_t int16_min(int16_t a, int16_t b) {
 static inline int16_t int16_max(int16_t a, int16_t b) {
     return a > b ? a : b;
 }
-
-#define UNUSED(x) (void)(x)
 
 /**********************************
  *       Helpers for nodes        *
