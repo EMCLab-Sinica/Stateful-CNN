@@ -23,7 +23,7 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
         my_printf_debug("input_id[%d] = %d ", j, input_id[j]);
         input[j] = &(parameter_info[input_id[j]]);
         if (input[j]->slot == SLOT_TEST_SET) {
-            input[j]->params_offset = (model->sample_idx % LABELS_DATA_LEN) * input[j]->params_len;
+            input[j]->params_offset = (model->sample_idx % PLAT_LABELS_DATA_LEN) * input[j]->params_len;
         }
         // dump_params(input[j]);
     }
@@ -102,8 +102,6 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
     dump_model(model, nodes);
 
     for (uint16_t node_idx = model->layer_idx; node_idx < model->nodes_len; node_idx++) {
-        Node *cur_node = &(nodes[node_idx]);
-
         handle_node(model, nodes, parameter_info, node_idx);
         model->layer_idx++;
 
@@ -150,7 +148,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
     int8_t label = -1, predicted = -1;
     uint32_t correct = 0, total = 0;
     if (!n_samples) {
-        n_samples = LABELS_DATA_LEN;
+        n_samples = PLAT_LABELS_DATA_LEN;
     }
     ParameterInfo *output_node;
     Model *model = (Model*)model_data;

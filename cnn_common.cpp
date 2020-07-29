@@ -21,7 +21,7 @@ static uint8_t* get_param_base_pointer(ParameterInfo *param, uint32_t *limit_p) 
             *limit_p = PARAMETERS2_DATA_LEN;
             return parameters2_data;
         case SLOT_TEST_SET:
-            *limit_p = SAMPLES_DATA_LEN;
+            *limit_p = PLAT_SAMPLES_DATA_LEN;
             return samples_data;
         default:
             *limit_p = INTERMEDIATE_VALUES_SIZE;

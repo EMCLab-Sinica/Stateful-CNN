@@ -27,7 +27,6 @@ class Constants:
     SLOT_PARAMETERS = 0xf0
     SLOT_TEST_SET = 0xff
     SLOT_INTERMEDIATE_VALUES = 0b01
-    CACHED_FILTERS_LEN = 8000
     COUNTERS_LEN = 64
     # To make the Node struct exactly 64 bytes
     NODE_NAME_LEN = 54
@@ -462,7 +461,6 @@ with open('data.cpp', 'w') as output_c, open('data.h', 'w') as output_h:
 #pragma once
 
 #include <stdint.h>
-#include "platform.h"
 
 struct ParameterInfo;
 struct Model;
@@ -486,6 +484,7 @@ struct Model;
     output_c.write('''
 #include "data.h"
 #include "cnn_common.h"
+#include "platform.h"
 ''')
 
     # ops
@@ -565,18 +564,9 @@ uint8_t *{var_name} = _{var_name};
     define_var('samples_data', samples_data[:len(samples_data)//len(labels)])
     define_var('labels_data', labels_data[:len(labels_data)//len(labels)])
 
-    output_h.write(f'''
-#ifdef USE_ALL_SAMPLES
-#undef SAMPLES_DATA_LEN
-#undef LABELS_DATA_LEN
-#define SAMPLES_DATA_LEN {len(samples_data)}
-#define LABELS_DATA_LEN {len(labels_data)}
-#endif
-''')
-
 with open('nvm.bin', 'wb') as f:
     f.write(config['nvm_size'] * b'\0')
-    f.seek(Constants.CACHED_FILTERS_LEN + config['num_slots'] * config['intermediate_values_size'])
+    f.seek(config['num_slots'] * config['intermediate_values_size'])
     for data_obj in outputs.values():
         data_obj.seek(0)
         f.write(data_obj.read())

@@ -27,11 +27,11 @@ uint16_t dma_invocations[COUNTERS_LEN];
 uint16_t dma_bytes[COUNTERS_LEN];
 
 uint8_t *intermediate_values(uint8_t slot_id) {
-    return nvm + CACHED_FILTERS_LEN + slot_id * INTERMEDIATE_VALUES_SIZE;
+    return nvm + slot_id * INTERMEDIATE_VALUES_SIZE;
 }
 
 Counters *counters() {
-    return (Counters*)(labels_data + LABELS_DATA_LEN);
+    return (Counters*)(labels_data + PLAT_LABELS_DATA_LEN);
 }
 
 int main(int argc, char* argv[]) {
@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
     parameters_data = intermediate_values(NUM_SLOTS);
     parameters2_data = parameters_data + PARAMETERS_DATA_LEN;
     samples_data = parameters2_data + PARAMETERS2_DATA_LEN;
-    model_data = samples_data + SAMPLES_DATA_LEN;
+    model_data = samples_data + PLAT_SAMPLES_DATA_LEN;
     labels_data = model_data + MODEL_DATA_LEN;
 
 #ifdef USE_ARM_CMSIS

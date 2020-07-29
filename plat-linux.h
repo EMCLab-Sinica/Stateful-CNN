@@ -1,6 +1,8 @@
 #pragma once
 
+#include "data.h"
+
 #define LEA_BUFFER_SIZE 1884
 
-// USE_ALL_SAMPLES must be 1 as nvm.bin contains all samples
-#define USE_ALL_SAMPLES 1
+#define PLAT_LABELS_DATA_LEN (LABELS_DATA_LEN * N_SAMPLES)
+#define PLAT_SAMPLES_DATA_LEN (SAMPLES_DATA_LEN * N_SAMPLES)
