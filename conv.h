@@ -4,4 +4,4 @@
 
 struct ParameterInfo;
 
-void determine_tile_c(struct ParameterInfo *param);
+void determine_tile_c(ParameterInfo *param, ParameterInfo *filter = nullptr);

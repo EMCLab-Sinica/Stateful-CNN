@@ -390,7 +390,8 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
                 for (uint16_t c = 0; c < CHANNEL; c++) {
                     int16_t input_tile_c_index = c / X->tile_c;
                     int16_t input_tile_c_offset = c % X->tile_c;
-                    int16_t val_offset = input_tile_c_index * W * H * X->tile_c + output_w * H * X->tile_c + output_h * X->tile_c + input_tile_c_offset;
+                    uint16_t cur_input_tile_c = MIN_VAL(X->tile_c, CHANNEL - input_tile_c_index * X->tile_c);
+                    int16_t val_offset = input_tile_c_index * W * H * X->tile_c + output_w * H * cur_input_tile_c + output_h * cur_input_tile_c + input_tile_c_offset;
                     int16_t val = *(data_baseptr + val_offset);
                     my_printf_debug("output_h = %d, ", output_h);
                     my_printf_debug("output_w = %d, ", output_w);
