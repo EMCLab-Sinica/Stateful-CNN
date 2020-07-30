@@ -57,8 +57,6 @@ jobs:
     steps:
     - name: Checkout main repo
       uses: actions/checkout@v2
-    - name: Install Git
-      run: ./.ci/install-git.sh
     - name: Checkout ARM-CMSIS
       uses: actions/checkout@v2
       with:
@@ -78,8 +76,6 @@ jobs:
     steps:
     - name: Checkout main repo
       uses: actions/checkout@v2
-    - name: Install Git
-      run: ./.ci/install-git.sh
     - name: Checkout ARM-CMSIS
       uses: actions/checkout@v2
       with:
@@ -99,8 +95,6 @@ jobs:
     steps:
     - name: Checkout main repo
       uses: actions/checkout@v2
-    - name: Install Git
-      run: ./.ci/install-git.sh
     - name: Checkout ARM-CMSIS
       uses: actions/checkout@v2
       with:
@@ -118,8 +112,6 @@ jobs:
       WITH_PROGRESS_EMBEDDING: 1
       USE_ARM_CMSIS: 1
     steps:
-    - name: Install Git
-      run: ./.ci/install-git.sh
     - name: Checkout main repo
       uses: actions/checkout@v2
     - name: Checkout ARM-CMSIS
