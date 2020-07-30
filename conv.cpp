@@ -305,11 +305,12 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
 
     my_printf_debug("Reinitialize input buffer" NEWLINE "inputs_len = %d" NEWLINE, inputs_len);
 
+    msp_status status;
 #ifndef USE_ARM_CMSIS
     msp_fill_q15_params fill_params;
     fill_params.length = inputs_len;
     fill_params.value = 0;
-    msp_status status = msp_fill_q15(&fill_params, lea_buffer);
+    status = msp_fill_q15(&fill_params, lea_buffer);
     msp_checkStatus(status);
 #else
     arm_fill_q15(0, lea_buffer, inputs_len);
