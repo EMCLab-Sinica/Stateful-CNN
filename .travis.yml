@@ -4,7 +4,7 @@ services:
   - docker
 
 script:
-  - docker run archlinux:latest bash ./.ci/test.sh
+  - docker run -v "$PWD:/stateful-cnn" archlinux:latest bash -c "cd /stateful-cnn && ./.ci/test.sh"
 
 env:
   - CONFIG=mnist WITH_PROGRESS_EMBEDDING=0
@@ -14,4 +14,4 @@ env:
 
 jobs:
   include:
-    script: docker run centos:7 bash ./.ci/test-centos7.sh
+    script: docker run -v "$PWD:/stateful-cnn" centos:7 bash -c "cd /stateful-cnn && ./.ci/test-centos7.sh"
