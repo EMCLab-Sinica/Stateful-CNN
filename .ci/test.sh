@@ -2,7 +2,8 @@
 
 set -e
 
-# System already up-to-date after install-git.sh
+ln -s ARM-CMSIS_5/CMSIS ARM-CMSIS
+pacman -Syu --noconfirm
 pacman -S --noconfirm --needed base-devel cmake python-pip
 pip install --user numpy onnx
 

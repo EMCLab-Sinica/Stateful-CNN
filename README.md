@@ -16,7 +16,8 @@ If you are using Python 3.6, install one more Python package:
 # Steps
 
 * `git submodule update --init --recursive`
-* `git clone -b patched https://github.com/EMCLab-Sinica/ARM-CMSIS_5 ARM-CMSIS`
+* `git clone -b patched https://github.com/EMCLab-Sinica/ARM-CMSIS_5 ../ARM-CMSIS_5`
+* `ln -s ../ARM-CMSIS_5/CMSIS ARM-CMSIS
 * `./transform.py mnist`
 * `cmake .`
 * `make`

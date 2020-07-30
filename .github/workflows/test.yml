@@ -64,7 +64,7 @@ jobs:
       with:
         repository: EMCLab-Sinica/ARM-CMSIS_5
         ref: patched
-        path: ARM-CMSIS
+        path: ARM-CMSIS_5
     - name: Test
       run: ./.ci/test.sh
 
@@ -85,7 +85,7 @@ jobs:
       with:
         repository: EMCLab-Sinica/ARM-CMSIS_5
         ref: patched
-        path: ARM-CMSIS
+        path: ARM-CMSIS_5
     - name: Test
       run: ./.ci/test.sh
 
@@ -106,7 +106,7 @@ jobs:
       with:
         repository: EMCLab-Sinica/ARM-CMSIS_5
         ref: patched
-        path: ARM-CMSIS
+        path: ARM-CMSIS_5
     - name: Test
       run: ./.ci/test.sh
 
@@ -127,7 +127,7 @@ jobs:
       with:
         repository: EMCLab-Sinica/ARM-CMSIS_5
         ref: patched
-        path: ARM-CMSIS
+        path: ARM-CMSIS_5
     - name: Test
       run: ./.ci/test.sh
 
