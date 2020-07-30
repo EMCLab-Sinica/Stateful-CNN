@@ -10,7 +10,9 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS} -Wstrict-prototypes -std=c11
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -std=c++11")
 
 set(DSPLIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/TI-DSPLib)
-set(ARM_CMSIS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/ARM-CMSIS)
+if (USE_ARM_CMSIS)
+    set(ARM_CMSIS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/ARM-CMSIS)
+endif (USE_ARM_CMSIS)
 
 add_library(fake-msp430sdk
     fake-msp430sdk/msp430.c
@@ -36,20 +38,22 @@ target_include_directories(dsplib
 )
 target_link_libraries(dsplib fake-msp430sdk)
 
-add_library(arm_cmsis_dsp
-    ${ARM_CMSIS_PATH}/DSP/Source/MatrixFunctions/arm_mat_init_q15.c
-    ${ARM_CMSIS_PATH}/DSP/Source/MatrixFunctions/arm_mat_mult_fast_q15.c
-    ${ARM_CMSIS_PATH}/DSP/Source/SupportFunctions/arm_fill_q15.c
-)
-target_include_directories(arm_cmsis_dsp
-    PUBLIC
-        ${ARM_CMSIS_PATH}/Core/Include
-        ${ARM_CMSIS_PATH}/DSP/Include
-)
-target_compile_definitions(arm_cmsis_dsp
-    PRIVATE
-        ARM_MATH_MATRIX_CHECK
-)
+if (USE_ARM_CMSIS)
+    add_library(arm_cmsis_dsp
+        ${ARM_CMSIS_PATH}/DSP/Source/MatrixFunctions/arm_mat_init_q15.c
+        ${ARM_CMSIS_PATH}/DSP/Source/MatrixFunctions/arm_mat_mult_fast_q15.c
+        ${ARM_CMSIS_PATH}/DSP/Source/SupportFunctions/arm_fill_q15.c
+    )
+    target_include_directories(arm_cmsis_dsp
+        PUBLIC
+            ${ARM_CMSIS_PATH}/Core/Include
+            ${ARM_CMSIS_PATH}/DSP/Include
+    )
+    target_compile_definitions(arm_cmsis_dsp
+        PRIVATE
+            ARM_MATH_MATRIX_CHECK
+    )
+endif (USE_ARM_CMSIS)
 
 add_executable(intermittent-cnn
     intermittent-cnn.cpp
@@ -60,7 +64,7 @@ add_executable(intermittent-cnn
     debug.cpp
     plat-linux.cpp
 )
-target_link_libraries(intermittent-cnn dsplib arm_cmsis_dsp fake-msp430sdk)
+target_link_libraries(intermittent-cnn dsplib fake-msp430sdk)
 
 target_compile_definitions(intermittent-cnn
     PRIVATE
@@ -72,4 +76,5 @@ if (USE_ARM_CMSIS)
         PRIVATE
             USE_ARM_CMSIS
     )
+    target_link_libraries(intermittent-cnn arm_cmsis_dsp)
 endif (USE_ARM_CMSIS)

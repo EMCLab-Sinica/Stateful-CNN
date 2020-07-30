@@ -2,7 +2,7 @@
 
 set -e
 
-pacman -Syu --noconfirm
+# System already up-to-date after install-git.sh
 pacman -S --noconfirm --needed base-devel cmake python-pip
 pip install --user numpy onnx
 

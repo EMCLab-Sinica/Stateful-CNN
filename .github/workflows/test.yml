@@ -10,6 +10,8 @@ jobs:
       CONFIG: mnist
       WITH_PROGRESS_EMBEDDING: 0
     steps:
+    - name: Install Git
+      run: ./.ci/install-git.sh
     - uses: actions/checkout@v2
     - name: Test
       run: ./.ci/test.sh
@@ -21,6 +23,8 @@ jobs:
       CONFIG: mnist
       WITH_PROGRESS_EMBEDDING: 1
     steps:
+    - name: Install Git
+      run: ./.ci/install-git.sh
     - uses: actions/checkout@v2
     - name: Test
       run: ./.ci/test.sh
@@ -32,6 +36,8 @@ jobs:
       CONFIG: cifar10
       WITH_PROGRESS_EMBEDDING: 0
     steps:
+    - name: Install Git
+      run: ./.ci/install-git.sh
     - uses: actions/checkout@v2
     - name: Test
       run: ./.ci/test.sh
@@ -43,6 +49,8 @@ jobs:
       CONFIG: cifar10
       WITH_PROGRESS_EMBEDDING: 1
     steps:
+    - name: Install Git
+      run: ./.ci/install-git.sh
     - uses: actions/checkout@v2
     - name: Test
       run: ./.ci/test.sh
@@ -55,6 +63,8 @@ jobs:
       WITH_PROGRESS_EMBEDDING: 0
       USE_ARM_CMSIS: 1
     steps:
+    - name: Install Git
+      run: ./.ci/install-git.sh
     - name: Checkout main repo
       uses: actions/checkout@v2
     - name: Checkout ARM-CMSIS
@@ -74,6 +84,8 @@ jobs:
       WITH_PROGRESS_EMBEDDING: 1
       USE_ARM_CMSIS: 1
     steps:
+    - name: Install Git
+      run: ./.ci/install-git.sh
     - name: Checkout main repo
       uses: actions/checkout@v2
     - name: Checkout ARM-CMSIS
@@ -93,6 +105,8 @@ jobs:
       WITH_PROGRESS_EMBEDDING: 0
       USE_ARM_CMSIS: 1
     steps:
+    - name: Install Git
+      run: ./.ci/install-git.sh
     - name: Checkout main repo
       uses: actions/checkout@v2
     - name: Checkout ARM-CMSIS
@@ -112,6 +126,8 @@ jobs:
       WITH_PROGRESS_EMBEDDING: 1
       USE_ARM_CMSIS: 1
     steps:
+    - name: Install Git
+      run: ./.ci/install-git.sh
     - name: Checkout main repo
       uses: actions/checkout@v2
     - name: Checkout ARM-CMSIS
@@ -130,6 +146,8 @@ jobs:
       CONFIG: mnist
       DEBUG_BUILD: 1
     steps:
+    - name: Install Git
+      run: ./.ci/install-git.sh
     - uses: actions/checkout@v2
     - name: Test
       run: ./.ci/test.sh
