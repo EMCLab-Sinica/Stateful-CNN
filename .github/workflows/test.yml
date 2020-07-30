@@ -2,59 +2,48 @@ name: Testing
 
 on: push
 
+_arch_config: &arch_config
+  runs-on: ubuntu-latest
+  container: archlinux:latest
+  steps:
+  - uses: actions/checkout@v2
+  - name: Test
+    run: ./.ci/test.sh
+
 jobs:
   mnist_baseline:
-    runs-on: ubuntu-latest
-
-    container: archlinux:latest
-
+    <<: *arch_config
     env:
       CONFIG: mnist
       WITH_PROGRESS_EMBEDDING: 0
-
-    steps:
-    - uses: actions/checkout@v2
-    - name: Test
-      run: ./.ci/test.sh
 
   mnist_stateful:
-    runs-on: ubuntu-latest
-
-    container: archlinux:latest
-
+    <<: *arch_config
     env:
       CONFIG: mnist
       WITH_PROGRESS_EMBEDDING: 1
 
-    steps:
-    - uses: actions/checkout@v2
-    - name: Test
-      run: ./.ci/test.sh
-
   cifar10_baseline:
-    runs-on: ubuntu-latest
-
-    container: archlinux:latest
-
+    <<: *arch_config
     env:
       CONFIG: cifar10
       WITH_PROGRESS_EMBEDDING: 0
 
-    steps:
-    - uses: actions/checkout@v2
-    - name: Test
-      run: ./.ci/test.sh
-
   cifar10_stateful:
-    runs-on: ubuntu-latest
-
-    container: archlinux:latest
-
+    <<: *arch_config
     env:
       CONFIG: cifar10
       WITH_PROGRESS_EMBEDDING: 1
 
+  debug_build:
+    <<: *arch_config
+    env:
+      DEBUG_BUILD: 1
+
+  old_system:
+    runs-on: ubuntu-latest
+    container: centos:7
     steps:
     - uses: actions/checkout@v2
     - name: Test
-      run: ./.ci/test.sh
+      run: ./.ci/test-centos7.sh

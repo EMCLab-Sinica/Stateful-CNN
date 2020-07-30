@@ -23,7 +23,7 @@ static void print_q15(int16_t val, const ValueInfo& val_info) {
         // 2^15
         int16_t offset = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
-        if (val_info->state) {
+        if (val_info.state) {
             offset = 0x4000;
         }
 #endif
