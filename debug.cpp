@@ -2,6 +2,8 @@
 #include "cnn_common.h"
 #include "intermittent-cnn.h"
 
+uint8_t dump_integer = 1;
+
 ValueInfo::ValueInfo(ParameterInfo *cur_param, Model *model) {
     this->scale = cur_param->scale;
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -14,17 +16,19 @@ ValueInfo::ValueInfo(ParameterInfo *cur_param, Model *model) {
 static void print_q15(int16_t val, const ValueInfo& val_info) {
 #if defined(__MSP430__) || defined(__MSP432__)
     my_printf("%d ", val);
-#elif defined(DUMP_INTEGERS)
-    my_printf("% 6d ", val);
 #else
-    // 2^15
-    int16_t offset = 0;
+    if (dump_integer) {
+        my_printf("% 6d ", val);
+    } else {
+        // 2^15
+        int16_t offset = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
-    if (val_info->state) {
-        offset = 0x4000;
-    }
+        if (val_info->state) {
+            offset = 0x4000;
+        }
 #endif
-    my_printf("% 13.6f", info.scale * (val - ) / 32768.0);
+        my_printf("% 13.6f", val_info.scale * (val - offset) / 32768.0);
+    }
 #endif
 }
 

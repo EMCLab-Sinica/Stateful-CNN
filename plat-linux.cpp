@@ -37,10 +37,13 @@ Counters *counters() {
 int main(int argc, char* argv[]) {
     int ret = 0, opt_ch, read_only = 0, n_samples = 0;
 
-    while((opt_ch = getopt(argc, argv, "r")) != -1) {
+    while((opt_ch = getopt(argc, argv, "fr")) != -1) {
         switch (opt_ch) {
             case 'r':
                 read_only = 1;
+                break;
+            case 'f':
+                dump_integer = 0;
                 break;
             default:
                 printf("Usage: %s [-r] [n_samples]\n", argv[0]);

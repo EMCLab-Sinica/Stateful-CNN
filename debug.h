@@ -6,7 +6,6 @@
 #include "platform.h"
 
 #define MY_NDEBUG
-#define DUMP_INTEGERS
 
 #if defined(__MSP430__) || defined(__MSP432__)
 #  include "Tools/myuart.h"
@@ -38,6 +37,8 @@ struct ValueInfo {
     uint8_t state;
 #endif
 };
+
+extern uint8_t dump_integer;
 
 void dump_value(struct Model *model, struct ParameterInfo *cur_param, size_t offset);
 
