@@ -51,6 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     env:
+      CONFIG: mnist
       DEBUG_BUILD: 1
     steps:
     - uses: actions/checkout@v2
