@@ -1,0 +1,60 @@
+name: Testing
+
+on: push
+
+jobs:
+  mnist_baseline:
+    runs-on: ubuntu-latest
+
+    container: archlinux:latest
+
+    env:
+      CONFIG: mnist
+      WITH_PROGRESS_EMBEDDING: 0
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Test
+      run: ./.ci/test.sh
+
+  mnist_stateful:
+    runs-on: ubuntu-latest
+
+    container: archlinux:latest
+
+    env:
+      CONFIG: mnist
+      WITH_PROGRESS_EMBEDDING: 1
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Test
+      run: ./.ci/test.sh
+
+  cifar10_baseline:
+    runs-on: ubuntu-latest
+
+    container: archlinux:latest
+
+    env:
+      CONFIG: cifar10
+      WITH_PROGRESS_EMBEDDING: 0
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Test
+      run: ./.ci/test.sh
+
+  cifar10_stateful:
+    runs-on: ubuntu-latest
+
+    container: archlinux:latest
+
+    env:
+      CONFIG: cifar10
+      WITH_PROGRESS_EMBEDDING: 1
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Test
+      run: ./.ci/test.sh
