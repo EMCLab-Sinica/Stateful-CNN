@@ -97,10 +97,7 @@ void determine_tile_c(ParameterInfo *param, ParameterInfo *filter) {
 }
 
 static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
-    /* put var declarations first to make the compiler happy */
-    int16_t *filter_addr;
-    uint16_t remaining_filters = conv_params->OUTPUT_CHANNEL - conv_params->conv_idx;
-    uint16_t cur_output_tile_c = MIN_VAL(conv_params->output->tile_c, remaining_filters);
+    uint16_t cur_output_tile_c = MIN_VAL(conv_params->output->tile_c, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
     MY_ASSERT(cur_output_tile_c);
 
     /* copy filter data */
@@ -125,7 +122,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         uint16_t filter_src_offset = conv_params->kH * conv_params->kW * conv_params->CHANNEL;
         for (uint16_t idx = 0; idx < cur_output_tile_c; idx++) {
             // TODO: cache reordered filters on NVM
-            filter_addr = get_q15_param(
+            int16_t *filter_addr = get_q15_param(
                 conv_params->conv_filter,
                 (conv_params->conv_idx + idx) * filter_src_offset
             );
@@ -442,30 +439,6 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 
     conv_params->CHANNEL = CHANNEL;
     conv_params->OUTPUT_CHANNEL = OUTPUT_CHANNEL;
-#ifdef WITH_PROGRESS_EMBEDDING
-    // Needs to handle multiple input state bits as IFM may be from different slots (separate tiling)
-    uint8_t input_state_bits[3]; // should accomodate n_tiles_c
-    if (conv_input->flags & SEPARATE_TILING) {
-        input_state_bits[0] = get_state_bit(model, conv_input->extra_info[0]);
-        input_state_bits[1] = get_state_bit(model, conv_input->extra_info[1]);
-    } else {
-        input_state_bits[0] = get_state_bit(model, conv_input->slot);
-    }
-    conv_params->old_output_state_bit = get_state_bit(model, output->slot);
-
-    uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
-    // Dimensions: NWHC
-    uint16_t initial_c = first_unfinished_value_offset % OUTPUT_CHANNEL;
-    first_unfinished_value_offset /= OUTPUT_CHANNEL;
-    uint16_t initial_h = first_unfinished_value_offset % conv_params->OUTPUT_H;
-    first_unfinished_value_offset /= conv_params->OUTPUT_H;
-    uint16_t initial_w = first_unfinished_value_offset % conv_params->OUTPUT_W;
-    uint16_t initial_n = first_unfinished_value_offset / conv_params->OUTPUT_W;
-    my_printf_debug("initial_n = %d" NEWLINE, initial_n);
-    my_printf_debug("initial_h = %d" NEWLINE, initial_h);
-    my_printf_debug("initial_w = %d" NEWLINE, initial_w);
-    my_printf_debug("initial_c = %d" NEWLINE, initial_c);
-#endif
 
     // TODO: state recovery with partially done MM
 
@@ -484,13 +457,44 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     conv_params->conv_idx_base = 0;
     conv_params->conv_idx = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
-    conv_params->input_tile_c_offset = initial_n * input_tile_c;
-    conv_params->input_tile_c_index = initial_n;
-    conv_params->input_w += initial_w * conv_params->stride;
-    conv_params->input_h += initial_h * conv_params->stride;
-    conv_params->conv_idx_base = initial_c / output_tile_c * output_tile_c;
-    conv_params->conv_idx = initial_c;
+    // Needs to handle multiple input state bits as IFM may be from different slots (separate tiling)
+    uint8_t input_state_bits[3]; // should accomodate n_tiles_c
+    if (conv_input->flags & SEPARATE_TILING) {
+        input_state_bits[0] = get_state_bit(model, conv_input->extra_info[0]);
+        input_state_bits[1] = get_state_bit(model, conv_input->extra_info[1]);
+    } else {
+        input_state_bits[0] = get_state_bit(model, conv_input->slot);
+    }
+    conv_params->old_output_state_bit = get_state_bit(model, output->slot);
+
+    uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
+    // Dimensions: channel-tiled NWHC
+    uint16_t slice_size_input_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL;
+    conv_params->input_tile_c_index = first_unfinished_value_offset / slice_size_input_channel_tiling;
+    conv_params->input_tile_c_offset = conv_params->input_tile_c_index * input_tile_c;
+    first_unfinished_value_offset %= slice_size_input_channel_tiling;
+
+    uint16_t slice_size_output_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * output_tile_c;
+    conv_params->conv_idx_base = first_unfinished_value_offset / slice_size_output_channel_tiling * output_tile_c;
+    conv_params->conv_idx = conv_params->conv_idx_base;
+    first_unfinished_value_offset %= slice_size_output_channel_tiling;
+
+    uint16_t cur_output_tile_c = MIN_VAL(output_tile_c, OUTPUT_CHANNEL - conv_params->conv_idx_base);
+    uint16_t slice_size_column = cur_output_tile_c * conv_params->OUTPUT_H;
+    conv_params->input_w += first_unfinished_value_offset / slice_size_column * conv_params->stride;
+    first_unfinished_value_offset %= slice_size_column;
+
+    conv_params->input_h += first_unfinished_value_offset / cur_output_tile_c * conv_params->stride;
+    first_unfinished_value_offset %= cur_output_tile_c;
+
+    conv_params->conv_idx += first_unfinished_value_offset;
+
+    my_printf_debug("initial output N = %d" NEWLINE, conv_params->input_tile_c_index);
+    my_printf_debug("initial output H = %d" NEWLINE, conv_params->input_h / conv_params->stride);
+    my_printf_debug("initial output W = %d" NEWLINE, conv_params->input_w / conv_params->stride);
+    my_printf_debug("initial output C = %d" NEWLINE, conv_params->conv_idx);
 #endif
+
     for (; conv_params->input_tile_c_offset < CHANNEL; conv_params->input_tile_c_offset += input_tile_c, conv_params->input_tile_c_index++) {
 #ifdef WITH_PROGRESS_EMBEDDING
         if (conv_params->conv_input->flags & SEPARATE_TILING) {

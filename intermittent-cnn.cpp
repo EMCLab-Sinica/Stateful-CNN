@@ -244,7 +244,12 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
     my_printf_debug("new_output_state_bit = %d" NEWLINE, new_output_state_bit);
 
     while (1) {
-        // dump_matrix(start, end - start, output->scale, !new_output_state_bit);
+#if 0
+        ValueInfo val_info;
+        val_info.scale = output->scale;
+        val_info.state = !new_output_state_bit;
+        dump_matrix(start, end - start, val_info);
+#endif
         int16_t *middle = start + (end - start) / 2;
         if (middle == start || middle == end) {
             if (get_value_state_bit(*start) != new_output_state_bit) {
