@@ -55,8 +55,10 @@ jobs:
       WITH_PROGRESS_EMBEDDING: 0
       USE_ARM_CMSIS: 1
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/checkout@v2
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout ARM-CMSIS
+      uses: actions/checkout@v2
       with:
         repository: EMCLab-Sinica/ARM-CMSIS_5
         ref: patched
@@ -72,8 +74,10 @@ jobs:
       WITH_PROGRESS_EMBEDDING: 1
       USE_ARM_CMSIS: 1
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/checkout@v2
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout ARM-CMSIS
+      uses: actions/checkout@v2
       with:
         repository: EMCLab-Sinica/ARM-CMSIS_5
         ref: patched
@@ -89,8 +93,10 @@ jobs:
       WITH_PROGRESS_EMBEDDING: 0
       USE_ARM_CMSIS: 1
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/checkout@v2
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout ARM-CMSIS
+      uses: actions/checkout@v2
       with:
         repository: EMCLab-Sinica/ARM-CMSIS_5
         ref: patched
@@ -106,8 +112,10 @@ jobs:
       WITH_PROGRESS_EMBEDDING: 1
       USE_ARM_CMSIS: 1
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/checkout@v2
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout ARM-CMSIS
+      uses: actions/checkout@v2
       with:
         repository: EMCLab-Sinica/ARM-CMSIS_5
         ref: patched
