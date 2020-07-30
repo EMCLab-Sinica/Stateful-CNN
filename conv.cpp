@@ -22,6 +22,8 @@
 #define TEMP_FILTER_WIDTH 0
 #endif
 
+static int16_t last_output_data_offset;
+
 #define CONV_TASK_FLAG_PROCESSED_FILTERS_BASE 2
 typedef struct ConvTaskParams {
     ParameterInfo *conv_input;
@@ -249,7 +251,12 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             conv_params->input_w / conv_params->stride * conv_params->OUTPUT_H * cur_output_tile_c +     // w
             (conv_params->input_h + offset_h) / conv_params->stride * cur_output_tile_c +                // h
             conv_params->conv_idx - conv_params->conv_idx_base;                                          // c
-    my_printf_debug("output_data offset = %d" NEWLINE, (uint16_t)(output_data - output_baseptr));
+
+    int16_t cur_output_data_offset = output_data - output_baseptr;
+    my_printf_debug("output_data offset = %d" NEWLINE, cur_output_data_offset);
+    MY_ASSERT(cur_output_data_offset > last_output_data_offset);
+    last_output_data_offset = cur_output_data_offset;
+
     MY_ASSERT((uint8_t*)(output_data + cur_output_tile_c) < intermediate_values(NUM_SLOTS));
 #if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
     for (uint16_t idx2 = 0; idx2 < cur_output_tile_c; idx2++) {
@@ -467,6 +474,8 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     determine_tile_c(output, conv_filter);
     uint16_t output_tile_c = output->tile_c;
     my_printf_debug("output_tile_c = %d" NEWLINE, output_tile_c);
+
+    last_output_data_offset = -1;
 
     conv_params->input_tile_c_offset = 0;
     conv_params->input_tile_c_index = 0;
