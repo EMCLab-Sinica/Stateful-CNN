@@ -402,9 +402,19 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         // input is in NWHC
         // TODO: state-aware recovery
         uint16_t H = X->dims[2], W = X->dims[3];
-        for (uint16_t output_h = 0; output_h < H; output_h++) {
-            for (uint16_t output_w = 0; output_w < W; output_w++) {
-                for (uint16_t c = 0; c < CHANNEL; c++) {
+        uint16_t output_h = 0, output_w = 0, c = 0;
+#ifdef WITH_PROGRESS_EMBEDDING
+        output_h = first_unfinished_value_offset / (W * CHANNEL);
+        first_unfinished_value_offset %= (W * CHANNEL);
+        output_w = first_unfinished_value_offset / CHANNEL;
+        c = first_unfinished_value_offset % CHANNEL;
+        my_printf_debug("initial output_h = %d, ", output_h);
+        my_printf_debug("initial output_w = %d, ", output_w);
+        my_printf_debug("initial c = %d" NEWLINE, c);
+#endif
+        for (; output_h < H; output_h++) {
+            for (; output_w < W; output_w++) {
+                for (; c < CHANNEL; c++) {
                     int16_t input_tile_c_index = c / X->tile_c;
                     int16_t input_tile_c_offset = c % X->tile_c;
                     uint16_t cur_input_tile_c = MIN_VAL(X->tile_c, CHANNEL - input_tile_c_index * X->tile_c);
@@ -415,9 +425,13 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
                     my_printf_debug("c = %d, ", c);
                     my_printf_debug("offset = %d, ", val_offset);
                     my_printf_debug("input val = %d" NEWLINE, val);
-                    *(output_baseptr + output_h * W * CHANNEL + output_w * CHANNEL + c) = MAX_VAL(val, threshold) + offset;
+                    uint16_t output_offset = output_h * W * CHANNEL + output_w * CHANNEL + c;
+                    *(output_baseptr + output_offset) = MAX_VAL(val, threshold) + offset;
+                    my_printf_debug("output_offset = %d" NEWLINE, output_offset);
                 }
+                c = 0;
             }
+            output_w = 0;
         }
     } else {
         uint16_t i = 0;
