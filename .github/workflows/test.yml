@@ -10,7 +10,14 @@ jobs:
       CONFIG: mnist
       WITH_PROGRESS_EMBEDDING: 0
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout TI-DSPLib
+      uses: actions/checkout@v2
+      with:
+        repository: EMCLab-Sinica/DSPLib
+        path: TI-DSPLib
+        token: ${{ secrets.access_token }}
     - name: Test
       run: ./.ci/test.sh
 
@@ -21,7 +28,14 @@ jobs:
       CONFIG: mnist
       WITH_PROGRESS_EMBEDDING: 1
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout TI-DSPLib
+      uses: actions/checkout@v2
+      with:
+        repository: EMCLab-Sinica/DSPLib
+        path: TI-DSPLib
+        token: ${{ secrets.access_token }}
     - name: Test
       run: ./.ci/test.sh
 
@@ -32,7 +46,14 @@ jobs:
       CONFIG: cifar10
       WITH_PROGRESS_EMBEDDING: 0
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout TI-DSPLib
+      uses: actions/checkout@v2
+      with:
+        repository: EMCLab-Sinica/DSPLib
+        path: TI-DSPLib
+        token: ${{ secrets.access_token }}
     - name: Test
       run: ./.ci/test.sh
 
@@ -43,7 +64,14 @@ jobs:
       CONFIG: cifar10
       WITH_PROGRESS_EMBEDDING: 1
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout TI-DSPLib
+      uses: actions/checkout@v2
+      with:
+        repository: EMCLab-Sinica/DSPLib
+        path: TI-DSPLib
+        token: ${{ secrets.access_token }}
     - name: Test
       run: ./.ci/test.sh
 

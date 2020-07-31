@@ -1,14 +1,14 @@
 // disable debug code in DSPLib
 //#define MSP_DISABLE_DIAGNOSTICS
 
+#ifndef USE_ARM_CMSIS
 #include <DSPLib.h>
-#ifdef USE_ARM_CMSIS
-#include <arm_math.h>
 #endif
 #include "cnn_common.h"
 #include "debug.h"
 #include "op_handlers.h"
 #include "intermittent-cnn.h"
+#include "my_dsplib.h"
 
 #define configCONV_STACK_SIZE 100
 
@@ -105,18 +105,12 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         conv_params->filter_buffer_addr = matrix_mpy_results - conv_params->filter_offset * (cur_output_tile_c + TEMP_FILTER_WIDTH);
 #ifndef USE_ARM_CMSIS
         int16_t *filter_tmp = matrix_mpy_results - conv_params->filter_offset; // before transpose
-
-        msp_fill_q15_params fill_params;
-        fill_params.length = conv_params->filter_offset;
-        fill_params.value = 0;
-        msp_status status = msp_fill_q15(&fill_params, filter_tmp);
-        msp_checkStatus(status);
+        uint16_t fill_length = conv_params->filter_offset;
 #else
         int16_t *filter_tmp = conv_params->filter_buffer_addr;
-
-        arm_fill_q15(0, filter_tmp, cur_output_tile_c * conv_params->filter_offset);
+        uint16_t fill_length = cur_output_tile_c * conv_params->filter_offset;
 #endif
-
+        my_fill_q15(0, filter_tmp, fill_length);
 
         uint16_t buffer_size = sizeof(int16_t) * conv_params->cur_input_tile_c;
         uint16_t filter_src_offset = conv_params->kH * conv_params->kW * conv_params->CHANNEL;
@@ -144,7 +138,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             } else
 #endif
             {
-                // XXX: why is this needed? Should already be zero with msp_fill_q15 above
+                // XXX: why is this needed? Should already be zero with my_fill_q15 above
                 filter_tmp[conv_params->filter_offset - 1] = 0;
             }
             if (conv_params->input_tile_c_index == 0) {
@@ -156,7 +150,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             params.length = conv_params->filter_offset;
             params.numChannels = cur_output_tile_c;
             params.channel = idx;
-            status = msp_interleave_q15(
+            msp_status status = msp_interleave_q15(
                 &params,
                 filter_tmp, /* src */
                 conv_params->filter_buffer_addr /* dst */
@@ -177,37 +171,12 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
     int16_t *input_buffer_addr = lea_buffer + offset_h * conv_params->dest_offset;
 
-    // XXX: LEA doc requires all matrix dimensions to be even, while LEA
-    // appears to still give correct results when srcARows is odd
-    // srcBCols should really be even, though
-    // http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/716353?MSP430FR5992-MSP-DSPLib-msp-matrix-mpy-q15
     uint16_t A_rows, A_cols, B_rows, B_cols;
     A_rows = 1;
     A_cols = B_rows = conv_params->filter_offset;
     B_cols = cur_output_tile_c;
     MY_ASSERT(A_rows * B_cols <= OUTPUT_LEN);
-    MY_ASSERT((A_cols & 1) || (B_cols & 1) == 0);
-#ifndef USE_ARM_CMSIS
-    msp_matrix_mpy_q15_params matrix_mpy_params;
-    matrix_mpy_params.srcARows = A_rows;
-    matrix_mpy_params.srcACols = A_cols;
-    matrix_mpy_params.srcBRows = B_rows;
-    matrix_mpy_params.srcBCols = B_cols;
-    msp_status status = msp_matrix_mpy_q15(
-        &matrix_mpy_params,
-        input_buffer_addr,
-        filter_buffer_addr,
-        matrix_mpy_results
-    );
-    msp_checkStatus(status);
-#else
-    arm_matrix_instance_q15 A, B, C;
-    arm_mat_init_q15(&A, A_rows, A_cols, input_buffer_addr);
-    arm_mat_init_q15(&B, B_rows, B_cols, filter_buffer_addr);
-    arm_mat_init_q15(&C, A_rows, B_cols, matrix_mpy_results);
-    arm_status status = arm_mat_mult_fast_q15(&A, &B, &C, NULL);
-    MY_ASSERT(status == ARM_MATH_SUCCESS);
-#endif
+    my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results, 1);
 
     /* START dump data */
 #ifndef MY_NDEBUG
@@ -305,16 +274,7 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
 
     my_printf_debug("Reinitialize input buffer" NEWLINE "inputs_len = %d" NEWLINE, inputs_len);
 
-    msp_status status;
-#ifndef USE_ARM_CMSIS
-    msp_fill_q15_params fill_params;
-    fill_params.length = inputs_len;
-    fill_params.value = 0;
-    status = msp_fill_q15(&fill_params, lea_buffer);
-    msp_checkStatus(status);
-#else
-    arm_fill_q15(0, lea_buffer, inputs_len);
-#endif
+    my_fill_q15(0, lea_buffer, inputs_len);
 
     dest += (h_start + field_size) * conv_params->dest_offset;
 
@@ -333,11 +293,7 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
             size * sizeof(int16_t));
 #ifdef WITH_PROGRESS_EMBEDDING
         if (conv_params->input_state_bit) {
-            msp_offset_q15_params offset_params;
-            offset_params.length = size / 2 * 2;
-            offset_params.offset = -0x4000;
-            status = msp_offset_q15(&offset_params, dest_addr, dest_addr);
-            msp_checkStatus(status);
+            my_offset_q15(dest_addr, -0x4000, dest_addr, size / 2 * 2);
             if (size % 2) {
                 dest_addr[size - 1] -= 0x4000;
             }
@@ -352,7 +308,7 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
     }
 
     my_printf_debug("Loaded inputs" NEWLINE);
-    // state = 0 as state bits are already removed by msp_offset_q15 above
+    // state = 0 as state bits are already removed by my_offset_q15 above
     dump_matrix(lea_buffer, inputs_len, ValueInfo(conv_params->conv_input));
 
     for (uint16_t j = 0; j < conv_params->H - conv_params->offset_h - conv_params->input_h; j += conv_params->stride) {
@@ -588,23 +544,19 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
     uint16_t chunk_len = (LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2;
 
     uint16_t overflow_factor = find_overflow_factor(model, data);
-    msp_scale_q15_params scale_params;
-    float_to_scale_params(&scale_params, 1.0f * SCALE / overflow_factor);
+    int16_t scaleFract;
+    uint8_t shift;
+    float_to_scale_params(&scaleFract, &shift, 1.0f * SCALE / overflow_factor);
 #ifdef WITH_PROGRESS_EMBEDDING
     int16_t input_offset = get_state_bit(model, data->slot) ? -0x4000 : 0;
     int16_t output_offset = get_state_bit(model, output->slot) ? 0 : 0x4000;
     my_printf_debug("input_offset = %d, ", input_offset);
     my_printf_debug("output_offset = %d" NEWLINE, output_offset);
-    msp_offset_q15_params offset_params;
 #endif
-    msp_status status;
 
     // XXX: use iterate_chunks() ?
     for (uint32_t tiling_results_offset = 0; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
         uint32_t real_chunk_len = MIN_VAL(chunk_len, tiling_results_len - tiling_results_offset);
-#ifdef WITH_PROGRESS_EMBEDDING
-        offset_params.length = real_chunk_len;
-#endif
         my_printf_debug("real_chunk_len = %d" NEWLINE, real_chunk_len);
         for (uint16_t input_tile_c_index = 0; input_tile_c_index < n_tiles_c; input_tile_c_index++) {
             int16_t *to_add = lea_buffer + input_tile_c_index * chunk_len;
@@ -613,23 +565,14 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
                       real_chunk_len * sizeof(int16_t));
             // scale up results as in convolution values are scaled down twice (input & weights)
 #ifdef WITH_PROGRESS_EMBEDDING
-            offset_params.offset = input_offset;
-            status = msp_offset_q15(&offset_params, to_add, to_add);
-            msp_checkStatus(status);
-#endif
-            scale_params.length = real_chunk_len;
-            status = msp_scale_q15(&scale_params, to_add, to_add);
-            msp_checkStatus(status);
+            my_offset_q15(to_add, input_offset, to_add, real_chunk_len);
+#endif // WITH_PROGRESS_EMBEDDING
+            my_scale_q15(to_add, scaleFract, shift, to_add, real_chunk_len);
             if (input_tile_c_index != 0) {
-                msp_add_q15_params params3;
-                params3.length = real_chunk_len;
-                status = msp_add_q15(&params3, lea_buffer, to_add, lea_buffer);
-                msp_checkStatus(status);
+                my_add_q15(lea_buffer, to_add, lea_buffer, real_chunk_len);
             }
 #ifdef WITH_PROGRESS_EMBEDDING
-            offset_params.offset = output_offset;
-            status = msp_offset_q15(&offset_params, to_add, to_add);
-            msp_checkStatus(status);
+            my_offset_q15(to_add, output_offset, to_add, real_chunk_len);
 #endif
         }
         my_memcpy(output_baseptr + tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));
