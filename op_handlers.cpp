@@ -35,7 +35,7 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
     const uint16_t CHANNEL = data->dims[1], W = data->dims[3];
     uint16_t stride = flags & 0x0f;
     uint16_t kernel_size = (flags & 0xf0) >> 4;
-    int16_t *data_baseptr = get_q15_param(data, 0);
+    const int16_t *data_baseptr = get_q15_param(data, 0);
 #ifdef WITH_PROGRESS_EMBEDDING
     uint8_t input_state_bit = get_state_bit(model, data->slot);
     uint8_t old_output_state_bit = get_state_bit(model, output->slot);
@@ -113,7 +113,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     my_printf_debug("initial_n = %d" NEWLINE, initial_n);
 #endif
 
-    int16_t *output_baseptr = get_q15_param(output, 0);
+    int16_t *output_baseptr = get_q15_param_writable(output, 0);
     uint16_t tile_c_offset = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
     tile_c_offset = initial_n * tile_c;
@@ -252,7 +252,7 @@ void handle_add(Model*, ParameterInfo *input[], ParameterInfo *output, uint16_t)
     }
     my_add_q15(buffer_a, buffer_b, buffer_a, vector_size);
 
-    my_memcpy(get_q15_param(output, 0), buffer_a, output->params_len);
+    my_memcpy(get_q15_param_writable(output, 0), buffer_a, output->params_len);
 }
 
 void alloc_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
@@ -320,7 +320,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 
         my_add_q15(buffer_matmul, buffer_temp, buffer_matmul, output->params_len / sizeof(int16_t));
     }
-    my_memcpy(get_q15_param(output, 0), buffer_matmul, output->params_len);
+    my_memcpy(get_q15_param_writable(output, 0), buffer_matmul, output->params_len);
 
     my_printf_debug("handle_matmul output" NEWLINE);
     dump_params(model, output);
@@ -348,8 +348,8 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     /* XXX: use LEA? */
     uint16_t bitwidth = X->bitwidth;
     MY_ASSERT(bitwidth == 16);
-    int16_t *data_baseptr = get_q15_param(X, 0);
-    int16_t *output_baseptr = get_q15_param(output, 0);
+    const int16_t *data_baseptr = get_q15_param(X, 0);
+    int16_t *output_baseptr = get_q15_param_writable(output, 0);
     int16_t data_len = X->params_len / (bitwidth / 8);
 
     int16_t threshold = 0, offset = 0;
@@ -366,7 +366,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     my_printf_debug("threshold = %d" NEWLINE, threshold);
     my_printf_debug("offset = %d" NEWLINE, offset);
 
-    int16_t *data_ptr = data_baseptr;
+    const int16_t *data_ptr = data_baseptr;
     int16_t *output_ptr = output_baseptr;
 #ifdef WITH_PROGRESS_EMBEDDING
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
@@ -523,7 +523,8 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 
     float scale;
     ParameterInfo *scaled = NULL;
-    int16_t *scaled_srcptr, *scaled_dstptr;
+    const int16_t *scaled_srcptr;
+    int16_t *scaled_dstptr;
     // The one with smaller `scale` (with larger values) is scaled down
     if (A->scale < B->scale) {
         scale = 1.0f * A->scale / B->scale;
@@ -547,7 +548,7 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         ParameterInfo tmp_param;
         my_memcpy(&tmp_param, scaled, sizeof(struct ParameterInfo));
         tmp_param.slot = new_slot;
-        scaled_dstptr = get_q15_param(&tmp_param, 0);
+        scaled_dstptr = get_q15_param_writable(&tmp_param, 0);
 
         iterate_chunks(scaled, [&] (uint32_t offset, uint16_t real_chunk_len) {
             my_memcpy(lea_buffer, scaled_srcptr + offset, real_chunk_len * sizeof(int16_t));
@@ -600,8 +601,8 @@ void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInf
 
     ParameterInfo *data = input[0];
     uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
-    int16_t *input_baseptr = get_q15_param(data, 0),
-            *output_baseptr = get_q15_param(output, 0);
+    const int16_t *input_baseptr = get_q15_param(data, 0);
+    int16_t *output_baseptr = get_q15_param_writable(output, 0);
     uint16_t len = H * W;
     for (uint16_t c = 0; c < CHANNEL; c++) {
         uint32_t total = 0;

@@ -11,7 +11,7 @@ int16_t node_input(Node *node, size_t i) {
     return *node_input_ptr(node, i) / 2;
 }
 
-static uint8_t* get_param_base_pointer(ParameterInfo *param, uint32_t *limit_p) {
+static const uint8_t* get_param_base_pointer(ParameterInfo *param, uint32_t *limit_p) {
     uint16_t slot_id = param->slot;
     switch (slot_id) {
         case SLOT_PARAMETERS:
@@ -29,28 +29,28 @@ static uint8_t* get_param_base_pointer(ParameterInfo *param, uint32_t *limit_p) 
     }
 }
 
-int16_t* get_q15_param(ParameterInfo *param, size_t i) {
+const int16_t* get_q15_param(ParameterInfo *param, size_t i) {
     MY_ASSERT(param->bitwidth == 16);
     uint32_t limit;
-    uint8_t *baseptr = get_param_base_pointer(param, &limit);
-    int16_t *ret = (int16_t*)(baseptr + param->params_offset) + i;
+    const uint8_t *baseptr = get_param_base_pointer(param, &limit);
+    const int16_t *ret = (int16_t*)(baseptr + param->params_offset) + i;
     MY_ASSERT((uint8_t*)ret < baseptr + limit);
     return ret;
 }
 
-int32_t* get_iq31_param(ParameterInfo *param, size_t i) {
-    MY_ASSERT(param->bitwidth == 32);
-    uint32_t limit;
-    uint8_t *baseptr = get_param_base_pointer(param, &limit);
-    int32_t *ret = (int32_t*)(baseptr + param->params_offset) + i;
-    MY_ASSERT((uint8_t*)ret < baseptr + limit);
+int16_t* get_q15_param_writable(ParameterInfo *param, size_t i) {
+    MY_ASSERT(param->bitwidth == 16);
+    MY_ASSERT(param->slot < SLOT_CONSTANTS_MIN);
+    uint8_t *baseptr = intermediate_values(param->slot);
+    int16_t *ret = reinterpret_cast<int16_t*>(baseptr + param->params_offset) + i;
+    MY_ASSERT(reinterpret_cast<uint8_t*>(ret) < baseptr + INTERMEDIATE_VALUES_SIZE);
     return ret;
 }
 
 int64_t get_int64_param(ParameterInfo *param, size_t i) {
     MY_ASSERT(param->bitwidth == 64);
     uint32_t limit;
-    uint8_t *baseptr = get_param_base_pointer(param, &limit);
+    const uint8_t *baseptr = get_param_base_pointer(param, &limit);
     int64_t *ret = (int64_t*)(baseptr + param->params_offset) + i;
     MY_ASSERT((uint8_t*)ret < baseptr + limit);
     return *ret;

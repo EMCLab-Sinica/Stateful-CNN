@@ -152,7 +152,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
     }
     ParameterInfo *output_node;
     Model *model = (Model*)model_data;
-    uint8_t *labels = labels_data;
+    const uint8_t *labels = labels_data;
     for (uint16_t i = 0; i < n_samples; i++) {
         model->sample_idx = i;
         label = labels[i];
@@ -195,7 +195,7 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
     } else {
         fill_value = 0;
     }
-    int16_t *output_ptr = get_q15_param(output, 0);
+    int16_t *output_ptr = get_q15_param_writable(output, 0);
     uint16_t fill_offset = output->params_len / sizeof(int16_t),
              end = INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);
     my_printf_debug("Fill %d", fill_value);
@@ -235,10 +235,10 @@ static uint8_t after_recovery = 1;
 
 uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
     // recovery from state bits
-    int16_t *baseptr = get_q15_param(output, 0);
-    int16_t *baseptr_end = baseptr + output->params_len / 2;
-    int16_t *start = baseptr;
-    int16_t *end = baseptr_end;
+    const int16_t *baseptr = get_q15_param(output, 0);
+    const int16_t *baseptr_end = baseptr + output->params_len / 2;
+    const int16_t *start = baseptr;
+    const int16_t *end = baseptr_end;
     uint8_t new_output_state_bit = get_state_bit(model, output->slot) ? 0 : 1;
     uint32_t first_unfinished_value_offset;
     my_printf_debug("new_output_state_bit = %d" NEWLINE, new_output_state_bit);
@@ -250,7 +250,7 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
         val_info.state = !new_output_state_bit;
         dump_matrix(start, end - start, val_info);
 #endif
-        int16_t *middle = start + (end - start) / 2;
+        const int16_t *middle = start + (end - start) / 2;
         if (middle == start || middle == end) {
             if (get_value_state_bit(*start) != new_output_state_bit) {
                 first_unfinished_value_offset = start - baseptr;

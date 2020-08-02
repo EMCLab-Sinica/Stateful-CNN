@@ -116,14 +116,14 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         uint16_t filter_src_offset = conv_params->kH * conv_params->kW * conv_params->CHANNEL;
         for (uint16_t idx = 0; idx < cur_output_tile_c; idx++) {
             // TODO: cache reordered filters on NVM
-            int16_t *filter_addr = get_q15_param(
+            const int16_t *filter_addr = get_q15_param(
                 conv_params->conv_filter,
                 (conv_params->conv_idx + idx) * filter_src_offset
             );
             my_printf_debug("Copying filter %d" NEWLINE, conv_params->conv_idx + idx);
             for (uint16_t h = 0; h < conv_params->kH; h++) {
                 int16_t *filter_dest_ptr = filter_tmp + h * conv_params->dest_offset;
-                int16_t *filter_src_ptr = filter_addr + h * conv_params->kW * conv_params->CHANNEL + conv_params->input_tile_c_offset;
+                const int16_t *filter_src_ptr = filter_addr + h * conv_params->kW * conv_params->CHANNEL + conv_params->input_tile_c_offset;
                 for (uint16_t w = 0; w < conv_params->kW; w++) {
                     my_memcpy(filter_dest_ptr,
                               filter_src_ptr,
@@ -211,7 +211,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     /* END dump data */
 
     // use NWHC so that output is written continuously on the address space
-    int16_t *output_baseptr = get_q15_param(conv_params->output, 0);
+    int16_t *output_baseptr = get_q15_param_writable(conv_params->output, 0);
     int16_t *output_data = output_baseptr +
             conv_params->OUTPUT_W * conv_params->OUTPUT_H * (conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL + conv_params->conv_idx_base) +   // n
             conv_params->input_w / conv_params->stride * conv_params->OUTPUT_H * cur_output_tile_c +     // w
@@ -240,7 +240,7 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
     /* copy input data, row by row */
 
     ParameterInfo *conv_input = conv_params->conv_input;
-    int16_t *input_addr = get_q15_param(conv_input, 0);
+    const int16_t *input_addr = get_q15_param(conv_input, 0);
     if (conv_input->flags & SEPARATE_TILING) {
         int8_t slot_difference = conv_params->conv_input->extra_info[conv_params->input_tile_c_index] - conv_params->conv_input->extra_info[0];
         input_addr += slot_difference * INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);
@@ -285,7 +285,7 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                     (int)(dest - lea_buffer));
     for (int32_t h = h_start; h <= h_end; h++) {
-        int16_t *input_src_addr = input_addr + (conv_params->input_h + h) * conv_params->W * conv_params->cur_input_tile_c + (conv_params->input_w + w_start) * conv_params->cur_input_tile_c;
+        const int16_t *input_src_addr = input_addr + (conv_params->input_h + h) * conv_params->W * conv_params->cur_input_tile_c + (conv_params->input_w + w_start) * conv_params->cur_input_tile_c;
         int16_t *dest_addr = dest + (w_start + field_size) * conv_params->cur_input_tile_c;
         my_memcpy(
             dest_addr,
@@ -539,8 +539,8 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 
     uint32_t tiling_results_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
 
-    int16_t *data_baseptr = get_q15_param(data, 0);
-    int16_t *output_baseptr = get_q15_param(output, 0);
+    const int16_t *data_baseptr = get_q15_param(data, 0);
+    int16_t *output_baseptr = get_q15_param_writable(output, 0);
     uint16_t chunk_len = (LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2;
 
     uint16_t overflow_factor = find_overflow_factor(model, data);
