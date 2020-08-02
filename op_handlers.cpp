@@ -1,5 +1,3 @@
-#include <functional>
-
 #include "cnn_common.h"
 #include "op_handlers.h"
 #include "debug.h"
@@ -498,7 +496,8 @@ void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output,
     }
 }
 
-static void iterate_chunks(ParameterInfo *param, std::function<void(uint32_t, uint16_t)> callback) {
+template<typename T>
+static void iterate_chunks(ParameterInfo *param, T callback) {
     uint16_t params_len = param->params_len / sizeof(int16_t);
     uint16_t chunk_len = (LEA_BUFFER_SIZE - 1) / 2 * 2;
 
