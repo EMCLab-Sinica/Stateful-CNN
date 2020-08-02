@@ -158,7 +158,14 @@ jobs:
       CONFIG: mnist
       DEBUG_BUILD: 1
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout TI-DSPLib
+      uses: actions/checkout@v2
+      with:
+        repository: EMCLab-Sinica/DSPLib
+        path: TI-DSPLib
+        token: ${{ secrets.access_token }}
     - name: Test
       run: ./.ci/test.sh
 
@@ -166,6 +173,13 @@ jobs:
     runs-on: ubuntu-latest
     container: centos:7
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout TI-DSPLib
+      uses: actions/checkout@v2
+      with:
+        repository: EMCLab-Sinica/DSPLib
+        path: TI-DSPLib
+        token: ${{ secrets.access_token }}
     - name: Test
       run: ./.ci/test-centos7.sh
