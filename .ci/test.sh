@@ -4,7 +4,7 @@ set -e
 
 ln -s ARM-CMSIS_5/CMSIS ARM-CMSIS
 pacman -Syu --noconfirm
-pacman -S --noconfirm --needed base-devel cmake python-pip
+pacman -S --noconfirm --needed base-devel cmake python-pip wget
 pip install --user numpy onnx
 
 # preparation
