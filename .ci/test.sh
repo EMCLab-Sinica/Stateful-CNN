@@ -24,6 +24,13 @@ if [[ $DEBUG_BUILD = 1 ]]; then
     run_args="$run_args 1"
 fi
 
+if [[ $CONFIG = mnist ]]; then
+    ./data/download-mnist.sh
+fi
+if [[ $CONFIG = cifar10 ]]; then
+    ./data/download-cifar10.sh
+fi
+
 python transform.py $transform_args "$CONFIG"
 cmake -B build $cmake_args
 make -C build

@@ -4,5 +4,8 @@ nvm.bin
 !/images/.keep
 data.cpp
 data.h
+/data/cifar-10-python.tar.gz
+/data/cifar-10-batches-py/
+/data/MNIST/
 /ARM-CMSIS
 /TI-DSPLib

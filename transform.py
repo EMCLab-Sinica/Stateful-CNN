@@ -99,10 +99,10 @@ configs = {
     'mnist': {
         # https://github.com/onnx/models/raw/master/vision/classification/mnist/model/mnist-8.onnx
         'onnx_model': 'data/mnist-8.onnx',
-        'input_file': 'data/Test-28x28_cntk_text.txt',
+        'input_file': 'data/MNIST/Test-28x28_cntk_text.txt',
         'scale': 8,
         'num_slots': 2,
-        'intermediate_values_size': 31000,
+        'intermediate_values_size': 20000,
         'nvm_size': 256 * 1024,
         'data_loader': load_data,
         'n_samples': 20,
@@ -111,7 +111,7 @@ configs = {
     },
     'cifar10': {
         'onnx_model': 'data/squeezenet_cifar10.onnx',
-        'input_file': 'data/cifar10-test_batch',
+        'input_file': 'data/cifar-10-batches-py/test_batch',
         'scale': 8,
         'num_slots': 3,
         'intermediate_values_size': 30000,

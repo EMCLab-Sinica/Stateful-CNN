@@ -18,7 +18,8 @@ If you are using Python 3.6, install one more Python package:
 * `git submodule update --init --recursive`
 * `git clone -b patched https://github.com/EMCLab-Sinica/ARM-CMSIS_5 ../ARM-CMSIS_5 && ln -s ../ARM-CMSIS_5/CMSIS ARM-CMSIS` if you want to use ARM CMSIS DSP library
 * `git clone ssh://git@github.com/EMCLab-Sinica/DSPLib TI-DSPLib` if you want to use TI DSPLib
-* `./transform.py mnist`
+* `./data/download-mnist.sh` and `./data/download-cifar10.sh` to download MNIST and CIFAR-10 datasets
+* `./transform.py (mnist|cifar10)`
 * `cmake . -D USE_ARM_CMSIS=(ON|OFF)`
 * `make`
 * `./intermittent-cnn`
