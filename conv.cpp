@@ -4,6 +4,7 @@
 #ifndef USE_ARM_CMSIS
 #include <DSPLib.h>
 #endif
+#include <inttypes.h> // for PRId32
 #include "cnn_common.h"
 #include "debug.h"
 #include "op_handlers.h"
@@ -167,8 +168,6 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
     int16_t *filter_buffer_addr = conv_params->filter_buffer_addr;
 
-    my_printf_debug("input_h=%d" NEWLINE, conv_params->input_h + offset_h);
-
     int16_t *input_buffer_addr = lea_buffer + offset_h * conv_params->dest_offset;
 
     uint16_t A_rows, A_cols, B_rows, B_cols;
@@ -180,6 +179,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
     /* START dump data */
 #ifndef MY_NDEBUG
+    my_printf_debug("input_h=%d" NEWLINE, conv_params->input_h + offset_h);
     my_printf_debug("conv_idx=");
     for (uint16_t idx = 0; idx < cur_output_tile_c; idx++) {
         my_printf_debug("%d ", conv_params->conv_idx + idx);
@@ -309,7 +309,7 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
 
     my_printf_debug("Loaded inputs" NEWLINE);
     // state = 0 as state bits are already removed by my_offset_q15 above
-    dump_matrix(lea_buffer, inputs_len, ValueInfo(conv_params->conv_input));
+    dump_matrix_debug(lea_buffer, inputs_len, ValueInfo(conv_params->conv_input));
 
     for (uint16_t j = 0; j < conv_params->H - conv_params->offset_h - conv_params->input_h; j += conv_params->stride) {
         // conv_idx is set to initial_c in handle_conv

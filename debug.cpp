@@ -1,3 +1,4 @@
+#include <inttypes.h> // for PRId64
 #include "debug.h"
 #include "cnn_common.h"
 #include "intermittent-cnn.h"
@@ -14,9 +15,6 @@ ValueInfo::ValueInfo(ParameterInfo *cur_param, Model *model) {
 }
 
 static void print_q15(int16_t val, const ValueInfo& val_info) {
-#if defined(__MSP430__) || defined(__MSP432__)
-    my_printf("%d ", val);
-#else
     if (dump_integer) {
         my_printf("% 6d ", val);
     } else {
@@ -29,7 +27,6 @@ static void print_q15(int16_t val, const ValueInfo& val_info) {
 #endif
         my_printf("% 13.6f", val_info.scale * (val - offset) / 32768.0);
     }
-#endif
 }
 
 void dump_value(Model *model, ParameterInfo *cur_param, size_t offset) {
@@ -40,6 +37,17 @@ void dump_value(Model *model, ParameterInfo *cur_param, size_t offset) {
     } else {
         ERROR_OCCURRED();
     }
+}
+
+void dump_matrix(const int16_t *mat, size_t len, const ValueInfo& val_info) {
+    my_printf("Scale: %d" NEWLINE, val_info.scale);
+    for (size_t j = 0; j < len; j++) {
+        print_q15(mat[j], val_info);
+        if (j && (j % 16 == 15)) {
+            my_printf(NEWLINE);
+        }
+    }
+    my_printf(NEWLINE);
 }
 
 #ifndef MY_NDEBUG
@@ -73,20 +81,20 @@ void dump_params(Model *model, ParameterInfo *cur_param) {
     my_printf("Slot: %d" NEWLINE, cur_param->slot);
     my_printf("Scale: %d" NEWLINE, cur_param->scale);
     for (uint16_t i = 0; i < NUM; i++) {
-        my_printf_debug("Matrix %d" NEWLINE, i);
+        my_printf("Matrix %d" NEWLINE, i);
         for (uint16_t j = 0; j < CHANNEL; j++) {
-            my_printf_debug("Channel %d" NEWLINE, j);
+            my_printf("Channel %d" NEWLINE, j);
             for (uint16_t k = 0; k < H; k++) {
                 for (uint16_t l = 0; l < W; l++) {
                     // internal format is NCHW
                     size_t offset = i * H * W * CHANNEL + j * H * W + k * W + l;
                     dump_value(model, cur_param, offset);
                 }
-                my_printf_debug(NEWLINE);
+                my_printf(NEWLINE);
             }
-            my_printf_debug(NEWLINE);
+            my_printf(NEWLINE);
         }
-        my_printf_debug(NEWLINE);
+        my_printf(NEWLINE);
     }
 }
 
@@ -102,11 +110,11 @@ void dump_params_nhwc(Model *model, ParameterInfo *cur_param, size_t offset) {
     my_printf("Slot: %d" NEWLINE, cur_param->slot);
     my_printf("Scale: %d" NEWLINE, cur_param->scale);
     for (uint16_t n = 0; n < NUM; n++) {
-        my_printf_debug("Matrix %d" NEWLINE, n);
+        my_printf("Matrix %d" NEWLINE, n);
         for (uint16_t tile_c_base = 0; tile_c_base < CHANNEL; tile_c_base += cur_param->tile_c) {
             uint16_t cur_tile_c = MIN_VAL(cur_param->tile_c, CHANNEL - tile_c_base);
             for (uint16_t c = 0; c < cur_tile_c; c++) {
-                my_printf_debug("Channel %d" NEWLINE, tile_c_base + c);
+                my_printf("Channel %d" NEWLINE, tile_c_base + c);
                 for (uint16_t h = 0; h < H; h++) {
                     for (uint16_t w = 0; w < W; w++) {
                         // internal format is NWHC (transposed) or NHWC
@@ -118,24 +126,13 @@ void dump_params_nhwc(Model *model, ParameterInfo *cur_param, size_t offset) {
                         }
                         dump_value(model, cur_param, offset + offset2);
                     }
-                    my_printf_debug(NEWLINE);
+                    my_printf(NEWLINE);
                 }
-                my_printf_debug(NEWLINE);
+                my_printf(NEWLINE);
             }
         }
-        my_printf_debug(NEWLINE);
+        my_printf(NEWLINE);
     }
-}
-
-void dump_matrix(int16_t *mat, size_t len, const ValueInfo& val_info) {
-    my_printf("Scale: %d" NEWLINE, val_info.scale);
-    for (size_t j = 0; j < len; j++) {
-        print_q15(mat[j], val_info);
-        if (j && (j % 16 == 15)) {
-            my_printf_debug(NEWLINE);
-        }
-    }
-    my_printf_debug(NEWLINE);
 }
 
 void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_info) {
@@ -143,10 +140,10 @@ void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_i
     for (size_t j = 0; j < rows * cols; j++) {
         print_q15(mat[j], val_info);
         if ((j+1) % cols == 0) {
-            my_printf_debug(NEWLINE);
+            my_printf(NEWLINE);
         }
     }
-    my_printf_debug(NEWLINE);
+    my_printf(NEWLINE);
 }
 
 void dump_model(Model *model, Node *nodes) {

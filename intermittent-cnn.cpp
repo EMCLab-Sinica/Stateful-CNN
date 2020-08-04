@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <string.h>
+#include <inttypes.h> // for PRId32
 
 #include "intermittent-cnn.h"
 #include "op_handlers.h"
@@ -225,8 +226,10 @@ uint8_t get_state_bit(Model *model, uint8_t slot_id) {
 uint8_t get_value_state_bit(int16_t val) {
     if (val < 0x2000 && val >= -0x2000) {
         return 0;
-    } else {
+    } else if (val >= 0x2000) {
         return 1;
+    } else {
+        ERROR_OCCURRED();
     }
 }
 
@@ -248,7 +251,7 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
         ValueInfo val_info;
         val_info.scale = output->scale;
         val_info.state = !new_output_state_bit;
-        dump_matrix(start, end - start, val_info);
+        dump_matrix_debug(start, end - start, val_info);
 #endif
         const int16_t *middle = start + (end - start) / 2;
         if (middle == start || middle == end) {
@@ -270,8 +273,11 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
         } else {
             end = middle;
         }
-        my_printf_debug("offset of start = %" PRId64, start - baseptr);
-        my_printf_debug(", offset of end = %" PRId64 NEWLINE, end - baseptr);
+        my_printf_debug(
+            "offset of start = %" PRId32 ", offset of end = %" PRId32 NEWLINE,
+            static_cast<uint32_t>(start - baseptr),
+            static_cast<uint32_t>(end - baseptr)
+        );
     }
 
     if (!after_recovery) {

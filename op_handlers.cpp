@@ -309,14 +309,14 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
                   current_width * B->dims[1] * sizeof(uint16_t));
 
         my_printf_debug("strip for A" NEWLINE);
-        dump_matrix(buffer_a + A->dims[0] * i, (size_t)(A->dims[0] * current_width), ValueInfo(A, model));
+        dump_matrix_debug(buffer_a + A->dims[0] * i, (size_t)(A->dims[0] * current_width), ValueInfo(A, model));
         my_printf_debug("B" NEWLINE);
-        dump_matrix(buffer_b, (size_t)(current_width * B->dims[1]), ValueInfo(B, model));
+        dump_matrix_debug(buffer_b, (size_t)(current_width * B->dims[1]), ValueInfo(B, model));
 
         my_matrix_mpy_q15(A->dims[0], current_width, current_width, B->dims[1], buffer_a + A->dims[0] * i, buffer_b, buffer_temp, 0);
 
         my_printf_debug("temp" NEWLINE);
-        dump_matrix(buffer_temp, (size_t)(A->dims[0] * B->dims[1]), ValueInfo(output, model));
+        dump_matrix_debug(buffer_temp, (size_t)(A->dims[0] * B->dims[1]), ValueInfo(output, model));
 
         my_add_q15(buffer_matmul, buffer_temp, buffer_matmul, output->params_len / sizeof(int16_t));
     }
@@ -396,13 +396,11 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
                     uint16_t cur_input_tile_c = MIN_VAL(X->tile_c, CHANNEL - input_tile_c_index * X->tile_c);
                     int16_t val_offset = input_tile_c_index * W * H * X->tile_c + output_w * H * cur_input_tile_c + output_h * cur_input_tile_c + input_tile_c_offset;
                     int16_t val = *(data_baseptr + val_offset);
-                    my_printf_debug("output_h = %d, ", output_h);
-                    my_printf_debug("output_w = %d, ", output_w);
-                    my_printf_debug("c = %d, ", c);
-                    my_printf_debug("offset = %d, ", val_offset);
-                    my_printf_debug("input val = %d" NEWLINE, val);
                     uint16_t output_offset = output_h * W * CHANNEL + output_w * CHANNEL + c;
                     *(output_baseptr + output_offset) = MAX_VAL(val, threshold) + offset;
+                    my_printf_debug(
+                        "output_h = %d, output_w = %d, c = %d, offset = %d, input val = %d" NEWLINE,
+                        output_h, output_w, c, val_offset, val);
                     my_printf_debug("output_offset = %d" NEWLINE, output_offset);
                 }
                 c = 0;
@@ -636,18 +634,19 @@ void handle_transpose(Model*, ParameterInfo *input[], ParameterInfo *output, uin
 
 uint16_t find_overflow_factor(Model *model, ParameterInfo *param) {
     uint16_t overflow_factor = 1;
-    int16_t max_val, min_val;
-    uint16_t index;
-#ifndef WITH_PROGRESS_EMBEDDING
-    int16_t min_bound = -32768 / SCALE;
-    int16_t max_bound = 32767 / SCALE;
-#else
-    int16_t min_bound = -8192 / SCALE;
-    int16_t max_bound = 8191 / SCALE;
-    int16_t val_offset = get_state_bit(model, param->slot) ? -16384 : 0;
-#endif
 
     iterate_chunks(param, [&] (uint32_t offset, uint16_t real_chunk_len) {
+#ifndef WITH_PROGRESS_EMBEDDING
+        int16_t min_bound = -32768 / SCALE;
+        int16_t max_bound = 32767 / SCALE;
+#else
+        int16_t min_bound = -8192 / SCALE;
+        int16_t max_bound = 8191 / SCALE;
+        int16_t val_offset = get_state_bit(model, param->slot) ? -16384 : 0;
+#endif
+        int16_t max_val, min_val;
+        uint16_t index;
+
         my_memcpy(lea_buffer, get_q15_param(param, offset), real_chunk_len * sizeof(int16_t));
 
         my_max_q15(lea_buffer, real_chunk_len, &max_val, &index);
