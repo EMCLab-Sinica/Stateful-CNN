@@ -93,6 +93,12 @@ Counters *counters(void);
 /* MSP430 SDK already defines MIN, which means minutes */
 #define MIN_VAL(x, y) ((x) < (y) ? (x) : (y))
 #define MAX_VAL(x, y) ((x) > (y) ? (x) : (y))
+// XXX: MSP432 driverlib requires DMA transfer size to be <= 1024. However,
+// transfer size < 1024 may be broken as well - copying 1024 items works,
+// copying 512 items works, copy a small number of items (e.g., 6, 10, ...)
+// works, and copying 626 items (in ConvMerge of conv2 in MNIST) DOES NOT
+// WORK (!?). By the way, fill_int16 appears not affected.
+#define LIMIT_DMA_SIZE(x) MIN_VAL(512, x)
 
 /* Better to not use macros
  * https://stackoverflow.com/a/3437484/3786245

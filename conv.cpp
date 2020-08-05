@@ -503,7 +503,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 
     my_printf_debug("handle_conv output" NEWLINE);
     for (uint16_t input_tile_c_index = 0; input_tile_c_index * input_tile_c < CHANNEL; input_tile_c_index++) {
-        dump_params_nhwc(model, output, input_tile_c_index * tiling_results_len);
+        dump_params_nhwc_debug(model, output, input_tile_c_index * tiling_results_len);
     }
 #endif
 }
@@ -541,7 +541,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 
     const int16_t *data_baseptr = get_q15_param(data, 0);
     int16_t *output_baseptr = get_q15_param_writable(output, 0);
-    uint16_t chunk_len = (LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2;
+    uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
 
     uint16_t overflow_factor = find_overflow_factor(model, data);
     int16_t scaleFract;
@@ -588,5 +588,5 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
     flip_state_bit(model, output);
 #endif
 
-    dump_params_nhwc(model, output, 0);
+    dump_params_nhwc_debug(model, output, 0);
 }

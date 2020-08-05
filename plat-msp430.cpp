@@ -71,6 +71,12 @@ void TA0_N_IRQHandler(void)
     counters()->time_counters[counters()->counter_idx]++;
 }
 
+#ifdef __MSP432__
+// For DMA on MSP432
+#pragma DATA_ALIGN(1024)
+uint8_t controlTable[1024];
+#endif
+
 void setOutputValue(uint8_t value)
 {
     if (value) {
@@ -92,8 +98,28 @@ void my_memcpy(void* dest, const void* src, size_t n) {
     DMA0CTL |= DMAEN + DMA_TRANSFER_BLOCK;
     DMA0CTL |= DMAREQ;
 #elif defined(__MSP432__)
-    // TODO: use DMA
-    memcpy(dest, src, n);
+    MAP_DMA_enableModule();
+    MAP_DMA_setControlBase(controlTable);
+    MAP_DMA_setChannelControl(
+        DMA_CH0_RESERVED0 | UDMA_PRI_SELECT, // Channel 0, PRImary channel
+        // re-arbitrate after 1024 (maximum) items
+        // an item is 16-bit
+        UDMA_ARB_1024 | UDMA_SIZE_16 | UDMA_SRC_INC_16 | UDMA_DST_INC_16
+    );
+    // Use the first configurable DMA interrupt handler DMA_INT1_IRQHandler,
+    // which is defined below (overriding weak symbol in startup*.c)
+    MAP_DMA_assignInterrupt(DMA_INT1, 0);
+    MAP_Interrupt_enableInterrupt(INT_DMA_INT1);
+    MAP_Interrupt_disableSleepOnIsrExit();
+    MAP_DMA_setChannelTransfer(
+        DMA_CH0_RESERVED0 | UDMA_PRI_SELECT,
+        UDMA_MODE_AUTO, // Set as auto mode with no need to retrigger after each arbitration
+        const_cast<void*>(src), dest,
+        n >> 1 // transfer size in items
+    );
+    MAP_DMA_enableChannel(0);
+    MAP_DMA_requestSoftwareTransfer(0);
+    while (MAP_DMA_isChannelEnabled(0)) {}
 #endif
 }
 
@@ -111,7 +137,22 @@ void fill_int16(int16_t *dest, uint16_t n, int16_t val) {
     DMA0CTL |= DMAEN + DMA_TRANSFER_BLOCK;
     DMA0CTL |= DMAREQ;
 #else
-#error "TODO: implement fill_int16 for MSP432"
+    MAP_DMA_enableModule();
+    MAP_DMA_setControlBase(controlTable);
+    MAP_DMA_setChannelControl(DMA_CH0_RESERVED0 | UDMA_PRI_SELECT, UDMA_SIZE_16 | UDMA_SRC_INC_NONE | UDMA_DST_INC_16 | UDMA_ARB_1024);
+    MAP_DMA_assignInterrupt(DMA_INT1, 0);
+    MAP_Interrupt_enableInterrupt(INT_DMA_INT1);
+    MAP_Interrupt_disableSleepOnIsrExit();
+    uint16_t transfer_size = n;
+    for (uint16_t transfer_offset = 0; transfer_offset < transfer_size; transfer_offset += 1024) {
+        MAP_DMA_setChannelTransfer(
+            DMA_CH0_RESERVED0 | UDMA_PRI_SELECT, UDMA_MODE_AUTO,
+            &val, dest + transfer_offset, MIN_VAL(1024, n - transfer_offset)
+        );
+        MAP_DMA_enableChannel(0);
+        MAP_DMA_requestSoftwareTransfer(0);
+        while (MAP_DMA_isChannelEnabled(0)) {}
+    }
 #endif
 }
 
@@ -123,21 +164,6 @@ void plat_print_results(void) {
         __no_operation();
     }
 }
-
-#ifdef __MSP432__
-// MSP430 intrinsic used by DSPLib
-// http://downloads.ti.com/docs/esd/SLAU132/msp430-intrinsics-slau1321420.html
-short __saturated_add_signed_short(short src1, short src2) {
-    int sum = src1 + src2;
-    if (sum > INT16_MAX) {
-        sum = INT16_MAX;
-    }
-    if (sum < INT16_MIN) {
-        sum = INT16_MIN;
-    }
-    return (short)sum;
-}
-#endif
 
 #pragma DATA_SECTION(".nvm")
 static uint8_t myFirstTime;
@@ -174,14 +200,8 @@ void IntermittentCNNTest() {
     }
 #endif
 
-    if (!model->run_counter) {
-        while (1) {
-            run_cnn_tests(1);
-        }
-    }
-
     while (1) {
-        __delay_cycles(16E6);
+        run_cnn_tests(1);
     }
 }
 
@@ -197,3 +217,11 @@ void button_pushed(void) {
     }
     push_counter++;
 }
+
+#ifdef __MSP432__
+
+extern "C" void DMA_INT1_IRQHandler(void) {
+    MAP_DMA_disableChannel(0);
+}
+
+#endif

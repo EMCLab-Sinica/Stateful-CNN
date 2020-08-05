@@ -216,7 +216,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 
     my_printf_debug("handle_maxpool output" NEWLINE);
     if (!need_nhwc2nchw) {
-        dump_params_nhwc(model, output, 0);
+        dump_params_nhwc_debug(model, output, 0);
     } else if (tile_c == CHANNEL) {
         dump_params(model, output);
     }
@@ -341,7 +341,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 
     ParameterInfo *X = input[0];
     my_printf_debug("handle_relu input" NEWLINE);
-    dump_params_nhwc(model, X, 0);
+    dump_params_nhwc_debug(model, X, 0);
 
     uint16_t CHANNEL = X->dims[1];
 
@@ -426,7 +426,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 #endif
 
     my_printf_debug("handle_relu output" NEWLINE);
-    dump_params_nhwc(model, output, 0);
+    dump_params_nhwc_debug(model, output, 0);
 }
 
 void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
@@ -497,7 +497,7 @@ void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output,
 template<typename T>
 static void iterate_chunks(ParameterInfo *param, T callback) {
     uint16_t params_len = param->params_len / sizeof(int16_t);
-    uint16_t chunk_len = (LEA_BUFFER_SIZE - 1) / 2 * 2;
+    uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / 2 * 2);
 
     for (uint32_t offset = 0; offset < params_len; offset += chunk_len) {
         uint16_t real_chunk_len = MIN_VAL(chunk_len, params_len - offset);
@@ -573,8 +573,8 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     output->extra_info[0] = output->slot = A->slot;
     output->extra_info[1] = B->slot;
 
-    dump_params_nhwc(model, A, 0);
-    dump_params_nhwc(model, B, 0);
+    dump_params_nhwc_debug(model, A, 0);
+    dump_params_nhwc_debug(model, B, 0);
 }
 
 void handle_dropout(Model*, ParameterInfo*[], ParameterInfo*, uint16_t) {
