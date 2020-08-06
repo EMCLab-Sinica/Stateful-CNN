@@ -14,6 +14,7 @@ if (USE_ARM_CMSIS)
 else (USE_ARM_CMSIS)
     set(DSPLIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/TI-DSPLib)
 endif (USE_ARM_CMSIS)
+set(COMMON_SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/common)
 
 add_library(fake-msp430sdk
     fake-msp430sdk/msp430.c
@@ -62,14 +63,14 @@ else (USE_ARM_CMSIS)
 endif (USE_ARM_CMSIS)
 
 add_executable(intermittent-cnn
-    intermittent-cnn.cpp
-    data.cpp
-    op_handlers.cpp
-    conv.cpp
-    cnn_common.cpp
-    debug.cpp
-    plat-linux.cpp
-    my_dsplib.cpp
+    ${COMMON_SRC_PATH}/intermittent-cnn.cpp
+    ${COMMON_SRC_PATH}/data.cpp
+    ${COMMON_SRC_PATH}/op_handlers.cpp
+    ${COMMON_SRC_PATH}/conv.cpp
+    ${COMMON_SRC_PATH}/cnn_common.cpp
+    ${COMMON_SRC_PATH}/debug.cpp
+    ${COMMON_SRC_PATH}/plat-linux.cpp
+    ${COMMON_SRC_PATH}/my_dsplib.cpp
 )
 target_link_libraries(intermittent-cnn fake-msp430sdk)
 

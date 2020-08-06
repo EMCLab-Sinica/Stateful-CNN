@@ -9,3 +9,4 @@ data.h
 /data/MNIST/
 /ARM-CMSIS
 /TI-DSPLib
+/build-posix/

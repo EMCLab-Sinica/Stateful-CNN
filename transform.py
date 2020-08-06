@@ -457,7 +457,7 @@ with open('images/ans.txt', 'w') as f:
 
 outputs['counters'].write(b'\0' * (4 * Constants.COUNTERS_LEN + 2))
 
-with open('data.cpp', 'w') as output_c, open('data.h', 'w') as output_h:
+with open('common/data.cpp', 'w') as output_c, open('common/data.h', 'w') as output_h:
     output_h.write('''
 #pragma once
 
