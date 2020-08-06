@@ -2,7 +2,9 @@
 
 set -e
 
-ln -s ARM-CMSIS_5/CMSIS ARM-CMSIS
+pushd ARM-CMSIS
+./create_symlinks.sh "$PWD/../ARM-CMSIS_5/CMSIS"
+popd
 pacman -Syu --noconfirm
 pacman -S --noconfirm --needed base-devel cmake python-pip wget
 pip install --user numpy onnx

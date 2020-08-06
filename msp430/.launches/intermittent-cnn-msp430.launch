@@ -4,7 +4,7 @@
 <stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_PROGRAM.MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="${build_artifact:intermittent-cnn-msp430}"/>
 <stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_PROJECT.MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="intermittent-cnn-msp430"/>
 <stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_TARGET_CONFIG" value="${target_config_active_default:intermittent-cnn-msp430}"/>
-<stringAttribute key="com.ti.ccstudio.debug.debugModel.MRU_PROGRAM.MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="/home/yen/var/local/School/newslab/intermittent-cnn/src-msp430/Large_Data/intermittent-cnn-msp430.out"/>
+<stringAttribute key="com.ti.ccstudio.debug.debugModel.MRU_PROGRAM.MSP430FR5994.ccxml.TI MSP430 USB1/MSP430" value="/home/yen/var/local/School/newslab/intermittent-cnn/src/msp430/Large_Data/intermittent-cnn-msp430.out"/>
 <listAttribute key="org.eclipse.debug.core.MAPPED_RESOURCE_PATHS">
 <listEntry value="/intermittent-cnn-msp430"/>
 </listAttribute>
