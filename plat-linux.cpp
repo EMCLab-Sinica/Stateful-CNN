@@ -1,3 +1,5 @@
+#ifdef POSIX_BUILD
+
 #define _POSIX_C_SOURCE 1 // for kill()
 
 #include "intermittent-cnn.h"
@@ -129,3 +131,5 @@ void fill_int16(int16_t *dest, uint16_t n, int16_t val) {
     // give up otherwise
     exit(1);
 }
+
+#endif // POSIX_BUILD

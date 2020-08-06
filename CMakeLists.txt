@@ -75,7 +75,8 @@ target_link_libraries(intermittent-cnn fake-msp430sdk)
 
 target_compile_definitions(intermittent-cnn
     PRIVATE
-    MY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+        MY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+        POSIX_BUILD
 )
 
 if (USE_ARM_CMSIS)
