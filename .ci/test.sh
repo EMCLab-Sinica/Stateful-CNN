@@ -22,7 +22,7 @@ if [[ $USE_ARM_CMSIS = 1 ]]; then
 fi
 
 if [[ $DEBUG_BUILD = 1 ]]; then
-    sed -i 's/#define MY_NDEBUG//' debug.h
+    sed -i 's/#define MY_NDEBUG//' common/debug.h
     run_args="$run_args 1"
 fi
 
