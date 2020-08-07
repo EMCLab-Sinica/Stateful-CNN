@@ -35,3 +35,12 @@ In the `msp430` folder, run:
 * `git clone ssh://git@github.com/EMCLab-Sinica/driverlib-msp430.git driverlib`
 
 And then import this project into CCStudio.
+
+# Building for MSP432P401R
+
+In the `msp432` folder, run:
+
+* `git clone ssh://git@github.com/EMCLab-Sinica/Tools.git Tools`
+* `git clone ssh://git@github.com/EMCLab-Sinica/driverlib-msp432.git driverlib`
+
+And then import this project into CCStudio.
