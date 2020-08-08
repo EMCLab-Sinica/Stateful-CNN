@@ -28,6 +28,7 @@ static int16_t last_output_data_offset;
 #define CONV_TASK_FLAG_PROCESSED_FILTERS_BASE 2
 typedef struct ConvTaskParams {
     ParameterInfo *conv_input;
+    ParameterInfo *real_conv_input; // for separate channel tiling
     ParameterInfo *conv_filter;
     ParameterInfo *conv_bias;
     ParameterInfo *output;
@@ -55,7 +56,6 @@ typedef struct ConvTaskParams {
     uint16_t filter_offset;
     uint8_t truncated;
 #ifdef WITH_PROGRESS_EMBEDDING
-    uint8_t input_state_bit;
     uint8_t old_output_state_bit;
 #endif
 
@@ -114,23 +114,17 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         my_fill_q15(0, filter_tmp, fill_length);
 
         uint16_t buffer_size = sizeof(int16_t) * conv_params->cur_input_tile_c;
-        uint16_t filter_src_offset = conv_params->kH * conv_params->kW * conv_params->CHANNEL;
+        uint16_t filter_len = conv_params->kH * conv_params->kW * conv_params->CHANNEL;
         for (uint16_t idx = 0; idx < cur_output_tile_c; idx++) {
-            // TODO: cache reordered filters on NVM
-            const int16_t *filter_addr = get_q15_param(
-                conv_params->conv_filter,
-                (conv_params->conv_idx + idx) * filter_src_offset
-            );
+            uint16_t filter_src_offset = (conv_params->conv_idx + idx) * filter_len;
             my_printf_debug("Copying filter %d" NEWLINE, conv_params->conv_idx + idx);
             for (uint16_t h = 0; h < conv_params->kH; h++) {
                 int16_t *filter_dest_ptr = filter_tmp + h * conv_params->dest_offset;
-                const int16_t *filter_src_ptr = filter_addr + h * conv_params->kW * conv_params->CHANNEL + conv_params->input_tile_c_offset;
+                uint16_t cur_filter_src_offset = filter_src_offset + h * conv_params->kW * conv_params->CHANNEL + conv_params->input_tile_c_offset;
                 for (uint16_t w = 0; w < conv_params->kW; w++) {
-                    my_memcpy(filter_dest_ptr,
-                              filter_src_ptr,
-                              buffer_size);
+                    my_memcpy_from_param(filter_dest_ptr, conv_params->conv_filter, cur_filter_src_offset, buffer_size);
                     filter_dest_ptr += conv_params->cur_input_tile_c;
-                    filter_src_ptr += conv_params->CHANNEL;
+                    cur_filter_src_offset += conv_params->CHANNEL;
                 }
             }
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -143,7 +137,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 filter_tmp[conv_params->filter_offset - 1] = 0;
             }
             if (conv_params->input_tile_c_index == 0) {
-                filter_tmp[conv_params->filter_offset - 1] += -*get_q15_param(conv_params->conv_bias, conv_params->conv_idx + idx) / conv_params->conv_input->scale;
+                filter_tmp[conv_params->filter_offset - 1] += -get_q15_param(conv_params->conv_bias, conv_params->conv_idx + idx) / conv_params->conv_input->scale;
             }
 
 #ifndef USE_ARM_CMSIS
@@ -211,19 +205,17 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     /* END dump data */
 
     // use NWHC so that output is written continuously on the address space
-    int16_t *output_baseptr = get_q15_param_writable(conv_params->output, 0);
-    int16_t *output_data = output_baseptr +
+    int16_t cur_output_data_offset =
             conv_params->OUTPUT_W * conv_params->OUTPUT_H * (conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL + conv_params->conv_idx_base) +   // n
             conv_params->input_w / conv_params->stride * conv_params->OUTPUT_H * cur_output_tile_c +     // w
             (conv_params->input_h + offset_h) / conv_params->stride * cur_output_tile_c +                // h
             conv_params->conv_idx - conv_params->conv_idx_base;                                          // c
 
-    int16_t cur_output_data_offset = output_data - output_baseptr;
     my_printf_debug("output_data offset = %d" NEWLINE, cur_output_data_offset);
     MY_ASSERT(cur_output_data_offset > last_output_data_offset);
     last_output_data_offset = cur_output_data_offset;
 
-    MY_ASSERT((uint8_t*)(output_data + cur_output_tile_c) < intermediate_values(NUM_SLOTS));
+    MY_ASSERT(cur_output_data_offset + cur_output_tile_c < INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
 #if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
     for (uint16_t idx2 = 0; idx2 < cur_output_tile_c; idx2++) {
         if (!conv_params->old_output_state_bit && !get_value_state_bit(matrix_mpy_results[idx2])) {
@@ -231,25 +223,26 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         }
     }
 #endif
-    my_memcpy(output_data, matrix_mpy_results, cur_output_tile_c * sizeof(int16_t));
+    my_memcpy_to_param(conv_params->output, cur_output_data_offset, matrix_mpy_results, cur_output_tile_c * sizeof(int16_t));
 }
 
-static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
+static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     int8_t field_size = (conv_params->kH - 1) / 2;
 
     /* copy input data, row by row */
 
-    ParameterInfo *conv_input = conv_params->conv_input;
-    const int16_t *input_addr = get_q15_param(conv_input, 0);
-    if (conv_input->flags & SEPARATE_TILING) {
-        int8_t slot_difference = conv_params->conv_input->extra_info[conv_params->input_tile_c_index] - conv_params->conv_input->extra_info[0];
-        input_addr += slot_difference * INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);
+    int16_t input_offset = 0;
+    if (conv_params->conv_input->flags & SEPARATE_TILING) {
+        conv_params->real_conv_input = get_parameter_info(conv_params->conv_input->extra_info[conv_params->input_tile_c_index]);
+        // Not touching input_offset as IFM for different input tiles are in different slots and each starts address 0 in
+        // corresponding slots
     } else {
-        input_addr += conv_params->input_tile_c_offset * conv_params->H * conv_params->W;
+        conv_params->real_conv_input = conv_params->conv_input;
+        input_offset += conv_params->input_tile_c_offset * conv_params->H * conv_params->W;
     }
 
     /* int32_t instead of int16_t as TI's compiler cannot handle negative
-     * offsets correctly. The expression `input_addr + (int16_t)(-2)` is
+     * offsets correctly. The expression `input_offset + (int16_t)(-2)` is
      * compiled as:
      * 1. -2 is represented as 0x00FFFE (general registers are 24-bit long).
      *    Assume this value is stored in R11.
@@ -285,14 +278,14 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                     (int)(dest - lea_buffer));
     for (int32_t h = h_start; h <= h_end; h++) {
-        const int16_t *input_src_addr = input_addr + (conv_params->input_h + h) * conv_params->W * conv_params->cur_input_tile_c + (conv_params->input_w + w_start) * conv_params->cur_input_tile_c;
+        int16_t input_src_offset = input_offset + (conv_params->input_h + h) * conv_params->W * conv_params->cur_input_tile_c + (conv_params->input_w + w_start) * conv_params->cur_input_tile_c;
         int16_t *dest_addr = dest + (w_start + field_size) * conv_params->cur_input_tile_c;
-        my_memcpy(
+        my_memcpy_from_param(
             dest_addr,
-            input_src_addr,
+            conv_params->real_conv_input, input_src_offset,
             size * sizeof(int16_t));
 #ifdef WITH_PROGRESS_EMBEDDING
-        if (conv_params->input_state_bit) {
+        if (get_state_bit(model, conv_params->real_conv_input->slot)) {
             my_offset_q15(dest_addr, -0x4000, dest_addr, size / 2 * 2);
             if (size % 2) {
                 dest_addr[size - 1] -= 0x4000;
@@ -309,7 +302,7 @@ static void handle_conv_inner_loop(ConvTaskParams *conv_params) {
 
     my_printf_debug("Loaded inputs" NEWLINE);
     // state = 0 as state bits are already removed by my_offset_q15 above
-    dump_matrix_debug(lea_buffer, inputs_len, ValueInfo(conv_params->conv_input));
+    dump_matrix_debug(lea_buffer, inputs_len, ValueInfo(conv_params->real_conv_input));
 
     for (uint16_t j = 0; j < conv_params->H - conv_params->offset_h - conv_params->input_h; j += conv_params->stride) {
         // conv_idx is set to initial_c in handle_conv
@@ -414,14 +407,6 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     conv_params->conv_idx_base = 0;
     conv_params->conv_idx = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
-    // Needs to handle multiple input state bits as IFM may be from different slots (separate tiling)
-    uint8_t input_state_bits[3]; // should accomodate n_tiles_c
-    if (conv_input->flags & SEPARATE_TILING) {
-        input_state_bits[0] = get_state_bit(model, conv_input->extra_info[0]);
-        input_state_bits[1] = get_state_bit(model, conv_input->extra_info[1]);
-    } else {
-        input_state_bits[0] = get_state_bit(model, conv_input->slot);
-    }
     conv_params->old_output_state_bit = get_state_bit(model, output->slot);
 
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
@@ -453,13 +438,6 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 #endif
 
     for (; conv_params->input_tile_c_offset < CHANNEL; conv_params->input_tile_c_offset += input_tile_c, conv_params->input_tile_c_index++) {
-#ifdef WITH_PROGRESS_EMBEDDING
-        if (conv_params->conv_input->flags & SEPARATE_TILING) {
-            conv_params->input_state_bit = input_state_bits[conv_params->input_tile_c_index];
-        } else {
-            conv_params->input_state_bit = input_state_bits[0];
-        }
-#endif
         conv_params->cur_input_tile_c = MIN_VAL(input_tile_c, CHANNEL - conv_params->input_tile_c_offset);
         my_printf_debug("cur_input_tile_c = %d" NEWLINE, conv_params->cur_input_tile_c);
         // +1 for bias
@@ -483,7 +461,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         while (conv_params->conv_idx_base < OUTPUT_CHANNEL) {
             for (; conv_params->input_w < W - conv_params->offset_w; conv_params->input_w += conv_params->stride) {
                 for (; conv_params->input_h < H - conv_params->offset_h; conv_params->input_h += conv_params->tile_h) {
-                    handle_conv_inner_loop(conv_params);
+                    handle_conv_inner_loop(model, conv_params);
                 }
                 conv_params->input_h = conv_params->offset_h;
             }
@@ -539,8 +517,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 
     uint32_t tiling_results_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
 
-    const int16_t *data_baseptr = get_q15_param(data, 0);
-    int16_t *output_baseptr = get_q15_param_writable(output, 0);
+    int16_t data_offset = 0;
     uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
 
     uint16_t overflow_factor = find_overflow_factor(model, data);
@@ -548,10 +525,10 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
     uint8_t shift;
     float_to_scale_params(&scaleFract, &shift, 1.0f * SCALE / overflow_factor);
 #ifdef WITH_PROGRESS_EMBEDDING
-    int16_t input_offset = get_state_bit(model, data->slot) ? -0x4000 : 0;
-    int16_t output_offset = get_state_bit(model, output->slot) ? 0 : 0x4000;
-    my_printf_debug("input_offset = %d, ", input_offset);
-    my_printf_debug("output_offset = %d" NEWLINE, output_offset);
+    int16_t input_value_offset = get_state_bit(model, data->slot) ? -0x4000 : 0;
+    int16_t output_value_offset = get_state_bit(model, output->slot) ? 0 : 0x4000;
+    my_printf_debug("input_value_offset = %d, ", input_value_offset);
+    my_printf_debug("output_value_offset = %d" NEWLINE, output_value_offset);
 #endif
 
     // XXX: use iterate_chunks() ?
@@ -560,22 +537,22 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
         my_printf_debug("real_chunk_len = %d" NEWLINE, real_chunk_len);
         for (uint16_t input_tile_c_index = 0; input_tile_c_index < n_tiles_c; input_tile_c_index++) {
             int16_t *to_add = lea_buffer + input_tile_c_index * chunk_len;
-            my_memcpy(to_add,
-                      data_baseptr + input_tile_c_index * tiling_results_len + tiling_results_offset,
+            my_memcpy_from_param(to_add, data,
+                      data_offset + input_tile_c_index * tiling_results_len + tiling_results_offset,
                       real_chunk_len * sizeof(int16_t));
             // scale up results as in convolution values are scaled down twice (input & weights)
 #ifdef WITH_PROGRESS_EMBEDDING
-            my_offset_q15(to_add, input_offset, to_add, real_chunk_len);
+            my_offset_q15(to_add, input_value_offset, to_add, real_chunk_len);
 #endif // WITH_PROGRESS_EMBEDDING
             my_scale_q15(to_add, scaleFract, shift, to_add, real_chunk_len);
             if (input_tile_c_index != 0) {
                 my_add_q15(lea_buffer, to_add, lea_buffer, real_chunk_len);
             }
 #ifdef WITH_PROGRESS_EMBEDDING
-            my_offset_q15(to_add, output_offset, to_add, real_chunk_len);
+            my_offset_q15(to_add, output_value_offset, to_add, real_chunk_len);
 #endif
         }
-        my_memcpy(output_baseptr + tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));
+        my_memcpy_to_param(output, tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));
     }
 
     my_printf_debug("After scaling up back and merging tiling results" NEWLINE);

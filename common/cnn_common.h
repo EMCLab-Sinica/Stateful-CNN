@@ -47,7 +47,7 @@ typedef struct ParameterInfo {
     // use signed type for scale as TI's compiler does not handle
     // multiplication/division with mixed signed and unsigned numbers correctly
     int16_t scale;
-    uint8_t dummy[2]; // for memory alignment
+    uint16_t parameter_info_idx;
 } ParameterInfo;
 
 static_assert(sizeof(ParameterInfo) == 28, "Unexpected size for ParameterInfo");
@@ -83,6 +83,7 @@ static_assert(sizeof(Counters) == 4 * COUNTERS_LEN + 2, "Unexpected size of Coun
  *          Global data           *
  **********************************/
 extern uint8_t *inputs_data;
+extern uint8_t *parameters_info_data;
 Counters *counters(void);
 
 
@@ -114,11 +115,13 @@ static inline int16_t int16_max(int16_t a, int16_t b) {
 /**********************************
  *       Helpers for nodes        *
  **********************************/
-const int16_t* get_q15_param(ParameterInfo *param, size_t i);
-int16_t* get_q15_param_writable(ParameterInfo *param, size_t i);
+const uint8_t* get_param_base_pointer(ParameterInfo *param, uint32_t *limit_p);
+int16_t get_q15_param(ParameterInfo *param, uint16_t offset_in_word);
+void put_q15_param(ParameterInfo *param, uint16_t offset_in_word, int16_t val);
 int64_t get_int64_param(ParameterInfo *param, size_t i);
 int16_t node_input(Node *node, size_t i);
 uint16_t get_next_slot(Model *model, ParameterInfo *param);
+ParameterInfo* get_parameter_info(size_t i);
 
 /**********************************
  *       Operation handlers       *

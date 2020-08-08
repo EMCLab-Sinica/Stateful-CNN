@@ -31,7 +31,7 @@ static void print_q15(int16_t val, const ValueInfo& val_info) {
 
 void dump_value(Model *model, ParameterInfo *cur_param, size_t offset) {
     if (cur_param->bitwidth == 16) {
-        print_q15(*get_q15_param(cur_param, offset), ValueInfo(cur_param, model));
+        print_q15(get_q15_param(cur_param, offset), ValueInfo(cur_param, model));
     } else if (cur_param->bitwidth == 64) {
         my_printf("%" PRId64 " ", get_int64_param(cur_param, offset));
     } else {

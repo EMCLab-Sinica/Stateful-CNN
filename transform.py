@@ -302,6 +302,7 @@ outputs = {
     'parameters2': io.BytesIO(),
     'samples': io.BytesIO(),
     'model': io.BytesIO(),
+    'parameters_info': io.BytesIO(),
     'labels': io.BytesIO(),
     'counters': io.BytesIO(),
 }
@@ -339,6 +340,8 @@ for node in model:
     outputs['model'].write(to_bytes(list(ops.keys()).index(node.op_type)))
     outputs['model'].write(to_bytes(node.flags))
 
+inputs_data.seek(0)
+outputs['model'].write(inputs_data.read())
 
 labels, images = config['data_loader'](config['input_file'], limit=config['n_samples'])
 
@@ -348,20 +351,22 @@ def select_parameters_slot(data_len):
     else:
         return parameters2_slot
 
+parameter_info_idx = 0
+
 for params in parameters:
     if params is None:  # input
         # Actual data for test samples are added last
         _, input_channel, dimX, dimY = images[0].shape
-        outputs['model'].write(to_bytes(parameters_slot.offset, size=32))  # params_offset
-        outputs['model'].write(to_bytes(input_channel* dimX * dimY * 2, size=32))  # A _q15 is 16-bit
-        outputs['model'].write(to_bytes(16, size=8))                # bitwidth
-        outputs['model'].write(to_bytes(Constants.SLOT_TEST_SET, size=8))     # slot
-        outputs['model'].write(to_bytes(input_channel, size=16))    # tile_c
+        outputs['parameters_info'].write(to_bytes(parameters_slot.offset, size=32))  # params_offset
+        outputs['parameters_info'].write(to_bytes(input_channel* dimX * dimY * 2, size=32))  # A _q15 is 16-bit
+        outputs['parameters_info'].write(to_bytes(16, size=8))                # bitwidth
+        outputs['parameters_info'].write(to_bytes(Constants.SLOT_TEST_SET, size=8))     # slot
+        outputs['parameters_info'].write(to_bytes(input_channel, size=16))    # tile_c
         # extend_dims
-        outputs['model'].write(to_bytes(1))
-        outputs['model'].write(to_bytes(input_channel))
-        outputs['model'].write(to_bytes(dimX))
-        outputs['model'].write(to_bytes(dimY))
+        outputs['parameters_info'].write(to_bytes(1))
+        outputs['parameters_info'].write(to_bytes(input_channel))
+        outputs['parameters_info'].write(to_bytes(dimX))
+        outputs['parameters_info'].write(to_bytes(dimY))
     else:
         assert len(params.dims) <= 4
         if params.data_type == onnx.TensorProto.FLOAT:
@@ -372,65 +377,62 @@ for params in parameters:
             data_len = len(float_data)
             assert data_len > 0
             slot = select_parameters_slot(data_len * 2)
-            outputs['model'].write(to_bytes(slot.offset, size=32))  # params_offset
-            outputs['model'].write(to_bytes(data_len * 2, size=32))  # A _q15 is 16-bit
+            outputs['parameters_info'].write(to_bytes(slot.offset, size=32))  # params_offset
+            outputs['parameters_info'].write(to_bytes(data_len * 2, size=32))  # A _q15 is 16-bit
             if params.name in conv_param_names:
                 print(f'Reorder conv param {params.name}')
                 float_data, _ = nchw2nhwc(float_data, params.dims)
             for param in float_data:
                 slot.target.write(to_bytes(_Q15(param / config['scale'])))
                 slot.offset += 2
-            outputs['model'].write(to_bytes(16, size=8)) # bitwidth
+            outputs['parameters_info'].write(to_bytes(16, size=8)) # bitwidth
         elif params.data_type == onnx.TensorProto.INT64:
             data_len = len(params.int64_data)
             slot = select_parameters_slot(data_len * 8)
-            outputs['model'].write(to_bytes(slot.offset, size=32))  # params_offset
-            outputs['model'].write(to_bytes(data_len * 8, size=32))
+            outputs['parameters_info'].write(to_bytes(slot.offset, size=32))  # params_offset
+            outputs['parameters_info'].write(to_bytes(data_len * 8, size=32))
             for param in params.int64_data:
                 slot.target.write(to_bytes(param, size=64))
                 slot.offset += 8
-            outputs['model'].write(to_bytes(64, size=8)) # bitwidth
+            outputs['parameters_info'].write(to_bytes(64, size=8)) # bitwidth
         else:
             assert False
-        outputs['model'].write(to_bytes(slot.slot_id, size=8))  # slot
+        outputs['parameters_info'].write(to_bytes(slot.slot_id, size=8))  # slot
         if len(params.dims) == 4:
             tile_c = params.dims[1]
         else:
             tile_c = 0
-        outputs['model'].write(to_bytes(tile_c, size=16))       # tile_c
+        outputs['parameters_info'].write(to_bytes(tile_c, size=16))       # tile_c
         print('dims = {}, length = {}'.format(params.dims, data_len))
         for dim in params.dims:
-            outputs['model'].write(to_bytes(dim))
+            outputs['parameters_info'].write(to_bytes(dim))
         # dims are always 4 uint16_t's in C++
         for _ in range(4 - len(params.dims)):
-            outputs['model'].write(to_bytes(0))
+            outputs['parameters_info'].write(to_bytes(0))
 
     # common to input and non-inputs
-    outputs['model'].write(to_bytes(0, size=8))                 # flags
+    outputs['parameters_info'].write(to_bytes(0, size=8))                 # flags
     for _ in range(3):
-        outputs['model'].write(to_bytes(0, size=8))             # extra_info
-    outputs['model'].write(to_bytes(config['scale']))           # scale
-    for _ in range(2):
-        outputs['model'].write(to_bytes(0, size=8))             # dummy
+        outputs['parameters_info'].write(to_bytes(0, size=8))             # extra_info
+    outputs['parameters_info'].write(to_bytes(config['scale']))           # scale
+    outputs['parameters_info'].write(to_bytes(parameter_info_idx))        # parameter_info_idx
+    parameter_info_idx += 1
 
 # Placeholder for ParameterInfo of intermediate values
 for idx, n in enumerate(nodes):
-    outputs['model'].write(to_bytes(0, size=32))  # params_offset
-    outputs['model'].write(to_bytes(0, size=32))  # params_len
-    outputs['model'].write(to_bytes(0, size=8))  # bitwidth
-    outputs['model'].write(to_bytes(0, size=8))  # slot
-    outputs['model'].write(to_bytes(0, size=16))  # tile_c
+    outputs['parameters_info'].write(to_bytes(0, size=32))  # params_offset
+    outputs['parameters_info'].write(to_bytes(0, size=32))  # params_len
+    outputs['parameters_info'].write(to_bytes(0, size=8))  # bitwidth
+    outputs['parameters_info'].write(to_bytes(0, size=8))  # slot
+    outputs['parameters_info'].write(to_bytes(0, size=16))  # tile_c
     for _ in range(4):  # dims[4]
-        outputs['model'].write(to_bytes(0))
-    outputs['model'].write(to_bytes(0, size=8))     # flags
+        outputs['parameters_info'].write(to_bytes(0))
+    outputs['parameters_info'].write(to_bytes(0, size=8))     # flags
     for _ in range(3):
-        outputs['model'].write(to_bytes(0, size=8)) # extra_info
-    outputs['model'].write(to_bytes(config['scale']))   # scale
-    for _ in range(2):
-        outputs['model'].write(to_bytes(0, size=8))             # dummy
-
-inputs_data.seek(0)
-outputs['model'].write(inputs_data.read())
+        outputs['parameters_info'].write(to_bytes(0, size=8)) # extra_info
+    outputs['parameters_info'].write(to_bytes(config['scale']))   # scale
+    outputs['parameters_info'].write(to_bytes(parameter_info_idx))             # parameter_info_idx
+    parameter_info_idx += 1
 
 for idx, im in enumerate(images):
     # load_data returns NCHW
@@ -555,7 +557,8 @@ extern {const_qualifier}uint8_t *{var_name};
             continue
         var_name += '_data'
         data_obj.seek(0)
-        define_var(var_name, data_obj.read(), var_name in ('model_data', 'counters_data'))
+        define_var(var_name, data_obj.read(),
+                   will_modify=var_name in ('model_data', 'parameters_info_data', 'counters_data'))
 
     outputs['samples'].seek(0)
     samples_data = outputs['samples'].read()

@@ -35,7 +35,6 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
     const uint16_t CHANNEL = data->dims[1], W = data->dims[3];
     uint16_t stride = flags & 0x0f;
     uint16_t kernel_size = (flags & 0xf0) >> 4;
-    const int16_t *data_baseptr = get_q15_param(data, 0);
 #ifdef WITH_PROGRESS_EMBEDDING
     uint8_t input_state_bit = get_state_bit(model, data->slot);
     uint8_t old_output_state_bit = get_state_bit(model, output->slot);
@@ -55,10 +54,8 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
 #endif
     for (uint16_t sH = 0; sH < kernel_size; sH++) {
         for (uint16_t sW = 0; sW < kernel_size; sW++) {
-            int16_t val;
-            // XXX: use a moving pointer instead of data_baseptr makes it slower. Why!?
             uint16_t val_offset = (output_h*stride+sH) * offset_h + (output_w*stride+sW) * offset_w + c;
-            val = data_baseptr[val_offset];
+            int16_t val = get_q15_param(data, val_offset);
 #ifdef WITH_PROGRESS_EMBEDDING
             if (input_state_bit) {
                 val -= 0x4000;
@@ -113,14 +110,13 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     my_printf_debug("initial_n = %d" NEWLINE, initial_n);
 #endif
 
-    int16_t *output_baseptr = get_q15_param_writable(output, 0);
     uint16_t tile_c_offset = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
     tile_c_offset = initial_n * tile_c;
 #endif
     for (; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
         uint16_t real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
-        int16_t *output_ptr = output_baseptr + tile_c_offset * new_H * new_W;
+        uint16_t output_offset = tile_c_offset * new_H * new_W;
         if (!need_nhwc2nchw) {
             // NHWC
             uint16_t output_h = 0;
@@ -137,7 +133,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 
             if (tile_c_offset == initial_n * tile_c) {
                 output_h = initial_h;
-                output_ptr += initial_h * new_W * real_tile_c;
+                output_offset += initial_h * new_W * real_tile_c;
             }
 #endif
             for (; output_h < new_H; output_h++) {
@@ -145,7 +141,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 #ifdef WITH_PROGRESS_EMBEDDING
                 if (tile_c_offset == initial_n * tile_c && output_h == initial_h) {
                     output_w = initial_w;
-                    output_ptr += initial_w * real_tile_c;
+                    output_offset += initial_w * real_tile_c;
                 }
 #endif
                 for (; output_w < new_W; output_w++) {
@@ -153,14 +149,14 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 #ifdef WITH_PROGRESS_EMBEDDING
                     if (tile_c_offset == initial_n * tile_c && output_h == initial_h && output_w == initial_w) {
                         c = initial_c;
-                        output_ptr += initial_c;
+                        output_offset += initial_c;
                     }
 #endif
                     for (; c < real_tile_c; c++) {
                         int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, output, model);
-                        my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
-                        *output_ptr = max_val;
-                        output_ptr++;
+                        my_printf_debug(NEWLINE "offset=%d" NEWLINE, output_offset);
+                        put_q15_param(output, output_offset, max_val);
+                        output_offset++;
                     }
                 }
             }
@@ -180,7 +176,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 
             if (tile_c_offset == initial_n * tile_c) {
                 c = initial_c;
-                output_ptr += initial_c * new_H * new_W;
+                output_offset += initial_c * new_H * new_W;
             }
 #endif
             for (; c < real_tile_c; c++) {
@@ -188,7 +184,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 #ifdef WITH_PROGRESS_EMBEDDING
                 if (tile_c_offset == initial_n * tile_c && c == initial_c) {
                     output_h = initial_h;
-                    output_ptr += initial_h * new_W;
+                    output_offset += initial_h * new_W;
                 }
 #endif
                 for (; output_h < new_H; output_h++) {
@@ -196,14 +192,14 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 #ifdef WITH_PROGRESS_EMBEDDING
                     if (tile_c_offset == initial_n * tile_c && c == initial_c && output_h == initial_h) {
                         output_w = initial_w;
-                        output_ptr += initial_w;
+                        output_offset += initial_w;
                     }
 #endif
                     for (; output_w < new_W; output_w++) {
                         int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, output, model);
-                        my_printf_debug(NEWLINE "offset=%d" NEWLINE, (uint16_t)(output_ptr - output_baseptr));
-                        *output_ptr = max_val;
-                        output_ptr++;
+                        my_printf_debug(NEWLINE "offset=%d" NEWLINE, output_offset);
+                        put_q15_param(output, output_offset, max_val);
+                        output_offset++;
                     }
                 }
             }
@@ -239,8 +235,8 @@ void handle_add(Model*, ParameterInfo *input[], ParameterInfo *output, uint16_t)
 
     int16_t *buffer_a = lea_buffer,
             *buffer_b = lea_buffer + output->params_len / sizeof(int16_t);
-    my_memcpy(buffer_a, get_q15_param(A, 0), output->params_len);
-    my_memcpy(buffer_b, get_q15_param(B, 0), output->params_len);
+    my_memcpy_from_param(buffer_a, A, 0, output->params_len);
+    my_memcpy_from_param(buffer_b, B, 0, output->params_len);
     int16_t scaleFract;
     uint8_t shift;
     if (A->scale > B->scale) {
@@ -252,7 +248,7 @@ void handle_add(Model*, ParameterInfo *input[], ParameterInfo *output, uint16_t)
     }
     my_add_q15(buffer_a, buffer_b, buffer_a, vector_size);
 
-    my_memcpy(get_q15_param_writable(output, 0), buffer_a, output->params_len);
+    my_memcpy_to_param(output, 0, buffer_a, output->params_len);
 }
 
 void alloc_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
@@ -289,7 +285,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 
     my_fill_q15(0, buffer_matmul, 256);
 
-    my_memcpy(buffer_a, get_q15_param(A, 0), A->dims[0] * A->dims[1] * sizeof(uint16_t));
+    my_memcpy_from_param(buffer_a, A, 0, A->dims[0] * A->dims[1] * sizeof(uint16_t));
 
 #ifdef WITH_PROGRESS_EMBEDDING
     if (get_state_bit(model, A->slot)) {
@@ -304,8 +300,8 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     for (uint16_t i = 0; i < B->dims[0]; i = (uint16_t)(i + step)) {
         uint16_t current_width = (uint16_t)MIN_VAL(step, B->dims[0] - i);
 
-        my_memcpy(buffer_b,
-                  get_q15_param(B, i * B->dims[1]),
+        my_memcpy_from_param(buffer_b,
+                  B, i * B->dims[1],
                   current_width * B->dims[1] * sizeof(uint16_t));
 
         my_printf_debug("strip for A" NEWLINE);
@@ -320,7 +316,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 
         my_add_q15(buffer_matmul, buffer_temp, buffer_matmul, output->params_len / sizeof(int16_t));
     }
-    my_memcpy(get_q15_param_writable(output, 0), buffer_matmul, output->params_len);
+    my_memcpy_to_param(output, 0, buffer_matmul, output->params_len);
 
     my_printf_debug("handle_matmul output" NEWLINE);
     dump_params(model, output);
@@ -348,8 +344,6 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     /* XXX: use LEA? */
     uint16_t bitwidth = X->bitwidth;
     MY_ASSERT(bitwidth == 16);
-    const int16_t *data_baseptr = get_q15_param(X, 0);
-    int16_t *output_baseptr = get_q15_param_writable(output, 0);
     int16_t data_len = X->params_len / (bitwidth / 8);
 
     int16_t threshold = 0, offset = 0;
@@ -366,12 +360,12 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     my_printf_debug("threshold = %d" NEWLINE, threshold);
     my_printf_debug("offset = %d" NEWLINE, offset);
 
-    const int16_t *data_ptr = data_baseptr;
-    int16_t *output_ptr = output_baseptr;
+    uint16_t data_offset = 0;
+    uint16_t output_offset = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
-    data_ptr += first_unfinished_value_offset;
-    output_ptr += first_unfinished_value_offset;
+    data_offset += first_unfinished_value_offset;
+    output_offset += first_unfinished_value_offset;
 #endif
 
     if (X->flags & TRANSPOSED) {
@@ -395,9 +389,9 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
                     int16_t input_tile_c_offset = c % X->tile_c;
                     uint16_t cur_input_tile_c = MIN_VAL(X->tile_c, CHANNEL - input_tile_c_index * X->tile_c);
                     int16_t val_offset = input_tile_c_index * W * H * X->tile_c + output_w * H * cur_input_tile_c + output_h * cur_input_tile_c + input_tile_c_offset;
-                    int16_t val = *(data_baseptr + val_offset);
-                    uint16_t output_offset = output_h * W * CHANNEL + output_w * CHANNEL + c;
-                    *(output_baseptr + output_offset) = MAX_VAL(val, threshold) + offset;
+                    int16_t val = get_q15_param(X, val_offset);
+                    output_offset = output_h * W * CHANNEL + output_w * CHANNEL + c;
+                    put_q15_param(output, output_offset, MAX_VAL(val, threshold) + offset);
                     my_printf_debug(
                         "output_h = %d, output_w = %d, c = %d, offset = %d, input val = %d" NEWLINE,
                         output_h, output_w, c, val_offset, val);
@@ -413,9 +407,9 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         i = first_unfinished_value_offset;
 #endif
         for (; i < data_len; i++) {
-            *output_ptr = MAX_VAL(*data_ptr, threshold) + offset;
-            data_ptr++;
-            output_ptr++;
+            put_q15_param(output, output_offset, MAX_VAL(get_q15_param(X, data_offset), threshold) + offset);
+            data_offset++;
+            output_offset++;
         }
     }
 
@@ -521,18 +515,14 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 
     float scale;
     ParameterInfo *scaled = NULL;
-    const int16_t *scaled_srcptr;
-    int16_t *scaled_dstptr;
     // The one with smaller `scale` (with larger values) is scaled down
     if (A->scale < B->scale) {
         scale = 1.0f * A->scale / B->scale;
         scaled = A;
-        scaled_srcptr = get_q15_param(A, 0);
         output->scale = A->scale = B->scale;
     } else if (A->scale > B->scale) {
         scale = 1.0f * B->scale / A->scale;
         scaled = B;
-        scaled_srcptr = get_q15_param(B, 0);
         output->scale = B->scale = A->scale;
     }
     if (scaled) {
@@ -546,10 +536,9 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         ParameterInfo tmp_param;
         my_memcpy(&tmp_param, scaled, sizeof(struct ParameterInfo));
         tmp_param.slot = new_slot;
-        scaled_dstptr = get_q15_param_writable(&tmp_param, 0);
 
         iterate_chunks(scaled, [&] (uint32_t offset, uint16_t real_chunk_len) {
-            my_memcpy(lea_buffer, scaled_srcptr + offset, real_chunk_len * sizeof(int16_t));
+            my_memcpy_from_param(lea_buffer, scaled, offset, real_chunk_len * sizeof(int16_t));
 #ifdef WITH_PROGRESS_EMBEDDING
             my_offset_q15(lea_buffer, model->state_bit[orig_slot] ? -0x4000 : 0, lea_buffer, real_chunk_len);
 #endif
@@ -557,7 +546,7 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 #ifdef WITH_PROGRESS_EMBEDDING
             my_offset_q15(lea_buffer, old_output_state_bit ? 0 : 0x4000, lea_buffer, real_chunk_len);
 #endif
-            my_memcpy(scaled_dstptr + offset, lea_buffer, real_chunk_len * sizeof(int16_t));
+            my_memcpy_to_param(&tmp_param, offset, lea_buffer, real_chunk_len * sizeof(int16_t));
         });
 
         // XXX: touching nodes is dirty :(
@@ -570,8 +559,9 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     }
 
     // saving slots here as it might be changed during the downscaling loop above
-    output->extra_info[0] = output->slot = A->slot;
-    output->extra_info[1] = B->slot;
+    output->extra_info[0] = A->parameter_info_idx;
+    output->extra_info[1] = B->parameter_info_idx;
+    output->slot = A->slot;
 
     dump_params_nhwc_debug(model, A, 0);
     dump_params_nhwc_debug(model, B, 0);
@@ -599,18 +589,16 @@ void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInf
 
     ParameterInfo *data = input[0];
     uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
-    const int16_t *input_baseptr = get_q15_param(data, 0);
-    int16_t *output_baseptr = get_q15_param_writable(output, 0);
     uint16_t len = H * W;
     for (uint16_t c = 0; c < CHANNEL; c++) {
         uint32_t total = 0;
         for (uint16_t h = 0; h < H; h++) {
             for (uint16_t w = 0; w < W; w++) {
                 // Input is from Conv, which uses NHWC
-                total += input_baseptr[h * W * CHANNEL + w * CHANNEL + c];
+                total += get_q15_param(data, h * W * CHANNEL + w * CHANNEL + c);
             }
         }
-        output_baseptr[c] = total / len;
+        put_q15_param(output, c, total / len);
     }
 
     dump_params(model, output);
@@ -647,7 +635,7 @@ uint16_t find_overflow_factor(Model *model, ParameterInfo *param) {
         int16_t max_val, min_val;
         uint16_t index;
 
-        my_memcpy(lea_buffer, get_q15_param(param, offset), real_chunk_len * sizeof(int16_t));
+        my_memcpy_from_param(lea_buffer, param, offset, real_chunk_len * sizeof(int16_t));
 
         my_max_q15(lea_buffer, real_chunk_len, &max_val, &index);
 #ifdef WITH_PROGRESS_EMBEDDING

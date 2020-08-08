@@ -8,7 +8,7 @@
 #include "data.h"
 #include "debug.h"
 
-static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info, uint16_t node_idx) {
+static void handle_node(Model *model, Node *nodes, uint16_t node_idx) {
     my_printf_debug("Current node: %d, ", node_idx);
 
     /* schedule it */
@@ -22,7 +22,7 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
     for (uint16_t j = 0; j < cur_node->inputs_len; j++) {
         input_id[j] = node_input(cur_node, j);
         my_printf_debug("input_id[%d] = %d ", j, input_id[j]);
-        input[j] = &(parameter_info[input_id[j]]);
+        input[j] = get_parameter_info(input_id[j]);
         if (input[j]->slot == SLOT_TEST_SET) {
             input[j]->params_offset = (model->sample_idx % PLAT_LABELS_DATA_LEN) * input[j]->params_len;
         }
@@ -32,8 +32,10 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
 
     /* Allocate an ParameterInfo for output. Details are filled by
      * individual operation handlers */
-    ParameterInfo *output = &(parameter_info[node_idx + model->n_input]);
+    ParameterInfo *output = get_parameter_info(node_idx + model->n_input);
+    uint16_t parameter_info_idx_saved = output->parameter_info_idx;
     my_memcpy(output, input[0], sizeof(ParameterInfo));
+    output->parameter_info_idx = parameter_info_idx_saved;
     output->params_offset = 0;
     allocators[cur_node->op_type](model, input, output, cur_node->flags);
     my_printf_debug("Needed mem = %d" NEWLINE, output->params_len);
@@ -74,8 +76,7 @@ static void handle_node(Model *model, Node *nodes, ParameterInfo* parameter_info
 
 int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
     Node *nodes = (Node*)(model + 1);
-    ParameterInfo *parameter_info = (ParameterInfo*)(nodes + model->nodes_len);
-    inputs_data = (uint8_t*)(parameter_info + model->nodes_len + model->n_input);
+    inputs_data = reinterpret_cast<uint8_t*>(nodes + model->nodes_len);
 
     my_printf_debug("model->n_input = %d" NEWLINE, model->n_input);
 
@@ -87,7 +88,7 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
             model->slot_users[idx] = -1;
 #ifdef WITH_PROGRESS_EMBEDDING
             model->state_bit[idx] = 0;
-            fill_int16((int16_t*)intermediate_values(idx), INTERMEDIATE_VALUES_SIZE / sizeof(int16_t), 0);
+            fill_int16(idx, 0, INTERMEDIATE_VALUES_SIZE / sizeof(int16_t), 0);
 #endif
         }
         for (uint16_t node_idx = 0; node_idx < model->nodes_len; node_idx++) {
@@ -103,20 +104,20 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
     dump_model(model, nodes);
 
     for (uint16_t node_idx = model->layer_idx; node_idx < model->nodes_len; node_idx++) {
-        handle_node(model, nodes, parameter_info, node_idx);
+        handle_node(model, nodes, node_idx);
         model->layer_idx++;
 
         dump_model(model, nodes);
     }
 
     /* XXX: is the last node always the output node? */
-    ParameterInfo *output_node = &(parameter_info[model->nodes_len + model->n_input - 1]);
+    ParameterInfo *output_node = get_parameter_info(model->nodes_len + model->n_input - 1);
     if (output_node_ptr) {
         *output_node_ptr = output_node;
     }
     int16_t max = INT16_MIN;
     for (uint16_t i = 0; i < output_node->dims[1]; i++) {
-        int16_t val = *get_q15_param(output_node, i);
+        int16_t val = get_q15_param(output_node, i);
         if (val > max) {
             *ansptr = (uint8_t)i;
             max = val;
@@ -196,13 +197,12 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
     } else {
         fill_value = 0;
     }
-    int16_t *output_ptr = get_q15_param_writable(output, 0);
     uint16_t fill_offset = output->params_len / sizeof(int16_t),
              end = INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);
     my_printf_debug("Fill %d", fill_value);
     my_printf_debug(" from %d", fill_offset);
     my_printf_debug(" to %d" NEWLINE, end);
-    fill_int16(output_ptr + fill_offset, end - fill_offset, fill_value);
+    fill_int16(output->slot, fill_offset, end - fill_offset, fill_value);
 
     uint8_t slot_id = output->slot;
     if (model->state_bit[slot_id]) {
@@ -238,10 +238,9 @@ static uint8_t after_recovery = 1;
 
 uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
     // recovery from state bits
-    const int16_t *baseptr = get_q15_param(output, 0);
-    const int16_t *baseptr_end = baseptr + output->params_len / 2;
-    const int16_t *start = baseptr;
-    const int16_t *end = baseptr_end;
+    uint32_t end_offset = output->params_len / 2;
+    uint32_t cur_begin_offset = 0;
+    uint32_t cur_end_offset = end_offset;
     uint8_t new_output_state_bit = get_state_bit(model, output->slot) ? 0 : 1;
     uint32_t first_unfinished_value_offset;
     my_printf_debug("new_output_state_bit = %d" NEWLINE, new_output_state_bit);
@@ -253,30 +252,29 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
         val_info.state = !new_output_state_bit;
         dump_matrix_debug(start, end - start, val_info);
 #endif
-        const int16_t *middle = start + (end - start) / 2;
-        if (middle == start || middle == end) {
-            if (get_value_state_bit(*start) != new_output_state_bit) {
-                first_unfinished_value_offset = start - baseptr;
-            } else if (get_value_state_bit(*end) != new_output_state_bit) {
-                first_unfinished_value_offset = end - baseptr;
-            } else if (end == baseptr_end) {
+        uint32_t middle_offset = cur_begin_offset + (cur_end_offset - cur_begin_offset) / 2;
+        if (middle_offset == 0 || middle_offset == end_offset) {
+            if (get_value_state_bit(get_q15_param(output, cur_begin_offset)) != new_output_state_bit) {
+                first_unfinished_value_offset = 0;
+            } else if (get_value_state_bit(get_q15_param(output, cur_end_offset)) != new_output_state_bit) {
+                first_unfinished_value_offset = end_offset;
+            } else if (cur_end_offset == end_offset) {
                 // all values finished - power failure just before the state
                 // bit for the output is flipped
-                first_unfinished_value_offset = baseptr_end - baseptr;
+                first_unfinished_value_offset = end_offset;
             } else {
                 ERROR_OCCURRED();
             }
             break;
         }
-        if (get_value_state_bit(*middle) == new_output_state_bit) {
-            start = middle;
+        if (get_value_state_bit(get_q15_param(output, middle_offset)) == new_output_state_bit) {
+            cur_begin_offset = middle_offset;
         } else {
-            end = middle;
+            cur_end_offset = middle_offset;
         }
         my_printf_debug(
-            "offset of start = %" PRId32 ", offset of end = %" PRId32 NEWLINE,
-            static_cast<uint32_t>(start - baseptr),
-            static_cast<uint32_t>(end - baseptr)
+            "offset of begin = %" PRId32 ", offset of end = %" PRId32 NEWLINE,
+            cur_begin_offset, cur_end_offset
         );
     }
 
@@ -290,10 +288,10 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
 
 #ifndef MY_NDEBUG
     for (uint32_t idx = 0; idx < first_unfinished_value_offset; idx++) {
-        MY_ASSERT(get_value_state_bit(baseptr[idx]) == new_output_state_bit);
+        MY_ASSERT(get_value_state_bit(get_q15_param(output, idx)) == new_output_state_bit);
     }
     for (uint32_t idx = first_unfinished_value_offset; idx < output->params_len / 2; idx++) {
-        MY_ASSERT(get_value_state_bit(baseptr[idx]) != new_output_state_bit);
+        MY_ASSERT(get_value_state_bit(get_q15_param(output, idx)) != new_output_state_bit);
     }
 #endif
 

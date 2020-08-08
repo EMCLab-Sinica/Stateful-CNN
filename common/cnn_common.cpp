@@ -2,16 +2,21 @@
 #include "debug.h"
 
 uint8_t *inputs_data;
+uint8_t *parameters_info_data;
 
 static int16_t* node_input_ptr(Node *node, size_t i) {
     return (int16_t*)(inputs_data + node->inputs_offset) + i;
+}
+
+ParameterInfo* get_parameter_info(size_t i) {
+    return reinterpret_cast<ParameterInfo*>(parameters_info_data) + i;
 }
 
 int16_t node_input(Node *node, size_t i) {
     return *node_input_ptr(node, i) / 2;
 }
 
-static const uint8_t* get_param_base_pointer(ParameterInfo *param, uint32_t *limit_p) {
+const uint8_t* get_param_base_pointer(ParameterInfo *param, uint32_t *limit_p) {
     uint16_t slot_id = param->slot;
     switch (slot_id) {
         case SLOT_PARAMETERS:
@@ -24,27 +29,27 @@ static const uint8_t* get_param_base_pointer(ParameterInfo *param, uint32_t *lim
             *limit_p = PLAT_SAMPLES_DATA_LEN;
             return samples_data;
         default:
-            *limit_p = INTERMEDIATE_VALUES_SIZE;
-            return intermediate_values(slot_id);
+            ERROR_OCCURRED();
     }
 }
 
-const int16_t* get_q15_param(ParameterInfo *param, size_t i) {
+int16_t get_q15_param(ParameterInfo *param, uint16_t i) {
     MY_ASSERT(param->bitwidth == 16);
-    uint32_t limit;
-    const uint8_t *baseptr = get_param_base_pointer(param, &limit);
-    const int16_t *ret = (int16_t*)(baseptr + param->params_offset) + i;
-    MY_ASSERT((uint8_t*)ret < baseptr + limit);
-    return ret;
+    if (param->slot >= SLOT_CONSTANTS_MIN) {
+        uint32_t limit;
+        const uint8_t *baseptr = get_param_base_pointer(param, &limit);
+        const int16_t *ret = (int16_t*)(baseptr + param->params_offset) + i;
+        MY_ASSERT(param->params_offset + i * sizeof(int16_t) < limit);
+        return *ret;
+    } else {
+        int16_t ret;
+        my_memcpy_from_param(&ret, param, i, sizeof(int16_t));
+        return ret;
+    }
 }
 
-int16_t* get_q15_param_writable(ParameterInfo *param, size_t i) {
-    MY_ASSERT(param->bitwidth == 16);
-    MY_ASSERT(param->slot < SLOT_CONSTANTS_MIN);
-    uint8_t *baseptr = intermediate_values(param->slot);
-    int16_t *ret = reinterpret_cast<int16_t*>(baseptr + param->params_offset) + i;
-    MY_ASSERT(reinterpret_cast<uint8_t*>(ret) < baseptr + INTERMEDIATE_VALUES_SIZE);
-    return ret;
+void put_q15_param(ParameterInfo *param, uint16_t i, int16_t val) {
+    my_memcpy_to_param(param, i, &val, sizeof(int16_t));
 }
 
 int64_t get_int64_param(ParameterInfo *param, size_t i) {
