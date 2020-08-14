@@ -25,6 +25,7 @@ target_include_directories(fake-msp430sdk
 )
 
 if (USE_ARM_CMSIS)
+    # Keep this list in sync with ARM-CMSIS/create_symlinks.sh
     add_library(arm_cmsis_dsp
         ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_add_q15.c
         ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_offset_q15.c
