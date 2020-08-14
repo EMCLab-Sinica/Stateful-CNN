@@ -38,6 +38,7 @@ extern uint8_t dump_integer;
 void dump_value(struct Model *model, struct ParameterInfo *cur_param, size_t offset);
 void dump_matrix(const int16_t *mat, size_t len, const ValueInfo& val_info);
 void dump_params_nhwc(struct Model *model, struct ParameterInfo *cur_param, size_t offset);
+void dump_model(struct Model *model, struct Node *nodes);
 
 #ifndef MY_NDEBUG
 
@@ -46,6 +47,7 @@ void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_i
 #define dump_value_debug dump_value
 #define dump_matrix_debug dump_matrix
 #define dump_params_nhwc_debug dump_params_nhwc
+#define dump_model_debug dump_model
 #define my_printf_debug my_printf
 
 #else
@@ -55,8 +57,8 @@ void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_i
 #define dump_value_debug(...)
 #define dump_matrix_debug(...)
 #define dump_params_nhwc_debug(...)
+#define dump_model_debug(...)
 #define my_printf_debug(...)
 
 #endif
 
-void dump_model(struct Model *model, struct Node *nodes);

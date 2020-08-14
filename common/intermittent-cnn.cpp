@@ -101,13 +101,13 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
 
     counters()->power_counters[counters()->counter_idx]++;
 
-    dump_model(model, nodes);
+    dump_model_debug(model, nodes);
 
     for (uint16_t node_idx = model->layer_idx; node_idx < model->nodes_len; node_idx++) {
         handle_node(model, nodes, node_idx);
         model->layer_idx++;
 
-        dump_model(model, nodes);
+        dump_model_debug(model, nodes);
     }
 
     /* XXX: is the last node always the output node? */

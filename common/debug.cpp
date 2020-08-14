@@ -87,6 +87,26 @@ void dump_params_nhwc(Model *model, ParameterInfo *cur_param, size_t offset) {
     }
 }
 
+void dump_model(Model *model, Node *nodes) {
+    uint16_t i, j;
+    for (i = 0; i < model->nodes_len; i++) {
+        Node *cur_node = &(nodes[i]);
+        if (model->layer_idx > i) {
+            my_printf("scheduled     ");
+        } else {
+            my_printf("not scheduled ");
+        }
+        my_printf("(");
+        for (j = 0; j < cur_node->inputs_len; j++) {
+            my_printf("%d", node_input(cur_node, j));
+            if (j != cur_node->inputs_len - 1) {
+                my_printf(", ");
+            }
+        }
+        my_printf(")" NEWLINE);
+    }
+}
+
 #ifndef MY_NDEBUG
 
 static void check_params_len(ParameterInfo *cur_param) {
@@ -145,29 +165,5 @@ void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_i
     }
     my_printf(NEWLINE);
 }
-
-void dump_model(Model *model, Node *nodes) {
-    uint16_t i, j;
-    for (i = 0; i < model->nodes_len; i++) {
-        Node *cur_node = &(nodes[i]);
-        if (model->layer_idx > i) {
-            my_printf("scheduled     ");
-        } else {
-            my_printf("not scheduled ");
-        }
-        my_printf("(");
-        for (j = 0; j < cur_node->inputs_len; j++) {
-            my_printf("%d", node_input(cur_node, j));
-            if (j != cur_node->inputs_len - 1) {
-                my_printf(", ");
-            }
-        }
-        my_printf(")" NEWLINE);
-    }
-}
-
-#else
-
-void dump_model(Model*, Node*) {}
 
 #endif
