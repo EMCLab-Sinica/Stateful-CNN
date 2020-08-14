@@ -7,6 +7,7 @@
 #endif
 #include <stdint.h>
 #include <string.h>
+#include "Tools/ext_fram/extfram.h"
 #include "intermittent-cnn.h"
 #include "cnn_common.h"
 #include "platform.h"
@@ -15,18 +16,21 @@
 
 /* on FRAM */
 
-//#define EXTERNAL_FRAM
+#define EXTERNAL_FRAM
 
 #ifdef EXTERNAL_FRAM
-// TODO
-static uint8_t *_intermediate_values;
+static uint32_t intermediate_values_offset(uint8_t slot_id) {
+    // Currently only intermediate values are on external FRAM, so starting
+    // from FRAM address 0.
+    return 0 + slot_id * INTERMEDIATE_VALUES_SIZE;
+}
 #else
 #pragma DATA_SECTION(".nvm2")
 static uint8_t _intermediate_values[NUM_SLOTS][INTERMEDIATE_VALUES_SIZE];
-#endif
-uint8_t *intermediate_values(uint8_t slot_id) {
+static uint8_t *intermediate_values(uint8_t slot_id) {
     return _intermediate_values[slot_id];
 }
+#endif
 
 Counters *counters() {
     return (Counters*)counters_data;
@@ -71,12 +75,6 @@ void TA0_N_IRQHandler(void)
     counters()->time_counters[counters()->counter_idx]++;
 }
 
-#ifdef __MSP432__
-// For DMA on MSP432
-#pragma DATA_ALIGN(1024)
-uint8_t controlTable[1024];
-#endif
-
 void setOutputValue(uint8_t value)
 {
     if (value) {
@@ -117,14 +115,45 @@ void my_memcpy(void* dest, const void* src, size_t n) {
         const_cast<void*>(src), dest,
         n >> 1 // transfer size in items
     );
+    curDMATransmitChannelNum = 0;
     MAP_DMA_enableChannel(0);
     MAP_DMA_requestSoftwareTransfer(0);
     while (MAP_DMA_isChannelEnabled(0)) {}
 #endif
 }
 
+// XXX: consolidate common code between POSIX and MSP430
+void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, const void *src, size_t n) {
+#ifdef EXTERNAL_FRAM
+    SPI_ADDR addr;
+    addr.L = intermediate_values_offset(param->slot) + offset_in_word * sizeof(int16_t);
+    SPI_WRITE(&addr, reinterpret_cast<const uint8_t*>(src), n);
+#else
+#error "TODO"
+#endif
+}
+
+void my_memcpy_from_param(void *dest, struct ParameterInfo *param, uint16_t offset_in_word, size_t n) {
+    if (param->slot >= SLOT_CONSTANTS_MIN) {
+        uint32_t limit;
+        const uint8_t *baseptr = get_param_base_pointer(param, &limit);
+        uint32_t total_offset = param->params_offset + offset_in_word * sizeof(int16_t);
+        MY_ASSERT(total_offset + n <= limit);
+        my_memcpy(dest, baseptr + total_offset, n);
+    } else {
+#ifdef EXTERNAL_FRAM
+        SPI_ADDR addr;
+        addr.L = intermediate_values_offset(param->slot) + offset_in_word * sizeof(int16_t);
+        SPI_READ(&addr, reinterpret_cast<uint8_t*>(dest), n);
+#else
+#error "TODO"
+#endif
+    }
+}
+
 // broken if n has type size_t
-void fill_int16(int16_t *dest, uint16_t n, int16_t val) {
+void fill_int16(uint8_t slot, uint16_t offset, uint16_t n, int16_t val) {
+#ifndef EXTERNAL_FRAM
 #ifdef __MSP430__
     DMA_init(&dma_params);
     DMA_setSrcAddress(MY_DMA_CHANNEL, (uint32_t)&val, DMA_DIRECTION_UNCHANGED);
@@ -149,10 +178,14 @@ void fill_int16(int16_t *dest, uint16_t n, int16_t val) {
             DMA_CH0_RESERVED0 | UDMA_PRI_SELECT, UDMA_MODE_AUTO,
             &val, dest + transfer_offset, MIN_VAL(1024, n - transfer_offset)
         );
+        curDMATransmitChannelNum = 0;
         MAP_DMA_enableChannel(0);
         MAP_DMA_requestSoftwareTransfer(0);
         while (MAP_DMA_isChannelEnabled(0)) {}
     }
+#endif
+#else
+    ERROR_OCCURRED(); // TODO
 #endif
 }
 
@@ -177,6 +210,11 @@ static uint32_t delay_counter;
 
 void IntermittentCNNTest() {
     Model *model = (Model*)model_data;
+
+#ifdef EXTERNAL_FRAM
+    initSPI();
+    // testSPI();
+#endif
 
     if (myFirstTime != 1) {
 #if DELAY_START_SECONDS > 0
@@ -217,11 +255,3 @@ void button_pushed(void) {
     }
     push_counter++;
 }
-
-#ifdef __MSP432__
-
-extern "C" void DMA_INT1_IRQHandler(void) {
-    MAP_DMA_disableChannel(0);
-}
-
-#endif

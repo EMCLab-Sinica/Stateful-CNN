@@ -15,7 +15,5 @@ void main(void)
     setFrequency(FreqLevel);
     uartinit();
 
-    while(1) {}
-
     IntermittentCNNTest();
 }

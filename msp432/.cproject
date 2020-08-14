@@ -79,7 +79,7 @@
 								<option id="com.ti.ccstudio.buildDefinitions.MSP432_GNU_9.0.linkerID.OUTPUT_FILE.1474882655" name="Output file (-o)" superClass="com.ti.ccstudio.buildDefinitions.MSP432_GNU_9.0.linkerID.OUTPUT_FILE" value="${ProjName}.out" valueType="string"/>
 								<option id="com.ti.ccstudio.buildDefinitions.MSP432_GNU_9.0.linkerID.MAP_FILE.20271074" name="Write a map file (-Map)" superClass="com.ti.ccstudio.buildDefinitions.MSP432_GNU_9.0.linkerID.MAP_FILE" value="${ProjName}.map" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.ti.ccstudio.buildDefinitions.MSP432_GNU_9.0.linkerID.LIBRARY.570316691" name="Libraries (-l, --library)" superClass="com.ti.ccstudio.buildDefinitions.MSP432_GNU_9.0.linkerID.LIBRARY" valueType="libs">
-									<listOptionValue builtIn="false" value="c"/>
+									<listOptionValue builtIn="false" value="c_nano"/>
 								</option>
 								<inputType id="com.ti.ccstudio.buildDefinitions.MSP432_GNU_9.0.exeLinker.inputType__CMD_SRCS.1683061491" name="Linker Command Files" superClass="com.ti.ccstudio.buildDefinitions.MSP432_GNU_9.0.exeLinker.inputType__CMD_SRCS"/>
 								<inputType id="com.ti.ccstudio.buildDefinitions.MSP432_GNU_9.0.exeLinker.inputType__CMD2_SRCS.486498849" name="Linker Command Files" superClass="com.ti.ccstudio.buildDefinitions.MSP432_GNU_9.0.exeLinker.inputType__CMD2_SRCS"/>
