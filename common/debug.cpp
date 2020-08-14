@@ -50,6 +50,17 @@ void dump_matrix(const int16_t *mat, size_t len, const ValueInfo& val_info) {
     my_printf(NEWLINE);
 }
 
+void dump_matrix(ParameterInfo *param, uint16_t offset, uint16_t len, const ValueInfo& val_info) {
+    my_printf("Scale: %d" NEWLINE, val_info.scale);
+    for (size_t j = 0; j < len; j++) {
+        print_q15(get_q15_param(param, offset + j), val_info);
+        if (j && (j % 16 == 15)) {
+            my_printf(NEWLINE);
+        }
+    }
+    my_printf(NEWLINE);
+}
+
 void dump_params_nhwc(Model *model, ParameterInfo *cur_param, size_t offset) {
     uint16_t NUM, H, W, CHANNEL;
     // tensor

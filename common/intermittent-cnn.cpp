@@ -250,10 +250,9 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
         ValueInfo val_info;
         val_info.scale = output->scale;
         val_info.state = !new_output_state_bit;
-        dump_matrix_debug(start, end - start, val_info);
+        dump_matrix_debug(output, cur_begin_offset, cur_end_offset - cur_begin_offset, val_info);
 #endif
-        uint32_t middle_offset = cur_begin_offset + (cur_end_offset - cur_begin_offset) / 2;
-        if (middle_offset == 0 || middle_offset == end_offset) {
+        if (cur_end_offset - cur_begin_offset <= 1) {
             if (get_value_state_bit(get_q15_param(output, cur_begin_offset)) != new_output_state_bit) {
                 first_unfinished_value_offset = 0;
             } else if (get_value_state_bit(get_q15_param(output, cur_end_offset)) != new_output_state_bit) {
@@ -267,6 +266,7 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
             }
             break;
         }
+        uint32_t middle_offset = cur_begin_offset + (cur_end_offset - cur_begin_offset) / 2;
         if (get_value_state_bit(get_q15_param(output, middle_offset)) == new_output_state_bit) {
             cur_begin_offset = middle_offset;
         } else {

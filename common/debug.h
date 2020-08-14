@@ -37,6 +37,7 @@ extern uint8_t dump_integer;
 
 void dump_value(struct Model *model, struct ParameterInfo *cur_param, size_t offset);
 void dump_matrix(const int16_t *mat, size_t len, const ValueInfo& val_info);
+void dump_matrix(ParameterInfo *param, uint16_t offset, uint16_t len, const ValueInfo& val_info);
 void dump_params_nhwc(struct Model *model, struct ParameterInfo *cur_param, size_t offset);
 void dump_model(struct Model *model, struct Node *nodes);
 
