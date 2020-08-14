@@ -25,7 +25,7 @@
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
 const uint8_t *parameters_data, *parameters2_data, *samples_data, *labels_data;
-uint8_t *model_data;
+uint8_t *model_data, *parameters_info_data;
 uint16_t dma_invocations[COUNTERS_LEN];
 uint16_t dma_bytes[COUNTERS_LEN];
 

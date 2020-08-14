@@ -2,7 +2,6 @@
 #include "debug.h"
 
 uint8_t *inputs_data;
-uint8_t *parameters_info_data;
 
 static int16_t* node_input_ptr(Node *node, size_t i) {
     return (int16_t*)(inputs_data + node->inputs_offset) + i;
