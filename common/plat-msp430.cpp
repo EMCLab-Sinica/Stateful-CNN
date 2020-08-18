@@ -152,7 +152,7 @@ void my_memcpy_from_param(void *dest, struct ParameterInfo *param, uint16_t offs
 }
 
 // broken if n has type size_t
-void fill_int16(uint8_t slot, uint16_t offset, uint16_t n, int16_t val) {
+void fill_int16(uint8_t slot, uint16_t offset_in_word, uint16_t n, int16_t val) {
 #ifndef EXTERNAL_FRAM
 #ifdef __MSP430__
     DMA_init(&dma_params);
@@ -185,7 +185,9 @@ void fill_int16(uint8_t slot, uint16_t offset, uint16_t n, int16_t val) {
     }
 #endif
 #else
-    ERROR_OCCURRED(); // TODO
+    SPI_ADDR addr;
+    addr.L = intermediate_values_offset(slot) + offset_in_word * sizeof(int16_t);
+    SPI_FILL_Q15(&addr, val, n);
 #endif
 }
 
