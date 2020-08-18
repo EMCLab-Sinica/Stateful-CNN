@@ -431,7 +431,7 @@ void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output,
     output->params_len = data->params_len;
     output->bitwidth = data->bitwidth;
     output->slot = data->slot;
-    model->slot_users[output->slot] = model->layer_idx;
+    get_slot_info(output->slot)->user = model->layer_idx;
     MY_ASSERT(shape->bitwidth == 64);
     /*
      * At most one dimension of the new shape can be -1. In this case, the
@@ -479,7 +479,7 @@ void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output,
     output->params_len = data->params_len;
     output->bitwidth = data->bitwidth;
     output->slot = data->slot;
-    model->slot_users[output->slot] = model->layer_idx;
+    get_slot_info(output->slot)->user = model->layer_idx;
     for (uint8_t i = 0, j = 0; i < 4; i++) {
         if (input[0]->dims[i] != 1) {
             output->dims[j] = input[0]->dims[i];
@@ -540,7 +540,7 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         iterate_chunks(scaled, [&] (uint32_t offset, uint16_t real_chunk_len) {
             my_memcpy_from_param(lea_buffer, scaled, offset, real_chunk_len * sizeof(int16_t));
 #ifdef WITH_PROGRESS_EMBEDDING
-            my_offset_q15(lea_buffer, model->state_bit[orig_slot] ? -0x4000 : 0, lea_buffer, real_chunk_len);
+            my_offset_q15(lea_buffer, get_slot_info(orig_slot)->state_bit ? -0x4000 : 0, lea_buffer, real_chunk_len);
 #endif
             my_scale_q15(lea_buffer, scale * 32768, 0, lea_buffer, real_chunk_len);
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -551,7 +551,7 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 
         // XXX: touching nodes is dirty :(
         Node *nodes = (Node*)(model + 1);
-        nodes[model->slot_users[scaled->slot]].max_output_id |= MAX_OUTPUT_ID_INVALID; // no longer used
+        nodes[get_slot_info(output->slot)->user].max_output_id |= MAX_OUTPUT_ID_INVALID; // no longer used
         scaled->slot = new_slot;
 #ifdef WITH_PROGRESS_EMBEDDING
         flip_state_bit(model, scaled);

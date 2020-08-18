@@ -32,6 +32,8 @@ class Constants:
     # To make the Node struct exactly 64 bytes
     NODE_NAME_LEN = 54
     MAX_OUTPUT_ID_INVALID = 0x8000
+    EXTRA_INFO_LEN = 3  # for memory alignment
+    TURNING_POINTS_LEN = 4
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
@@ -302,6 +304,7 @@ outputs = {
     'parameters2': io.BytesIO(),
     'samples': io.BytesIO(),
     'model': io.BytesIO(),
+    'slots_info': io.BytesIO(),
     'parameters_info': io.BytesIO(),
     'labels': io.BytesIO(),
     'counters': io.BytesIO(),
@@ -312,12 +315,15 @@ outputs['model'].write(to_bytes(n_input))
 outputs['model'].write(to_bytes(0))  # Model.running
 outputs['model'].write(to_bytes(0))  # Model.recovery
 outputs['model'].write(to_bytes(0))  # Model.run_counter
-for _ in range(config['num_slots']):
-    outputs['model'].write(to_bytes(0))  # Model.state_bit
-for _ in range(config['num_slots']):
-    outputs['model'].write(to_bytes(-1))  # Model.slot_users
 outputs['model'].write(to_bytes(0))  # Model.layer_idx
 outputs['model'].write(to_bytes(0))  # Model.sample_idx
+
+for _ in range(config['num_slots']):
+    outputs['slots_info'].write(to_bytes(0))        # SlotInfo.state_bit
+    outputs['slots_info'].write(to_bytes(0))        # SlotInfo.n_turning_points
+    for __ in range(Constants.TURNING_POINTS_LEN):
+        outputs['slots_info'].write(to_bytes(-1))   # SlotInfo.turning_points
+    outputs['slots_info'].write(to_bytes(-1))       # SlotInfo.user
 
 @dataclasses.dataclass
 class ParametersSlot:
@@ -412,7 +418,7 @@ for params in parameters:
 
     # common to input and non-inputs
     outputs['parameters_info'].write(to_bytes(0, size=8))                 # flags
-    for _ in range(3):
+    for _ in range(Constants.EXTRA_INFO_LEN):
         outputs['parameters_info'].write(to_bytes(0, size=8))             # extra_info
     outputs['parameters_info'].write(to_bytes(config['scale']))           # scale
     outputs['parameters_info'].write(to_bytes(parameter_info_idx))        # parameter_info_idx
@@ -428,7 +434,7 @@ for idx, n in enumerate(nodes):
     for _ in range(4):  # dims[4]
         outputs['parameters_info'].write(to_bytes(0))
     outputs['parameters_info'].write(to_bytes(0, size=8))     # flags
-    for _ in range(3):
+    for _ in range(Constants.EXTRA_INFO_LEN):
         outputs['parameters_info'].write(to_bytes(0, size=8)) # extra_info
     outputs['parameters_info'].write(to_bytes(config['scale']))   # scale
     outputs['parameters_info'].write(to_bytes(parameter_info_idx))             # parameter_info_idx
@@ -515,7 +521,7 @@ struct Model;
     for op in keys:
         if ops[op][1]:
             output_c.write(f'void alloc_{op.lower()}(Model *model, ParameterInfo *[], struct ParameterInfo *output, uint16_t) {{\n')
-            output_c.write('    model->slot_users[output->slot] = model->layer_idx;\n')
+            output_c.write('    get_slot_info(output->slot)->user = model->layer_idx;\n')
             output_c.write('}\n')
 
     # data
@@ -555,10 +561,10 @@ extern {const_qualifier}uint8_t *{var_name};
     for var_name, data_obj in outputs.items():
         if var_name in ('samples', 'labels'):
             continue
-        var_name += '_data'
+        full_var_name = var_name + '_data'
         data_obj.seek(0)
-        define_var(var_name, data_obj.read(),
-                   will_modify=var_name in ('model_data', 'parameters_info_data', 'counters_data'))
+        define_var(full_var_name, data_obj.read(),
+                   will_modify=var_name in ('model', 'slots_info', 'parameters_info', 'counters'))
 
     outputs['samples'].seek(0)
     samples_data = outputs['samples'].read()

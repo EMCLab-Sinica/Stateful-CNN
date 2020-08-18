@@ -43,7 +43,7 @@ typedef struct ParameterInfo {
     // uint8_t is not enough. For example, fully connected layer in MNIST has dims 256x1
     uint16_t dims[4];
     uint8_t flags;
-    uint8_t extra_info[3];
+    uint8_t extra_info[EXTRA_INFO_LEN];
     // use signed type for scale as TI's compiler does not handle
     // multiplication/division with mixed signed and unsigned numbers correctly
     int16_t scale;
@@ -58,17 +58,24 @@ typedef struct Model {
     uint16_t running;
     uint16_t recovery;
     uint16_t run_counter;
-#ifdef WITH_PROGRESS_EMBEDDING
-    uint16_t state_bit[NUM_SLOTS];
-#else
-    uint16_t dummy[NUM_SLOTS];
-#endif
-    int16_t slot_users[NUM_SLOTS];
     uint16_t layer_idx;
     uint16_t sample_idx;
 } Model;
 
-static_assert(sizeof(Model) == 14 + NUM_SLOTS * 4, "Unexpected size for Model");
+static_assert(sizeof(Model) == 14, "Unexpected size for Model");
+
+typedef struct SlotInfo {
+#ifdef WITH_PROGRESS_EMBEDDING
+    uint16_t state_bit;
+    uint16_t n_turning_points;
+    uint16_t turning_points[TURNING_POINTS_LEN];
+#else
+    uint8_t dummy[4 + 2 * TURNING_POINTS_LEN];
+#endif
+    int16_t user;
+} SlotInfo;
+
+static_assert(sizeof(SlotInfo) == 6 + TURNING_POINTS_LEN * 2, "Unexpected size for SlotInfo");
 
 typedef struct {
     uint16_t time_counters[COUNTERS_LEN];
@@ -122,6 +129,7 @@ int64_t get_int64_param(ParameterInfo *param, size_t i);
 int16_t node_input(Node *node, size_t i);
 uint16_t get_next_slot(Model *model, ParameterInfo *param);
 ParameterInfo* get_parameter_info(size_t i);
+SlotInfo * get_slot_info(uint8_t i);
 
 /**********************************
  *       Operation handlers       *

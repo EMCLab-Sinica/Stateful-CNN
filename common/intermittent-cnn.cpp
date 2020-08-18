@@ -44,13 +44,13 @@ static void handle_node(Model *model, Node *nodes, uint16_t node_idx) {
     }
 
 #ifdef WITH_PROGRESS_EMBEDDING
-    my_printf_debug("State bit=%d" NEWLINE, get_state_bit(model, output->slot));
+    my_printf_debug("Old output state bit=%d" NEWLINE, get_state_bit(model, output->slot));
 #endif
     handlers[cur_node->op_type](model, input, output, cur_node->flags);
     // For some operations (e.g., ConvMerge), scale is determined in the handlers
     my_printf_debug("Scale = %d" NEWLINE, output->scale);
 #ifdef WITH_PROGRESS_EMBEDDING
-    my_printf_debug("State bit=%d" NEWLINE, get_state_bit(model, output->slot));
+    my_printf_debug("New output state bit=%d" NEWLINE, get_state_bit(model, output->slot));
 #endif
 
     counters()->counter_idx++;
@@ -85,9 +85,10 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
         // reset model
         model->layer_idx = 0;
         for (uint8_t idx = 0; idx < NUM_SLOTS; idx++) {
-            model->slot_users[idx] = -1;
+            SlotInfo *cur_slot_info = get_slot_info(idx);
+            cur_slot_info->user = -1;
 #ifdef WITH_PROGRESS_EMBEDDING
-            model->state_bit[idx] = 0;
+            cur_slot_info->state_bit = 0;
             fill_int16(idx, 0, INTERMEDIATE_VALUES_SIZE / sizeof(int16_t), 0);
 #endif
         }
@@ -201,12 +202,58 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
     my_printf_debug(" to %d" NEWLINE, end);
     fill_int16(output->slot, fill_offset, end - fill_offset, fill_value);
 
-    uint8_t slot_id = output->slot;
-    if (model->state_bit[slot_id]) {
-        model->state_bit[slot_id] = 0;
+    int16_t new_turning_point = output->params_len / 2;
+    SlotInfo *cur_slot_info = get_slot_info(output->slot);
+    if (cur_slot_info->n_turning_points == 0) {
+        cur_slot_info->n_turning_points = 1;
+        cur_slot_info->turning_points[0] = new_turning_point;
     } else {
-        model->state_bit[slot_id] = 1;
+        // XXX: better way than copying the array?
+        for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
+            if (new_turning_point < cur_slot_info->turning_points[idx]) {
+                uint8_t new_turning_point_idx = idx;
+                cur_slot_info->n_turning_points++;
+                MY_ASSERT(cur_slot_info->n_turning_points <= TURNING_POINTS_LEN);
+                for (uint8_t idx2 = cur_slot_info->n_turning_points - 1; idx2 > new_turning_point_idx; idx2--) {
+                    cur_slot_info->turning_points[idx2] = cur_slot_info->turning_points[idx2 - 1];
+                }
+                cur_slot_info->turning_points[new_turning_point_idx] = new_turning_point;
+                break;
+            } else if (new_turning_point == cur_slot_info->turning_points[idx]) {
+                cur_slot_info->n_turning_points--;
+                for (uint8_t idx2 = idx; idx2 < cur_slot_info->n_turning_points; idx2++) {
+                    cur_slot_info->turning_points[idx2] = cur_slot_info->turning_points[idx2 + 1];
+                }
+            }
+        }
     }
+
+    my_printf_debug("%d turning point(s) for slot %d: ", cur_slot_info->n_turning_points, output->slot);
+    for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
+        my_printf_debug("%d ", cur_slot_info->turning_points[idx]);
+    }
+    my_printf_debug(NEWLINE);
+
+    cur_slot_info->state_bit ^= 1;
+
+#ifndef MY_NDEBUG
+    uint8_t cur_state_bit = get_state_bit(model, output->slot);
+    uint8_t turning_point_idx = 0;
+    uint16_t next_turning_point = -1;
+    if (turning_point_idx < cur_slot_info->n_turning_points) {
+        next_turning_point = cur_slot_info->turning_points[turning_point_idx];
+    }
+    for (uint32_t idx = 0; idx < INTERMEDIATE_VALUES_SIZE / sizeof(int16_t); idx++) {
+        if (idx == next_turning_point) {
+            cur_state_bit ^= 1;
+            turning_point_idx++;
+            if (turning_point_idx < cur_slot_info->n_turning_points) {
+                next_turning_point = cur_slot_info->turning_points[turning_point_idx];
+            }
+        }
+        MY_ASSERT(get_value_state_bit(get_q15_param(output, idx)) == cur_state_bit);
+    }
+#endif
 }
 
 uint8_t get_state_bit(Model *model, uint8_t slot_id) {
@@ -216,7 +263,7 @@ uint8_t get_state_bit(Model *model, uint8_t slot_id) {
         case SLOT_TEST_SET:
             return 0;
         default:
-            return model->state_bit[slot_id];
+            return get_slot_info(slot_id)->state_bit;
     }
 }
 
@@ -230,6 +277,19 @@ uint8_t get_value_state_bit(int16_t val) {
     }
 }
 
+static uint8_t new_output_state_bit(Model *model, ParameterInfo *param, uint16_t offset) {
+    uint8_t ret = get_state_bit(model, param->slot) ^ 1;
+    SlotInfo *cur_slot_info = get_slot_info(param->slot);
+    for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
+        if (offset >= cur_slot_info->turning_points[idx]) {
+            ret = ret ^ 1;
+        } else {
+            break;
+        }
+    }
+    return ret;
+}
+
 // XXX: run recovery only once for each power cycle
 static uint8_t after_recovery = 1;
 
@@ -238,22 +298,21 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
     uint32_t end_offset = output->params_len / 2;
     uint32_t cur_begin_offset = 0;
     uint32_t cur_end_offset = end_offset;
-    uint8_t new_output_state_bit = get_state_bit(model, output->slot) ? 0 : 1;
     uint32_t first_unfinished_value_offset;
-    my_printf_debug("new_output_state_bit = %d" NEWLINE, new_output_state_bit);
+    my_printf_debug("new_output_state_bit for first value = %d" NEWLINE, new_output_state_bit(model, output, 0));
 
     while (1) {
-#if 0
+#if 1
         ValueInfo val_info;
         val_info.scale = output->scale;
-        val_info.state = !new_output_state_bit;
+        val_info.state = 0; // TODO
         dump_matrix_debug(output, cur_begin_offset, cur_end_offset - cur_begin_offset, val_info);
 #endif
         if (cur_end_offset - cur_begin_offset <= 1) {
-            if (get_value_state_bit(get_q15_param(output, cur_begin_offset)) != new_output_state_bit) {
+            if (get_value_state_bit(get_q15_param(output, cur_begin_offset)) != new_output_state_bit(model, output, cur_begin_offset)) {
                 first_unfinished_value_offset = 0;
-            } else if (get_value_state_bit(get_q15_param(output, cur_end_offset)) != new_output_state_bit) {
-                first_unfinished_value_offset = end_offset;
+            } else if (get_value_state_bit(get_q15_param(output, cur_end_offset)) != new_output_state_bit(model, output, cur_end_offset)) {
+                first_unfinished_value_offset = cur_end_offset;
             } else if (cur_end_offset == end_offset) {
                 // all values finished - power failure just before the state
                 // bit for the output is flipped
@@ -264,7 +323,7 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
             break;
         }
         uint32_t middle_offset = cur_begin_offset + (cur_end_offset - cur_begin_offset) / 2;
-        if (get_value_state_bit(get_q15_param(output, middle_offset)) == new_output_state_bit) {
+        if (get_value_state_bit(get_q15_param(output, middle_offset)) == new_output_state_bit(model, output, middle_offset)) {
             cur_begin_offset = middle_offset;
         } else {
             cur_end_offset = middle_offset;
@@ -285,10 +344,10 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
 
 #ifndef MY_NDEBUG
     for (uint32_t idx = 0; idx < first_unfinished_value_offset; idx++) {
-        MY_ASSERT(get_value_state_bit(get_q15_param(output, idx)) == new_output_state_bit);
+        MY_ASSERT(get_value_state_bit(get_q15_param(output, idx)) == new_output_state_bit(model, output, idx));
     }
     for (uint32_t idx = first_unfinished_value_offset; idx < output->params_len / 2; idx++) {
-        MY_ASSERT(get_value_state_bit(get_q15_param(output, idx)) != new_output_state_bit);
+        MY_ASSERT(get_value_state_bit(get_q15_param(output, idx)) != new_output_state_bit(model, output, idx));
     }
 #endif
 
