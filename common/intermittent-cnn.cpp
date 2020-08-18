@@ -128,10 +128,7 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
 }
 
 void print_results(Model *model, ParameterInfo *output_node) {
-    for (uint16_t i = 0; i < output_node->dims[1]; i++) {
-        dump_value(model, output_node, i);
-    }
-    my_printf(NEWLINE);
+    dump_params(model, output_node);
 
     my_printf("ticks: ");
     for (uint8_t i = 0; i < counters()->counter_idx; i++) {

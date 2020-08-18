@@ -118,8 +118,6 @@ void dump_model(Model *model, Node *nodes) {
     }
 }
 
-#ifndef MY_NDEBUG
-
 static void check_params_len(ParameterInfo *cur_param) {
     uint32_t expected_params_len = sizeof(int16_t);
     for (uint8_t i = 0; i < 4; i++) {
@@ -165,6 +163,8 @@ void dump_params(Model *model, ParameterInfo *cur_param) {
         my_printf(NEWLINE);
     }
 }
+
+#ifndef MY_NDEBUG
 
 void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_info) {
     my_printf("Scale: %d" NEWLINE, val_info.scale);

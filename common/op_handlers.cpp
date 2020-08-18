@@ -92,7 +92,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     ParameterInfo *data = input[0];
 
     my_printf_debug("handle_maxpool input" NEWLINE);
-    dump_params(model, data);
+    dump_params_debug(model, data);
 
     const uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
     uint16_t new_H = H / stride;
@@ -214,7 +214,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     if (!need_nhwc2nchw) {
         dump_params_nhwc_debug(model, output, 0);
     } else if (tile_c == CHANNEL) {
-        dump_params(model, output);
+        dump_params_debug(model, output);
     }
 }
 
@@ -268,9 +268,9 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     ParameterInfo *A = input[0], *B = input[1];
 
     my_printf_debug("handle_matmul inputs" NEWLINE);
-    // dump_params(model, A);
+    // dump_params_debug(model, A);
     my_printf_debug("B" NEWLINE);
-    dump_params(model, B);
+    dump_params_debug(model, B);
     my_printf_debug("MatMul! A: (%dx%d), B: (%dx%d)" NEWLINE,
               A->dims[0], A->dims[1], B->dims[0], B->dims[1]);
 
@@ -319,7 +319,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     my_memcpy_to_param(output, 0, buffer_matmul, output->params_len);
 
     my_printf_debug("handle_matmul output" NEWLINE);
-    dump_params(model, output);
+    dump_params_debug(model, output);
 
 #ifdef WITH_PROGRESS_EMBEDDING
     flip_state_bit(model, output);
@@ -601,7 +601,7 @@ void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInf
         put_q15_param(output, c, total / len);
     }
 
-    dump_params(model, output);
+    dump_params_debug(model, output);
 }
 
 void handle_softmax(Model*, ParameterInfo*[], ParameterInfo*, uint16_t) {
@@ -636,6 +636,8 @@ uint16_t find_overflow_factor(Model *model, ParameterInfo *param) {
         uint16_t index;
 
         my_memcpy_from_param(lea_buffer, param, offset, real_chunk_len * sizeof(int16_t));
+
+        // dump_matrix(lea_buffer, real_chunk_len, ValueInfo(param));
 
         my_max_q15(lea_buffer, real_chunk_len, &max_val, &index);
 #ifdef WITH_PROGRESS_EMBEDDING
