@@ -2,3 +2,6 @@
 	path = data/SqueezeNet_vs_CIFAR10
 	url = https://github.com/yan12125/SqueezeNet_vs_CIFAR10
 	ignore = untracked
+[submodule "Tools"]
+	path = Tools
+	url = ssh://git@github.com/EMCLab-Sinica/Tools.git
