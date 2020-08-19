@@ -67,12 +67,15 @@ __interrupt void DMA_ISR(void)
 #pragma vector=configTICK_VECTOR
 __interrupt void vTimerHandler( void )
 #elif defined(__MSP432__)
-void TA0_N_IRQHandler(void)
+extern "C" void TA1_0_IRQHandler(void)
 #endif
 {
     // one tick is configured as roughly 1 millisecond
     // See vApplicationSetupTimerInterrupt() in main.h and FreeRTOSConfig.h
     counters()->time_counters[counters()->counter_idx]++;
+#ifdef __MSP432__
+    MAP_Timer_A_clearCaptureCompareInterrupt(TIMER_A1_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_0);
+#endif
 }
 
 void setOutputValue(uint8_t value)
