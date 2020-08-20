@@ -57,6 +57,8 @@ typedef struct ConvTaskParams {
     uint8_t truncated;
 #ifdef WITH_PROGRESS_EMBEDDING
     uint8_t old_output_state_bit;
+    uint8_t turning_point_idx;
+    int16_t next_turning_point;
 #endif
 
     uint16_t conv_idx;
@@ -101,6 +103,22 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     uint16_t cur_output_tile_c = MIN_VAL(conv_params->output->tile_c, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
     MY_ASSERT(cur_output_tile_c);
 
+    // use NWHC so that output is written continuously on the address space
+    int16_t cur_output_data_offset =
+            conv_params->OUTPUT_W * conv_params->OUTPUT_H * (conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL + conv_params->conv_idx_base) +   // n
+            conv_params->input_w / conv_params->stride * conv_params->OUTPUT_H * cur_output_tile_c +     // w
+            (conv_params->input_h + offset_h) / conv_params->stride * cur_output_tile_c +                // h
+            conv_params->conv_idx - conv_params->conv_idx_base;                                          // c
+
+#ifdef WITH_PROGRESS_EMBEDDING
+    int16_t n_keep_state_bits = cur_output_tile_c;
+    uint8_t need_cleanup_state_bits = 0;
+    if (conv_params->next_turning_point > 0) {
+        n_keep_state_bits -= MAX_VAL(0, cur_output_data_offset + cur_output_tile_c - conv_params->next_turning_point);
+    }
+    my_printf_debug("n_keep_state_bits = %d" NEWLINE, n_keep_state_bits);
+#endif
+
     /* copy filter data */
     if (conv_params->cached_filter_idx != conv_params->conv_idx || conv_params->cached_input_tile_c_offset != conv_params->input_tile_c_offset) {
         conv_params->filter_buffer_addr = matrix_mpy_results - conv_params->filter_offset * (cur_output_tile_c + TEMP_FILTER_WIDTH);
@@ -128,7 +146,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 }
             }
 #ifdef WITH_PROGRESS_EMBEDDING
-            if (!conv_params->old_output_state_bit) {
+            if ((!conv_params->old_output_state_bit && idx < n_keep_state_bits) || (conv_params->old_output_state_bit && idx >= n_keep_state_bits)) {
                 filter_tmp[conv_params->filter_offset - 1] = -0x4000;
             } else
 #endif
@@ -158,6 +176,19 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
         conv_params->cached_filter_idx = conv_params->conv_idx;
         conv_params->cached_input_tile_c_offset = conv_params->input_tile_c_offset;
+    } else {
+#ifdef WITH_PROGRESS_EMBEDDING
+        need_cleanup_state_bits = 1;
+#ifndef USE_ARM_CMSIS
+        if (n_keep_state_bits != cur_output_tile_c) {
+            int16_t n_strip_state_bits = cur_output_tile_c - n_keep_state_bits;
+            int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + cur_output_tile_c * conv_params->filter_offset - n_strip_state_bits;
+            my_offset_q15(to_flip_state_bits, 0x4000, to_flip_state_bits, n_strip_state_bits);
+        }
+#else
+#error "TODO"
+#endif
+#endif
     }
 
     int16_t *filter_buffer_addr = conv_params->filter_buffer_addr;
@@ -204,19 +235,12 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #endif
     /* END dump data */
 
-    // use NWHC so that output is written continuously on the address space
-    int16_t cur_output_data_offset =
-            conv_params->OUTPUT_W * conv_params->OUTPUT_H * (conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL + conv_params->conv_idx_base) +   // n
-            conv_params->input_w / conv_params->stride * conv_params->OUTPUT_H * cur_output_tile_c +     // w
-            (conv_params->input_h + offset_h) / conv_params->stride * cur_output_tile_c +                // h
-            conv_params->conv_idx - conv_params->conv_idx_base;                                          // c
-
     my_printf_debug("output_data offset = %d" NEWLINE, cur_output_data_offset);
     MY_ASSERT(cur_output_data_offset > last_output_data_offset);
     last_output_data_offset = cur_output_data_offset;
 
     MY_ASSERT(cur_output_data_offset + cur_output_tile_c < INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
-#if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING)
+#if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING) && 0 // XXX: restore this check
     for (uint16_t idx2 = 0; idx2 < cur_output_tile_c; idx2++) {
         if (!conv_params->old_output_state_bit && !get_value_state_bit(matrix_mpy_results[idx2])) {
             ERROR_OCCURRED();
@@ -224,6 +248,23 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     }
 #endif
     my_memcpy_to_param(conv_params->output, cur_output_data_offset, matrix_mpy_results, cur_output_tile_c * sizeof(int16_t));
+
+#ifdef WITH_PROGRESS_EMBEDDING
+    if (n_keep_state_bits != cur_output_tile_c) {
+        conv_params->turning_point_idx++;
+        conv_params->next_turning_point = get_slot_info(conv_params->output->slot)->turning_points[conv_params->turning_point_idx];
+        conv_params->old_output_state_bit ^= 1;
+
+        if (need_cleanup_state_bits) {
+#ifndef USE_ARM_CMSIS
+            int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + cur_output_tile_c * (conv_params->filter_offset - 1);
+            my_offset_q15(to_flip_state_bits, 0x4000, to_flip_state_bits, n_keep_state_bits);
+#else
+#error "TODO"
+#endif
+        }
+    }
+#endif
 }
 
 static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
@@ -407,6 +448,13 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     conv_params->conv_idx_base = 0;
     conv_params->conv_idx = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
+    SlotInfo *cur_slot_info = get_slot_info(output->slot);
+    conv_params->turning_point_idx = 0;
+    conv_params->next_turning_point = -1;
+    if (conv_params->turning_point_idx < cur_slot_info->n_turning_points) {
+        conv_params->next_turning_point = cur_slot_info->turning_points[conv_params->turning_point_idx];
+    }
+
     conv_params->old_output_state_bit = get_state_bit(model, output->slot);
 
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
