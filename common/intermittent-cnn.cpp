@@ -277,8 +277,8 @@ uint8_t get_value_state_bit(int16_t val) {
     }
 }
 
-static uint8_t new_output_state_bit(Model *model, ParameterInfo *param, uint16_t offset) {
-    uint8_t ret = get_state_bit(model, param->slot) ^ 1;
+uint8_t param_state_bit(Model *model, ParameterInfo *param, uint16_t offset) {
+    uint8_t ret = get_state_bit(model, param->slot);
     SlotInfo *cur_slot_info = get_slot_info(param->slot);
     for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
         if (offset >= cur_slot_info->turning_points[idx]) {
@@ -299,7 +299,7 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
     uint32_t cur_begin_offset = 0;
     uint32_t cur_end_offset = end_offset;
     uint32_t first_unfinished_value_offset;
-    my_printf_debug("new_output_state_bit for first value = %d" NEWLINE, new_output_state_bit(model, output, 0));
+    my_printf_debug("new_output_state_bit for first value = %d" NEWLINE, param_state_bit(model, output, 0) ^ 1);
 
     while (1) {
 #if 1
@@ -309,9 +309,9 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
         dump_matrix_debug(output, cur_begin_offset, cur_end_offset - cur_begin_offset, val_info);
 #endif
         if (cur_end_offset - cur_begin_offset <= 1) {
-            if (get_value_state_bit(get_q15_param(output, cur_begin_offset)) != new_output_state_bit(model, output, cur_begin_offset)) {
+            if (get_value_state_bit(get_q15_param(output, cur_begin_offset)) == param_state_bit(model, output, cur_begin_offset)) {
                 first_unfinished_value_offset = 0;
-            } else if (get_value_state_bit(get_q15_param(output, cur_end_offset)) != new_output_state_bit(model, output, cur_end_offset)) {
+            } else if (get_value_state_bit(get_q15_param(output, cur_end_offset)) == param_state_bit(model, output, cur_end_offset)) {
                 first_unfinished_value_offset = cur_end_offset;
             } else if (cur_end_offset == end_offset) {
                 // all values finished - power failure just before the state
@@ -323,7 +323,7 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
             break;
         }
         uint32_t middle_offset = cur_begin_offset + (cur_end_offset - cur_begin_offset) / 2;
-        if (get_value_state_bit(get_q15_param(output, middle_offset)) == new_output_state_bit(model, output, middle_offset)) {
+        if (get_value_state_bit(get_q15_param(output, middle_offset)) != param_state_bit(model, output, middle_offset)) {
             cur_begin_offset = middle_offset;
         } else {
             cur_end_offset = middle_offset;
@@ -344,10 +344,10 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
 
 #ifndef MY_NDEBUG
     for (uint32_t idx = 0; idx < first_unfinished_value_offset; idx++) {
-        MY_ASSERT(get_value_state_bit(get_q15_param(output, idx)) == new_output_state_bit(model, output, idx));
+        MY_ASSERT(get_value_state_bit(get_q15_param(output, idx)) != param_state_bit(model, output, idx));
     }
     for (uint32_t idx = first_unfinished_value_offset; idx < output->params_len / 2; idx++) {
-        MY_ASSERT(get_value_state_bit(get_q15_param(output, idx)) != new_output_state_bit(model, output, idx));
+        MY_ASSERT(get_value_state_bit(get_q15_param(output, idx)) == param_state_bit(model, output, idx));
     }
 #endif
 

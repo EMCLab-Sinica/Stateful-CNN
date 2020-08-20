@@ -493,9 +493,28 @@ static void iterate_chunks(ParameterInfo *param, T callback) {
     uint16_t params_len = param->params_len / sizeof(int16_t);
     uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / 2 * 2);
 
-    for (uint32_t offset = 0; offset < params_len; offset += chunk_len) {
-        uint16_t real_chunk_len = MIN_VAL(chunk_len, params_len - offset);
-        callback(offset, real_chunk_len);
+    uint16_t cur_chunk_len;
+#ifdef WITH_PROGRESS_EMBEDDING
+    uint8_t turning_point_idx = 0;
+    int16_t next_turning_point = -1;
+    SlotInfo *cur_slot_info = get_slot_info(param->slot);
+    if (turning_point_idx < cur_slot_info->n_turning_points) {
+        next_turning_point = cur_slot_info->turning_points[turning_point_idx];
+    }
+#endif
+    for (uint32_t offset = 0; offset < params_len; offset += cur_chunk_len) {
+        cur_chunk_len = MIN_VAL(chunk_len, params_len - offset);
+#ifdef WITH_PROGRESS_EMBEDDING
+        if (next_turning_point > 0) {
+            uint16_t chunk_len_before_turning_point = MIN_VAL(cur_chunk_len, next_turning_point - offset);
+            if (chunk_len_before_turning_point != cur_chunk_len) {
+                turning_point_idx++;
+                next_turning_point = cur_slot_info->turning_points[turning_point_idx];
+            }
+            cur_chunk_len = chunk_len_before_turning_point;
+        }
+#endif
+        callback(offset, cur_chunk_len);
     }
 }
 
@@ -630,7 +649,7 @@ uint16_t find_overflow_factor(Model *model, ParameterInfo *param) {
 #else
         int16_t min_bound = -8192 / SCALE;
         int16_t max_bound = 8191 / SCALE;
-        int16_t val_offset = get_state_bit(model, param->slot) ? -16384 : 0;
+        int16_t val_offset = param_state_bit(model, param, offset) ? -16384 : 0;
 #endif
         int16_t max_val, min_val;
         uint16_t index;
