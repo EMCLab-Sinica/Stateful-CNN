@@ -251,7 +251,11 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
                 next_turning_point = cur_slot_info->turning_points[turning_point_idx];
             }
         }
-        MY_ASSERT(get_value_state_bit(get_q15_param(output, idx)) == cur_state_bit);
+        int16_t val = get_q15_param(output, idx);
+        if (get_value_state_bit(val) != cur_state_bit) {
+            my_printf_debug("Value %d at index %d has incorrect state bit" NEWLINE, val, idx);
+            ERROR_OCCURRED();
+        }
     }
 #endif
 }
@@ -273,6 +277,7 @@ uint8_t get_value_state_bit(int16_t val) {
     } else if (val >= 0x2000) {
         return 1;
     } else {
+        my_printf_debug("%s: unexpected value %d" NEWLINE, __func__, val);
         ERROR_OCCURRED();
     }
 }

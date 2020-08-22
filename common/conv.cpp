@@ -99,6 +99,12 @@ void determine_tile_c(ParameterInfo *param, ParameterInfo *filter) {
     }
 }
 
+static void flip_filter_state_bits(int16_t *to_flip_state_bits, uint16_t len) {
+    my_printf_debug("Flipping %d state bits in filters" NEWLINE, len);
+    // need negating filter value here as it will be multiplied with _Q15(-1.0), or -32768
+    my_offset_q15(to_flip_state_bits, get_value_state_bit(-*to_flip_state_bits) ? 0x4000 : -0x4000, to_flip_state_bits, len);
+}
+
 static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     uint16_t cur_output_tile_c = MIN_VAL(conv_params->output->tile_c, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
     MY_ASSERT(cur_output_tile_c);
@@ -147,6 +153,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             }
 #ifdef WITH_PROGRESS_EMBEDDING
             if ((!conv_params->old_output_state_bit && idx < n_keep_state_bits) || (conv_params->old_output_state_bit && idx >= n_keep_state_bits)) {
+                my_printf_debug("Adding state bit for newly loaded filter idx=%d" NEWLINE, idx);
                 filter_tmp[conv_params->filter_offset - 1] = -0x4000;
             } else
 #endif
@@ -181,9 +188,9 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         need_cleanup_state_bits = 1;
 #ifndef USE_ARM_CMSIS
         if (n_keep_state_bits != cur_output_tile_c) {
-            int16_t n_strip_state_bits = cur_output_tile_c - n_keep_state_bits;
-            int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + cur_output_tile_c * conv_params->filter_offset - n_strip_state_bits;
-            my_offset_q15(to_flip_state_bits, 0x4000, to_flip_state_bits, n_strip_state_bits);
+            int16_t n_flip_state_bits = cur_output_tile_c - n_keep_state_bits;
+            int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + cur_output_tile_c * conv_params->filter_offset - n_flip_state_bits;
+            flip_filter_state_bits(to_flip_state_bits, n_flip_state_bits);
         }
 #else
 #error "TODO"
@@ -258,7 +265,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         if (need_cleanup_state_bits) {
 #ifndef USE_ARM_CMSIS
             int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + cur_output_tile_c * (conv_params->filter_offset - 1);
-            my_offset_q15(to_flip_state_bits, 0x4000, to_flip_state_bits, n_keep_state_bits);
+            flip_filter_state_bits(to_flip_state_bits, n_keep_state_bits);
 #else
 #error "TODO"
 #endif
@@ -565,7 +572,6 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 
     uint32_t tiling_results_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
 
-    int16_t data_offset = 0;
     uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
 
     uint16_t overflow_factor = find_overflow_factor(model, data);
@@ -579,25 +585,37 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
     my_printf_debug("output_value_offset = %d" NEWLINE, output_value_offset);
 #endif
 
-    // XXX: use iterate_chunks() ?
+    // XXX: use iterate_chunks() for the outer loop?
     for (uint32_t tiling_results_offset = 0; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
         uint32_t real_chunk_len = MIN_VAL(chunk_len, tiling_results_len - tiling_results_offset);
         my_printf_debug("real_chunk_len = %d" NEWLINE, real_chunk_len);
         for (uint16_t input_tile_c_index = 0; input_tile_c_index < n_tiles_c; input_tile_c_index++) {
             int16_t *to_add = lea_buffer + input_tile_c_index * chunk_len;
+            uint16_t data_offset = input_tile_c_index * tiling_results_len + tiling_results_offset;
             my_memcpy_from_param(to_add, data,
-                      data_offset + input_tile_c_index * tiling_results_len + tiling_results_offset,
-                      real_chunk_len * sizeof(int16_t));
+                      data_offset, real_chunk_len * sizeof(int16_t));
             // scale up results as in convolution values are scaled down twice (input & weights)
 #ifdef WITH_PROGRESS_EMBEDDING
-            my_offset_q15(to_add, input_value_offset, to_add, real_chunk_len);
+            iterate_chunks(model, data, data_offset, real_chunk_len, [to_add, data_offset] (uint16_t range_offset, uint16_t range_len, uint8_t state_bit) {
+                my_printf_debug("input range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
+                int16_t *to_offset = to_add + range_offset - data_offset;
+                my_offset_q15(to_offset, state_bit ? -0x4000 : 0, to_offset, range_len);
+            });
 #endif // WITH_PROGRESS_EMBEDDING
             my_scale_q15(to_add, scaleFract, shift, to_add, real_chunk_len);
+            ValueInfo val_info(data);
+            val_info.state = 0;
+            dump_matrix(to_add, real_chunk_len, val_info);
             if (input_tile_c_index != 0) {
                 my_add_q15(lea_buffer, to_add, lea_buffer, real_chunk_len);
             }
 #ifdef WITH_PROGRESS_EMBEDDING
-            my_offset_q15(to_add, output_value_offset, to_add, real_chunk_len);
+            iterate_chunks(model, output, data_offset, real_chunk_len, [to_add, data_offset] (uint16_t range_offset, uint16_t range_len, uint8_t state_bit) {
+                my_printf_debug("output range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
+                int16_t *to_offset = to_add + range_offset - data_offset;
+                // output state bit has not been flipped yet
+                my_offset_q15(to_offset, state_bit ? 0 : 0x4000, to_offset, range_len);
+            });
 #endif
         }
         my_memcpy_to_param(output, tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));
