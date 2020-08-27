@@ -346,19 +346,8 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     MY_ASSERT(bitwidth == 16);
     int16_t data_len = X->params_len / (bitwidth / 8);
 
-    int16_t threshold = 0, offset = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
-    if (get_state_bit(model, X->slot)) {
-        threshold = 0x4000;
-        offset = -0x4000;
-    }
-    if (!get_state_bit(model, output->slot)) {
-        offset += 0x4000;
-    }
 #endif
-
-    my_printf_debug("threshold = %d" NEWLINE, threshold);
-    my_printf_debug("offset = %d" NEWLINE, offset);
 
     uint16_t data_offset = 0;
     uint16_t output_offset = 0;
@@ -381,6 +370,19 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         my_printf_debug("initial output_h = %d, ", output_h);
         my_printf_debug("initial output_w = %d, ", output_w);
         my_printf_debug("initial c = %d" NEWLINE, c);
+
+        int16_t offset = get_state_bit(model, output->slot) ? 0 : 0x4000;
+        uint8_t output_turning_point_idx = 0;
+        int16_t next_output_turning_point = -1;
+        SlotInfo *output_slot_info = get_slot_info(output->slot);
+        while (output_turning_point_idx < output_slot_info->n_turning_points) {
+            next_output_turning_point = output_slot_info->turning_points[output_turning_point_idx];
+            output_turning_point_idx++;
+            if (next_output_turning_point > static_cast<int16_t>(first_unfinished_value_offset)) {
+                break;
+            }
+            offset ^= 0x4000;
+        }
 #endif
         for (; output_h < H; output_h++) {
             for (; output_w < W; output_w++) {
@@ -389,13 +391,24 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
                     int16_t input_tile_c_offset = c % X->tile_c;
                     uint16_t cur_input_tile_c = MIN_VAL(X->tile_c, CHANNEL - input_tile_c_index * X->tile_c);
                     int16_t val_offset = input_tile_c_index * W * H * X->tile_c + output_w * H * cur_input_tile_c + output_h * cur_input_tile_c + input_tile_c_offset;
-                    int16_t val = get_q15_param(X, val_offset);
+                    int16_t input_val = get_q15_param(X, val_offset);
                     output_offset = output_h * W * CHANNEL + output_w * CHANNEL + c;
-                    put_q15_param(output, output_offset, MAX_VAL(val, threshold) + offset);
+#ifdef WITH_PROGRESS_EMBEDDING
+                    // assuming input state bits are correct...
+                    if (get_value_state_bit(input_val)) {
+                        input_val -= 0x4000;
+                    }
+                    if (next_output_turning_point > 0 && output_offset >= next_output_turning_point) {
+                        offset ^= 0x4000;
+                        next_output_turning_point = output_slot_info->turning_points[output_turning_point_idx];
+                        output_turning_point_idx++;
+                    }
+#endif
+                    int16_t output_val = MAX_VAL(input_val, 0) + offset;
+                    put_q15_param(output, output_offset, output_val);
                     my_printf_debug(
-                        "output_h = %d, output_w = %d, c = %d, offset = %d, input val = %d" NEWLINE,
-                        output_h, output_w, c, val_offset, val);
-                    my_printf_debug("output_offset = %d" NEWLINE, output_offset);
+                        "output_h=% 3d, output_w=% 3d, c=% 3d, val_offset=% 5d, offset=% 6d, input val=% 6d, output_offset=% 6d, output val=% 6d" NEWLINE,
+                        output_h, output_w, c, val_offset, offset, input_val, output_offset, output_val);
                 }
                 c = 0;
             }
@@ -404,10 +417,10 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
     } else {
         uint16_t i = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
-        i = first_unfinished_value_offset;
+        ERROR_OCCURRED(); // TODO: adapt to range-based state assignments
 #endif
         for (; i < data_len; i++) {
-            put_q15_param(output, output_offset, MAX_VAL(get_q15_param(X, data_offset), threshold) + offset);
+            put_q15_param(output, output_offset, MAX_VAL(get_q15_param(X, data_offset), 0));
             data_offset++;
             output_offset++;
         }
@@ -519,21 +532,24 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         uint8_t orig_slot = scaled->slot;
 #endif
         uint8_t new_slot = get_next_slot(model, scaled);
-#ifdef WITH_PROGRESS_EMBEDDING
-        uint8_t old_output_state_bit = get_state_bit(model, new_slot);
-#endif
         ParameterInfo param_in_new_slot;
         my_memcpy(&param_in_new_slot, scaled, sizeof(struct ParameterInfo));
         param_in_new_slot.slot = new_slot;
 
-        iterate_chunks(model, scaled, 0, 0, [scaled, orig_slot, scale, old_output_state_bit, &param_in_new_slot] (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) {
+        iterate_chunks(model, scaled, 0, 0, [model, scaled, orig_slot, scale, &param_in_new_slot] (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) {
+            my_printf_debug("scaled range_offset=%d range_len=%d state_bit=%d" NEWLINE, offset, real_chunk_len, state_bit);
             my_memcpy_from_param(lea_buffer, scaled, offset, real_chunk_len * sizeof(int16_t));
 #ifdef WITH_PROGRESS_EMBEDDING
-            my_offset_q15(lea_buffer, get_slot_info(orig_slot)->state_bit ? -0x4000 : 0, lea_buffer, real_chunk_len);
+            my_offset_q15(lea_buffer, state_bit ? -0x4000 : 0, lea_buffer, real_chunk_len);
 #endif
             my_scale_q15(lea_buffer, scale * 32768, 0, lea_buffer, real_chunk_len);
 #ifdef WITH_PROGRESS_EMBEDDING
-            my_offset_q15(lea_buffer, old_output_state_bit ? 0 : 0x4000, lea_buffer, real_chunk_len);
+            iterate_chunks(model, &param_in_new_slot, offset, real_chunk_len, [offset] (uint32_t output_offset, uint16_t output_chunk_len, uint8_t old_output_state_bit) {
+                my_printf_debug("output output_offset=%d output_chunk_len=%d old_output_state_bit=%d" NEWLINE, output_offset, output_chunk_len, old_output_state_bit);
+                // every output chunk has the same starting offset as corresponding scaled input chunk
+                int16_t *output_to_offset = lea_buffer + output_offset - offset;
+                my_offset_q15(output_to_offset, old_output_state_bit ? 0 : 0x4000, output_to_offset, output_chunk_len);
+            });
 #endif
             my_memcpy_to_param(&param_in_new_slot, offset, lea_buffer, real_chunk_len * sizeof(int16_t));
         });

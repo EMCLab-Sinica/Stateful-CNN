@@ -578,12 +578,6 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
     int16_t scaleFract;
     uint8_t shift;
     float_to_scale_params(&scaleFract, &shift, 1.0f * SCALE / overflow_factor);
-#ifdef WITH_PROGRESS_EMBEDDING
-    int16_t input_value_offset = get_state_bit(model, data->slot) ? -0x4000 : 0;
-    int16_t output_value_offset = get_state_bit(model, output->slot) ? 0 : 0x4000;
-    my_printf_debug("input_value_offset = %d, ", input_value_offset);
-    my_printf_debug("output_value_offset = %d" NEWLINE, output_value_offset);
-#endif
 
     // XXX: use iterate_chunks() for the outer loop?
     for (uint32_t tiling_results_offset = 0; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
@@ -605,7 +599,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
             my_scale_q15(to_add, scaleFract, shift, to_add, real_chunk_len);
             ValueInfo val_info(data);
             val_info.state = 0;
-            dump_matrix(to_add, real_chunk_len, val_info);
+            dump_matrix_debug(to_add, real_chunk_len, val_info);
             if (input_tile_c_index != 0) {
                 my_add_q15(lea_buffer, to_add, lea_buffer, real_chunk_len);
             }
