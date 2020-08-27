@@ -333,12 +333,15 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
             conv_params->real_conv_input, input_src_offset,
             size * sizeof(int16_t));
 #ifdef WITH_PROGRESS_EMBEDDING
-        if (get_state_bit(model, conv_params->real_conv_input->slot)) {
-            my_offset_q15(dest_addr, -0x4000, dest_addr, size / 2 * 2);
-            if (size % 2) {
-                dest_addr[size - 1] -= 0x4000;
+        iterate_chunks(model, conv_params->real_conv_input, input_src_offset, size, [dest_addr, input_src_offset] (uint16_t range_offset, uint16_t range_len, uint8_t state_bit) {
+            if (state_bit) {
+                int16_t *to_offset = dest_addr + range_offset - input_src_offset;
+                my_offset_q15(to_offset, -0x4000, to_offset, range_len / 2 * 2);
+                if (range_len % 2) {
+                    to_offset[range_len - 1] -= 0x4000;
+                }
             }
-        }
+        });
 #endif
         dest += conv_params->dest_offset;
     }
@@ -593,7 +596,9 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
             iterate_chunks(model, data, data_offset, real_chunk_len, [to_add, data_offset] (uint16_t range_offset, uint16_t range_len, uint8_t state_bit) {
                 my_printf_debug("input range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
                 int16_t *to_offset = to_add + range_offset - data_offset;
-                my_offset_q15(to_offset, state_bit ? -0x4000 : 0, to_offset, range_len);
+                if (state_bit) {
+                    my_offset_q15(to_offset, -0x4000, to_offset, range_len);
+                }
             });
 #endif // WITH_PROGRESS_EMBEDDING
             my_scale_q15(to_add, scaleFract, shift, to_add, real_chunk_len);
@@ -608,7 +613,9 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
                 my_printf_debug("output range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
                 int16_t *to_offset = to_add + range_offset - data_offset;
                 // output state bit has not been flipped yet
-                my_offset_q15(to_offset, state_bit ? 0 : 0x4000, to_offset, range_len);
+                if (!state_bit) {
+                    my_offset_q15(to_offset, 0x4000, to_offset, range_len);
+                }
             });
 #endif
         }

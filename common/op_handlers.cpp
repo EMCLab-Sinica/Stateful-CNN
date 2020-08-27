@@ -540,7 +540,9 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
             my_printf_debug("scaled range_offset=%d range_len=%d state_bit=%d" NEWLINE, offset, real_chunk_len, state_bit);
             my_memcpy_from_param(lea_buffer, scaled, offset, real_chunk_len * sizeof(int16_t));
 #ifdef WITH_PROGRESS_EMBEDDING
-            my_offset_q15(lea_buffer, state_bit ? -0x4000 : 0, lea_buffer, real_chunk_len);
+            if (state_bit) {
+                my_offset_q15(lea_buffer, -0x4000, lea_buffer, real_chunk_len);
+            }
 #endif
             my_scale_q15(lea_buffer, scale * 32768, 0, lea_buffer, real_chunk_len);
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -548,7 +550,9 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
                 my_printf_debug("output output_offset=%d output_chunk_len=%d old_output_state_bit=%d" NEWLINE, output_offset, output_chunk_len, old_output_state_bit);
                 // every output chunk has the same starting offset as corresponding scaled input chunk
                 int16_t *output_to_offset = lea_buffer + output_offset - offset;
-                my_offset_q15(output_to_offset, old_output_state_bit ? 0 : 0x4000, output_to_offset, output_chunk_len);
+                if (!old_output_state_bit) {
+                    my_offset_q15(output_to_offset, 0x4000, output_to_offset, output_chunk_len);
+                }
             });
 #endif
             my_memcpy_to_param(&param_in_new_slot, offset, lea_buffer, real_chunk_len * sizeof(int16_t));
