@@ -88,7 +88,6 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
             SlotInfo *cur_slot_info = get_slot_info(idx);
             cur_slot_info->user = -1;
 #ifdef WITH_PROGRESS_EMBEDDING
-            cur_slot_info->state_bit = 0;
             fill_int16(idx, 0, INTERMEDIATE_VALUES_SIZE / sizeof(int16_t), 0);
 #endif
         }
@@ -224,6 +223,7 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
                 for (uint8_t idx2 = idx; idx2 < cur_slot_info->n_turning_points; idx2++) {
                     cur_slot_info->turning_points[idx2] = cur_slot_info->turning_points[idx2 + 1];
                 }
+                break;
             }
         }
     }
