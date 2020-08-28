@@ -602,9 +602,6 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
             });
 #endif // WITH_PROGRESS_EMBEDDING
             my_scale_q15(to_add, scaleFract, shift, to_add, real_chunk_len);
-            ValueInfo val_info(data);
-            val_info.state = 0;
-            dump_matrix_debug(to_add, real_chunk_len, val_info);
             if (input_tile_c_index != 0) {
                 my_add_q15(lea_buffer, to_add, lea_buffer, real_chunk_len);
             }
