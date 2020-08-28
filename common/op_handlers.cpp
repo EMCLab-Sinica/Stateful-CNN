@@ -14,6 +14,29 @@ int16_t lea_buffer[LEA_BUFFER_SIZE];
 
 #define RESHAPE_AUTO_DIM (uint16_t)(-1)
 
+static void find_initial_state_bit(int16_t* p_offset, uint8_t* p_output_turning_point_idx, int16_t* p_next_output_turning_point, SlotInfo** p_output_slot_info, uint32_t first_unfinished_value_offset, Model* model, ParameterInfo* output) {
+    *p_offset = get_state_bit(model, output->slot) ? 0 : 0x4000;
+    *p_output_turning_point_idx = 0;
+    *p_next_output_turning_point = -1;
+    *p_output_slot_info = get_slot_info(output->slot);
+    while (*p_output_turning_point_idx < (*p_output_slot_info)->n_turning_points) {
+        *p_next_output_turning_point = (*p_output_slot_info)->turning_points[*p_output_turning_point_idx];
+        (*p_output_turning_point_idx)++;
+        if (*p_next_output_turning_point > static_cast<int16_t>(first_unfinished_value_offset)) {
+            break;
+        }
+        *p_offset ^= 0x4000;
+    }
+}
+
+static void check_next_turning_point(int16_t* p_offset, uint8_t* p_output_turning_point_idx, int16_t* p_next_output_turning_point, SlotInfo* output_slot_info, uint16_t output_offset) {
+    if (*p_next_output_turning_point > 0 && output_offset >= *p_next_output_turning_point) {
+        *p_offset ^= 0x4000;
+        *p_next_output_turning_point = output_slot_info->turning_points[*p_output_turning_point_idx];
+        (*p_output_turning_point_idx)++;
+    }
+}
+
 void alloc_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
     uint16_t stride = flags & 0x0f;
 
@@ -31,14 +54,10 @@ void alloc_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     output->dims[3] = new_W;
 }
 
-static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, uint16_t flags, ParameterInfo *data, ParameterInfo *output, Model *model) {
+static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, uint16_t flags, ParameterInfo *data, Model *model) {
     const uint16_t CHANNEL = data->dims[1], W = data->dims[3];
     uint16_t stride = flags & 0x0f;
     uint16_t kernel_size = (flags & 0xf0) >> 4;
-#ifdef WITH_PROGRESS_EMBEDDING
-    uint8_t input_state_bit = get_state_bit(model, data->slot);
-    uint8_t old_output_state_bit = get_state_bit(model, output->slot);
-#endif
 
     int16_t offset_h, offset_w;
     offset_h = W * CHANNEL;
@@ -57,7 +76,8 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
             uint16_t val_offset = (output_h*stride+sH) * offset_h + (output_w*stride+sW) * offset_w + c;
             int16_t val = get_q15_param(data, val_offset);
 #ifdef WITH_PROGRESS_EMBEDDING
-            if (input_state_bit) {
+            if (get_value_state_bit(val)) {
+                // assuming input state bits are correct...
                 val -= 0x4000;
             }
 #endif
@@ -71,11 +91,6 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, u
             }
         }
     }
-#ifdef WITH_PROGRESS_EMBEDDING
-    if (!old_output_state_bit) {
-        max_val += 0x4000;
-    }
-#endif
     // need a space as dump_value does not append spaces when DUMP_INTEGERS is not defined
     my_printf_debug(" max=");
     dump_value_debug(model, data, max_val_offset);
@@ -102,17 +117,21 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     uint16_t tile_c = output->tile_c;
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
 
+    uint16_t tile_c_offset = 0;
+
 #ifdef WITH_PROGRESS_EMBEDDING
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
     uint16_t initial_n, initial_c, initial_h, initial_w;
     initial_n = first_unfinished_value_offset / (new_H * new_W * tile_c);
 
     my_printf_debug("initial_n = %d" NEWLINE, initial_n);
-#endif
 
-    uint16_t tile_c_offset = 0;
-#ifdef WITH_PROGRESS_EMBEDDING
     tile_c_offset = initial_n * tile_c;
+
+    int16_t offset, next_output_turning_point;
+    uint8_t output_turning_point_idx;
+    SlotInfo *output_slot_info;
+    find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
 #endif
     for (; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
         uint16_t real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
@@ -153,8 +172,12 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                     }
 #endif
                     for (; c < real_tile_c; c++) {
-                        int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, output, model);
-                        my_printf_debug(NEWLINE "offset=%d" NEWLINE, output_offset);
+                        int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
+                        my_printf_debug(NEWLINE "output_offset=%d" NEWLINE, output_offset);
+#ifdef WITH_PROGRESS_EMBEDDING
+                        check_next_turning_point(&offset, &output_turning_point_idx, &next_output_turning_point, output_slot_info, output_offset);
+                        max_val += offset;
+#endif
                         put_q15_param(output, output_offset, max_val);
                         output_offset++;
                     }
@@ -196,8 +219,11 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                     }
 #endif
                     for (; output_w < new_W; output_w++) {
-                        int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, output, model);
-                        my_printf_debug(NEWLINE "offset=%d" NEWLINE, output_offset);
+                        int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
+                        my_printf_debug(NEWLINE "output_offset=%d" NEWLINE, output_offset);
+#ifdef WITH_PROGRESS_EMBEDDING
+                        max_val += offset;
+#endif
                         put_q15_param(output, output_offset, max_val);
                         output_offset++;
                     }
@@ -371,18 +397,10 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
         my_printf_debug("initial output_w = %d, ", output_w);
         my_printf_debug("initial c = %d" NEWLINE, c);
 
-        int16_t offset = get_state_bit(model, output->slot) ? 0 : 0x4000;
-        uint8_t output_turning_point_idx = 0;
-        int16_t next_output_turning_point = -1;
-        SlotInfo *output_slot_info = get_slot_info(output->slot);
-        while (output_turning_point_idx < output_slot_info->n_turning_points) {
-            next_output_turning_point = output_slot_info->turning_points[output_turning_point_idx];
-            output_turning_point_idx++;
-            if (next_output_turning_point > static_cast<int16_t>(first_unfinished_value_offset)) {
-                break;
-            }
-            offset ^= 0x4000;
-        }
+        int16_t offset, next_output_turning_point;
+        uint8_t output_turning_point_idx;
+        SlotInfo *output_slot_info;
+        find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
 #endif
         for (; output_h < H; output_h++) {
             for (; output_w < W; output_w++) {
@@ -398,11 +416,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
                     if (get_value_state_bit(input_val)) {
                         input_val -= 0x4000;
                     }
-                    if (next_output_turning_point > 0 && output_offset >= next_output_turning_point) {
-                        offset ^= 0x4000;
-                        next_output_turning_point = output_slot_info->turning_points[output_turning_point_idx];
-                        output_turning_point_idx++;
-                    }
+                    check_next_turning_point(&offset, &output_turning_point_idx, &next_output_turning_point, output_slot_info, output_offset);
 #endif
                     int16_t output_val = MAX_VAL(input_val, 0) + offset;
                     put_q15_param(output, output_offset, output_val);
