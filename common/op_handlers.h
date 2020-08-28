@@ -21,6 +21,8 @@ void iterate_chunks(Model *model, ParameterInfo *param, uint16_t start_offset, u
 
     uint16_t cur_chunk_len;
 #ifdef WITH_PROGRESS_EMBEDDING
+    dump_turning_points(param);
+
     state_bit = get_state_bit(model, param->slot);
     uint8_t turning_point_idx = 0;
     int16_t next_turning_point = -1;
@@ -38,7 +40,8 @@ void iterate_chunks(Model *model, ParameterInfo *param, uint16_t start_offset, u
         cur_chunk_len = MIN_VAL(chunk_len, params_len - offset);
 #ifdef WITH_PROGRESS_EMBEDDING
         uint8_t next_state_flipped = 0;
-        if (next_turning_point > 0) {
+        // Use <= here as turning_point_idx is actually index for the _next_ turning point
+        if (next_turning_point > 0 && turning_point_idx <= cur_slot_info->n_turning_points) {
             uint16_t chunk_len_before_turning_point = MIN_VAL(cur_chunk_len, next_turning_point - offset);
             if (chunk_len_before_turning_point != cur_chunk_len) {
                 next_turning_point = cur_slot_info->turning_points[turning_point_idx];
@@ -48,6 +51,8 @@ void iterate_chunks(Model *model, ParameterInfo *param, uint16_t start_offset, u
             cur_chunk_len = chunk_len_before_turning_point;
         }
 #endif
+        // TODO: sometimes cur_chunk_len becomes 0 - fix it
+        // MY_ASSERT(cur_chunk_len);
         callback(offset, cur_chunk_len, state_bit);
 #ifdef WITH_PROGRESS_EMBEDDING
         if (next_state_flipped) {

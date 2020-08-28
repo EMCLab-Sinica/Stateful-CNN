@@ -186,6 +186,16 @@ void set_sample_index(Model *model, uint8_t index) {
 }
 
 #ifdef WITH_PROGRESS_EMBEDDING
+void dump_turning_points(ParameterInfo *output) {
+    SlotInfo *cur_slot_info = get_slot_info(output->slot);
+    my_printf_debug("%d turning point(s) for slot %d: ", cur_slot_info->n_turning_points, output->slot);
+    for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
+        my_printf_debug("%d ", cur_slot_info->turning_points[idx]);
+    }
+    my_printf_debug(NEWLINE);
+
+}
+
 void flip_state_bit(Model *model, ParameterInfo *output) {
     // XXX: reduce # of values to fill
     int16_t fill_value;
@@ -203,36 +213,34 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
 
     int16_t new_turning_point = output->params_len / 2;
     SlotInfo *cur_slot_info = get_slot_info(output->slot);
-    if (cur_slot_info->n_turning_points == 0) {
-        cur_slot_info->n_turning_points = 1;
-        cur_slot_info->turning_points[0] = new_turning_point;
-    } else {
-        // XXX: better way than copying the array?
-        for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
-            if (new_turning_point < cur_slot_info->turning_points[idx]) {
-                uint8_t new_turning_point_idx = idx;
-                cur_slot_info->n_turning_points++;
-                MY_ASSERT(cur_slot_info->n_turning_points <= TURNING_POINTS_LEN);
-                for (uint8_t idx2 = cur_slot_info->n_turning_points - 1; idx2 > new_turning_point_idx; idx2--) {
-                    cur_slot_info->turning_points[idx2] = cur_slot_info->turning_points[idx2 - 1];
-                }
-                cur_slot_info->turning_points[new_turning_point_idx] = new_turning_point;
-                break;
-            } else if (new_turning_point == cur_slot_info->turning_points[idx]) {
-                cur_slot_info->n_turning_points--;
-                for (uint8_t idx2 = idx; idx2 < cur_slot_info->n_turning_points; idx2++) {
-                    cur_slot_info->turning_points[idx2] = cur_slot_info->turning_points[idx2 + 1];
-                }
-                break;
+    // XXX: better way than copying the array?
+    uint8_t new_turning_point_inserted = 0;
+    for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
+        if (new_turning_point < cur_slot_info->turning_points[idx]) {
+            uint8_t new_turning_point_idx = idx;
+            cur_slot_info->n_turning_points++;
+            MY_ASSERT(cur_slot_info->n_turning_points <= TURNING_POINTS_LEN);
+            for (uint8_t idx2 = cur_slot_info->n_turning_points - 1; idx2 > new_turning_point_idx; idx2--) {
+                cur_slot_info->turning_points[idx2] = cur_slot_info->turning_points[idx2 - 1];
             }
+            cur_slot_info->turning_points[new_turning_point_idx] = new_turning_point;
+            new_turning_point_inserted = 1;
+            break;
+        } else if (new_turning_point == cur_slot_info->turning_points[idx]) {
+            cur_slot_info->n_turning_points--;
+            for (uint8_t idx2 = idx; idx2 < cur_slot_info->n_turning_points; idx2++) {
+                cur_slot_info->turning_points[idx2] = cur_slot_info->turning_points[idx2 + 1];
+            }
+            new_turning_point_inserted = 1;
+            break;
         }
     }
-
-    my_printf_debug("%d turning point(s) for slot %d: ", cur_slot_info->n_turning_points, output->slot);
-    for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
-        my_printf_debug("%d ", cur_slot_info->turning_points[idx]);
+    if (!new_turning_point_inserted) {
+        cur_slot_info->n_turning_points++;
+        cur_slot_info->turning_points[cur_slot_info->n_turning_points - 1] = new_turning_point;
     }
-    my_printf_debug(NEWLINE);
+
+    dump_turning_points(output);
 
     cur_slot_info->state_bit ^= 1;
 
