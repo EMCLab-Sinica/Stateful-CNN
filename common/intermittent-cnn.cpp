@@ -37,7 +37,7 @@ static void handle_node(Model *model, Node *nodes, uint16_t node_idx) {
     my_memcpy(output, input[0], sizeof(ParameterInfo));
     output->parameter_info_idx = parameter_info_idx_saved;
     output->params_offset = 0;
-    allocators[cur_node->op_type](model, input, output, cur_node->flags);
+    allocators[cur_node->op_type](model, input, output, &cur_node->flags);
     my_printf_debug("Needed mem = %d" NEWLINE, output->params_len);
     if (output->slot == SLOT_INTERMEDIATE_VALUES) {
         my_printf_debug("New params_offset = %d" NEWLINE, output->params_offset);
@@ -46,7 +46,7 @@ static void handle_node(Model *model, Node *nodes, uint16_t node_idx) {
 #ifdef WITH_PROGRESS_EMBEDDING
     my_printf_debug("Old output state bit=%d" NEWLINE, get_state_bit(model, output->slot));
 #endif
-    handlers[cur_node->op_type](model, input, output, cur_node->flags);
+    handlers[cur_node->op_type](model, input, output, &cur_node->flags);
     // For some operations (e.g., ConvMerge), scale is determined in the handlers
     my_printf_debug("Scale = %d" NEWLINE, output->scale);
 #ifdef WITH_PROGRESS_EMBEDDING

@@ -363,7 +363,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     }
 }
 
-void alloc_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags) {
+void alloc_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1];
 
     MY_ASSERT(conv_input->bitwidth == 16 && conv_filter->bitwidth == 16);
@@ -380,8 +380,8 @@ void alloc_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
     conv_params->kH = conv_filter->dims[2];
     conv_params->kW = conv_filter->dims[3];
 
-    conv_params->stride = flags & 0x0f;
-    if ((flags & 0xff00) >> 8 == AUTO_PAD_VALID) {
+    conv_params->stride = flags->stride;
+    if (flags->generic == AUTO_PAD_VALID) {
         conv_params->offset_h = conv_params->kH / 2;
         conv_params->offset_w = conv_params->kW / 2;
     } else {
@@ -405,7 +405,7 @@ void alloc_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uin
     output->scale = conv_input->scale * conv_filter->scale;
 }
 
-void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
+void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
     ParameterInfo *conv_input = input[0], *conv_filter = input[1], *conv_bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 
@@ -544,7 +544,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, ui
 #endif
 }
 
-void alloc_convmerge(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t) {
+void alloc_convmerge(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
     ParameterInfo *data = input[0];
 
     my_memcpy(output, data, sizeof(struct ParameterInfo));
@@ -557,7 +557,7 @@ void alloc_convmerge(Model *model, ParameterInfo *input[], ParameterInfo *output
     output->params_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W * sizeof(int16_t);
 }
 
-void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t) {
+void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, NodeFlags*) {
     // XXX: make this function idempotent
 
     // Do not use conv_params here as its intialization in alloc_conv and

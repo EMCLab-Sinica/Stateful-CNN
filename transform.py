@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import argparse
+import ctypes
 import dataclasses
 import io
 import itertools
@@ -83,11 +84,27 @@ def _Q15(num):
 
     return int(num * 2 ** 15)
 
+# https://stackoverflow.com/a/11481471/3786245
+class NodeFlags_bits(ctypes.LittleEndianStructure):
+    _fields_ = [
+        ("generic", ctypes.c_uint8, 8),
+        ("kernel_size", ctypes.c_uint8, 4),
+        ("stride", ctypes.c_uint8, 4),
+    ]
+
+class NodeFlags(ctypes.Union):
+    _fields_ = [
+        ("b", NodeFlags_bits),
+        ("as_bytes", ctypes.c_uint16),
+    ]
+
+    def __repr__(self):
+        return f'<NodeFlags generic={self.b.generic} kernel_size={self.b.kernel_size} stride={self.b.stride}>'
 
 class ONNXNodeWrapper:
-    def __init__(self, orig_node: onnx.NodeProto, flags: int = 0):
+    def __init__(self, orig_node: onnx.NodeProto):
         self.orig_node = orig_node
-        self.flags = flags
+        self.flags = NodeFlags()
 
     def __getattr__(self, name):
         return getattr(self.orig_node, name)
@@ -219,16 +236,16 @@ for idx, n in enumerate(nodes):
         conv_param_names.add(n.input[1])
         auto_pad = get_attr(n, 'auto_pad')
         if auto_pad == b'VALID':
-            n.flags += op_flag('AUTO_PAD_VALID') * 0x100
+            n.flags.b.generic += op_flag('AUTO_PAD_VALID')
     if n.op_type == 'MaxPool':
         kernel_shape = get_attr(n, 'kernel_shape')
         if kernel_shape is not None:
-            n.flags += kernel_shape[0] * 0x10
+            n.flags.b.kernel_size = kernel_shape[0]
     if n.op_type in ('MaxPool', 'Conv'):
         stride = get_attr(n, 'strides')[0]
-        n.flags += stride
+        n.flags.b.stride = stride
     if n.op_type == 'Reshape' and prev_node and prev_node.op_type == 'MaxPool':
-        prev_node.flags += op_flag('NHWC2NCHW') * 0x100
+        prev_node.flags.b.generic += op_flag('NHWC2NCHW')
     names[output[0]] = idx + n_input
     prev_node = n
 
@@ -239,7 +256,7 @@ class Node:
     name: str
     inputs: List[int]
     op_type: str
-    flags: int
+    flags: NodeFlags
     max_output_id: int
 
 model = []
@@ -344,7 +361,7 @@ for node in model:
         # the lowest bit is used as a flag in topological sort
         inputs_data.write(to_bytes(inp * 2))
     outputs['model'].write(to_bytes(list(ops.keys()).index(node.op_type)))
-    outputs['model'].write(to_bytes(node.flags))
+    outputs['model'].write(to_bytes(node.flags.as_bytes))
 
 inputs_data.seek(0)
 outputs['model'].write(inputs_data.read())
@@ -473,6 +490,7 @@ with open('common/data.cpp', 'w') as output_c, open('common/data.h', 'w') as out
 
 struct ParameterInfo;
 struct Model;
+struct NodeFlags;
 
 ''')
     for item in itertools.chain(dir(Constants), config.keys()):
@@ -508,8 +526,8 @@ struct Model;
     output_c.write('};\n\n')
 
     for op in keys:
-        output_h.write('void alloc_{}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
-        output_h.write('void handle_{}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, uint16_t flags);\n'.format(op.lower()))
+        output_h.write('void alloc_{}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, NodeFlags* flags);\n'.format(op.lower()))
+        output_h.write('void handle_{}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, NodeFlags* flags);\n'.format(op.lower()))
     output_c.write('handler handlers[] = {\n')
     for op in keys:
         output_c.write(f'    handle_{op},\n'.lower())
@@ -520,7 +538,7 @@ struct Model;
     output_c.write('};\n')
     for op in keys:
         if ops[op][1]:
-            output_c.write(f'void alloc_{op.lower()}(Model *model, ParameterInfo *[], struct ParameterInfo *output, uint16_t) {{\n')
+            output_c.write(f'void alloc_{op.lower()}(Model *model, ParameterInfo *[], struct ParameterInfo *output, NodeFlags*) {{\n')
             output_c.write('    get_slot_info(output->slot)->user = model->layer_idx;\n')
             output_c.write('}\n')
 

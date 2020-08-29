@@ -7,18 +7,20 @@
 /**********************************
  *        Data structures         *
  **********************************/
+
+struct NodeFlags {
+    uint8_t generic : 8;
+    uint8_t kernel_size : 4;    // used in MaxPool
+    uint8_t stride : 4;         // used in Conv and MaxPool
+};
+
 typedef struct Node {
     char name[NODE_NAME_LEN];
     uint16_t inputs_len;
     uint16_t inputs_offset;
     uint16_t max_output_id;
     uint16_t op_type;
-    /* Layout of 16 bits in flags
-     * 15-08 generic flags
-     * 07-04 kernel_size (used in MaxPool)
-     * 03-00 stride (used in Conv and MaxPool)
-     **/
-    uint16_t flags;
+    NodeFlags flags;
 } Node;
 
 // _Static_assert in C11 or static_assert in C++11 requires the message
@@ -134,8 +136,8 @@ SlotInfo * get_slot_info(uint8_t i);
 /**********************************
  *       Operation handlers       *
  **********************************/
-typedef void (*handler)(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
-typedef void (*allocator)(Model *model, ParameterInfo *input[], ParameterInfo *output, uint16_t flags);
+typedef void (*handler)(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags);
+typedef void (*allocator)(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags);
 // below are defined in ops.c
 extern uint8_t expected_inputs_len[];
 extern handler handlers[];
