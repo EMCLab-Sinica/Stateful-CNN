@@ -16,7 +16,8 @@ void main(void)
 
     setFrequency(FreqLevel);
     uartinit();
-    timerinit();
+    // XXX: disabled - timer intterupts appear to interfere DMA read for external FRAM
+    // timerinit();
 
     IntermittentCNNTest();
 }

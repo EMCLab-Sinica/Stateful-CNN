@@ -28,7 +28,8 @@ int main( void )
     /* Configure the hardware ready to run the demo. */
     prvSetupHardware();
 
-    vApplicationSetupTimerInterrupt();
+    // XXX: disabled - timer intterupts appear to interfere DMA read for external FRAM
+    // vApplicationSetupTimerInterrupt();
     IntermittentCNNTest();
 
 	return 0;
