@@ -14,6 +14,7 @@ int16_t lea_buffer[LEA_BUFFER_SIZE];
 
 #define RESHAPE_AUTO_DIM (uint16_t)(-1)
 
+#ifdef WITH_PROGRESS_EMBEDDING
 static void find_initial_state_bit(int16_t* p_offset, uint8_t* p_output_turning_point_idx, int16_t* p_next_output_turning_point, SlotInfo** p_output_slot_info, uint32_t first_unfinished_value_offset, Model* model, ParameterInfo* output) {
     *p_offset = get_state_bit(model, output->slot) ? 0 : 0x4000;
     *p_output_turning_point_idx = 0;
@@ -36,6 +37,7 @@ static void check_next_turning_point(int16_t* p_offset, uint8_t* p_output_turnin
         (*p_output_turning_point_idx)++;
     }
 }
+#endif
 
 void alloc_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags) {
     uint16_t stride = flags->stride;
@@ -418,11 +420,20 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, No
                     }
                     check_next_turning_point(&offset, &output_turning_point_idx, &next_output_turning_point, output_slot_info, output_offset);
 #endif
-                    int16_t output_val = MAX_VAL(input_val, 0) + offset;
+                    int16_t output_val = MAX_VAL(input_val, 0);
+#ifdef WITH_PROGRESS_EMBEDDING
+                    output_val += offset;
+#endif
                     put_q15_param(output, output_offset, output_val);
+#ifdef WITH_PROGRESS_EMBEDDING
                     my_printf_debug(
                         "output_h=% 3d, output_w=% 3d, c=% 3d, val_offset=% 5d, offset=% 6d, input val=% 6d, output_offset=% 6d, output val=% 6d" NEWLINE,
                         output_h, output_w, c, val_offset, offset, input_val, output_offset, output_val);
+#else
+                    my_printf_debug(
+                        "output_h=% 3d, output_w=% 3d, c=% 3d, val_offset=% 5d, input val=% 6d, output_offset=% 6d, output val=% 6d" NEWLINE,
+                        output_h, output_w, c, val_offset, 0, input_val, output_offset, output_val);
+#endif
                 }
                 c = 0;
             }
@@ -542,15 +553,12 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         output->scale = B->scale = A->scale;
     }
     if (scaled) {
-#ifdef WITH_PROGRESS_EMBEDDING
-        uint8_t orig_slot = scaled->slot;
-#endif
         uint8_t new_slot = get_next_slot(model, scaled);
         ParameterInfo param_in_new_slot;
         my_memcpy(&param_in_new_slot, scaled, sizeof(struct ParameterInfo));
         param_in_new_slot.slot = new_slot;
 
-        iterate_chunks(model, scaled, 0, 0, [model, scaled, orig_slot, scale, &param_in_new_slot] (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) {
+        iterate_chunks(model, scaled, 0, 0, [model, scaled, scale, &param_in_new_slot] (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) {
             my_printf_debug("scaled range_offset=%d range_len=%d state_bit=%d" NEWLINE, offset, real_chunk_len, state_bit);
             my_memcpy_from_param(lea_buffer, scaled, offset, real_chunk_len * sizeof(int16_t));
 #ifdef WITH_PROGRESS_EMBEDDING

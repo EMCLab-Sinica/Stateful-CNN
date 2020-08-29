@@ -99,11 +99,13 @@ void determine_tile_c(ParameterInfo *param, ParameterInfo *filter) {
     }
 }
 
+#ifdef WITH_PROGRESS_EMBEDDING
 static void flip_filter_state_bits(int16_t *to_flip_state_bits, uint16_t len) {
     my_printf_debug("Flipping %d state bits in filters" NEWLINE, len);
     // need negating filter value here as it will be multiplied with _Q15(-1.0), or -32768
     my_offset_q15(to_flip_state_bits, get_value_state_bit(-*to_flip_state_bits) ? 0x4000 : -0x4000, to_flip_state_bits, len);
 }
+#endif
 
 static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     uint16_t cur_output_tile_c = MIN_VAL(conv_params->output->tile_c, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
