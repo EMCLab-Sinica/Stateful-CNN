@@ -27,7 +27,8 @@ void iterate_chunks(Model *model, ParameterInfo *param, uint16_t start_offset, u
     uint8_t turning_point_idx = 0;
     int16_t next_turning_point = -1;
     SlotInfo *cur_slot_info = get_slot_info(param->slot);
-    while (turning_point_idx < cur_slot_info->n_turning_points) {
+    uint16_t n_turning_points = cur_slot_info ? cur_slot_info->n_turning_points : 0;
+    while (turning_point_idx < n_turning_points) {
         next_turning_point = cur_slot_info->turning_points[turning_point_idx];
         turning_point_idx++;
         if (next_turning_point > start_offset) {

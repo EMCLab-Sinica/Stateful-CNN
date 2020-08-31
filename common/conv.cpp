@@ -122,6 +122,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     int16_t n_keep_state_bits = cur_output_tile_c;
     uint8_t need_cleanup_state_bits = 0;
     if (conv_params->next_turning_point > 0) {
+        my_printf_debug("next_turning_point = %d" NEWLINE, conv_params->next_turning_point);
         n_keep_state_bits -= MAX_VAL(0, cur_output_data_offset + cur_output_tile_c - conv_params->next_turning_point);
     }
     my_printf_debug("n_keep_state_bits = %d" NEWLINE, n_keep_state_bits);
@@ -582,7 +583,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
     uint16_t overflow_factor = find_overflow_factor(model, data);
     int16_t scaleFract;
     uint8_t shift;
-    float_to_scale_params(&scaleFract, &shift, 1.0f * SCALE / overflow_factor);
+    float_to_scale_params(&scaleFract, &shift, 1.0f * SCALE / overflow_factor / n_tiles_c);
 
     // XXX: use iterate_chunks() for the outer loop?
     for (uint32_t tiling_results_offset = 0; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
@@ -591,9 +592,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
         for (uint16_t input_tile_c_index = 0; input_tile_c_index < n_tiles_c; input_tile_c_index++) {
             int16_t *to_add = lea_buffer + input_tile_c_index * chunk_len;
             uint16_t data_offset = input_tile_c_index * tiling_results_len + tiling_results_offset;
-            my_memcpy_from_param(to_add, data,
-                      data_offset, real_chunk_len * sizeof(int16_t));
-            // scale up results as in convolution values are scaled down twice (input & weights)
+            my_memcpy_from_param(to_add, data, data_offset, real_chunk_len * sizeof(int16_t));
 #ifdef WITH_PROGRESS_EMBEDDING
             iterate_chunks(model, data, data_offset, real_chunk_len, [to_add, data_offset] (uint16_t range_offset, uint16_t range_len, uint8_t state_bit) {
                 my_printf_debug("input range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
@@ -603,21 +602,23 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
                 }
             });
 #endif // WITH_PROGRESS_EMBEDDING
+            // scale up results as in convolution values are scaled down twice (input & weights)
             my_scale_q15(to_add, scaleFract, shift, to_add, real_chunk_len);
             if (input_tile_c_index != 0) {
                 my_add_q15(lea_buffer, to_add, lea_buffer, real_chunk_len);
             }
-#ifdef WITH_PROGRESS_EMBEDDING
-            iterate_chunks(model, output, data_offset, real_chunk_len, [to_add, data_offset] (uint16_t range_offset, uint16_t range_len, uint8_t state_bit) {
-                my_printf_debug("output range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
-                int16_t *to_offset = to_add + range_offset - data_offset;
-                // output state bit has not been flipped yet
-                if (!state_bit) {
-                    my_offset_q15(to_offset, 0x4000, to_offset, range_len);
-                }
-            });
-#endif
         }
+#ifdef WITH_PROGRESS_EMBEDDING
+        iterate_chunks(model, output, tiling_results_offset, real_chunk_len, [tiling_results_offset] (uint16_t range_offset, uint16_t range_len, uint8_t state_bit) {
+            my_printf_debug("output range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
+            int16_t *to_offset = lea_buffer + range_offset - tiling_results_offset;
+            // output state bit has not been flipped yet
+            if (!state_bit) {
+                my_offset_q15(to_offset, 0x4000, to_offset, range_len);
+            }
+        });
+        dump_matrix_debug(lea_buffer, real_chunk_len, ValueInfo(output));
+#endif
         my_memcpy_to_param(output, tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));
     }
 

@@ -12,7 +12,13 @@ ParameterInfo* get_parameter_info(size_t i) {
 }
 
 SlotInfo* get_slot_info(uint8_t i) {
-    return reinterpret_cast<SlotInfo*>(slots_info_data) + i;
+    if (i < NUM_SLOTS) {
+        return reinterpret_cast<SlotInfo*>(slots_info_data) + i;
+    } else if (i >= SLOT_CONSTANTS_MIN) {
+        return nullptr;
+    } else {
+        ERROR_OCCURRED();
+    }
 }
 
 int16_t node_input(Node *node, size_t i) {

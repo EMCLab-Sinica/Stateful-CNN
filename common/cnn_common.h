@@ -67,6 +67,7 @@ typedef struct Model {
 static_assert(sizeof(Model) == 14, "Unexpected size for Model");
 
 typedef struct SlotInfo {
+    SlotInfo() {}
 #ifdef WITH_PROGRESS_EMBEDDING
     uint16_t state_bit;
     uint16_t n_turning_points;

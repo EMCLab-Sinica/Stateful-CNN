@@ -316,11 +316,12 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     my_memcpy_from_param(buffer_a, A, 0, A->dims[0] * A->dims[1] * sizeof(uint16_t));
 
 #ifdef WITH_PROGRESS_EMBEDDING
-    if (get_state_bit(model, A->slot)) {
-        for (uint16_t idx = 0; idx < A_len; idx++) {
-            buffer_a[idx] -= 0x4000;
+    iterate_chunks(model, A, 0, 0, [buffer_a] (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) {
+        if (state_bit) {
+            int16_t* to_offset = buffer_a + offset;
+            my_offset_q15(to_offset, -0x4000, to_offset, real_chunk_len);
         }
-    }
+    });
 #endif
 
     /* LEA wants addresses to be 4-aligned */
@@ -344,6 +345,16 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 
         my_add_q15(buffer_matmul, buffer_temp, buffer_matmul, output->params_len / sizeof(int16_t));
     }
+
+#ifdef WITH_PROGRESS_EMBEDDING
+    iterate_chunks(model, output, 0, 0, [buffer_matmul] (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) {
+        if (!state_bit) {
+            int16_t* to_offset = buffer_matmul + offset;
+            my_offset_q15(to_offset, 0x4000, to_offset, real_chunk_len);
+        }
+    });
+#endif
+
     my_memcpy_to_param(output, 0, buffer_matmul, output->params_len);
 
     my_printf_debug("handle_matmul output" NEWLINE);
@@ -469,7 +480,10 @@ void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output,
     output->params_len = data->params_len;
     output->bitwidth = data->bitwidth;
     output->slot = data->slot;
-    get_slot_info(output->slot)->user = model->layer_idx;
+    SlotInfo *cur_slot_info = get_slot_info(output->slot);
+    if (cur_slot_info) {
+        cur_slot_info->user = model->layer_idx;
+    }
     MY_ASSERT(shape->bitwidth == 64);
     /*
      * At most one dimension of the new shape can be -1. In this case, the
@@ -517,7 +531,10 @@ void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output,
     output->params_len = data->params_len;
     output->bitwidth = data->bitwidth;
     output->slot = data->slot;
-    get_slot_info(output->slot)->user = model->layer_idx;
+    SlotInfo *cur_slot_info = get_slot_info(output->slot);
+    if (cur_slot_info) {
+        cur_slot_info->user = model->layer_idx;
+    }
     for (uint8_t i = 0, j = 0; i < 4; i++) {
         if (input[0]->dims[i] != 1) {
             output->dims[j] = input[0]->dims[i];
@@ -631,6 +648,10 @@ void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInf
         }
         put_q15_param(output, c, total / len);
     }
+
+#ifdef WITH_PROGRESS_EMBEDDING
+    flip_state_bit(model, output);
+#endif
 
     dump_params_debug(model, output);
 }

@@ -6,6 +6,7 @@ import io
 import itertools
 import pprint
 import struct
+import textwrap
 import warnings
 from typing import List
 
@@ -538,9 +539,14 @@ struct NodeFlags;
     output_c.write('};\n')
     for op in keys:
         if ops[op][1]:
-            output_c.write(f'void alloc_{op.lower()}(Model *model, ParameterInfo *[], struct ParameterInfo *output, struct NodeFlags*) {{\n')
-            output_c.write('    get_slot_info(output->slot)->user = model->layer_idx;\n')
-            output_c.write('}\n')
+            output_c.write(textwrap.dedent(f'''
+                void alloc_{op.lower()}(Model *model, ParameterInfo *[], struct ParameterInfo *output, struct NodeFlags*) {{
+                    SlotInfo *cur_slot_info = get_slot_info(output->slot);
+                    if (cur_slot_info) {{
+                        cur_slot_info->user = model->layer_idx;
+                    }}
+                }}
+            '''))
 
     # data
     for idx, name in enumerate(other_flags):
