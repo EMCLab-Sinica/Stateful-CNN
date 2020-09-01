@@ -216,6 +216,7 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
     fill_int16(output->slot, fill_offset, end - fill_offset, fill_value);
 
     int16_t new_turning_point = output->params_len / 2;
+    my_printf_debug("New turning point=%d" NEWLINE, new_turning_point);
     SlotInfo *cur_slot_info = get_slot_info(output->slot);
     // XXX: better way than copying the array?
     uint8_t new_turning_point_inserted = 0;
@@ -270,6 +271,7 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
             ERROR_OCCURRED();
         }
     }
+    dump_matrix_debug(output, 0, new_turning_point, ValueInfo(output));
 #endif
 }
 

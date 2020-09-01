@@ -36,6 +36,10 @@ void iterate_chunks(Model *model, ParameterInfo *param, uint16_t start_offset, u
         }
         state_bit ^= 1;
     }
+    if (turning_point_idx == n_turning_points) {
+        // no turning points not after start_offset found
+        next_turning_point = -1;
+    }
 #endif
     for (uint32_t offset = start_offset; offset < params_len; offset += cur_chunk_len) {
         cur_chunk_len = MIN_VAL(chunk_len, params_len - offset);
@@ -52,8 +56,7 @@ void iterate_chunks(Model *model, ParameterInfo *param, uint16_t start_offset, u
             cur_chunk_len = chunk_len_before_turning_point;
         }
 #endif
-        // TODO: sometimes cur_chunk_len becomes 0 - fix it
-        // MY_ASSERT(cur_chunk_len);
+        MY_ASSERT(cur_chunk_len);
         callback(offset, cur_chunk_len, state_bit);
 #ifdef WITH_PROGRESS_EMBEDDING
         if (next_state_flipped) {

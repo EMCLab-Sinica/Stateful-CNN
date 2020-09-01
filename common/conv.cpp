@@ -158,6 +158,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             if ((!conv_params->old_output_state_bit && idx < n_keep_state_bits) || (conv_params->old_output_state_bit && idx >= n_keep_state_bits)) {
                 my_printf_debug("Adding state bit for newly loaded filter idx=%d" NEWLINE, idx);
                 filter_tmp[conv_params->filter_offset - 1] = -0x4000;
+                need_cleanup_state_bits = 1;
             } else
 #endif
             {
@@ -603,7 +604,11 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
             });
 #endif // WITH_PROGRESS_EMBEDDING
             // scale up results as in convolution values are scaled down twice (input & weights)
+            my_printf_debug("Before my_scale_q15");
+            dump_matrix_debug(to_add, real_chunk_len, ValueInfo(data));
             my_scale_q15(to_add, scaleFract, shift, to_add, real_chunk_len);
+            my_printf_debug("After my_scale_q15");
+            dump_matrix_debug(to_add, real_chunk_len, ValueInfo(data));
             if (input_tile_c_index != 0) {
                 my_add_q15(lea_buffer, to_add, lea_buffer, real_chunk_len);
             }
@@ -617,7 +622,6 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
                 my_offset_q15(to_offset, 0x4000, to_offset, range_len);
             }
         });
-        dump_matrix_debug(lea_buffer, real_chunk_len, ValueInfo(output));
 #endif
         my_memcpy_to_param(output, tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));
     }
