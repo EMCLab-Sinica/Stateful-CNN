@@ -139,7 +139,7 @@ configs = {
         'data_loader': load_data_cifar10,
         'n_samples': 20,
         'n_all_samples': 10000,
-        'fp32_accuracy': 0.7553,
+        'fp32_accuracy': 0.7704,
     },
 }
 
