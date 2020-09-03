@@ -18,14 +18,21 @@ static void print_q15(int16_t val, const ValueInfo& val_info) {
     if (dump_integer) {
         my_printf("% 6d ", val);
     } else {
-        // 2^15
-        int16_t offset = 0;
+        uint8_t use_prefix = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
-        if (val_info.state) {
-            offset = 0x4000;
+        if (val != -0x8000) {
+            if (val < -0x2000) {
+                // happens in the last value of each filter column (state embedding)
+                val += 0x4000;
+                use_prefix = 1;
+            }
+            if (get_value_state_bit(val)) {
+                // 2^15
+                val -= 0x4000;
+            }
         }
 #endif
-        my_printf("% 13.6f", val_info.scale * (val - offset) / 32768.0);
+        my_printf(use_prefix ? "   *% 9.6f" : "% 13.6f", val_info.scale * val / 32768.0);
     }
 }
 

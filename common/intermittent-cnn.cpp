@@ -87,16 +87,11 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
         for (uint8_t idx = 0; idx < NUM_SLOTS; idx++) {
             SlotInfo *cur_slot_info = get_slot_info(idx);
             cur_slot_info->user = -1;
-#ifdef WITH_PROGRESS_EMBEDDING
-            fill_int16(idx, 0, INTERMEDIATE_VALUES_SIZE / sizeof(int16_t), 0);
-#endif
         }
         for (uint16_t node_idx = 0; node_idx < model->nodes_len; node_idx++) {
             nodes[node_idx].max_output_id &= ~MAX_OUTPUT_ID_INVALID;
         }
         model->running = 1;
-    } else {
-        model->recovery = 1;
     }
 
     counters()->power_counters[counters()->counter_idx]++;
@@ -201,20 +196,6 @@ void dump_turning_points(ParameterInfo *output) {
 }
 
 void flip_state_bit(Model *model, ParameterInfo *output) {
-    // XXX: reduce # of values to fill
-    int16_t fill_value;
-    if (!get_state_bit(model, output->slot)) {
-        fill_value = 0x4000;
-    } else {
-        fill_value = 0;
-    }
-    uint16_t fill_offset = output->params_len / sizeof(int16_t),
-             end = INTERMEDIATE_VALUES_SIZE / sizeof(int16_t);
-    my_printf_debug("Fill %d", fill_value);
-    my_printf_debug(" from %d", fill_offset);
-    my_printf_debug(" to %d" NEWLINE, end);
-    fill_int16(output->slot, fill_offset, end - fill_offset, fill_value);
-
     int16_t new_turning_point = output->params_len / 2;
     my_printf_debug("New turning point=%d" NEWLINE, new_turning_point);
     SlotInfo *cur_slot_info = get_slot_info(output->slot);
@@ -271,7 +252,7 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
             ERROR_OCCURRED();
         }
     }
-    dump_matrix_debug(output, 0, new_turning_point, ValueInfo(output));
+    // dump_matrix_debug(output, 0, new_turning_point, ValueInfo(output));
 #endif
 }
 
@@ -287,13 +268,11 @@ uint8_t get_state_bit(Model *model, uint8_t slot_id) {
 }
 
 uint8_t get_value_state_bit(int16_t val) {
-    if (val < 0x2000 && val >= -0x2000) {
+    MY_ASSERT(-0x2000 <= val && val < 0x6000);
+    if (val < 0x2000) {
         return 0;
-    } else if (val >= 0x2000) {
-        return 1;
     } else {
-        my_printf_debug("%s: unexpected value %d" NEWLINE, __func__, val);
-        ERROR_OCCURRED();
+        return 1;
     }
 }
 
@@ -320,6 +299,8 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
     uint32_t cur_end_offset = end_offset;
     uint32_t first_unfinished_value_offset;
     my_printf_debug("new_output_state_bit for first value = %d" NEWLINE, param_state_bit(model, output, 0) ^ 1);
+
+    dump_turning_points(output);
 
     while (1) {
 #if 1
@@ -354,13 +335,13 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
         );
     }
 
+    my_printf_debug("first_unfinished_value_offset = %d" NEWLINE, first_unfinished_value_offset);
+
     if (!after_recovery) {
         MY_ASSERT(first_unfinished_value_offset == 0);
     } else {
         after_recovery = 0;
     }
-
-    my_printf_debug("first_unfinished_value_offset = %d" NEWLINE, first_unfinished_value_offset);
 
 #ifndef MY_NDEBUG
     for (uint32_t idx = 0; idx < first_unfinished_value_offset; idx++) {

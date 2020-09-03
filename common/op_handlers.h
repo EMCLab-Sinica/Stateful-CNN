@@ -3,6 +3,7 @@
 #include "platform.h"
 #include "cnn_common.h"
 #include "intermittent-cnn.h"
+#include "debug.h"
 
 extern int16_t lea_buffer[LEA_BUFFER_SIZE];
 uint16_t find_overflow_factor(struct Model *model, struct ParameterInfo *param);
@@ -28,15 +29,17 @@ void iterate_chunks(Model *model, ParameterInfo *param, uint16_t start_offset, u
     int16_t next_turning_point = -1;
     SlotInfo *cur_slot_info = get_slot_info(param->slot);
     uint16_t n_turning_points = cur_slot_info ? cur_slot_info->n_turning_points : 0;
+    uint8_t turning_point_found = 0;
     while (turning_point_idx < n_turning_points) {
         next_turning_point = cur_slot_info->turning_points[turning_point_idx];
         turning_point_idx++;
         if (next_turning_point > start_offset) {
+            turning_point_found = 1;
             break;
         }
         state_bit ^= 1;
     }
-    if (turning_point_idx == n_turning_points) {
+    if (!turning_point_found) {
         // no turning points not after start_offset found
         next_turning_point = -1;
     }

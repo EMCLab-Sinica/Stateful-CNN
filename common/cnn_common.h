@@ -108,7 +108,7 @@ Counters *counters(void);
 // transfer size < 1024 may be broken as well - copying 1024 items works,
 // copying 512 items works, copy a small number of items (e.g., 6, 10, ...)
 // works, and copying 626 items (in ConvMerge of conv2 in MNIST) DOES NOT
-// WORK (!?). By the way, fill_int16 appears not affected.
+// WORK (!?).
 #define LIMIT_DMA_SIZE(x) MIN_VAL(512, x)
 
 /* Better to not use macros

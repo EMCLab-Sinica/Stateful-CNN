@@ -19,6 +19,8 @@
 #  define NEWLINE "\n"
 #endif
 
+#define MY_ASSERT(cond) if (!(cond)) { my_printf("Assertion failed at %s:%d" NEWLINE, __FILE__, __LINE__); ERROR_OCCURRED(); }
+
 struct ParameterInfo;
 struct Model;
 struct Node;

@@ -70,9 +70,6 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, N
     my_printf_debug("c=%d" NEWLINE, c);
 
     int16_t max_val = INT16_MIN;
-#ifndef MY_NDEBUG
-    uint16_t max_val_offset;
-#endif
     for (uint16_t sH = 0; sH < kernel_size; sH++) {
         for (uint16_t sW = 0; sW < kernel_size; sW++) {
             uint16_t val_offset = (output_h*stride+sH) * offset_h + (output_w*stride+sW) * offset_w + c;
@@ -83,19 +80,16 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, N
                 val -= 0x4000;
             }
 #endif
-            dump_value_debug(model, data, val_offset);
+            // dump_value_debug(model, data, val_offset);
+            my_printf_debug("% 5d ", val);
             // XXX: use LEA?
             if (val > max_val) {
                 max_val = val;
-#ifndef MY_NDEBUG
-                max_val_offset = val_offset;
-#endif
             }
         }
     }
     // need a space as dump_value does not append spaces when DUMP_INTEGERS is not defined
-    my_printf_debug(" max=");
-    dump_value_debug(model, data, max_val_offset);
+    my_printf_debug(" max=% 5d ", max_val);
     return max_val;
 }
 
@@ -224,6 +218,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                         int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
                         my_printf_debug(NEWLINE "output_offset=%d" NEWLINE, output_offset);
 #ifdef WITH_PROGRESS_EMBEDDING
+                        check_next_turning_point(&offset, &output_turning_point_idx, &next_output_turning_point, output_slot_info, output_offset);
                         max_val += offset;
 #endif
                         put_q15_param(output, output_offset, max_val);
@@ -253,7 +248,7 @@ void alloc_add(Model *model, ParameterInfo *input[], ParameterInfo *output, Node
     output->slot = get_next_slot(model, A);
 }
 
-void handle_add(Model*, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_add(Model* model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
     /* Add: Y = X + W */
     my_printf_debug("Add!" NEWLINE);
 
@@ -277,6 +272,12 @@ void handle_add(Model*, ParameterInfo *input[], ParameterInfo *output, NodeFlags
     my_add_q15(buffer_a, buffer_b, buffer_a, vector_size);
 
     my_memcpy_to_param(output, 0, buffer_a, output->params_len);
+
+#ifdef WITH_PROGRESS_EMBEDDING
+    flip_state_bit(model, output);
+#endif
+
+    dump_matrix_debug(output, 0, output->params_len / sizeof(int16_t), ValueInfo(output));
 }
 
 void alloc_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
@@ -443,7 +444,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, No
 #else
                     my_printf_debug(
                         "output_h=% 3d, output_w=% 3d, c=% 3d, val_offset=% 5d, input val=% 6d, output_offset=% 6d, output val=% 6d" NEWLINE,
-                        output_h, output_w, c, val_offset, 0, input_val, output_offset, output_val);
+                        output_h, output_w, c, val_offset, input_val, output_offset, output_val);
 #endif
                 }
                 c = 0;

@@ -80,6 +80,10 @@ int main(int argc, char* argv[]) {
     my_printf("Use TI DSPLib" NEWLINE);
 #endif
 
+#ifdef WITH_PROGRESS_EMBEDDING
+    memset(intermediate_values(0), 0, INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
+#endif
+
     ret = run_cnn_tests(n_samples);
 
     for (uint16_t counter_idx = 0; counter_idx < COUNTERS_LEN; counter_idx++) {
@@ -138,15 +142,6 @@ void my_memcpy_from_param(void *dest, struct ParameterInfo *param, uint16_t offs
         my_memcpy(dest, baseptr + total_offset, n);
     } else {
         my_memcpy(dest, intermediate_values(param->slot) + offset_in_word * sizeof(int16_t), n);
-    }
-}
-
-void fill_int16(uint8_t slot, uint16_t offset, uint16_t n, int16_t val) {
-    MY_ASSERT(slot < SLOT_CONSTANTS_MIN);
-    return;
-    int16_t *dest = reinterpret_cast<int16_t*>(intermediate_values(slot)) + offset;
-    for (size_t idx = 0; idx < n; idx++) {
-        dest[idx] = val;
     }
 }
 

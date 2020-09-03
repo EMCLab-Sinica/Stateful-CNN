@@ -604,10 +604,10 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
             });
 #endif // WITH_PROGRESS_EMBEDDING
             // scale up results as in convolution values are scaled down twice (input & weights)
-            my_printf_debug("Before my_scale_q15");
+            my_printf_debug("Before my_scale_q15" NEWLINE);
             dump_matrix_debug(to_add, real_chunk_len, ValueInfo(data));
             my_scale_q15(to_add, scaleFract, shift, to_add, real_chunk_len);
-            my_printf_debug("After my_scale_q15");
+            my_printf_debug("After my_scale_q15" NEWLINE);
             dump_matrix_debug(to_add, real_chunk_len, ValueInfo(data));
             if (input_tile_c_index != 0) {
                 my_add_q15(lea_buffer, to_add, lea_buffer, real_chunk_len);

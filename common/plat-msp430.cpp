@@ -154,46 +154,6 @@ void my_memcpy_from_param(void *dest, struct ParameterInfo *param, uint16_t offs
     }
 }
 
-// broken if n has type size_t
-void fill_int16(uint8_t slot, uint16_t offset_in_word, uint16_t n, int16_t val) {
-#ifndef EXTERNAL_FRAM
-#ifdef __MSP430__
-    DMA_init(&dma_params);
-    DMA_setSrcAddress(MY_DMA_CHANNEL, (uint32_t)&val, DMA_DIRECTION_UNCHANGED);
-    DMA_setDstAddress(MY_DMA_CHANNEL, (uint32_t)dest, DMA_DIRECTION_INCREMENT);
-    /* transfer size is in words (2 bytes) */
-    DMA0SZ = n;
-    // DMA_enableInterrupt(MY_DMA_CHANNEL);
-    // _0 => unchanged
-    // _3 => increment
-    DMA0CTL |= DMAEN + DMA_TRANSFER_BLOCK;
-    DMA0CTL |= DMAREQ;
-#else
-    MAP_DMA_enableModule();
-    MAP_DMA_setControlBase(controlTable);
-    MAP_DMA_setChannelControl(DMA_CH0_RESERVED0 | UDMA_PRI_SELECT, UDMA_SIZE_16 | UDMA_SRC_INC_NONE | UDMA_DST_INC_16 | UDMA_ARB_1024);
-    MAP_DMA_assignInterrupt(DMA_INT1, 0);
-    MAP_Interrupt_enableInterrupt(INT_DMA_INT1);
-    MAP_Interrupt_disableSleepOnIsrExit();
-    uint16_t transfer_size = n;
-    for (uint16_t transfer_offset = 0; transfer_offset < transfer_size; transfer_offset += 1024) {
-        MAP_DMA_setChannelTransfer(
-            DMA_CH0_RESERVED0 | UDMA_PRI_SELECT, UDMA_MODE_AUTO,
-            &val, dest + transfer_offset, MIN_VAL(1024, n - transfer_offset)
-        );
-        curDMATransmitChannelNum = 0;
-        MAP_DMA_enableChannel(0);
-        MAP_DMA_requestSoftwareTransfer(0);
-        while (MAP_DMA_isChannelEnabled(0)) {}
-    }
-#endif
-#else
-    SPI_ADDR addr;
-    addr.L = intermediate_values_offset(slot) + offset_in_word * sizeof(int16_t);
-    SPI_FILL_Q15(&addr, val, n);
-#endif
-}
-
 void plat_print_results(void) {
 }
 
@@ -234,6 +194,10 @@ void IntermittentCNNTest() {
         myFirstTime = 1;
         model->run_counter = 0;
     }
+
+    SPI_ADDR addr;
+    addr.L = intermediate_values_offset(0);
+    SPI_FILL_Q15(&addr, 0, INTERMEDIATE_VALUES_SIZE * NUM_SLOTS / sizeof(int16_t));
 
 #if DELAY_START_SECONDS > 0
     while (delay_counter < DELAY_START_SECONDS) {
