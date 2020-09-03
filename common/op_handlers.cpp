@@ -637,6 +637,14 @@ void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInf
     my_printf_debug("GlobalAveragePool!" NEWLINE);
 
     ParameterInfo *data = input[0];
+
+#ifdef WITH_PROGRESS_EMBEDDING
+    int16_t offset, next_output_turning_point;
+    uint8_t output_turning_point_idx;
+    SlotInfo *output_slot_info;
+    find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, 0 /*TODO: first_unfinished_value_offset*/, model, output);
+#endif
+
     uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
     uint16_t len = H * W;
     for (uint16_t c = 0; c < CHANNEL; c++) {
@@ -644,10 +652,21 @@ void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInf
         for (uint16_t h = 0; h < H; h++) {
             for (uint16_t w = 0; w < W; w++) {
                 // Input is from Conv, which uses NHWC
-                total += get_q15_param(data, h * W * CHANNEL + w * CHANNEL + c);
+                int16_t val = get_q15_param(data, h * W * CHANNEL + w * CHANNEL + c);
+#ifdef WITH_PROGRESS_EMBEDDING
+                if (get_value_state_bit(val)) {
+                    val -= 0x4000;
+                }
+#endif
+                total += val;
             }
         }
-        put_q15_param(output, c, total / len);
+        int16_t avg = total / len;
+#ifdef WITH_PROGRESS_EMBEDDING
+        check_next_turning_point(&offset, &output_turning_point_idx, &next_output_turning_point, output_slot_info, c);
+        avg += offset;
+#endif
+        put_q15_param(output, c, avg);
     }
 
 #ifdef WITH_PROGRESS_EMBEDDING
