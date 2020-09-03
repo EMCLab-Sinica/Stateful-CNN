@@ -35,7 +35,7 @@ class Constants:
     NODE_NAME_LEN = 54
     MAX_OUTPUT_ID_INVALID = 0x8000
     EXTRA_INFO_LEN = 3  # for memory alignment
-    TURNING_POINTS_LEN = 6
+    TURNING_POINTS_LEN = 8
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
