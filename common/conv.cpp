@@ -100,11 +100,30 @@ void determine_tile_c(ParameterInfo *param, ParameterInfo *filter) {
 }
 
 #ifdef WITH_PROGRESS_EMBEDDING
-static void flip_filter_state_bits(int16_t *to_flip_state_bits, uint16_t len) {
+static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t cur_output_tile_c, uint16_t len, uint8_t first_round) {
     MY_ASSERT(len < OUTPUT_LEN);
     my_printf_debug("Flipping %d state bits in filters" NEWLINE, len);
     // need negating filter value here as it will be multiplied with _Q15(-1.0), or -32768
-    my_offset_q15(to_flip_state_bits, get_value_state_bit(-*to_flip_state_bits) ? 0x4000 : -0x4000, to_flip_state_bits, len);
+#ifndef USE_ARM_CMSIS
+    int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + cur_output_tile_c * conv_params->filter_offset;
+    if (first_round) {
+        to_flip_state_bits -= len;
+    } else {
+        to_flip_state_bits -= cur_output_tile_c;
+    }
+    int16_t offset = get_value_state_bit(-*to_flip_state_bits) ? 0x4000 : -0x4000;
+    my_offset_q15(to_flip_state_bits, offset, to_flip_state_bits, len);
+#else
+    int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + conv_params->filter_offset - 1;
+    if (first_round) {
+        to_flip_state_bits += (cur_output_tile_c - len) * conv_params->filter_offset;
+    }
+    int16_t offset = get_value_state_bit(-*to_flip_state_bits) ? 0x4000 : -0x4000;
+    for (uint16_t idx = 0; idx < len; idx++) {
+        *to_flip_state_bits += offset;
+        to_flip_state_bits += conv_params->filter_offset;
+    }
+#endif
 }
 #endif
 
@@ -193,15 +212,10 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     } else {
 #ifdef WITH_PROGRESS_EMBEDDING
         need_cleanup_state_bits = 1;
-#ifndef USE_ARM_CMSIS
         if (n_keep_state_bits != cur_output_tile_c) {
             int16_t n_flip_state_bits = cur_output_tile_c - n_keep_state_bits;
-            int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + cur_output_tile_c * conv_params->filter_offset - n_flip_state_bits;
-            flip_filter_state_bits(to_flip_state_bits, n_flip_state_bits);
+            flip_filter_state_bits(conv_params, cur_output_tile_c, n_flip_state_bits, 1);
         }
-#else
-#error "TODO"
-#endif
 #endif
     }
 
@@ -273,12 +287,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         }
 
         if (need_cleanup_state_bits) {
-#ifndef USE_ARM_CMSIS
-            int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + cur_output_tile_c * (conv_params->filter_offset - 1);
-            flip_filter_state_bits(to_flip_state_bits, n_keep_state_bits);
-#else
-#error "TODO"
-#endif
+            flip_filter_state_bits(conv_params, cur_output_tile_c, n_keep_state_bits, 0);
         }
     }
 #endif
