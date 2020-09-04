@@ -3,7 +3,8 @@ import re
 
 import numpy as np
 
-def load_data(filename, limit=None):
+def load_data(filename, start: int, limit: int):
+    # XXX: implement start for MNIST
     images = []
     labels = []
 
