@@ -160,7 +160,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
             // stdout is not flushed at \n if it is not a terminal
             my_flush();
         }
-        my_printf_debug("label=%d predicted=%d correct=%d" NEWLINE, label, predicted, label == predicted);
+        my_printf_debug("idx=%d label=%d predicted=%d correct=%d" NEWLINE, i, label, predicted, label == predicted);
     }
     if (n_samples == 1) {
         print_results(model, output_node);

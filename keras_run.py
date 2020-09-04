@@ -47,6 +47,7 @@ else:
         # Tensorflow 2.x uses .numpy instead of .eval for eager execution
         predicted = np.argmax(layer_outs.numpy()[0])
         if predicted == labels[idx]:
+            print(f'Correct at idx={idx}')
             correct += 1
     total = len(labels)
     print(f'correct={correct} total={total} rate={correct/total}')

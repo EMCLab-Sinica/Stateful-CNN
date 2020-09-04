@@ -597,10 +597,10 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 
     uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
 
-    uint16_t overflow_factor = find_overflow_factor(model, data);
+    uint16_t overflow_factor = find_overflow_factor(model, data) * n_tiles_c;
     int16_t scaleFract;
     uint8_t shift;
-    float_to_scale_params(&scaleFract, &shift, 1.0f * SCALE / overflow_factor / n_tiles_c);
+    float_to_scale_params(&scaleFract, &shift, 1.0f * SCALE / overflow_factor);
 
     // XXX: use iterate_chunks() for the outer loop?
     for (uint32_t tiling_results_offset = 0; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
