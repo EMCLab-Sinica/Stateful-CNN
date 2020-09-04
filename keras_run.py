@@ -19,7 +19,7 @@ functors = [K.function([inp], [out]) for out in outputs]    # evaluation functio
 
 limit = 1
 # Testing
-labels, images = load_data_cifar10(sys.argv[1], limit=limit)
+labels, images = load_data_cifar10(sys.argv[1], start=0, limit=limit)
 if limit == 1:
     layer_outs = [func([images]) for func in functors]
     for idx in range(len(layer_outs)):

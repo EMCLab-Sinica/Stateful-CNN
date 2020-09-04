@@ -33,8 +33,12 @@ static void find_initial_state_bit(int16_t* p_offset, uint8_t* p_output_turning_
 static void check_next_turning_point(int16_t* p_offset, uint8_t* p_output_turning_point_idx, int16_t* p_next_output_turning_point, SlotInfo* output_slot_info, uint16_t output_offset) {
     if (*p_next_output_turning_point > 0 && output_offset >= *p_next_output_turning_point) {
         *p_offset ^= 0x4000;
-        *p_next_output_turning_point = output_slot_info->turning_points[*p_output_turning_point_idx];
-        (*p_output_turning_point_idx)++;
+        if (*p_output_turning_point_idx < output_slot_info->n_turning_points) {
+            *p_next_output_turning_point = output_slot_info->turning_points[*p_output_turning_point_idx];
+            (*p_output_turning_point_idx)++;
+        } else {
+            *p_next_output_turning_point = -1;
+        }
     }
 }
 #endif
@@ -439,11 +443,11 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, No
                     put_q15_param(output, output_offset, output_val);
 #ifdef WITH_PROGRESS_EMBEDDING
                     my_printf_debug(
-                        "output_h=% 3d, output_w=% 3d, c=% 3d, val_offset=% 5d, offset=% 6d, input val=% 6d, output_offset=% 6d, output val=% 6d" NEWLINE,
+                        "output_h=% 3d, output_w=% 3d, c=% 3d, val_offset=% 6d, offset=% 6d, input val=% 6d, output_offset=% 6d, output val=% 6d" NEWLINE,
                         output_h, output_w, c, val_offset, offset, input_val, output_offset, output_val);
 #else
                     my_printf_debug(
-                        "output_h=% 3d, output_w=% 3d, c=% 3d, val_offset=% 5d, input val=% 6d, output_offset=% 6d, output val=% 6d" NEWLINE,
+                        "output_h=% 3d, output_w=% 3d, c=% 3d, val_offset=% 6d, input val=% 6d, output_offset=% 6d, output val=% 6d" NEWLINE,
                         output_h, output_w, c, val_offset, input_val, output_offset, output_val);
 #endif
                 }

@@ -1,6 +1,5 @@
 import pickle
 import re
-from typing import Optional
 
 import numpy as np
 
@@ -40,7 +39,7 @@ def load_data(filename, limit=None):
 
     return labels, images
 
-def load_data_cifar10(filename: str, limit: Optional[int] = None):
+def load_data_cifar10(filename: str, start: int, limit: int):
     if filename.endswith('.png'):
         import cv2
         im = cv2.imread(filename, cv2.IMREAD_COLOR)
@@ -52,11 +51,11 @@ def load_data_cifar10(filename: str, limit: Optional[int] = None):
             test_data = pickle.load(f, encoding='bytes')
         if limit is None:
             limit = len(test_data[b'labels'])
-        labels = test_data[b'labels'][:limit]
+        labels = test_data[b'labels'][start:start+limit]
         images = []
         H = 32
         W = 32
-        for im_data in test_data[b'data'][:limit]:
+        for im_data in test_data[b'data'][start:start+limit]:
             # ONNX models transformed from Keras ones uses NHWC as input
             im = np.array(im_data)
             im = np.reshape(im, (3, H, W))

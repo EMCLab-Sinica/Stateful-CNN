@@ -367,7 +367,7 @@ for node in model:
 inputs_data.seek(0)
 outputs['model'].write(inputs_data.read())
 
-labels, images = config['data_loader'](config['input_file'], limit=config['n_samples'])
+labels, images = config['data_loader'](config['input_file'], start=0, limit=config['n_samples'])
 
 def select_parameters_slot(data_len):
     if data_len <= 1024:  # XXX: random heuristic
