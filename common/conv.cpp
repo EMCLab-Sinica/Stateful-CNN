@@ -128,7 +128,8 @@ static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t cur_out
 #endif
 
 static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
-    uint16_t cur_output_tile_c = MIN_VAL(conv_params->output->tile_c, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
+    // cur_output_tile_c should be signed, or MAX_VAL below is broken with TI's compiler
+    int16_t cur_output_tile_c = MIN_VAL(conv_params->output->tile_c, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
     MY_ASSERT(cur_output_tile_c);
 
     // use NWHC so that output is written continuously on the address space
@@ -355,10 +356,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         iterate_chunks(model, conv_params->real_conv_input, input_src_offset, size, [dest_addr, input_src_offset] (uint16_t range_offset, uint16_t range_len, uint8_t state_bit) {
             if (state_bit) {
                 int16_t *to_offset = dest_addr + range_offset - input_src_offset;
-                my_offset_q15(to_offset, -0x4000, to_offset, range_len / 2 * 2);
-                if (range_len % 2) {
-                    to_offset[range_len - 1] -= 0x4000;
-                }
+                my_offset_q15(to_offset, -0x4000, to_offset, range_len);
             }
         });
 #endif

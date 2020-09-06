@@ -33,11 +33,28 @@ void my_fill_q15(int16_t value, int16_t *pDst, uint32_t blockSize) {
 
 void my_offset_q15(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t blockSize) {
 #ifndef USE_ARM_CMSIS
-    msp_offset_q15_params offset_params;
-    offset_params.length = blockSize;
-    offset_params.offset = offset;
-    msp_status status = msp_offset_q15(&offset_params, pSrc, pDst);
-    msp_checkStatus(status);
+    // XXX: the alignment adjustment code in this function only supports pSrc == pDst
+    MY_ASSERT(pSrc == pDst);
+    // if pSrc is not 4-byte aligned...
+    if (reinterpret_cast<uint64_t>(pSrc) & 3) {
+        *pDst = *pSrc + offset;
+        pSrc++;
+        pDst++;
+        MY_ASSERT(blockSize); // avoid overflow in the next line
+        blockSize--;
+    }
+    // LEA does not like zero-sized blocks
+    uint16_t block_size_for_lea = blockSize / 2 * 2;
+    if (block_size_for_lea) {
+        msp_offset_q15_params offset_params;
+        offset_params.length = block_size_for_lea;
+        offset_params.offset = offset;
+        msp_status status = msp_offset_q15(&offset_params, pSrc, pDst);
+        msp_checkStatus(status);
+    }
+    if (blockSize % 2) {
+        pDst[blockSize - 1] = pSrc[blockSize - 1] + offset;
+    }
 #else
     arm_offset_q15(pSrc, offset, pDst, blockSize);
 #endif

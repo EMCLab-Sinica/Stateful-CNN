@@ -701,11 +701,9 @@ uint16_t find_overflow_factor(Model *model, ParameterInfo *param) {
 
     iterate_chunks(model, param, 0, 0, [model, param, &overflow_factor] (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) {
 #ifndef WITH_PROGRESS_EMBEDDING
-        int16_t min_bound = -32768 / SCALE;
-        int16_t max_bound = 32767 / SCALE;
+        int16_t bound = 32768 / SCALE;
 #else
-        int16_t min_bound = -8192 / SCALE;
-        int16_t max_bound = 8191 / SCALE;
+        int16_t bound = 8192 / SCALE;
         int16_t val_offset = param_state_bit(model, param, offset) ? -16384 : 0;
 #endif
         int16_t max_val, min_val;
@@ -721,7 +719,7 @@ uint16_t find_overflow_factor(Model *model, ParameterInfo *param) {
 #endif
         my_printf_debug("Max value %d", max_val);
         my_printf_debug(" occurs at index %d" NEWLINE, index);
-        while (max_val && max_val >= max_bound * overflow_factor) {
+        while (max_val && abs(max_val) >= bound * overflow_factor) {
             overflow_factor *= 2;
         }
 
@@ -731,7 +729,7 @@ uint16_t find_overflow_factor(Model *model, ParameterInfo *param) {
 #endif
         my_printf_debug("Min value %d", min_val);
         my_printf_debug(" occurs at index %d" NEWLINE, index);
-        while (min_val && min_val <= min_bound * overflow_factor) {
+        while (min_val && abs(min_val) >= bound * overflow_factor) {
             overflow_factor *= 2;
         }
     });

@@ -503,7 +503,10 @@ struct NodeFlags;
             val = config[item]
             if not isinstance(val, (int, float)):
                 continue
-        output_h.write(f'#define {item.upper()} {val}\n')
+        # Making it long to avoid overflow for expressions like
+        # INTERMEDIATE_VALUES_SIZE * NUM_SLOTS on 16-bit systems
+        suffix = 'l' if item == 'intermediate_values_size' else ''
+        output_h.write(f'#define {item.upper()} {val}{suffix}\n')
 
     if not args.without_progress_embedding:
         output_h.write('''
