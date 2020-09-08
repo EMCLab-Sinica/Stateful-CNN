@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h> // sprintf()
+#include "data.h"
 #include "platform.h"
 
 #define MY_NDEBUG
@@ -43,6 +44,9 @@ void dump_matrix(ParameterInfo *param, uint16_t offset, uint16_t len, const Valu
 void dump_params(struct Model *model, struct ParameterInfo *cur_param);
 void dump_params_nhwc(struct Model *model, struct ParameterInfo *cur_param, size_t offset);
 void dump_model(struct Model *model, struct Node *nodes);
+#ifdef WITH_PROGRESS_EMBEDDING
+void dump_turning_points(ParameterInfo *output);
+#endif
 
 #ifndef MY_NDEBUG
 
@@ -53,6 +57,9 @@ void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_i
 #define dump_params_nhwc_debug dump_params_nhwc
 #define dump_model_debug dump_model
 #define my_printf_debug my_printf
+#ifdef WITH_PROGRESS_EMBEDDING
+#define dump_turning_points_debug dump_turning_points
+#endif
 
 #else
 
@@ -63,6 +70,9 @@ void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_i
 #define dump_params_nhwc_debug(...)
 #define dump_model_debug(...)
 #define my_printf_debug(...)
+#ifdef WITH_PROGRESS_EMBEDDING
+#define dump_turning_points_debug(...)
+#endif
 
 #endif
 

@@ -22,7 +22,7 @@ void iterate_chunks(Model *model, ParameterInfo *param, uint16_t start_offset, u
 
     uint16_t cur_chunk_len;
 #ifdef WITH_PROGRESS_EMBEDDING
-    dump_turning_points(param);
+    dump_turning_points_debug(param);
 
     state_bit = get_state_bit(model, param->slot);
     uint8_t turning_point_idx = 0;

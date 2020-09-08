@@ -181,20 +181,6 @@ void set_sample_index(Model *model, uint8_t index) {
 }
 
 #ifdef WITH_PROGRESS_EMBEDDING
-void dump_turning_points(ParameterInfo *output) {
-    SlotInfo *cur_slot_info = get_slot_info(output->slot);
-    if (!cur_slot_info) {
-        my_printf_debug("%d is not a normal slot" NEWLINE, output->slot);
-        return;
-    }
-    my_printf_debug("%d turning point(s) for slot %d: ", cur_slot_info->n_turning_points, output->slot);
-    for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
-        my_printf_debug("%d ", cur_slot_info->turning_points[idx]);
-    }
-    my_printf_debug(NEWLINE);
-
-}
-
 void flip_state_bit(Model *model, ParameterInfo *output) {
     int16_t new_turning_point = output->params_len / 2;
     my_printf_debug("New turning point=%d" NEWLINE, new_turning_point);
@@ -226,7 +212,7 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
         cur_slot_info->turning_points[cur_slot_info->n_turning_points - 1] = new_turning_point;
     }
 
-    dump_turning_points(output);
+    dump_turning_points_debug(output);
 
     cur_slot_info->state_bit ^= 1;
 
@@ -300,7 +286,7 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
     uint32_t first_unfinished_value_offset;
     my_printf_debug("new_output_state_bit for first value = %d" NEWLINE, param_state_bit(model, output, 0) ^ 1);
 
-    dump_turning_points(output);
+    dump_turning_points_debug(output);
 
     while (1) {
 #if 1

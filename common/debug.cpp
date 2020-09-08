@@ -171,6 +171,21 @@ void dump_params(Model *model, ParameterInfo *cur_param) {
     }
 }
 
+#ifdef WITH_PROGRESS_EMBEDDING
+void dump_turning_points(ParameterInfo *output) {
+    SlotInfo *cur_slot_info = get_slot_info(output->slot);
+    if (!cur_slot_info) {
+        my_printf("%d is not a normal slot" NEWLINE, output->slot);
+        return;
+    }
+    my_printf("%d turning point(s) for slot %d: ", cur_slot_info->n_turning_points, output->slot);
+    for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
+        my_printf("%d ", cur_slot_info->turning_points[idx]);
+    }
+    my_printf(NEWLINE);
+}
+#endif
+
 #ifndef MY_NDEBUG
 
 void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_info) {
