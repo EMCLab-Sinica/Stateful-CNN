@@ -8,6 +8,14 @@
 #include "data.h"
 #include "debug.h"
 
+#define STATEFUL_CNN_SILENT
+//#define ALWAYS_RUN_RECOVERY
+
+#ifdef STATEFUL_CNN_SILENT
+#undef my_printf
+#define my_printf(...)
+#endif
+
 static void handle_node(Model *model, Node *nodes, uint16_t node_idx) {
     my_printf_debug("Current node: %d, ", node_idx);
 
@@ -162,9 +170,11 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
         }
         my_printf_debug("idx=%d label=%d predicted=%d correct=%d" NEWLINE, i, label, predicted, label == predicted);
     }
+#ifndef STATEFUL_CNN_SILENT
     if (n_samples == 1) {
         print_results(model, output_node);
     }
+#endif
     my_printf("correct=%" PRId32 " ", correct);
     my_printf("total=%" PRId32 " ", total);
     my_printf("rate=%f" NEWLINE, 1.0*correct/total);
@@ -275,10 +285,15 @@ uint8_t param_state_bit(Model *model, ParameterInfo *param, uint16_t offset) {
     return ret;
 }
 
-// XXX: run recovery only once for each power cycle
 static uint8_t after_recovery = 1;
 
 uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
+#ifndef ALWAYS_RUN_RECOVERY
+    if (!after_recovery) {
+        return 0;
+    }
+#endif
+
     // recovery from state bits
     uint32_t end_offset = output->params_len / 2;
     uint32_t cur_begin_offset = 0;
