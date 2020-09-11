@@ -12,7 +12,7 @@
 /* Standard demo includes, used so the tick hook can exercise some FreeRTOS
 functionality in an interrupt. */
 #include <driverlib.h>
-#include <main.h>
+#include "main.h"
 
 /*-----------------------------------------------------------*/
 /*
