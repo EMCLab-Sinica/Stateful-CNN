@@ -8,14 +8,6 @@
 #include "data.h"
 #include "debug.h"
 
-#define STATEFUL_CNN_SILENT
-//#define ALWAYS_RUN_RECOVERY
-
-#ifdef STATEFUL_CNN_SILENT
-#undef my_printf
-#define my_printf(...)
-#endif
-
 static void handle_node(Model *model, Node *nodes, uint16_t node_idx) {
     my_printf_debug("Current node: %d, ", node_idx);
 
@@ -64,6 +56,7 @@ static void handle_node(Model *model, Node *nodes, uint16_t node_idx) {
     counters()->counter_idx++;
     MY_ASSERT(counters()->counter_idx < COUNTERS_LEN);
 
+#if MY_DEBUG >= 1
     my_printf_debug("output dims: ");
     uint8_t has_dims = 0;
     for (uint8_t j = 0; j < 4; j++) {
@@ -75,6 +68,7 @@ static void handle_node(Model *model, Node *nodes, uint16_t node_idx) {
     my_printf_debug(NEWLINE);
     MY_ASSERT(has_dims);
     MY_ASSERT(output->bitwidth);
+#endif
 
     if (node_idx == model->nodes_len - 1) {
         model->running = 0;
@@ -131,6 +125,7 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
 }
 
 void print_results(Model *model, ParameterInfo *output_node) {
+#if MY_DEBUG >= 1
     dump_params(model, output_node);
 
     my_printf("op types:" NEWLINE);
@@ -155,6 +150,7 @@ void print_results(Model *model, ParameterInfo *output_node) {
     plat_print_results();
     my_printf(NEWLINE "run_counter: %d", model->run_counter);
     my_printf(NEWLINE);
+#endif
 }
 
 uint8_t run_cnn_tests(uint16_t n_samples) {
@@ -174,21 +170,23 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
         if (label == predicted) {
             correct++;
         }
+#if MY_DEBUG >= 1
         if (i % 100 == 0) {
             my_printf("Sample %d finished" NEWLINE, model->sample_idx);
             // stdout is not flushed at \n if it is not a terminal
             my_flush();
         }
         my_printf_debug("idx=%d label=%d predicted=%d correct=%d" NEWLINE, i, label, predicted, label == predicted);
+#endif
     }
-#ifndef STATEFUL_CNN_SILENT
+#if MY_DEBUG >= 1
     if (n_samples == 1) {
         print_results(model, output_node);
     }
-#endif
     my_printf("correct=%" PRId32 " ", correct);
     my_printf("total=%" PRId32 " ", total);
     my_printf("rate=%f" NEWLINE, 1.0*correct/total);
+#endif
 
     // Allow only 1% of accuracy drop
     if (N_SAMPLES == N_ALL_SAMPLES && correct < (FP32_ACCURACY - 0.01) * total) {
@@ -237,7 +235,7 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
 
     cur_slot_info->state_bit ^= 1;
 
-#ifndef MY_NDEBUG
+#if MY_DEBUG >= 1
     // dump_matrix_debug(output, 0, output->params_len / 2, ValueInfo(output));
     uint8_t cur_state_bit = get_state_bit(model, output->slot);
     uint8_t turning_point_idx = 0;
@@ -254,7 +252,7 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
             }
         }
         int16_t val = get_q15_param(output, idx);
-        MY_ASSERT(get_value_state_bit(val) != cur_state_bit);
+        MY_ASSERT(get_value_state_bit(val) == cur_state_bit);
     }
     // dump_matrix_debug(output, 0, new_turning_point, ValueInfo(output));
 #endif
@@ -287,7 +285,7 @@ uint8_t param_state_bit(Model *model, ParameterInfo *param, uint16_t offset) {
 static uint8_t after_recovery = 1;
 
 uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
-#ifndef ALWAYS_RUN_RECOVERY
+#if MY_DEBUG >= 1
     if (!after_recovery) {
         return 0;
     }
@@ -343,7 +341,7 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
         after_recovery = 0;
     }
 
-#ifndef MY_NDEBUG
+#if MY_DEBUG >= 1
     for (uint32_t idx = 0; idx < first_unfinished_value_offset; idx++) {
         MY_ASSERT(get_value_state_bit(get_q15_param(output, idx)) != param_state_bit(model, output, idx));
     }

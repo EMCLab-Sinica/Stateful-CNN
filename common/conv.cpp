@@ -233,7 +233,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results, 1);
 
     /* START dump data */
-#ifndef MY_NDEBUG
+#if MY_DEBUG >= 2
     my_printf_debug("input_h=%d" NEWLINE, conv_params->input_h + offset_h);
     my_printf_debug("conv_idx=");
     for (uint16_t idx = 0; idx < cur_output_tile_c; idx++) {
@@ -531,11 +531,6 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, No
         }
         conv_params->filter_offset = conv_params->kH * conv_params->dest_offset;
 
-        // `/ 2 * 2` as LEA requires matrix dimensions to be even
-        uint16_t filter_limit = ((LEA_BUFFER_SIZE - OUTPUT_LEN - conv_params->dest_offset * (conv_params->kH + conv_params->tile_h - 1)) / (conv_params->dest_offset * conv_params->kH) - TEMP_FILTER_WIDTH) / 2 * 2;
-        my_printf_debug("filter_limit: %d" NEWLINE, filter_limit);
-        MY_ASSERT(filter_limit >= output_tile_c);
-
         while (conv_params->conv_idx_base < OUTPUT_CHANNEL) {
             for (; conv_params->input_w < W - conv_params->offset_w; conv_params->input_w += conv_params->stride) {
                 for (; conv_params->input_h < H - conv_params->offset_h; conv_params->input_h += conv_params->tile_h) {
@@ -554,7 +549,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, No
     flip_state_bit(model, output);
 #endif
 
-#ifndef MY_NDEBUG
+#if MY_DEBUG >= 2
     uint32_t tiling_results_len = OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W;
 
     my_printf_debug("handle_conv output" NEWLINE);

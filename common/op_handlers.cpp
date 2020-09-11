@@ -249,8 +249,8 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 }
 
 void alloc_add(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
-    ParameterInfo *A = input[0], *B = input[1];
-    MY_ASSERT(A->bitwidth == 16 && B->bitwidth == 16);
+    ParameterInfo *A = input[0];
+    MY_ASSERT(A->bitwidth == 16 && input[1]->bitwidth == 16);
 
     output->slot = get_next_slot(model, A);
 }

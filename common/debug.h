@@ -6,7 +6,10 @@
 #include "data.h"
 #include "platform.h"
 
-#define MY_NDEBUG
+// 0: silent, assertion disabled
+// 1: normal
+// 2: verbose
+#define MY_DEBUG 0
 
 #if defined(__MSP430__) || defined(__MSP432__)
 #  include "Tools/myuart.h"
@@ -20,7 +23,11 @@
 #  define NEWLINE "\n"
 #endif
 
+#if MY_DEBUG >= 1
 #define MY_ASSERT(cond) if (!(cond)) { my_printf("Assertion failed at %s:%d" NEWLINE, __FILE__, __LINE__); ERROR_OCCURRED(); }
+#else
+#define MY_ASSERT(cond)
+#endif
 
 struct ParameterInfo;
 struct Model;
@@ -49,7 +56,7 @@ void dump_model(struct Model *model, struct Node *nodes);
 void dump_turning_points(ParameterInfo *output);
 #endif
 
-#ifndef MY_NDEBUG
+#if MY_DEBUG >= 2
 
 #define dump_value_debug dump_value
 #define dump_matrix_debug dump_matrix
