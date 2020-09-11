@@ -186,8 +186,6 @@ void dump_turning_points(ParameterInfo *output) {
 }
 #endif
 
-#ifndef MY_NDEBUG
-
 void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_info) {
     my_printf("Scale: %d" NEWLINE, val_info.scale);
     for (size_t j = 0; j < rows * cols; j++) {
@@ -198,5 +196,3 @@ void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_i
     }
     my_printf(NEWLINE);
 }
-
-#endif

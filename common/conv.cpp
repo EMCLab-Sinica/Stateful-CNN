@@ -245,13 +245,13 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
     my_printf_debug("input_buffer_addr = lea_buffer + %d" NEWLINE, (int)(input_buffer_addr - lea_buffer));
     my_printf_debug("input" NEWLINE);
-    dump_matrix2(input_buffer_addr, A_rows, A_cols, ValueInfo(conv_params->conv_input));
+    dump_matrix2_debug(input_buffer_addr, A_rows, A_cols, ValueInfo(conv_params->conv_input));
     my_printf_debug("filter_buffer_addr = lea_buffer + LEA_BUFFER_SIZE - %d" NEWLINE, (int)(lea_buffer + LEA_BUFFER_SIZE - filter_buffer_addr));
     my_printf_debug("filter" NEWLINE);
 #ifndef USE_ARM_CMSIS
-    dump_matrix2(filter_buffer_addr, B_rows, B_cols, ValueInfo(conv_params->conv_filter));
+    dump_matrix2_debug(filter_buffer_addr, B_rows, B_cols, ValueInfo(conv_params->conv_filter));
 #else
-    dump_matrix2(filter_buffer_addr, B_cols, B_rows, ValueInfo(conv_params->conv_filter));
+    dump_matrix2_debug(filter_buffer_addr, B_cols, B_rows, ValueInfo(conv_params->conv_filter));
 #endif
 
     my_printf_debug("matrix_mpy_results" NEWLINE);
@@ -260,7 +260,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #ifdef WITH_PROGRESS_EMBEDDING
     val_info.state = !conv_params->old_output_state_bit;
 #endif
-    dump_matrix2(matrix_mpy_results, A_rows, B_cols, val_info);
+    dump_matrix2_debug(matrix_mpy_results, A_rows, B_cols, val_info);
     my_printf_debug(NEWLINE);
 #endif
     /* END dump data */
