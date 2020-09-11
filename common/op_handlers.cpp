@@ -30,15 +30,18 @@ static void find_initial_state_bit(int16_t* p_offset, uint8_t* p_output_turning_
     }
 }
 
-static void check_next_turning_point(int16_t* p_offset, uint8_t* p_output_turning_point_idx, int16_t* p_next_output_turning_point, SlotInfo* output_slot_info, uint16_t output_offset) {
-    if (*p_next_output_turning_point > 0 && output_offset >= *p_next_output_turning_point) {
-        *p_offset ^= 0x4000;
-        if (*p_output_turning_point_idx < output_slot_info->n_turning_points) {
-            *p_next_output_turning_point = output_slot_info->turning_points[*p_output_turning_point_idx];
-            (*p_output_turning_point_idx)++;
-        } else {
-            *p_next_output_turning_point = -1;
-        }
+#define check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset) \
+    if (next_output_turning_point > 0 && output_offset >= next_output_turning_point) { \
+        next_turning_point(&offset, &output_turning_point_idx, &next_output_turning_point, output_slot_info); \
+    }
+
+static void next_turning_point(int16_t* p_offset, uint8_t* p_output_turning_point_idx, int16_t* p_next_output_turning_point, SlotInfo* output_slot_info) {
+    *p_offset ^= 0x4000;
+    if (*p_output_turning_point_idx < output_slot_info->n_turning_points) {
+        *p_next_output_turning_point = output_slot_info->turning_points[*p_output_turning_point_idx];
+        (*p_output_turning_point_idx)++;
+    } else {
+        *p_next_output_turning_point = -1;
     }
 }
 #endif
@@ -157,7 +160,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 #endif
             for (; output_h < new_H; output_h++) {
                 uint16_t output_w = 0;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if defined(WITH_PROGRESS_EMBEDDING) && 0 // TODO
                 if (tile_c_offset == initial_n * tile_c && output_h == initial_h) {
                     output_w = initial_w;
                     output_offset += initial_w * real_tile_c;
@@ -165,7 +168,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 #endif
                 for (; output_w < new_W; output_w++) {
                     uint16_t c = 0;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if defined(WITH_PROGRESS_EMBEDDING) && 0 // TODO
                     if (tile_c_offset == initial_n * tile_c && output_h == initial_h && output_w == initial_w) {
                         c = initial_c;
                         output_offset += initial_c;
@@ -175,7 +178,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                         int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
                         my_printf_debug(NEWLINE "output_offset=%d" NEWLINE, output_offset);
 #ifdef WITH_PROGRESS_EMBEDDING
-                        check_next_turning_point(&offset, &output_turning_point_idx, &next_output_turning_point, output_slot_info, output_offset);
+                        check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
                         max_val += offset;
 #endif
                         put_q15_param(output, output_offset, max_val);
@@ -204,7 +207,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 #endif
             for (; c < real_tile_c; c++) {
                 uint16_t output_h = 0;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if defined(WITH_PROGRESS_EMBEDDING) && 0 // TODO
                 if (tile_c_offset == initial_n * tile_c && c == initial_c) {
                     output_h = initial_h;
                     output_offset += initial_h * new_W;
@@ -212,7 +215,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 #endif
                 for (; output_h < new_H; output_h++) {
                     uint16_t output_w = 0;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if defined(WITH_PROGRESS_EMBEDDING) && 0 // TODO
                     if (tile_c_offset == initial_n * tile_c && c == initial_c && output_h == initial_h) {
                         output_w = initial_w;
                         output_offset += initial_w;
@@ -222,7 +225,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                         int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
                         my_printf_debug(NEWLINE "output_offset=%d" NEWLINE, output_offset);
 #ifdef WITH_PROGRESS_EMBEDDING
-                        check_next_turning_point(&offset, &output_turning_point_idx, &next_output_turning_point, output_slot_info, output_offset);
+                        check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
                         max_val += offset;
 #endif
                         put_q15_param(output, output_offset, max_val);
@@ -434,7 +437,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, No
                     if (get_value_state_bit(input_val)) {
                         input_val -= 0x4000;
                     }
-                    check_next_turning_point(&offset, &output_turning_point_idx, &next_output_turning_point, output_slot_info, output_offset);
+                    check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
 #endif
                     int16_t output_val = MAX_VAL(input_val, 0);
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -667,7 +670,7 @@ void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInf
         }
         int16_t avg = total / len;
 #ifdef WITH_PROGRESS_EMBEDDING
-        check_next_turning_point(&offset, &output_turning_point_idx, &next_output_turning_point, output_slot_info, c);
+        check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, c);
         avg += offset;
 #endif
         put_q15_param(output, c, avg);

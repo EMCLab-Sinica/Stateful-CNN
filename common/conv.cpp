@@ -59,6 +59,7 @@ typedef struct ConvTaskParams {
     uint8_t old_output_state_bit;
     uint8_t turning_point_idx;
     int16_t next_turning_point;
+    SlotInfo* cur_slot_info;
 #endif
 
     uint16_t conv_idx;
@@ -140,7 +141,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             conv_params->conv_idx - conv_params->conv_idx_base;                                          // c
 
 #ifdef WITH_PROGRESS_EMBEDDING
-    SlotInfo *cur_slot_info = get_slot_info(conv_params->output->slot);
+    SlotInfo *cur_slot_info = conv_params->cur_slot_info;
     int16_t n_keep_state_bits = cur_output_tile_c;
     uint8_t need_cleanup_state_bits = 0;
     if (conv_params->turning_point_idx < cur_slot_info->n_turning_points && conv_params->next_turning_point > 0) {
@@ -212,8 +213,8 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         conv_params->cached_input_tile_c_offset = conv_params->input_tile_c_offset;
     } else {
 #ifdef WITH_PROGRESS_EMBEDDING
-        need_cleanup_state_bits = 1;
         if (n_keep_state_bits != cur_output_tile_c) {
+            need_cleanup_state_bits = 1;
             int16_t n_flip_state_bits = cur_output_tile_c - n_keep_state_bits;
             flip_filter_state_bits(conv_params, cur_output_tile_c, n_flip_state_bits, 1);
         }
@@ -269,13 +270,6 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     last_output_data_offset = cur_output_data_offset;
 
     MY_ASSERT(cur_output_data_offset + cur_output_tile_c < INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
-#if !defined(MY_NDEBUG) && defined(WITH_PROGRESS_EMBEDDING) && 0 // XXX: restore this check
-    for (uint16_t idx2 = 0; idx2 < cur_output_tile_c; idx2++) {
-        if (!conv_params->old_output_state_bit && !get_value_state_bit(matrix_mpy_results[idx2])) {
-            ERROR_OCCURRED();
-        }
-    }
-#endif
     my_memcpy_to_param(conv_params->output, cur_output_data_offset, matrix_mpy_results, cur_output_tile_c * sizeof(int16_t));
 
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -345,23 +339,31 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     size_t size = (w_end - w_start + 1) * conv_params->cur_input_tile_c;
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                     (int)(dest - lea_buffer));
+    int16_t input_src_offset;
     for (int32_t h = h_start; h <= h_end; h++) {
-        int16_t input_src_offset = input_offset + (conv_params->input_h + h) * conv_params->W * conv_params->cur_input_tile_c + (conv_params->input_w + w_start) * conv_params->cur_input_tile_c;
+        input_src_offset = input_offset + (conv_params->input_h + h) * conv_params->W * conv_params->cur_input_tile_c + (conv_params->input_w + w_start) * conv_params->cur_input_tile_c;
         int16_t *dest_addr = dest + (w_start + field_size) * conv_params->cur_input_tile_c;
         my_memcpy_from_param(
             dest_addr,
             conv_params->real_conv_input, input_src_offset,
             size * sizeof(int16_t));
-#ifdef WITH_PROGRESS_EMBEDDING
-        iterate_chunks(model, conv_params->real_conv_input, input_src_offset, size, [dest_addr, input_src_offset] (uint16_t range_offset, uint16_t range_len, uint8_t state_bit) {
-            if (state_bit) {
-                int16_t *to_offset = dest_addr + range_offset - input_src_offset;
-                my_offset_q15(to_offset, -0x4000, to_offset, range_len);
-            }
-        });
-#endif
         dest += conv_params->dest_offset;
     }
+    my_printf_debug("Loaded inputs before removing state bits" NEWLINE);
+    dump_matrix_debug(lea_buffer, inputs_len, ValueInfo());
+#ifdef WITH_PROGRESS_EMBEDDING
+    // Not using iterate_chunks here as it is too slow
+    // TODO: use LEA
+    if (conv_params->cur_slot_info->n_turning_points) {
+        int16_t *ptr = lea_buffer;
+        for (size_t idx = 0; idx < inputs_len; idx++) {
+            if (get_value_state_bit(*ptr)) {
+                *ptr -= 0x4000;
+            }
+            ptr++;
+        }
+    }
+#endif
     uint16_t offset = conv_params->dest_offset - 1;
     while (offset < inputs_len) {
         lea_buffer[offset] = -0x8000; // _Q15(-1.0)
@@ -475,7 +477,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, No
     conv_params->conv_idx_base = 0;
     conv_params->conv_idx = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
-    SlotInfo *cur_slot_info = get_slot_info(output->slot);
+    SlotInfo *cur_slot_info = conv_params->cur_slot_info = get_slot_info(output->slot);
     conv_params->turning_point_idx = 0;
     conv_params->next_turning_point = -1;
     if (conv_params->turning_point_idx < cur_slot_info->n_turning_points) {

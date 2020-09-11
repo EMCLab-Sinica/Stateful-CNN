@@ -197,7 +197,7 @@ void IntermittentCNNTest() {
 
     SPI_ADDR addr;
     addr.L = intermediate_values_offset(0);
-    SPI_FILL_Q15(&addr, 0, INTERMEDIATE_VALUES_SIZE * NUM_SLOTS / sizeof(int16_t));
+    SPI_FILL_Q15(&addr, 0, INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
 
 #if DELAY_START_SECONDS > 0
     while (delay_counter < DELAY_START_SECONDS) {

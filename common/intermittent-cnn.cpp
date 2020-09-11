@@ -133,9 +133,20 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
 void print_results(Model *model, ParameterInfo *output_node) {
     dump_params(model, output_node);
 
-    my_printf("ticks: ");
+    my_printf("op types:" NEWLINE);
+    Node *nodes = (Node*)(model + 1);
     for (uint8_t i = 0; i < counters()->counter_idx; i++) {
-        my_printf("%d ", counters()->time_counters[i]);
+        my_printf("% 5d ", nodes[i].op_type);
+        if (i % 16 == 15) {
+            my_printf(NEWLINE);
+        }
+    }
+    my_printf(NEWLINE "ticks:" NEWLINE);
+    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
+        my_printf("% 5d ", counters()->time_counters[i]);
+        if (i % 16 == 15) {
+            my_printf(NEWLINE);
+        }
     }
     my_printf(NEWLINE "power counters: ");
     for (uint8_t i = 0; i < counters()->counter_idx; i++) {
@@ -243,10 +254,7 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
             }
         }
         int16_t val = get_q15_param(output, idx);
-        if (get_value_state_bit(val) != cur_state_bit) {
-            my_printf_debug("Value %d at index %d has incorrect state bit" NEWLINE, val, idx);
-            ERROR_OCCURRED();
-        }
+        MY_ASSERT(get_value_state_bit(val) != cur_state_bit);
     }
     // dump_matrix_debug(output, 0, new_turning_point, ValueInfo(output));
 #endif
@@ -260,15 +268,6 @@ uint8_t get_state_bit(Model *model, uint8_t slot_id) {
             return 0;
         default:
             return get_slot_info(slot_id)->state_bit;
-    }
-}
-
-uint8_t get_value_state_bit(int16_t val) {
-    MY_ASSERT(-0x2000 <= val && val < 0x6000);
-    if (val < 0x2000) {
-        return 0;
-    } else {
-        return 1;
     }
 }
 
