@@ -340,9 +340,11 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                     (int)(dest - lea_buffer));
     int16_t input_src_offset;
+    dump_turning_points_debug(conv_params->output);
     for (int32_t h = h_start; h <= h_end; h++) {
         input_src_offset = input_offset + (conv_params->input_h + h) * conv_params->W * conv_params->cur_input_tile_c + (conv_params->input_w + w_start) * conv_params->cur_input_tile_c;
         int16_t *dest_addr = dest + (w_start + field_size) * conv_params->cur_input_tile_c;
+        my_printf_debug("Load input from range [%d, %ld)" NEWLINE, input_src_offset, input_src_offset + size);
         my_memcpy_from_param(
             dest_addr,
             conv_params->real_conv_input, input_src_offset,
@@ -572,6 +574,42 @@ void alloc_convmerge(Model *model, ParameterInfo *input[], ParameterInfo *output
     output->params_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W * sizeof(int16_t);
 }
 
+class ConvMergeInputChunkHandler : public ChunkHandler {
+public:
+    ConvMergeInputChunkHandler(int16_t *_to_add, uint16_t _data_offset)
+        : to_add(_to_add), data_offset(_data_offset) {}
+
+    void operator () (uint32_t range_offset, uint16_t range_len, uint8_t state_bit) const override {
+        my_printf_debug("input range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
+        int16_t *to_offset = to_add + range_offset - data_offset;
+        if (state_bit) {
+            my_offset_q15(to_offset, -0x4000, to_offset, range_len);
+        }
+    }
+
+private:
+    int16_t *to_add;
+    uint16_t data_offset;
+};
+
+class ConvMergeOutputChunkHandler : public ChunkHandler {
+public:
+    ConvMergeOutputChunkHandler(uint32_t _tiling_results_offset)
+        : tiling_results_offset(_tiling_results_offset) {}
+
+    void operator () (uint32_t range_offset, uint16_t range_len, uint8_t state_bit) const override {
+        my_printf_debug("output range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
+        int16_t *to_offset = lea_buffer + range_offset - tiling_results_offset;
+        // output state bit has not been flipped yet
+        if (!state_bit) {
+            my_offset_q15(to_offset, 0x4000, to_offset, range_len);
+        }
+    }
+
+private:
+    uint32_t tiling_results_offset;
+};
+
 void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, NodeFlags*) {
     // XXX: make this function idempotent
 
@@ -606,13 +644,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
             uint16_t data_offset = input_tile_c_index * tiling_results_len + tiling_results_offset;
             my_memcpy_from_param(to_add, data, data_offset, real_chunk_len * sizeof(int16_t));
 #ifdef WITH_PROGRESS_EMBEDDING
-            iterate_chunks(model, data, data_offset, real_chunk_len, [to_add, data_offset] (uint16_t range_offset, uint16_t range_len, uint8_t state_bit) {
-                my_printf_debug("input range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
-                int16_t *to_offset = to_add + range_offset - data_offset;
-                if (state_bit) {
-                    my_offset_q15(to_offset, -0x4000, to_offset, range_len);
-                }
-            });
+            iterate_chunks(model, data, data_offset, real_chunk_len, ConvMergeInputChunkHandler(to_add, data_offset));
 #endif // WITH_PROGRESS_EMBEDDING
             // scale up results as in convolution values are scaled down twice (input & weights)
             my_printf_debug("Before my_scale_q15" NEWLINE);
@@ -625,14 +657,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
             }
         }
 #ifdef WITH_PROGRESS_EMBEDDING
-        iterate_chunks(model, output, tiling_results_offset, real_chunk_len, [tiling_results_offset] (uint16_t range_offset, uint16_t range_len, uint8_t state_bit) {
-            my_printf_debug("output range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
-            int16_t *to_offset = lea_buffer + range_offset - tiling_results_offset;
-            // output state bit has not been flipped yet
-            if (!state_bit) {
-                my_offset_q15(to_offset, 0x4000, to_offset, range_len);
-            }
-        });
+        iterate_chunks(model, output, tiling_results_offset, real_chunk_len, ConvMergeOutputChunkHandler(tiling_results_offset));
 #endif
         my_memcpy_to_param(output, tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));
     }

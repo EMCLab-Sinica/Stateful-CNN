@@ -300,6 +300,36 @@ void alloc_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, N
     output->scale = A->scale * B->scale;
 }
 
+class MatMulInputChunkHandler : public ChunkHandler {
+public:
+    MatMulInputChunkHandler(int16_t *_buffer_a) : buffer_a(_buffer_a) {}
+
+    void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
+        if (state_bit) {
+            int16_t* to_offset = buffer_a + offset;
+            my_offset_q15(to_offset, -0x4000, to_offset, real_chunk_len);
+        }
+    }
+
+private:
+    int16_t *buffer_a;
+};
+
+class MatMulOutputChunkHandler : public ChunkHandler {
+public:
+    MatMulOutputChunkHandler(int16_t *_buffer_matmul) : buffer_matmul(_buffer_matmul) {}
+
+    void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
+        if (!state_bit) {
+            int16_t* to_offset = buffer_matmul + offset;
+            my_offset_q15(to_offset, 0x4000, to_offset, real_chunk_len);
+        }
+    }
+
+private:
+    int16_t *buffer_matmul;
+};
+
 void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
     ParameterInfo *A = input[0], *B = input[1];
 
@@ -324,12 +354,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     my_memcpy_from_param(buffer_a, A, 0, A->dims[0] * A->dims[1] * sizeof(uint16_t));
 
 #ifdef WITH_PROGRESS_EMBEDDING
-    iterate_chunks(model, A, 0, 0, [buffer_a] (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) {
-        if (state_bit) {
-            int16_t* to_offset = buffer_a + offset;
-            my_offset_q15(to_offset, -0x4000, to_offset, real_chunk_len);
-        }
-    });
+    iterate_chunks(model, A, 0, 0, MatMulInputChunkHandler(buffer_a));
 #endif
 
     /* LEA wants addresses to be 4-aligned */
@@ -355,12 +380,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     }
 
 #ifdef WITH_PROGRESS_EMBEDDING
-    iterate_chunks(model, output, 0, 0, [buffer_matmul] (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) {
-        if (!state_bit) {
-            int16_t* to_offset = buffer_matmul + offset;
-            my_offset_q15(to_offset, 0x4000, to_offset, real_chunk_len);
-        }
-    });
+    iterate_chunks(model, output, 0, 0, MatMulOutputChunkHandler(buffer_matmul));
 #endif
 
     my_memcpy_to_param(output, 0, buffer_matmul, output->params_len);
@@ -554,6 +574,50 @@ void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output,
 void alloc_concat(Model *, ParameterInfo *[], ParameterInfo*, NodeFlags*) {
 }
 
+class ConcatOutputChunkHandler : public ChunkHandler {
+public:
+    ConcatOutputChunkHandler(uint32_t _offset) : offset(_offset) {}
+
+    void operator () (uint32_t output_offset, uint16_t output_chunk_len, uint8_t old_output_state_bit) const override {
+        my_printf_debug("output output_offset=%d output_chunk_len=%d old_output_state_bit=%d" NEWLINE, output_offset, output_chunk_len, old_output_state_bit);
+        // every output chunk has the same starting offset as corresponding scaled input chunk
+        int16_t *output_to_offset = lea_buffer + output_offset - offset;
+        if (!old_output_state_bit) {
+            my_offset_q15(output_to_offset, 0x4000, output_to_offset, output_chunk_len);
+        }
+    }
+
+private:
+    uint32_t offset;
+};
+
+class ConcatInputChunkHandler : public ChunkHandler {
+public:
+    ConcatInputChunkHandler(Model *_model, ParameterInfo *_scaled, float _scale, ParameterInfo *_param_in_new_slot)
+        : model(_model), scaled(_scaled), scale(_scale), param_in_new_slot(_param_in_new_slot) {}
+
+    void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
+        my_printf_debug("scaled range_offset=%d range_len=%d state_bit=%d" NEWLINE, offset, real_chunk_len, state_bit);
+        my_memcpy_from_param(lea_buffer, scaled, offset, real_chunk_len * sizeof(int16_t));
+#ifdef WITH_PROGRESS_EMBEDDING
+        if (state_bit) {
+            my_offset_q15(lea_buffer, -0x4000, lea_buffer, real_chunk_len);
+        }
+#endif
+        my_scale_q15(lea_buffer, scale * 32768, 0, lea_buffer, real_chunk_len);
+#ifdef WITH_PROGRESS_EMBEDDING
+        iterate_chunks(model, param_in_new_slot, offset, real_chunk_len, ConcatOutputChunkHandler(offset));
+#endif
+        my_memcpy_to_param(param_in_new_slot, offset, lea_buffer, real_chunk_len * sizeof(int16_t));
+    }
+
+private:
+    Model *model;
+    ParameterInfo *scaled;
+    float scale;
+    ParameterInfo *param_in_new_slot;
+};
+
 void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
     my_printf_debug("Concat!" NEWLINE);
 
@@ -583,27 +647,7 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         my_memcpy(&param_in_new_slot, scaled, sizeof(struct ParameterInfo));
         param_in_new_slot.slot = new_slot;
 
-        iterate_chunks(model, scaled, 0, 0, [model, scaled, scale, &param_in_new_slot] (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) {
-            my_printf_debug("scaled range_offset=%d range_len=%d state_bit=%d" NEWLINE, offset, real_chunk_len, state_bit);
-            my_memcpy_from_param(lea_buffer, scaled, offset, real_chunk_len * sizeof(int16_t));
-#ifdef WITH_PROGRESS_EMBEDDING
-            if (state_bit) {
-                my_offset_q15(lea_buffer, -0x4000, lea_buffer, real_chunk_len);
-            }
-#endif
-            my_scale_q15(lea_buffer, scale * 32768, 0, lea_buffer, real_chunk_len);
-#ifdef WITH_PROGRESS_EMBEDDING
-            iterate_chunks(model, &param_in_new_slot, offset, real_chunk_len, [offset] (uint32_t output_offset, uint16_t output_chunk_len, uint8_t old_output_state_bit) {
-                my_printf_debug("output output_offset=%d output_chunk_len=%d old_output_state_bit=%d" NEWLINE, output_offset, output_chunk_len, old_output_state_bit);
-                // every output chunk has the same starting offset as corresponding scaled input chunk
-                int16_t *output_to_offset = lea_buffer + output_offset - offset;
-                if (!old_output_state_bit) {
-                    my_offset_q15(output_to_offset, 0x4000, output_to_offset, output_chunk_len);
-                }
-            });
-#endif
-            my_memcpy_to_param(&param_in_new_slot, offset, lea_buffer, real_chunk_len * sizeof(int16_t));
-        });
+        iterate_chunks(model, scaled, 0, 0, ConcatInputChunkHandler(model, scaled, scale, &param_in_new_slot));
 
         // XXX: touching nodes is dirty :(
         Node *nodes = (Node*)(model + 1);
@@ -699,10 +743,12 @@ void handle_transpose(Model*, ParameterInfo *input[], ParameterInfo *output, Nod
     output->dims[3] = X->dims[2];
 }
 
-uint16_t find_overflow_factor(Model *model, ParameterInfo *param) {
-    uint16_t overflow_factor = 1;
+class OverflowChunkHandler : public ChunkHandler {
+public:
+    OverflowChunkHandler(Model *_model, ParameterInfo *_param, uint16_t *_overflow_factor)
+        : model(_model), param(_param), overflow_factor(_overflow_factor) {}
 
-    iterate_chunks(model, param, 0, 0, [model, param, &overflow_factor] (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) {
+    void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
 #ifndef WITH_PROGRESS_EMBEDDING
         int16_t bound = 32768 / SCALE;
 #else
@@ -722,8 +768,8 @@ uint16_t find_overflow_factor(Model *model, ParameterInfo *param) {
 #endif
         my_printf_debug("Max value %d", max_val);
         my_printf_debug(" occurs at index %d" NEWLINE, index);
-        while (max_val && abs(max_val) >= bound * overflow_factor) {
-            overflow_factor *= 2;
+        while (max_val && abs(max_val) >= bound * (*overflow_factor)) {
+            (*overflow_factor) *= 2;
         }
 
         my_min_q15(lea_buffer, real_chunk_len, &min_val, &index);
@@ -732,10 +778,20 @@ uint16_t find_overflow_factor(Model *model, ParameterInfo *param) {
 #endif
         my_printf_debug("Min value %d", min_val);
         my_printf_debug(" occurs at index %d" NEWLINE, index);
-        while (min_val && abs(min_val) >= bound * overflow_factor) {
-            overflow_factor *= 2;
+        while (min_val && abs(min_val) >= bound * (*overflow_factor)) {
+            (*overflow_factor) *= 2;
         }
-    });
+    }
+private:
+    Model *model;
+    ParameterInfo *param;
+    uint16_t *overflow_factor;
+};
+
+uint16_t find_overflow_factor(Model *model, ParameterInfo *param) {
+    uint16_t overflow_factor = 1;
+
+    iterate_chunks(model, param, 0, 0, OverflowChunkHandler(model, param, &overflow_factor));
 
     my_printf_debug("Overflow factor = %d" NEWLINE, overflow_factor);
 
@@ -749,4 +805,63 @@ void float_to_scale_params(int16_t *scaleFract, uint8_t *shift, float scale) {
         (*shift)++;
     }
     *scaleFract = scale * 32768;
+}
+
+void iterate_chunks(Model *model, ParameterInfo *param, uint16_t start_offset, uint16_t len, const ChunkHandler& callback) {
+    uint16_t params_len;
+    if (!len) {
+        params_len = param->params_len / sizeof(int16_t);
+    } else {
+        params_len = start_offset + len;
+    }
+    uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / 2 * 2);
+    uint8_t state_bit = 0;
+
+    uint16_t cur_chunk_len;
+#ifdef WITH_PROGRESS_EMBEDDING
+    dump_turning_points_debug(param);
+
+    state_bit = get_state_bit(model, param->slot);
+    uint8_t turning_point_idx = 0;
+    int16_t next_turning_point = -1;
+    SlotInfo *cur_slot_info = get_slot_info(param->slot);
+    uint16_t n_turning_points = cur_slot_info ? cur_slot_info->n_turning_points : 0;
+    uint8_t turning_point_found = 0;
+    while (turning_point_idx < n_turning_points) {
+        next_turning_point = cur_slot_info->turning_points[turning_point_idx];
+        turning_point_idx++;
+        if (next_turning_point > start_offset) {
+            turning_point_found = 1;
+            break;
+        }
+        state_bit ^= 1;
+    }
+    if (!turning_point_found) {
+        // no turning points not after start_offset found
+        next_turning_point = -1;
+    }
+#endif
+    for (uint32_t offset = start_offset; offset < params_len; offset += cur_chunk_len) {
+        cur_chunk_len = MIN_VAL(chunk_len, params_len - offset);
+#ifdef WITH_PROGRESS_EMBEDDING
+        uint8_t next_state_flipped = 0;
+        // Use <= here as turning_point_idx is actually index for the _next_ turning point
+        if (next_turning_point > 0 && turning_point_idx <= cur_slot_info->n_turning_points) {
+            uint16_t chunk_len_before_turning_point = MIN_VAL(cur_chunk_len, next_turning_point - offset);
+            if (chunk_len_before_turning_point != cur_chunk_len) {
+                next_turning_point = cur_slot_info->turning_points[turning_point_idx];
+                turning_point_idx++;
+                next_state_flipped = 1;
+            }
+            cur_chunk_len = chunk_len_before_turning_point;
+        }
+#endif
+        MY_ASSERT(cur_chunk_len);
+        callback(offset, cur_chunk_len, state_bit);
+#ifdef WITH_PROGRESS_EMBEDDING
+        if (next_state_flipped) {
+            state_bit ^= 1;
+        }
+#endif
+    }
 }
