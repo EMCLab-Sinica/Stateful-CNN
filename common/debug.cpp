@@ -7,11 +7,6 @@ uint8_t dump_integer = 1;
 
 ValueInfo::ValueInfo(ParameterInfo *cur_param, Model *model) {
     this->scale = cur_param->scale;
-#ifdef WITH_PROGRESS_EMBEDDING
-    if (model) {
-        this->state = get_state_bit(model, cur_param->slot);
-    }
-#endif
 }
 
 static void print_q15(int16_t val, const ValueInfo& val_info) {

@@ -35,12 +35,9 @@ struct Node;
 
 struct ValueInfo {
     ValueInfo(ParameterInfo *cur_param, Model *model = nullptr);
-    ValueInfo() {}
+    ValueInfo() = delete;
 
     uint16_t scale;
-#ifdef WITH_PROGRESS_EMBEDDING
-    uint8_t state;
-#endif
 };
 
 extern uint8_t dump_integer;

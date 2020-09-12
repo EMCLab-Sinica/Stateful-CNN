@@ -255,12 +255,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #endif
 
     my_printf_debug("matrix_mpy_results" NEWLINE);
-    ValueInfo val_info;
-    val_info.scale = conv_params->conv_input->scale * conv_params->conv_filter->scale;
-#ifdef WITH_PROGRESS_EMBEDDING
-    val_info.state = !conv_params->old_output_state_bit;
-#endif
-    dump_matrix2_debug(matrix_mpy_results, A_rows, B_cols, val_info);
+    dump_matrix2_debug(matrix_mpy_results, A_rows, B_cols, ValueInfo(conv_params->output));
     my_printf_debug(NEWLINE);
 #endif
     /* END dump data */
@@ -352,7 +347,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         dest += conv_params->dest_offset;
     }
     my_printf_debug("Loaded inputs before removing state bits" NEWLINE);
-    dump_matrix_debug(lea_buffer, inputs_len, ValueInfo());
+    dump_matrix_debug(lea_buffer, inputs_len, ValueInfo(conv_params->real_conv_input));
 #ifdef WITH_PROGRESS_EMBEDDING
     // Not using iterate_chunks here as it is too slow
     // TODO: use LEA

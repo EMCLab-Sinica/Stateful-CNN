@@ -302,10 +302,7 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
 
     while (1) {
 #if 1
-        ValueInfo val_info;
-        val_info.scale = output->scale;
-        val_info.state = 0; // TODO
-        dump_matrix_debug(output, cur_begin_offset, cur_end_offset - cur_begin_offset, val_info);
+        dump_matrix_debug(output, cur_begin_offset, cur_end_offset - cur_begin_offset, ValueInfo(output));
 #endif
         if (cur_end_offset - cur_begin_offset <= 1) {
             if (get_value_state_bit(get_q15_param(output, cur_begin_offset)) == param_state_bit(model, output, cur_begin_offset)) {
