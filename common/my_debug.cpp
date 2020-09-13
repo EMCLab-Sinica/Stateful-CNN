@@ -1,5 +1,5 @@
 #include <inttypes.h> // for PRId64
-#include "debug.h"
+#include "my_debug.h"
 #include "cnn_common.h"
 #include "intermittent-cnn.h"
 

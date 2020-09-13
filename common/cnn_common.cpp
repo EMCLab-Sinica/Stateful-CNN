@@ -1,5 +1,5 @@
 #include "cnn_common.h"
-#include "debug.h"
+#include "my_debug.h"
 
 uint8_t *inputs_data;
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 void my_add_q15(const int16_t *pSrcA, const int16_t *pSrcB, int16_t *pDst, uint32_t blockSize);
 void my_fill_q15(int16_t value, int16_t *pDst, uint32_t blockSize);
 void my_offset_q15(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t blockSize);

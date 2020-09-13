@@ -6,7 +6,7 @@
 #endif
 #include <inttypes.h> // for PRId32
 #include "cnn_common.h"
-#include "debug.h"
+#include "my_debug.h"
 #include "op_handlers.h"
 #include "intermittent-cnn.h"
 #include "my_dsplib.h"
@@ -335,7 +335,6 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                     (int)(dest - lea_buffer));
     int16_t input_src_offset;
-    dump_turning_points_debug(conv_params->output);
     for (int32_t h = h_start; h <= h_end; h++) {
         input_src_offset = input_offset + (conv_params->input_h + h) * conv_params->W * conv_params->cur_input_tile_c + (conv_params->input_w + w_start) * conv_params->cur_input_tile_c;
         int16_t *dest_addr = dest + (w_start + field_size) * conv_params->cur_input_tile_c;
@@ -349,6 +348,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     my_printf_debug("Loaded inputs before removing state bits" NEWLINE);
     dump_matrix_debug(lea_buffer, inputs_len, ValueInfo(conv_params->real_conv_input));
 #ifdef WITH_PROGRESS_EMBEDDING
+    dump_turning_points_debug(conv_params->output);
     // Not using iterate_chunks here as it is too slow
     // TODO: use LEA
     if (conv_params->cur_slot_info->n_turning_points) {

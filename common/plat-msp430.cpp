@@ -12,7 +12,7 @@
 #include "cnn_common.h"
 #include "platform.h"
 #include "data.h"
-#include "debug.h"
+#include "my_debug.h"
 
 /* on FRAM */
 

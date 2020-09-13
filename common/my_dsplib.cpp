@@ -6,7 +6,7 @@
 
 #include "my_dsplib.h"
 #include "platform.h"
-#include "debug.h"
+#include "my_debug.h"
 
 void my_add_q15(const int16_t *pSrcA, const int16_t *pSrcB, int16_t *pDst, uint32_t blockSize) {
 #ifndef USE_ARM_CMSIS

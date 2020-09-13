@@ -6,7 +6,7 @@
 #include "op_handlers.h"
 #include "cnn_common.h"
 #include "data.h"
-#include "debug.h"
+#include "my_debug.h"
 
 static void handle_node(Model *model, Node *nodes, uint16_t node_idx) {
     my_printf_debug("Current node: %d, ", node_idx);

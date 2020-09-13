@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 #include "data.h"
-#include "debug.h"
+#include "my_debug.h"
 
 struct ParameterInfo;
 struct Model;

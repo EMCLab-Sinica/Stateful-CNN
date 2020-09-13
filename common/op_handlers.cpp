@@ -1,6 +1,6 @@
 #include "cnn_common.h"
 #include "op_handlers.h"
-#include "debug.h"
+#include "my_debug.h"
 #include "platform.h"
 #include "conv.h"
 #include "intermittent-cnn.h"

@@ -4,7 +4,7 @@
 
 #include "intermittent-cnn.h"
 #include "cnn_common.h"
-#include "debug.h"
+#include "my_debug.h"
 #include "platform.h"
 #include "data.h"
 #include <stdint.h>
