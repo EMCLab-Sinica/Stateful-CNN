@@ -15,33 +15,43 @@ int16_t lea_buffer[LEA_BUFFER_SIZE];
 #define RESHAPE_AUTO_DIM (uint16_t)(-1)
 
 #ifdef WITH_PROGRESS_EMBEDDING
-static void find_initial_state_bit(int16_t* p_offset, uint8_t* p_output_turning_point_idx, int16_t* p_next_output_turning_point, SlotInfo** p_output_slot_info, uint32_t first_unfinished_value_offset, Model* model, ParameterInfo* output) {
-    *p_offset = get_state_bit(model, output->slot) ? 0 : 0x4000;
-    *p_output_turning_point_idx = 0;
-    *p_next_output_turning_point = -1;
-    *p_output_slot_info = get_slot_info(output->slot);
-    while (*p_output_turning_point_idx < (*p_output_slot_info)->n_turning_points) {
-        *p_next_output_turning_point = (*p_output_slot_info)->turning_points[*p_output_turning_point_idx];
-        (*p_output_turning_point_idx)++;
-        if (*p_next_output_turning_point > static_cast<int16_t>(first_unfinished_value_offset)) {
+void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, ParameterInfo* param) {
+    *p_offset = get_state_bit(model, param->slot) ? 0x4000 : 0;
+    *p_turning_point_idx = 0;
+    *p_next_turning_point = -1;
+    *p_slot_info = get_slot_info(param->slot);
+    uint8_t next_turning_point_found = 0;
+    if (!(*p_slot_info)) {
+        return;
+    }
+    while (*p_turning_point_idx < (*p_slot_info)->n_turning_points) {
+        *p_next_turning_point = (*p_slot_info)->turning_points[*p_turning_point_idx];
+        (*p_turning_point_idx)++;
+        if (*p_next_turning_point > static_cast<int16_t>(initial_value_idx)) {
+            next_turning_point_found = 1;
             break;
         }
         *p_offset ^= 0x4000;
     }
+    if (!next_turning_point_found) {
+        *p_next_turning_point = -1;
+    }
 }
 
-#define check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset) \
-    if (next_output_turning_point > 0 && output_offset >= next_output_turning_point) { \
-        next_turning_point(&offset, &output_turning_point_idx, &next_output_turning_point, output_slot_info); \
-    }
-
-static void next_turning_point(int16_t* p_offset, uint8_t* p_output_turning_point_idx, int16_t* p_next_output_turning_point, SlotInfo* output_slot_info) {
+void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo* slot_info, uint16_t value_idx) {
     *p_offset ^= 0x4000;
-    if (*p_output_turning_point_idx < output_slot_info->n_turning_points) {
-        *p_next_output_turning_point = output_slot_info->turning_points[*p_output_turning_point_idx];
-        (*p_output_turning_point_idx)++;
-    } else {
-        *p_next_output_turning_point = -1;
+    uint8_t next_turning_point_found = 0;
+    while (*p_turning_point_idx < slot_info->n_turning_points) {
+        *p_next_turning_point = slot_info->turning_points[*p_turning_point_idx];
+        (*p_turning_point_idx)++;
+        if (*p_next_turning_point >= value_idx) {
+            next_turning_point_found = 1;
+            break;
+        }
+        *p_offset ^= 0x4000;
+    }
+    if (!next_turning_point_found) {
+        *p_next_turning_point = -1;
     }
 }
 #endif
@@ -135,6 +145,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
+    offset ^= 0x4000;
 #endif
     for (; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
         uint16_t real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
@@ -442,6 +453,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, No
         uint8_t output_turning_point_idx;
         SlotInfo *output_slot_info;
         find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
+        offset ^= 0x4000;
 #endif
         for (; output_h < H; output_h++) {
             for (; output_w < W; output_w++) {
@@ -694,6 +706,7 @@ void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInf
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, 0 /*TODO: first_unfinished_value_offset*/, model, output);
+    offset ^= 0x4000;
 #endif
 
     uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];

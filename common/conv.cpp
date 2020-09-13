@@ -335,36 +335,52 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                     (int)(dest - lea_buffer));
     int16_t input_src_offset;
+    input_src_offset = input_offset + (conv_params->input_h + h_start) * conv_params->W * conv_params->cur_input_tile_c + (conv_params->input_w + w_start) * conv_params->cur_input_tile_c;
+#ifdef WITH_PROGRESS_EMBEDDING
+    dump_turning_points_debug(conv_params->real_conv_input);
+
+    int16_t offset, next_turning_point;
+    uint8_t turning_point_idx;
+    SlotInfo *input_slot_info;
+    find_initial_state_bit(&offset, &turning_point_idx, &next_turning_point, &input_slot_info, input_src_offset, model, conv_params->real_conv_input);
+#endif
     for (int32_t h = h_start; h <= h_end; h++) {
-        input_src_offset = input_offset + (conv_params->input_h + h) * conv_params->W * conv_params->cur_input_tile_c + (conv_params->input_w + w_start) * conv_params->cur_input_tile_c;
         int16_t *dest_addr = dest + (w_start + field_size) * conv_params->cur_input_tile_c;
-        my_printf_debug("Load input from range [%d, %ld)" NEWLINE, input_src_offset, input_src_offset + size);
+        int16_t input_src_offset_end = input_src_offset + size;
+        my_printf_debug("Load %ld IFM values from range [%d, %d)" NEWLINE, size, input_src_offset, input_src_offset_end);
         my_memcpy_from_param(
             dest_addr,
             conv_params->real_conv_input, input_src_offset,
             size * sizeof(int16_t));
+#ifdef WITH_PROGRESS_EMBEDDING
+        if (offset) {
+            MY_ASSERT(static_cast<uint16_t>(next_turning_point) > input_src_offset);
+            my_offset_q15(dest_addr, -offset, dest_addr, MIN_VAL(static_cast<int16_t>(size), static_cast<uint16_t>(next_turning_point) - input_src_offset));
+        } else if (static_cast<uint16_t>(next_turning_point) < input_src_offset_end) {
+            MY_ASSERT(next_turning_point >= input_src_offset);
+            int16_t *to_offset  = dest_addr + next_turning_point - input_src_offset;
+            my_offset_q15(to_offset, -0x4000, to_offset, input_src_offset_end - next_turning_point);
+        }
+#endif
         dest += conv_params->dest_offset;
+        input_src_offset += conv_params->W * conv_params->cur_input_tile_c;
+#ifdef WITH_PROGRESS_EMBEDDING
+        check_next_turning_point(offset, turning_point_idx, next_turning_point, input_slot_info, input_src_offset);
+#endif
     }
     my_printf_debug("Loaded inputs before removing state bits" NEWLINE);
     dump_matrix_debug(lea_buffer, inputs_len, ValueInfo(conv_params->real_conv_input));
-#ifdef WITH_PROGRESS_EMBEDDING
-    dump_turning_points_debug(conv_params->output);
-    // Not using iterate_chunks here as it is too slow
-    // TODO: use LEA
-    if (conv_params->cur_slot_info->n_turning_points) {
-        int16_t *ptr = lea_buffer;
-        for (size_t idx = 0; idx < inputs_len; idx++) {
-            if (get_value_state_bit(*ptr)) {
-                *ptr -= 0x4000;
-            }
-            ptr++;
-        }
+#if defined(WITH_PROGRESS_EMBEDDING) && MY_DEBUG >= 2
+    int16_t *ptr = lea_buffer;
+    for (size_t idx = 0; idx < inputs_len; idx++) {
+        MY_ASSERT(!get_value_state_bit(*ptr));
+        ptr++;
     }
 #endif
-    uint16_t offset = conv_params->dest_offset - 1;
-    while (offset < inputs_len) {
-        lea_buffer[offset] = -0x8000; // _Q15(-1.0)
-        offset += conv_params->dest_offset;
+    uint16_t bias_multipler_offset = conv_params->dest_offset - 1;
+    while (bias_multipler_offset < inputs_len) {
+        lea_buffer[bias_multipler_offset] = -0x8000; // _Q15(-1.0)
+        bias_multipler_offset += conv_params->dest_offset;
     }
 
     my_printf_debug("Loaded inputs" NEWLINE);
