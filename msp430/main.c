@@ -122,7 +122,9 @@ __interrupt void Port_5(void)
     GPIO_disableInterrupt(GPIO_PORT_P5, GPIO_PIN5);
 
     /* Button pushed, do something if you need to */
-    button_pushed();
+    uint16_t status_5_5 = GPIO_getInterruptStatus(GPIO_PORT_P5, GPIO_PIN5),
+             status_5_6 = GPIO_getInterruptStatus(GPIO_PORT_P5, GPIO_PIN6);
+    button_pushed(status_5_5, status_5_6);
 
     GPIO_enableInterrupt(GPIO_PORT_P5, GPIO_PIN6);
     GPIO_enableInterrupt(GPIO_PORT_P5, GPIO_PIN5);

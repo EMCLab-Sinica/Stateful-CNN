@@ -212,15 +212,20 @@ void IntermittentCNNTest() {
     }
 }
 
-void button_pushed(void) {
+void button_pushed(uint16_t button1_status, uint16_t button2_status) {
     static uint8_t push_counter = 0;
+
+    my_printf_debug("button1_status=%d button2_status=%d" NEWLINE, button1_status, button2_status);
+
+    if (button1_status && button2_status) {
+        // XXX: somehow interrupts for both buttons are triggered immediately after recovery
+        return;
+    }
 
     Model *model = (Model*)model_data;
     my_printf("%d" NEWLINE, model->run_counter);
 
-    // XXX: somehow the ISR for button is triggered immediately after recovery
-    if (push_counter >= 1) {
-        myFirstTime = 0;
-    }
+    myFirstTime = 0;
+
     push_counter++;
 }

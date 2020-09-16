@@ -1,6 +1,7 @@
 #pragma once
 
 #include "data.h"
+#include <stdint.h>
 
 #define LEA_BUFFER_SIZE 1884 // (4096 - 0x138 (LEASTACK) - 2 * 8 (MSP_LEA_MAC_PARAMS)) / sizeof(int16_t)
 
@@ -13,7 +14,7 @@ extern "C" {
 #endif
 
 void IntermittentCNNTest(void);
-void button_pushed(void);
+void button_pushed(uint16_t button1_status, uint16_t button2_status);
 
 #ifdef __cplusplus
 }

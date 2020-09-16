@@ -124,8 +124,8 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
     return 0;
 }
 
-void print_results(Model *model, ParameterInfo *output_node) {
 #if MY_DEBUG >= 1
+static void print_results(Model *model, ParameterInfo *output_node) {
     dump_params(model, output_node);
 
     my_printf("op types:" NEWLINE);
@@ -150,8 +150,8 @@ void print_results(Model *model, ParameterInfo *output_node) {
     plat_print_results();
     my_printf(NEWLINE "run_counter: %d", model->run_counter);
     my_printf(NEWLINE);
-#endif
 }
+#endif
 
 uint8_t run_cnn_tests(uint16_t n_samples) {
     int8_t label = -1, predicted = -1;
