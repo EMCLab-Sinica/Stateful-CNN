@@ -56,7 +56,7 @@ typedef struct ConvTaskParams {
     uint16_t filter_offset;
     uint8_t truncated;
 #ifdef WITH_PROGRESS_EMBEDDING
-    uint8_t old_output_state_bit;
+    int16_t old_output_offset ;
     uint8_t turning_point_idx;
     int16_t next_turning_point;
     SlotInfo* cur_slot_info;
@@ -144,7 +144,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     SlotInfo *cur_slot_info = conv_params->cur_slot_info;
     int16_t n_keep_state_bits = cur_output_tile_c;
     uint8_t need_cleanup_state_bits = 0;
-    if (conv_params->turning_point_idx < cur_slot_info->n_turning_points && conv_params->next_turning_point > 0) {
+    if (conv_params->turning_point_idx <= cur_slot_info->n_turning_points && conv_params->next_turning_point > 0) {
         my_printf_debug("next_turning_point = %d" NEWLINE, conv_params->next_turning_point);
         n_keep_state_bits -= MAX_VAL(0, cur_output_data_offset + cur_output_tile_c - conv_params->next_turning_point);
     }
@@ -179,7 +179,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 }
             }
 #ifdef WITH_PROGRESS_EMBEDDING
-            if ((!conv_params->old_output_state_bit && idx < n_keep_state_bits) || (conv_params->old_output_state_bit && idx >= n_keep_state_bits)) {
+            if ((!conv_params->old_output_offset && idx < n_keep_state_bits) || (conv_params->old_output_offset && idx >= n_keep_state_bits)) {
                 my_printf_debug("Adding state bit for newly loaded filter idx=%d" NEWLINE, idx);
                 filter_tmp[conv_params->filter_offset - 1] = -0x4000;
                 need_cleanup_state_bits = 1;
@@ -269,12 +269,9 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
 #ifdef WITH_PROGRESS_EMBEDDING
     if (n_keep_state_bits != cur_output_tile_c) {
-        conv_params->turning_point_idx++;
-        conv_params->old_output_state_bit ^= 1;
-        my_printf_debug("old_output_state_bit flipped to %d" NEWLINE, conv_params->old_output_state_bit);
-        if (conv_params->turning_point_idx < cur_slot_info->n_turning_points) {
-            conv_params->next_turning_point = cur_slot_info->turning_points[conv_params->turning_point_idx];
-        }
+        check_next_turning_point(conv_params->old_output_offset, conv_params->turning_point_idx,
+                                 conv_params->next_turning_point, conv_params->cur_slot_info, cur_output_data_offset + cur_output_tile_c);
+        my_printf_debug("old_output_offset flipped to %d" NEWLINE, conv_params->old_output_offset);
 
         if (need_cleanup_state_bits) {
             flip_filter_state_bits(conv_params, cur_output_tile_c, n_keep_state_bits, 0);
@@ -368,8 +365,6 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         check_next_turning_point(offset, turning_point_idx, next_turning_point, input_slot_info, input_src_offset);
 #endif
     }
-    my_printf_debug("Loaded inputs before removing state bits" NEWLINE);
-    dump_matrix_debug(lea_buffer, inputs_len, ValueInfo(conv_params->real_conv_input));
 #if defined(WITH_PROGRESS_EMBEDDING) && MY_DEBUG >= 2
     int16_t *ptr = lea_buffer;
     for (size_t idx = 0; idx < inputs_len; idx++) {
@@ -490,17 +485,13 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, No
     conv_params->conv_idx_base = 0;
     conv_params->conv_idx = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
-    SlotInfo *cur_slot_info = conv_params->cur_slot_info = get_slot_info(output->slot);
-    conv_params->turning_point_idx = 0;
-    conv_params->next_turning_point = -1;
-    if (conv_params->turning_point_idx < cur_slot_info->n_turning_points) {
-        conv_params->next_turning_point = cur_slot_info->turning_points[conv_params->turning_point_idx];
-    }
-
-    conv_params->old_output_state_bit = get_state_bit(model, output->slot);
-    my_printf_debug("old_output_state_bit = %d" NEWLINE, conv_params->old_output_state_bit);
-
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
+
+    find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point,
+                           &conv_params->cur_slot_info, first_unfinished_value_offset, model, output);
+
+    my_printf_debug("old_output_offset = %d" NEWLINE, conv_params->old_output_offset);
+
     // Dimensions: channel-tiled NWHC
     uint16_t slice_size_input_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL;
     conv_params->input_tile_c_index = first_unfinished_value_offset / slice_size_input_channel_tiling;
