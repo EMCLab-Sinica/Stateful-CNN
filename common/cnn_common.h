@@ -58,7 +58,7 @@ typedef struct Model {
     uint16_t nodes_len;
     uint16_t n_input;
     uint16_t running;
-    uint16_t recovery;
+    uint16_t first_time;
     uint16_t run_counter;
     uint16_t layer_idx;
     uint16_t sample_idx;

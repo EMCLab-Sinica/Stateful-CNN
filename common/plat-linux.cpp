@@ -39,6 +39,7 @@ Counters *counters() {
 
 int main(int argc, char* argv[]) {
     int ret = 0, opt_ch, read_only = 0, n_samples = 0;
+    Model *model;
 
     while((opt_ch = getopt(argc, argv, "fr")) != -1) {
         switch (opt_ch) {
@@ -81,7 +82,11 @@ int main(int argc, char* argv[]) {
 #endif
 
 #ifdef WITH_PROGRESS_EMBEDDING
-    memset(intermediate_values(0), 0, INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
+    model = reinterpret_cast<Model*>(model_data);
+    if (model->first_time) {
+        memset(intermediate_values(0), 0, INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
+        model->first_time = 0;
+    }
 #endif
 
     ret = run_cnn_tests(n_samples);

@@ -163,9 +163,6 @@ void plat_print_results(void) {
     }
 }
 
-#pragma DATA_SECTION(".nvm")
-static uint8_t myFirstTime;
-
 #define DELAY_START_SECONDS 0
 
 #if DELAY_START_SECONDS > 0
@@ -181,7 +178,7 @@ void IntermittentCNNTest() {
     // testSPI();
 #endif
 
-    if (myFirstTime != 1) {
+    if (model->first_time) {
 #if DELAY_START_SECONDS > 0
         delay_counter = 0;
 #endif
@@ -191,7 +188,7 @@ void IntermittentCNNTest() {
             counters()->power_counters[i] = 0;
         }
 
-        myFirstTime = 1;
+        model->first_time = 0;
         model->run_counter = 0;
     }
 
@@ -225,7 +222,7 @@ void button_pushed(uint16_t button1_status, uint16_t button2_status) {
     Model *model = (Model*)model_data;
     my_printf("%d" NEWLINE, model->run_counter);
 
-    myFirstTime = 0;
+    model->first_time = 1;
 
     push_counter++;
 }
