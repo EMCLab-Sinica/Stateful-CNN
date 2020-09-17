@@ -19,7 +19,7 @@ jobs:
         path: TI-DSPLib
         token: ${{ secrets.access_token }}
     - name: Test
-      run: ./.ci/test.sh
+      run: ./utils/test.sh
 
   mnist_stateful:
     runs-on: ubuntu-latest
@@ -37,7 +37,7 @@ jobs:
         path: TI-DSPLib
         token: ${{ secrets.access_token }}
     - name: Test
-      run: ./.ci/test.sh
+      run: ./utils/test.sh
 
   cifar10_baseline:
     runs-on: ubuntu-latest
@@ -55,7 +55,7 @@ jobs:
         path: TI-DSPLib
         token: ${{ secrets.access_token }}
     - name: Test
-      run: ./.ci/test.sh
+      run: ./utils/test.sh
 
   cifar10_stateful:
     runs-on: ubuntu-latest
@@ -73,7 +73,7 @@ jobs:
         path: TI-DSPLib
         token: ${{ secrets.access_token }}
     - name: Test
-      run: ./.ci/test.sh
+      run: ./utils/test.sh
 
   mnist_baseline_cmsis:
     runs-on: ubuntu-latest
@@ -92,7 +92,7 @@ jobs:
         ref: patched
         path: ARM-CMSIS_5
     - name: Test
-      run: ./.ci/test.sh
+      run: ./utils/test.sh
 
   mnist_stateful_cmsis:
     runs-on: ubuntu-latest
@@ -111,7 +111,7 @@ jobs:
         ref: patched
         path: ARM-CMSIS_5
     - name: Test
-      run: ./.ci/test.sh
+      run: ./utils/test.sh
 
   cifar10_baseline_cmsis:
     runs-on: ubuntu-latest
@@ -130,7 +130,7 @@ jobs:
         ref: patched
         path: ARM-CMSIS_5
     - name: Test
-      run: ./.ci/test.sh
+      run: ./utils/test.sh
 
   cifar10_stateful_cmsis:
     runs-on: ubuntu-latest
@@ -149,7 +149,7 @@ jobs:
         ref: patched
         path: ARM-CMSIS_5
     - name: Test
-      run: ./.ci/test.sh
+      run: ./utils/test.sh
 
   debug_build:
     runs-on: ubuntu-latest
@@ -167,7 +167,7 @@ jobs:
         path: TI-DSPLib
         token: ${{ secrets.access_token }}
     - name: Test
-      run: ./.ci/test.sh
+      run: ./utils/test.sh
 
   old_system:
     runs-on: ubuntu-latest
@@ -182,4 +182,4 @@ jobs:
         path: TI-DSPLib
         token: ${{ secrets.access_token }}
     - name: Test
-      run: ./.ci/test-centos7.sh
+      run: ./utils/test-centos7.sh

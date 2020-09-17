@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 project(intermittent-cnn)
 
 option(USE_ARM_CMSIS "Use DSP from ARM CMSIS pack" OFF)
+set(MY_DEBUG "1" CACHE STRING "Local debug flag. See my_debug.h for details.")
 
 # Too many parameters are unused if some features are not enabled
 set(COMMON_FLAGS "-Wall -Wextra -Wshadow -Wundef -Wno-unused-parameter -g -O0 -pedantic")
@@ -79,6 +80,7 @@ target_compile_definitions(intermittent-cnn
     PRIVATE
         MY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         POSIX_BUILD
+        MY_DEBUG=${MY_DEBUG}
 )
 
 if (USE_ARM_CMSIS)

@@ -12,6 +12,7 @@ pip install --user numpy onnx
 # preparation
 transform_args="--all-samples"
 cmake_args=""
+MY_DEBUG="1"
 run_args=""
 if [[ $WITH_PROGRESS_EMBEDDING = 0 ]]; then
     transform_args="$transform_args --without-progress-embedding"
@@ -22,9 +23,10 @@ if [[ $USE_ARM_CMSIS = 1 ]]; then
 fi
 
 if [[ $DEBUG_BUILD = 1 ]]; then
-    sed -i 's/#define MY_NDEBUG//' common/my_debug.h
+    MY_DEBUG="2"
     run_args="$run_args 1"
 fi
+cmake_args="$cmake_args -D MY_DEBUG=$MY_DEBUG"
 
 if [[ $CONFIG = mnist ]]; then
     ./data/download-mnist.sh

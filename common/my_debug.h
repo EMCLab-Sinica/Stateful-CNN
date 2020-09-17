@@ -9,7 +9,9 @@
 // 0: silent, assertion disabled
 // 1: normal
 // 2: verbose
+#ifndef MY_DEBUG
 #define MY_DEBUG 0
+#endif
 
 #if defined(__MSP430__) || defined(__MSP432__)
 #  include "Tools/myuart.h"
