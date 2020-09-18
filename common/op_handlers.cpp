@@ -266,18 +266,51 @@ void alloc_add(Model *model, ParameterInfo *input[], ParameterInfo *output, Node
     output->slot = get_next_slot(model, A);
 }
 
+class AddOutputChunkHandler : public ChunkHandler {
+public:
+    AddOutputChunkHandler(int16_t *_buffer) : buffer(_buffer) {}
+
+    void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
+        if (!state_bit) {
+            int16_t* to_offset = buffer + offset;
+            my_offset_q15(to_offset, 0x4000, to_offset, real_chunk_len);
+        }
+    }
+
+private:
+    int16_t *buffer;
+};
+
 void handle_add(Model* model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
     /* Add: Y = X + W */
     my_printf_debug("Add!" NEWLINE);
 
     ParameterInfo *A = input[0], *B = input[1];
 
+    my_printf_debug("handle_add input A" NEWLINE);
+    dump_params_debug(model, A);
+    my_printf_debug("handle_add input B" NEWLINE);
+    dump_params_debug(model, B);
+
     uint16_t vector_size = A->dims[1];
 
     int16_t *buffer_a = lea_buffer,
-            *buffer_b = lea_buffer + output->params_len / sizeof(int16_t);
+            *buffer_b = lea_buffer + vector_size;
     my_memcpy_from_param(buffer_a, A, 0, output->params_len);
     my_memcpy_from_param(buffer_b, B, 0, output->params_len);
+
+#ifdef WITH_PROGRESS_EMBEDDING
+    // XXX: use LEA?
+    for (uint16_t idx = 0; idx < vector_size; idx++) {
+        if (get_value_state_bit(buffer_a[idx])) {
+            buffer_a[idx] -= 0x4000;
+        }
+        if (get_value_state_bit(buffer_b[idx])) {
+            buffer_a[idx] -= 0x4000;
+        }
+    }
+#endif
+
     int16_t scaleFract;
     uint8_t shift;
     if (A->scale > B->scale) {
@@ -289,13 +322,18 @@ void handle_add(Model* model, ParameterInfo *input[], ParameterInfo *output, Nod
     }
     my_add_q15(buffer_a, buffer_b, buffer_a, vector_size);
 
+#ifdef WITH_PROGRESS_EMBEDDING
+    iterate_chunks(model, output, 0, vector_size, AddOutputChunkHandler(buffer_a));
+#endif
+
     my_memcpy_to_param(output, 0, buffer_a, output->params_len);
 
 #ifdef WITH_PROGRESS_EMBEDDING
     flip_state_bit(model, output);
 #endif
 
-    dump_matrix_debug(output, 0, output->params_len / sizeof(int16_t), ValueInfo(output));
+    my_printf_debug("handle_add output" NEWLINE);
+    dump_params_debug(model, output);
 }
 
 void alloc_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
