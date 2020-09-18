@@ -210,8 +210,6 @@ void IntermittentCNNTest() {
 }
 
 void button_pushed(uint16_t button1_status, uint16_t button2_status) {
-    static uint8_t push_counter = 0;
-
     my_printf_debug("button1_status=%d button2_status=%d" NEWLINE, button1_status, button2_status);
 
     if (button1_status && button2_status) {
@@ -222,7 +220,5 @@ void button_pushed(uint16_t button1_status, uint16_t button2_status) {
     Model *model = (Model*)model_data;
     my_printf("%d" NEWLINE, model->run_counter);
 
-    model->first_time = 1;
-
-    push_counter++;
+    reset_everything(model);
 }

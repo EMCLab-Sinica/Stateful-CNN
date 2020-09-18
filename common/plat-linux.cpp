@@ -38,11 +38,14 @@ Counters *counters() {
 }
 
 int main(int argc, char* argv[]) {
-    int ret = 0, opt_ch, read_only = 0, n_samples = 0;
+    int ret = 0, opt_ch, button_pushed = 0, read_only = 0, n_samples = 0;
     Model *model;
 
-    while((opt_ch = getopt(argc, argv, "fr")) != -1) {
+    while((opt_ch = getopt(argc, argv, "bfr")) != -1) {
         switch (opt_ch) {
+            case 'b':
+                button_pushed = 1;
+                break;
             case 'r':
                 read_only = 1;
                 break;
@@ -81,8 +84,14 @@ int main(int argc, char* argv[]) {
     my_printf("Use TI DSPLib" NEWLINE);
 #endif
 
-#ifdef WITH_PROGRESS_EMBEDDING
     model = reinterpret_cast<Model*>(model_data);
+
+    // emulating button_pushed - treating as a fresh run
+    if (button_pushed) {
+        reset_everything(model);
+    }
+
+#ifdef WITH_PROGRESS_EMBEDDING
     if (model->first_time) {
         memset(intermediate_values(0), 0, INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
         model->first_time = 0;

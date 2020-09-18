@@ -199,6 +199,18 @@ void set_sample_index(Model *model, uint8_t index) {
     model->sample_idx = index;
 }
 
+void reset_everything(Model *model) {
+    model->first_time = 1;
+    model->running = 0;
+#ifdef WITH_PROGRESS_EMBEDDING
+    for (uint8_t idx = 0; idx < NUM_SLOTS; idx++) {
+        SlotInfo *cur_slot_info = get_slot_info(idx);
+        cur_slot_info->state_bit = 0;
+        cur_slot_info->n_turning_points = 0;
+    }
+#endif
+}
+
 #ifdef WITH_PROGRESS_EMBEDDING
 void flip_state_bit(Model *model, ParameterInfo *output) {
     int16_t new_turning_point = output->params_len / 2;
