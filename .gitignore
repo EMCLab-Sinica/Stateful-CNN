@@ -10,4 +10,4 @@ data.h
 /ARM-CMSIS/*
 !/ARM-CMSIS/*.sh
 /TI-DSPLib
-/build-posix/
+/build/

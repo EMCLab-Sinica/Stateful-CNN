@@ -5,6 +5,8 @@ project(intermittent-cnn)
 option(USE_ARM_CMSIS "Use DSP from ARM CMSIS pack" OFF)
 set(MY_DEBUG "1" CACHE STRING "Local debug flag. See my_debug.h for details.")
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Too many parameters are unused if some features are not enabled
 set(COMMON_FLAGS "-Wall -Wextra -Wshadow -Wundef -Wno-unused-parameter -g -O0 -pedantic")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS} -Wstrict-prototypes -std=c11")
