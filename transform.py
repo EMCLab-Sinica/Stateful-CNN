@@ -147,6 +147,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('config', choices=configs.keys())
 parser.add_argument('--without-progress-embedding', action='store_true')
 parser.add_argument('--all-samples', action='store_true')
+parser.add_argument('--write-images', action='store_true')
 args = parser.parse_args()
 config = configs[args.config]
 if args.all_samples:
@@ -464,7 +465,7 @@ for idx, im in enumerate(images):
         for idx_h in range(im.shape[2]):
             for idx_w in range(im.shape[3]):
                 outputs['samples'].write(to_bytes(_Q15(im[0, idx_c, idx_h, idx_w] / config['scale'])))
-    try:
+    if args.write_images:
         import cv2
         # Restore conanical image format (H, W, C)
         im = np.squeeze(im * 256)
@@ -472,14 +473,13 @@ for idx, im in enumerate(images):
             im = np.expand_dims(im, axis=-1)
             im = 255 - im
         cv2.imwrite(f'images/test{idx:02d}.png', im)
-    except ImportError:
-        pass
 
 for label in labels:
     outputs['labels'].write(to_bytes(label, size=8))
 
-with open('images/ans.txt', 'w') as f:
-    f.write(' '.join(map(str, labels)))
+if args.write_images:
+    with open('images/ans.txt', 'w') as f:
+        f.write(' '.join(map(str, labels)))
 
 outputs['counters'].write(b'\0' * (4 * Constants.COUNTERS_LEN + 2))
 
