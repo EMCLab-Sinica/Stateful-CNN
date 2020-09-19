@@ -132,7 +132,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 
     uint16_t tile_c_offset = 0;
 
-    uint16_t output_h, output_w, c;
+    uint16_t output_h = 0, output_w = 0, c = 0;
     uint16_t output_offset = 0;
 
 #if STATEFUL_CNN
@@ -214,6 +214,8 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
             c = 0;
         }
     }
+
+    MY_ASSERT(output_offset == output->params_len / sizeof(int16_t));
 
 #if STATEFUL_CNN
     flip_state_bit(model, output);

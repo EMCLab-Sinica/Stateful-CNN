@@ -633,9 +633,10 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
     uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
 
     uint16_t overflow_factor = find_overflow_factor(model, data) * n_tiles_c;
+    float scale_f = 1.0 * SCALE / overflow_factor;
     int16_t scaleFract;
     uint8_t shift;
-    float_to_scale_params(&scaleFract, &shift, 1.0f * SCALE / overflow_factor);
+    float_to_scale_params(&scaleFract, &shift, scale_f);
 
     // XXX: use iterate_chunks() for the outer loop?
     for (uint32_t tiling_results_offset = 0; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
@@ -650,10 +651,12 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 #endif
             // scale up results as in convolution values are scaled down twice (input & weights)
             my_printf_debug("Before my_scale_q15" NEWLINE);
-            dump_matrix_debug(to_add, real_chunk_len, ValueInfo(data));
+            ValueInfo val_info_data(data);
+            dump_matrix_debug(to_add, real_chunk_len, val_info_data);
             my_scale_q15(to_add, scaleFract, shift, to_add, real_chunk_len);
             my_printf_debug("After my_scale_q15" NEWLINE);
-            dump_matrix_debug(to_add, real_chunk_len, ValueInfo(data));
+            val_info_data.scale /= scale_f;
+            dump_matrix_debug(to_add, real_chunk_len, val_info_data);
             if (input_tile_c_index != 0) {
                 my_add_q15(lea_buffer, to_add, lea_buffer, real_chunk_len);
             }
@@ -666,7 +669,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 
     my_printf_debug("After scaling up back and merging tiling results" NEWLINE);
 
-    output->scale = output->scale * overflow_factor / SCALE;
+    output->scale /= scale_f;
 
     setOutputValue(0);
 
