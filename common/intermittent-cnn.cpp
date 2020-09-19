@@ -264,7 +264,8 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
             }
         }
         int16_t val = get_q15_param(output, idx);
-        MY_ASSERT(get_value_state_bit(val) == cur_state_bit);
+        MY_ASSERT(get_value_state_bit(val) == cur_state_bit,
+            "Value %d at index %d does not have expected state bit %d" NEWLINE, val, idx, cur_state_bit);
     }
     // dump_matrix_debug(output, 0, new_turning_point, ValueInfo(output));
 #endif

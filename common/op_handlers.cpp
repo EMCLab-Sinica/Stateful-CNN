@@ -82,9 +82,9 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, N
     offset_h = W * CHANNEL;
     offset_w = CHANNEL;
 
-    my_printf_debug("output_h=%d ", output_h);
-    my_printf_debug("output_w=%d ", output_w);
-    my_printf_debug("c=%d" NEWLINE, c);
+    my_printf_debug("output_h=% 3d ", output_h);
+    my_printf_debug("output_w=% 3d ", output_w);
+    my_printf_debug("c=% 3d ", c);
 
     int16_t max_val = INT16_MIN;
     for (uint16_t sH = 0; sH < kernel_size; sH++) {
@@ -132,12 +132,13 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
 
     uint16_t tile_c_offset = 0;
 
+    uint16_t output_h, output_w, c;
+    uint16_t output_offset = 0;
+
 #ifdef WITH_PROGRESS_EMBEDDING
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
     uint16_t initial_n, initial_c, initial_h, initial_w;
     initial_n = first_unfinished_value_offset / (new_H * new_W * tile_c);
-
-    my_printf_debug("initial_n = %d" NEWLINE, initial_n);
 
     tile_c_offset = initial_n * tile_c;
 
@@ -146,48 +147,40 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
     offset ^= 0x4000;
+
+    uint16_t initial_real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
+    output_offset = first_unfinished_value_offset;
+    if (!need_nhwc2nchw) {
+        initial_c = first_unfinished_value_offset % initial_real_tile_c;
+        first_unfinished_value_offset /= initial_real_tile_c;
+        initial_w = first_unfinished_value_offset % new_W;
+        first_unfinished_value_offset /= new_W;
+        initial_h = first_unfinished_value_offset % new_H;
+    } else {
+        initial_w = first_unfinished_value_offset % new_W;
+        first_unfinished_value_offset /= new_W;
+        initial_h = first_unfinished_value_offset % new_H;
+        first_unfinished_value_offset /= new_H;
+        initial_c = first_unfinished_value_offset % initial_real_tile_c;
+    }
+    output_h = initial_h;
+    output_w = initial_w;
+    c = initial_c;
+    my_printf_debug("initial_n = %d" NEWLINE, initial_n);
+    my_printf_debug("initial_h = %d" NEWLINE, initial_h);
+    my_printf_debug("initial_w = %d" NEWLINE, initial_w);
+    my_printf_debug("initial_c = %d" NEWLINE, initial_c);
 #endif
+
     for (; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
         uint16_t real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
-        uint16_t output_offset = tile_c_offset * new_H * new_W;
         if (!need_nhwc2nchw) {
             // NHWC
-            uint16_t output_h = 0;
-#ifdef WITH_PROGRESS_EMBEDDING
-            initial_c = first_unfinished_value_offset % real_tile_c;
-            first_unfinished_value_offset /= real_tile_c;
-            initial_w = first_unfinished_value_offset % new_W;
-            first_unfinished_value_offset /= new_W;
-            initial_h = first_unfinished_value_offset % new_H;
-
-            my_printf_debug("initial_h = %d" NEWLINE, initial_h);
-            my_printf_debug("initial_w = %d" NEWLINE, initial_w);
-            my_printf_debug("initial_c = %d" NEWLINE, initial_c);
-
-            if (tile_c_offset == initial_n * tile_c) {
-                output_h = initial_h;
-                output_offset += initial_h * new_W * real_tile_c;
-            }
-#endif
             for (; output_h < new_H; output_h++) {
-                uint16_t output_w = 0;
-#if defined(WITH_PROGRESS_EMBEDDING) && 0 // TODO
-                if (tile_c_offset == initial_n * tile_c && output_h == initial_h) {
-                    output_w = initial_w;
-                    output_offset += initial_w * real_tile_c;
-                }
-#endif
                 for (; output_w < new_W; output_w++) {
-                    uint16_t c = 0;
-#if defined(WITH_PROGRESS_EMBEDDING) && 0 // TODO
-                    if (tile_c_offset == initial_n * tile_c && output_h == initial_h && output_w == initial_w) {
-                        c = initial_c;
-                        output_offset += initial_c;
-                    }
-#endif
                     for (; c < real_tile_c; c++) {
                         int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
-                        my_printf_debug(NEWLINE "output_offset=%d" NEWLINE, output_offset);
+                        my_printf_debug("output_offset=%d" NEWLINE, output_offset);
 #ifdef WITH_PROGRESS_EMBEDDING
                         check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
                         max_val += offset;
@@ -195,46 +188,18 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                         put_q15_param(output, output_offset, max_val);
                         output_offset++;
                     }
+                    c = 0;
                 }
+                output_w = 0;
             }
+            output_h = 0;
         } else {
             // NCHW
-            uint16_t c = 0;
-#ifdef WITH_PROGRESS_EMBEDDING
-            initial_w = first_unfinished_value_offset % new_W;
-            first_unfinished_value_offset /= new_W;
-            initial_h = first_unfinished_value_offset % new_H;
-            first_unfinished_value_offset /= new_H;
-            initial_c = first_unfinished_value_offset % real_tile_c;
-
-            my_printf_debug("initial_h = %d" NEWLINE, initial_h);
-            my_printf_debug("initial_w = %d" NEWLINE, initial_w);
-            my_printf_debug("initial_c = %d" NEWLINE, initial_c);
-
-            if (tile_c_offset == initial_n * tile_c) {
-                c = initial_c;
-                output_offset += initial_c * new_H * new_W;
-            }
-#endif
             for (; c < real_tile_c; c++) {
-                uint16_t output_h = 0;
-#if defined(WITH_PROGRESS_EMBEDDING) && 0 // TODO
-                if (tile_c_offset == initial_n * tile_c && c == initial_c) {
-                    output_h = initial_h;
-                    output_offset += initial_h * new_W;
-                }
-#endif
                 for (; output_h < new_H; output_h++) {
-                    uint16_t output_w = 0;
-#if defined(WITH_PROGRESS_EMBEDDING) && 0 // TODO
-                    if (tile_c_offset == initial_n * tile_c && c == initial_c && output_h == initial_h) {
-                        output_w = initial_w;
-                        output_offset += initial_w;
-                    }
-#endif
                     for (; output_w < new_W; output_w++) {
                         int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
-                        my_printf_debug(NEWLINE "output_offset=%d" NEWLINE, output_offset);
+                        my_printf_debug("output_offset=%d" NEWLINE, output_offset);
 #ifdef WITH_PROGRESS_EMBEDDING
                         check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
                         max_val += offset;
@@ -242,8 +207,11 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                         put_q15_param(output, output_offset, max_val);
                         output_offset++;
                     }
+                    output_w = 0;
                 }
+                output_h = 0;
             }
+            c = 0;
         }
     }
 
@@ -597,7 +565,7 @@ void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output,
         output->dims[auto_idx] = inferred_dim;
         new_len *= inferred_dim;
     }
-    MY_ASSERT(new_len * sizeof(int16_t) == output->params_len)
+    MY_ASSERT(new_len * sizeof(int16_t) == output->params_len);
 }
 
 void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
@@ -907,7 +875,7 @@ void iterate_chunks(Model *model, ParameterInfo *param, uint16_t start_offset, u
             cur_chunk_len = chunk_len_before_turning_point;
         }
 #endif
-        MY_ASSERT(cur_chunk_len);
+        MY_ASSERT(cur_chunk_len != 0);
         callback(offset, cur_chunk_len, state_bit);
 #ifdef WITH_PROGRESS_EMBEDDING
         if (next_state_flipped) {

@@ -26,9 +26,26 @@
 #endif
 
 #if MY_DEBUG >= 1
-#define MY_ASSERT(cond) if (!(cond)) { my_printf("Assertion failed at %s:%d" NEWLINE, __FILE__, __LINE__); ERROR_OCCURRED(); }
+template<typename ...Args>
+void my_printf_wrapper(Args... args) {
+    my_printf(args...);
+}
+
+template<>
+void my_printf_wrapper();
+
+template<typename ...Args>
+void my_assert_impl(const char *file, uint16_t line, uint8_t cond, Args... args) {
+    if (!cond) {
+        my_printf("Assertion failed at %s:%d" NEWLINE, file, line);
+        my_printf_wrapper(args...);
+        ERROR_OCCURRED();
+    }
+}
+
+#define MY_ASSERT(...) my_assert_impl(__FILE__, __LINE__, __VA_ARGS__)
 #else
-#define MY_ASSERT(cond)
+#define MY_ASSERT(...)
 #endif
 
 struct ParameterInfo;
