@@ -14,8 +14,8 @@ transform_args="--all-samples"
 cmake_args=""
 MY_DEBUG="1"
 run_args=""
-if [[ $WITH_PROGRESS_EMBEDDING = 0 ]]; then
-    transform_args="$transform_args --without-progress-embedding"
+if [[ $STATEFUL_CNN = 0 ]]; then
+    transform_args="$transform_args --without-stateful-cnn"
 fi
 
 if [[ $USE_ARM_CMSIS = 1 ]]; then

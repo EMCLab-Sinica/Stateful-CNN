@@ -8,7 +8,7 @@ jobs:
     container: archlinux:latest
     env:
       CONFIG: mnist
-      WITH_PROGRESS_EMBEDDING: 0
+      STATEFUL_CNN: 0
     steps:
     - name: Checkout main repo
       uses: actions/checkout@v2
@@ -26,7 +26,7 @@ jobs:
     container: archlinux:latest
     env:
       CONFIG: mnist
-      WITH_PROGRESS_EMBEDDING: 1
+      STATEFUL_CNN: 1
     steps:
     - name: Checkout main repo
       uses: actions/checkout@v2
@@ -44,7 +44,7 @@ jobs:
     container: archlinux:latest
     env:
       CONFIG: cifar10
-      WITH_PROGRESS_EMBEDDING: 0
+      STATEFUL_CNN: 0
     steps:
     - name: Checkout main repo
       uses: actions/checkout@v2
@@ -62,7 +62,7 @@ jobs:
     container: archlinux:latest
     env:
       CONFIG: cifar10
-      WITH_PROGRESS_EMBEDDING: 1
+      STATEFUL_CNN: 1
     steps:
     - name: Checkout main repo
       uses: actions/checkout@v2
@@ -80,7 +80,7 @@ jobs:
     container: archlinux:latest
     env:
       CONFIG: mnist
-      WITH_PROGRESS_EMBEDDING: 0
+      STATEFUL_CNN: 0
       USE_ARM_CMSIS: 1
     steps:
     - name: Checkout main repo
@@ -99,7 +99,7 @@ jobs:
     container: archlinux:latest
     env:
       CONFIG: mnist
-      WITH_PROGRESS_EMBEDDING: 1
+      STATEFUL_CNN: 1
       USE_ARM_CMSIS: 1
     steps:
     - name: Checkout main repo
@@ -118,7 +118,7 @@ jobs:
     container: archlinux:latest
     env:
       CONFIG: cifar10
-      WITH_PROGRESS_EMBEDDING: 0
+      STATEFUL_CNN: 0
       USE_ARM_CMSIS: 1
     steps:
     - name: Checkout main repo
@@ -137,7 +137,7 @@ jobs:
     container: archlinux:latest
     env:
       CONFIG: cifar10
-      WITH_PROGRESS_EMBEDDING: 1
+      STATEFUL_CNN: 1
       USE_ARM_CMSIS: 1
     steps:
     - name: Checkout main repo

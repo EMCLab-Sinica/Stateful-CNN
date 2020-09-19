@@ -90,7 +90,7 @@ int main(int argc, char* argv[]) {
         reset_everything(model);
     }
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     if (model->first_time) {
         memset(intermediate_values(0), 0, INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
         model->first_time = 0;

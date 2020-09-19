@@ -55,7 +55,7 @@ typedef struct ConvTaskParams {
     uint16_t dest_offset;
     uint16_t filter_offset;
     uint8_t truncated;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     int16_t old_output_offset ;
     uint8_t turning_point_idx;
     int16_t next_turning_point;
@@ -100,7 +100,7 @@ void determine_tile_c(ParameterInfo *param, ParameterInfo *filter) {
     }
 }
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
 static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t cur_output_tile_c, uint16_t len, uint8_t first_round) {
     MY_ASSERT(len < OUTPUT_LEN);
     my_printf_debug("Flipping %d state bits in filters" NEWLINE, len);
@@ -140,7 +140,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             (conv_params->input_h + offset_h) / conv_params->stride * cur_output_tile_c +                // h
             conv_params->conv_idx - conv_params->conv_idx_base;                                          // c
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     SlotInfo *cur_slot_info = conv_params->cur_slot_info;
     int16_t n_keep_state_bits = cur_output_tile_c;
     uint8_t need_cleanup_state_bits = 0;
@@ -178,7 +178,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                     cur_filter_src_offset += conv_params->CHANNEL;
                 }
             }
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
             if ((!conv_params->old_output_offset && idx < n_keep_state_bits) || (conv_params->old_output_offset && idx >= n_keep_state_bits)) {
                 my_printf_debug("Adding state bit for newly loaded filter idx=%d" NEWLINE, idx);
                 filter_tmp[conv_params->filter_offset - 1] = -0x4000;
@@ -212,7 +212,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         conv_params->cached_filter_idx = conv_params->conv_idx;
         conv_params->cached_input_tile_c_offset = conv_params->input_tile_c_offset;
     } else {
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
         if (n_keep_state_bits != cur_output_tile_c) {
             need_cleanup_state_bits = 1;
             int16_t n_flip_state_bits = cur_output_tile_c - n_keep_state_bits;
@@ -267,7 +267,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     MY_ASSERT(cur_output_data_offset + cur_output_tile_c < INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
     my_memcpy_to_param(conv_params->output, cur_output_data_offset, matrix_mpy_results, cur_output_tile_c * sizeof(int16_t));
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     if (n_keep_state_bits != cur_output_tile_c) {
         check_next_turning_point(conv_params->old_output_offset, conv_params->turning_point_idx,
                                  conv_params->next_turning_point, conv_params->cur_slot_info, cur_output_data_offset + cur_output_tile_c);
@@ -333,7 +333,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
                     (int)(dest - lea_buffer));
     int16_t input_src_offset;
     input_src_offset = input_offset + (conv_params->input_h + h_start) * conv_params->W * conv_params->cur_input_tile_c + (conv_params->input_w + w_start) * conv_params->cur_input_tile_c;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     dump_turning_points_debug(model, conv_params->real_conv_input);
 
     int16_t offset, next_turning_point;
@@ -349,7 +349,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
             dest_addr,
             conv_params->real_conv_input, input_src_offset,
             size * sizeof(int16_t));
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
         if (offset) {
             MY_ASSERT(static_cast<uint16_t>(next_turning_point) > input_src_offset);
             my_offset_q15(dest_addr, -offset, dest_addr, MIN_VAL(static_cast<int16_t>(size), static_cast<uint16_t>(next_turning_point) - input_src_offset));
@@ -361,11 +361,11 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
 #endif
         dest += conv_params->dest_offset;
         input_src_offset += conv_params->W * conv_params->cur_input_tile_c;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
         check_next_turning_point(offset, turning_point_idx, next_turning_point, input_slot_info, input_src_offset);
 #endif
     }
-#if defined(WITH_PROGRESS_EMBEDDING) && MY_DEBUG >= 2
+#if STATEFUL_CNN && MY_DEBUG >= 2
     int16_t *ptr = lea_buffer;
     for (size_t idx = 0; idx < inputs_len; idx++) {
         MY_ASSERT(!get_value_state_bit(*ptr));
@@ -484,7 +484,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, No
     conv_params->input_h = conv_params->offset_h;
     conv_params->conv_idx_base = 0;
     conv_params->conv_idx = 0;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
 
     find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point,
@@ -549,7 +549,7 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, No
         conv_params->conv_idx = conv_params->conv_idx_base = 0;
     }
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     flip_state_bit(model, output);
 #endif
 
@@ -645,9 +645,9 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
             int16_t *to_add = lea_buffer + input_tile_c_index * chunk_len;
             uint16_t data_offset = input_tile_c_index * tiling_results_len + tiling_results_offset;
             my_memcpy_from_param(to_add, data, data_offset, real_chunk_len * sizeof(int16_t));
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
             iterate_chunks(model, data, data_offset, real_chunk_len, ConvMergeInputChunkHandler(to_add, data_offset));
-#endif // WITH_PROGRESS_EMBEDDING
+#endif
             // scale up results as in convolution values are scaled down twice (input & weights)
             my_printf_debug("Before my_scale_q15" NEWLINE);
             dump_matrix_debug(to_add, real_chunk_len, ValueInfo(data));
@@ -658,7 +658,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
                 my_add_q15(lea_buffer, to_add, lea_buffer, real_chunk_len);
             }
         }
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
         iterate_chunks(model, output, tiling_results_offset, real_chunk_len, ConvMergeOutputChunkHandler(tiling_results_offset));
 #endif
         my_memcpy_to_param(output, tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));
@@ -670,7 +670,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
 
     setOutputValue(0);
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     flip_state_bit(model, output);
 #endif
 

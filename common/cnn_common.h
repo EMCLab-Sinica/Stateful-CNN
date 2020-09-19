@@ -56,12 +56,10 @@ static_assert(sizeof(ParameterInfo) == 28, "Unexpected size for ParameterInfo");
 
 typedef struct SlotInfo {
     SlotInfo() {}
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     uint16_t state_bit;
     uint16_t n_turning_points;
     uint16_t turning_points[TURNING_POINTS_LEN];
-#else
-    uint8_t dummy[4 + 2 * TURNING_POINTS_LEN];
 #endif
     int16_t user;
 } SlotInfo;
@@ -77,7 +75,7 @@ typedef struct Model {
     SlotInfo slots_info[NUM_SLOTS];
 } Model;
 
-static_assert(sizeof(Model) == 14 + NUM_SLOTS * (6 + TURNING_POINTS_LEN * 2), "Unexpected size for Model");
+static_assert(sizeof(Model) == 14 + NUM_SLOTS * (2 + STATEFUL_CNN * (4 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
 
 typedef struct {
     uint16_t time_counters[COUNTERS_LEN];

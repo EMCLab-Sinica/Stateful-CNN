@@ -14,7 +14,7 @@ int16_t lea_buffer[LEA_BUFFER_SIZE];
 
 #define RESHAPE_AUTO_DIM (uint16_t)(-1)
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
 void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, ParameterInfo* param) {
     *p_offset = get_state_bit(model, param->slot) ? 0x4000 : 0;
     *p_turning_point_idx = 0;
@@ -91,7 +91,7 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, N
         for (uint16_t sW = 0; sW < kernel_size; sW++) {
             uint16_t val_offset = (output_h*stride+sH) * offset_h + (output_w*stride+sW) * offset_w + c;
             int16_t val = get_q15_param(data, val_offset);
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
             if (get_value_state_bit(val)) {
                 // assuming input state bits are correct...
                 val -= 0x4000;
@@ -135,7 +135,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     uint16_t output_h, output_w, c;
     uint16_t output_offset = 0;
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
     uint16_t initial_n, initial_c, initial_h, initial_w;
     initial_n = first_unfinished_value_offset / (new_H * new_W * tile_c);
@@ -181,7 +181,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                     for (; c < real_tile_c; c++) {
                         int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
                         my_printf_debug("output_offset=%d" NEWLINE, output_offset);
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
                         check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
                         max_val += offset;
 #endif
@@ -200,7 +200,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
                     for (; output_w < new_W; output_w++) {
                         int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
                         my_printf_debug("output_offset=%d" NEWLINE, output_offset);
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
                         check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
                         max_val += offset;
 #endif
@@ -215,7 +215,7 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
         }
     }
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     flip_state_bit(model, output);
 #endif
 
@@ -267,7 +267,7 @@ void handle_add(Model* model, ParameterInfo *input[], ParameterInfo *output, Nod
     my_memcpy_from_param(buffer_a, A, 0, output->params_len);
     my_memcpy_from_param(buffer_b, B, 0, output->params_len);
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     // XXX: use LEA?
     for (uint16_t idx = 0; idx < vector_size; idx++) {
         if (get_value_state_bit(buffer_a[idx])) {
@@ -290,13 +290,13 @@ void handle_add(Model* model, ParameterInfo *input[], ParameterInfo *output, Nod
     }
     my_add_q15(buffer_a, buffer_b, buffer_a, vector_size);
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     iterate_chunks(model, output, 0, vector_size, AddOutputChunkHandler(buffer_a));
 #endif
 
     my_memcpy_to_param(output, 0, buffer_a, output->params_len);
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     flip_state_bit(model, output);
 #endif
 
@@ -370,7 +370,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 
     my_memcpy_from_param(buffer_a, A, 0, A->dims[0] * A->dims[1] * sizeof(uint16_t));
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     iterate_chunks(model, A, 0, 0, MatMulInputChunkHandler(buffer_a));
 #endif
 
@@ -396,7 +396,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         my_add_q15(buffer_matmul, buffer_temp, buffer_matmul, output->params_len / sizeof(int16_t));
     }
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     iterate_chunks(model, output, 0, 0, MatMulOutputChunkHandler(buffer_matmul));
 #endif
 
@@ -405,7 +405,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     my_printf_debug("handle_matmul output" NEWLINE);
     dump_params_debug(model, output);
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     flip_state_bit(model, output);
 #endif
 }
@@ -430,12 +430,12 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, No
     MY_ASSERT(bitwidth == 16);
     int16_t data_len = X->params_len / (bitwidth / 8);
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
 #endif
 
     uint16_t data_offset = 0;
     uint16_t output_offset = 0;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
     data_offset += first_unfinished_value_offset;
     output_offset += first_unfinished_value_offset;
@@ -446,7 +446,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, No
         // TODO: state-aware recovery
         uint16_t H = X->dims[2], W = X->dims[3];
         uint16_t output_h = 0, output_w = 0, c = 0;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
         output_h = first_unfinished_value_offset / (W * CHANNEL);
         first_unfinished_value_offset %= (W * CHANNEL);
         output_w = first_unfinished_value_offset / CHANNEL;
@@ -470,7 +470,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, No
                     int16_t val_offset = input_tile_c_index * W * H * X->tile_c + output_w * H * cur_input_tile_c + output_h * cur_input_tile_c + input_tile_c_offset;
                     int16_t input_val = get_q15_param(X, val_offset);
                     output_offset = output_h * W * CHANNEL + output_w * CHANNEL + c;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
                     // assuming input state bits are correct...
                     if (get_value_state_bit(input_val)) {
                         input_val -= 0x4000;
@@ -478,11 +478,11 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, No
                     check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
 #endif
                     int16_t output_val = MAX_VAL(input_val, 0);
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
                     output_val += offset;
 #endif
                     put_q15_param(output, output_offset, output_val);
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
                     my_printf_debug(
                         "output_h=% 3d, output_w=% 3d, c=% 3d, val_offset=% 6d, offset=% 6d, input val=% 6d, output_offset=% 6d, output val=% 6d" NEWLINE,
                         output_h, output_w, c, val_offset, offset, input_val, output_offset, output_val);
@@ -498,7 +498,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, No
         }
     } else {
         uint16_t i = 0;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
         ERROR_OCCURRED(); // TODO: adapt to range-based state assignments
 #endif
         for (; i < data_len; i++) {
@@ -510,7 +510,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, No
 
     output->tile_c = CHANNEL;
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     flip_state_bit(model, output);
 #endif
 
@@ -617,13 +617,13 @@ public:
     void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
         my_printf_debug("scaled range_offset=%d range_len=%d state_bit=%d" NEWLINE, offset, real_chunk_len, state_bit);
         my_memcpy_from_param(lea_buffer, scaled, offset, real_chunk_len * sizeof(int16_t));
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
         if (state_bit) {
             my_offset_q15(lea_buffer, -0x4000, lea_buffer, real_chunk_len);
         }
 #endif
         my_scale_q15(lea_buffer, scale * 32768, 0, lea_buffer, real_chunk_len);
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
         iterate_chunks(model, param_in_new_slot, offset, real_chunk_len, ConcatOutputChunkHandler(offset));
 #endif
         my_memcpy_to_param(param_in_new_slot, offset, lea_buffer, real_chunk_len * sizeof(int16_t));
@@ -671,7 +671,7 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
         Node *nodes = (Node*)(model + 1);
         nodes[get_slot_info(model, output->slot)->user].max_output_id |= MAX_OUTPUT_ID_INVALID; // no longer used
         scaled->slot = new_slot;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
         flip_state_bit(model, scaled);
 #endif
     }
@@ -707,7 +707,7 @@ void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInf
 
     ParameterInfo *data = input[0];
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     int16_t offset, next_output_turning_point;
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
@@ -723,7 +723,7 @@ void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInf
             for (uint16_t w = 0; w < W; w++) {
                 // Input is from Conv, which uses NHWC
                 int16_t val = get_q15_param(data, h * W * CHANNEL + w * CHANNEL + c);
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
                 if (get_value_state_bit(val)) {
                     val -= 0x4000;
                 }
@@ -732,14 +732,14 @@ void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInf
             }
         }
         int16_t avg = total / len;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
         check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, c);
         avg += offset;
 #endif
         put_q15_param(output, c, avg);
     }
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     flip_state_bit(model, output);
 #endif
 
@@ -768,7 +768,7 @@ public:
         : model(_model), param(_param), overflow_factor(_overflow_factor) {}
 
     void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
-#ifndef WITH_PROGRESS_EMBEDDING
+#if !STATEFUL_CNN
         int16_t bound = 32768 / SCALE;
 #else
         int16_t bound = 8192 / SCALE;
@@ -782,7 +782,7 @@ public:
         // dump_matrix(lea_buffer, real_chunk_len, ValueInfo(param));
 
         my_max_q15(lea_buffer, real_chunk_len, &max_val, &index);
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
         max_val += val_offset;
 #endif
         my_printf_debug("Max value %d", max_val);
@@ -792,7 +792,7 @@ public:
         }
 
         my_min_q15(lea_buffer, real_chunk_len, &min_val, &index);
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
         min_val += val_offset;
 #endif
         my_printf_debug("Min value %d", min_val);
@@ -837,7 +837,7 @@ void iterate_chunks(Model *model, ParameterInfo *param, uint16_t start_offset, u
     uint8_t state_bit = 0;
 
     uint16_t cur_chunk_len;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     dump_turning_points_debug(model, param);
 
     state_bit = get_state_bit(model, param->slot);
@@ -862,7 +862,7 @@ void iterate_chunks(Model *model, ParameterInfo *param, uint16_t start_offset, u
 #endif
     for (uint32_t offset = start_offset; offset < params_len; offset += cur_chunk_len) {
         cur_chunk_len = MIN_VAL(chunk_len, params_len - offset);
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
         uint8_t next_state_flipped = 0;
         // Use <= here as turning_point_idx is actually index for the _next_ turning point
         if (next_turning_point > 0 && turning_point_idx <= cur_slot_info->n_turning_points) {
@@ -877,7 +877,7 @@ void iterate_chunks(Model *model, ParameterInfo *param, uint16_t start_offset, u
 #endif
         MY_ASSERT(cur_chunk_len != 0);
         callback(offset, cur_chunk_len, state_bit);
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
         if (next_state_flipped) {
             state_bit ^= 1;
         }

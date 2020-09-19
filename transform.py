@@ -36,6 +36,7 @@ class Constants:
     MAX_OUTPUT_ID_INVALID = 0x8000
     EXTRA_INFO_LEN = 3  # for memory alignment
     TURNING_POINTS_LEN = 8
+    STATEFUL_CNN = 1
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
@@ -145,7 +146,7 @@ configs = {
 
 parser = argparse.ArgumentParser()
 parser.add_argument('config', choices=configs.keys())
-parser.add_argument('--without-progress-embedding', action='store_true')
+parser.add_argument('--without-stateful-cnn', action='store_true')
 parser.add_argument('--all-samples', action='store_true')
 parser.add_argument('--write-images', action='store_true')
 args = parser.parse_args()
@@ -153,6 +154,9 @@ config = configs[args.config]
 if args.all_samples:
     config['nvm_size'] *= 64
     config['n_samples'] = config['n_all_samples']
+
+if args.without_stateful_cnn:
+    Constants.STATEFUL_CNN = 0
 
 original_model = onnx.load(config['onnx_model'])
 try:
@@ -336,10 +340,11 @@ outputs['model'].write(to_bytes(0))  # Model.run_counter
 outputs['model'].write(to_bytes(0))  # Model.layer_idx
 outputs['model'].write(to_bytes(0))  # Model.sample_idx
 for _ in range(config['num_slots']): # Model.slots_info
-    outputs['model'].write(to_bytes(0))        # SlotInfo.state_bit
-    outputs['model'].write(to_bytes(0))        # SlotInfo.n_turning_points
-    for __ in range(Constants.TURNING_POINTS_LEN):
-        outputs['model'].write(to_bytes(-1))   # SlotInfo.turning_points
+    if Constants.STATEFUL_CNN:
+        outputs['model'].write(to_bytes(0))        # SlotInfo.state_bit
+        outputs['model'].write(to_bytes(0))        # SlotInfo.n_turning_points
+        for __ in range(Constants.TURNING_POINTS_LEN):
+            outputs['model'].write(to_bytes(-1))   # SlotInfo.turning_points
     outputs['model'].write(to_bytes(-1))       # SlotInfo.user
 
 @dataclasses.dataclass
@@ -506,10 +511,6 @@ struct NodeFlags;
         suffix = 'l' if item == 'intermediate_values_size' else ''
         output_h.write(f'#define {item.upper()} {val}{suffix}\n')
 
-    if not args.without_progress_embedding:
-        output_h.write('''
-#define WITH_PROGRESS_EMBEDDING
-''')
     output_c.write('''
 #include "data.h"
 #include "cnn_common.h"

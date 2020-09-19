@@ -43,13 +43,13 @@ static void handle_node(Model *model, Node *nodes, uint16_t node_idx) {
         my_printf_debug("New params_offset = %d" NEWLINE, output->params_offset);
     }
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     my_printf_debug("Old output state bit=%d" NEWLINE, get_state_bit(model, output->slot));
 #endif
     handlers[cur_node->op_type](model, input, output, &cur_node->flags);
     // For some operations (e.g., ConvMerge), scale is determined in the handlers
     my_printf_debug("Scale = %d" NEWLINE, output->scale);
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     my_printf_debug("New output state bit=%d" NEWLINE, get_state_bit(model, output->slot));
 #endif
 
@@ -202,7 +202,7 @@ void set_sample_index(Model *model, uint8_t index) {
 void reset_everything(Model *model) {
     model->first_time = 1;
     model->running = 0;
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
     for (uint8_t idx = 0; idx < NUM_SLOTS; idx++) {
         SlotInfo *cur_slot_info = get_slot_info(model, idx);
         cur_slot_info->state_bit = 0;
@@ -211,7 +211,7 @@ void reset_everything(Model *model) {
 #endif
 }
 
-#ifdef WITH_PROGRESS_EMBEDDING
+#if STATEFUL_CNN
 void flip_state_bit(Model *model, ParameterInfo *output) {
     int16_t new_turning_point = output->params_len / 2;
     my_printf_debug("New turning point=%d" NEWLINE, new_turning_point);
