@@ -54,18 +54,6 @@ typedef struct ParameterInfo {
 
 static_assert(sizeof(ParameterInfo) == 28, "Unexpected size for ParameterInfo");
 
-typedef struct Model {
-    uint16_t nodes_len;
-    uint16_t n_input;
-    uint16_t running;
-    uint16_t first_time;
-    uint16_t run_counter;
-    uint16_t layer_idx;
-    uint16_t sample_idx;
-} Model;
-
-static_assert(sizeof(Model) == 14, "Unexpected size for Model");
-
 typedef struct SlotInfo {
     SlotInfo() {}
 #ifdef WITH_PROGRESS_EMBEDDING
@@ -78,7 +66,18 @@ typedef struct SlotInfo {
     int16_t user;
 } SlotInfo;
 
-static_assert(sizeof(SlotInfo) == 6 + TURNING_POINTS_LEN * 2, "Unexpected size for SlotInfo");
+typedef struct Model {
+    uint16_t nodes_len;
+    uint16_t n_input;
+    uint16_t running;
+    uint16_t first_time;
+    uint16_t run_counter;
+    uint16_t layer_idx;
+    uint16_t sample_idx;
+    SlotInfo slots_info[NUM_SLOTS];
+} Model;
+
+static_assert(sizeof(Model) == 14 + NUM_SLOTS * (6 + TURNING_POINTS_LEN * 2), "Unexpected size for Model");
 
 typedef struct {
     uint16_t time_counters[COUNTERS_LEN];
@@ -132,7 +131,7 @@ int64_t get_int64_param(ParameterInfo *param, size_t i);
 int16_t node_input(Node *node, size_t i);
 uint16_t get_next_slot(Model *model, ParameterInfo *param);
 ParameterInfo* get_parameter_info(size_t i);
-SlotInfo * get_slot_info(uint8_t i);
+SlotInfo * get_slot_info(Model* model, uint8_t i);
 
 /**********************************
  *       Operation handlers       *

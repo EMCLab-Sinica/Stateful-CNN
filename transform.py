@@ -323,7 +323,6 @@ outputs = {
     'parameters2': io.BytesIO(),
     'samples': io.BytesIO(),
     'model': io.BytesIO(),
-    'slots_info': io.BytesIO(),
     'parameters_info': io.BytesIO(),
     'labels': io.BytesIO(),
     'counters': io.BytesIO(),
@@ -336,13 +335,12 @@ outputs['model'].write(to_bytes(1))  # Model.first_time
 outputs['model'].write(to_bytes(0))  # Model.run_counter
 outputs['model'].write(to_bytes(0))  # Model.layer_idx
 outputs['model'].write(to_bytes(0))  # Model.sample_idx
-
-for _ in range(config['num_slots']):
-    outputs['slots_info'].write(to_bytes(0))        # SlotInfo.state_bit
-    outputs['slots_info'].write(to_bytes(0))        # SlotInfo.n_turning_points
+for _ in range(config['num_slots']): # Model.slots_info
+    outputs['model'].write(to_bytes(0))        # SlotInfo.state_bit
+    outputs['model'].write(to_bytes(0))        # SlotInfo.n_turning_points
     for __ in range(Constants.TURNING_POINTS_LEN):
-        outputs['slots_info'].write(to_bytes(-1))   # SlotInfo.turning_points
-    outputs['slots_info'].write(to_bytes(-1))       # SlotInfo.user
+        outputs['model'].write(to_bytes(-1))   # SlotInfo.turning_points
+    outputs['model'].write(to_bytes(-1))       # SlotInfo.user
 
 @dataclasses.dataclass
 class ParametersSlot:
@@ -544,7 +542,7 @@ struct NodeFlags;
         if ops[op][1]:
             output_c.write(textwrap.dedent(f'''
                 void alloc_{op.lower()}(Model *model, ParameterInfo *[], struct ParameterInfo *output, struct NodeFlags*) {{
-                    SlotInfo *cur_slot_info = get_slot_info(output->slot);
+                    SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
                     if (cur_slot_info) {{
                         cur_slot_info->user = model->layer_idx;
                     }}
@@ -591,7 +589,7 @@ extern {const_qualifier}uint8_t *{var_name};
         full_var_name = var_name + '_data'
         data_obj.seek(0)
         define_var(full_var_name, data_obj.read(),
-                   will_modify=var_name in ('model', 'slots_info', 'parameters_info', 'counters'))
+                   will_modify=var_name in ('model', 'parameters_info', 'counters'))
 
     outputs['samples'].seek(0)
     samples_data = outputs['samples'].read()

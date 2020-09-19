@@ -170,8 +170,8 @@ void dump_params(Model *model, ParameterInfo *cur_param) {
 }
 
 #ifdef WITH_PROGRESS_EMBEDDING
-void dump_turning_points(ParameterInfo *output) {
-    SlotInfo *cur_slot_info = get_slot_info(output->slot);
+void dump_turning_points(Model *model, ParameterInfo *output) {
+    SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
     if (!cur_slot_info) {
         my_printf("%d is not a normal slot" NEWLINE, output->slot);
         return;

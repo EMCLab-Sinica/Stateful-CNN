@@ -87,7 +87,7 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
         // reset model
         model->layer_idx = 0;
         for (uint8_t idx = 0; idx < NUM_SLOTS; idx++) {
-            SlotInfo *cur_slot_info = get_slot_info(idx);
+            SlotInfo *cur_slot_info = get_slot_info(model, idx);
             cur_slot_info->user = -1;
         }
         for (uint16_t node_idx = 0; node_idx < model->nodes_len; node_idx++) {
@@ -204,7 +204,7 @@ void reset_everything(Model *model) {
     model->running = 0;
 #ifdef WITH_PROGRESS_EMBEDDING
     for (uint8_t idx = 0; idx < NUM_SLOTS; idx++) {
-        SlotInfo *cur_slot_info = get_slot_info(idx);
+        SlotInfo *cur_slot_info = get_slot_info(model, idx);
         cur_slot_info->state_bit = 0;
         cur_slot_info->n_turning_points = 0;
     }
@@ -215,7 +215,7 @@ void reset_everything(Model *model) {
 void flip_state_bit(Model *model, ParameterInfo *output) {
     int16_t new_turning_point = output->params_len / 2;
     my_printf_debug("New turning point=%d" NEWLINE, new_turning_point);
-    SlotInfo *cur_slot_info = get_slot_info(output->slot);
+    SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
     // XXX: better way than copying the array?
     uint8_t new_turning_point_inserted = 0;
     for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
@@ -243,7 +243,7 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
         cur_slot_info->turning_points[cur_slot_info->n_turning_points - 1] = new_turning_point;
     }
 
-    dump_turning_points_debug(output);
+    dump_turning_points_debug(model, output);
 
     cur_slot_info->state_bit ^= 1;
 
@@ -278,13 +278,13 @@ uint8_t get_state_bit(Model *model, uint8_t slot_id) {
         case SLOT_TEST_SET:
             return 0;
         default:
-            return get_slot_info(slot_id)->state_bit;
+            return get_slot_info(model, slot_id)->state_bit;
     }
 }
 
 uint8_t param_state_bit(Model *model, ParameterInfo *param, uint16_t offset) {
     uint8_t ret = get_state_bit(model, param->slot);
-    SlotInfo *cur_slot_info = get_slot_info(param->slot);
+    SlotInfo *cur_slot_info = get_slot_info(model, param->slot);
     for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
         if (offset >= cur_slot_info->turning_points[idx]) {
             ret = ret ^ 1;
@@ -311,7 +311,7 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
     uint32_t first_unfinished_value_offset;
     my_printf_debug("new_output_state_bit for first value = %d" NEWLINE, param_state_bit(model, output, 0) ^ 1);
 
-    dump_turning_points_debug(output);
+    dump_turning_points_debug(model, output);
 
     while (1) {
 #if 1

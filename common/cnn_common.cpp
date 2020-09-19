@@ -11,9 +11,9 @@ ParameterInfo* get_parameter_info(size_t i) {
     return reinterpret_cast<ParameterInfo*>(parameters_info_data) + i;
 }
 
-SlotInfo* get_slot_info(uint8_t i) {
+SlotInfo* get_slot_info(Model* model, uint8_t i) {
     if (i < NUM_SLOTS) {
-        return reinterpret_cast<SlotInfo*>(slots_info_data) + i;
+        return model->slots_info + i;
     } else if (i >= SLOT_CONSTANTS_MIN) {
         return nullptr;
     } else {
@@ -84,7 +84,7 @@ uint16_t get_next_slot(Model *model, ParameterInfo *param) {
             cycle_count++;
             MY_ASSERT(cycle_count <= 1);
         }
-        int16_t slot_user_id = get_slot_info(next_slot_id)->user;
+        int16_t slot_user_id = get_slot_info(model, next_slot_id)->user;
         if (slot_user_id < 0) {
             break;
         }
@@ -98,6 +98,6 @@ uint16_t get_next_slot(Model *model, ParameterInfo *param) {
         }
     }
     my_printf_debug("next_slot_id = %d" NEWLINE, next_slot_id);
-    get_slot_info(next_slot_id)->user = model->layer_idx;
+    get_slot_info(model, next_slot_id)->user = model->layer_idx;
     return next_slot_id;
 }

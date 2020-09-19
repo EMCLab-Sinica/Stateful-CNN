@@ -19,7 +19,7 @@ void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int
     *p_offset = get_state_bit(model, param->slot) ? 0x4000 : 0;
     *p_turning_point_idx = 0;
     *p_next_turning_point = -1;
-    *p_slot_info = get_slot_info(param->slot);
+    *p_slot_info = get_slot_info(model, param->slot);
     uint8_t next_turning_point_found = 0;
     if (!(*p_slot_info)) {
         return;
@@ -526,7 +526,7 @@ void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output,
     output->params_len = data->params_len;
     output->bitwidth = data->bitwidth;
     output->slot = data->slot;
-    SlotInfo *cur_slot_info = get_slot_info(output->slot);
+    SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
     if (cur_slot_info) {
         cur_slot_info->user = model->layer_idx;
     }
@@ -577,7 +577,7 @@ void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output,
     output->params_len = data->params_len;
     output->bitwidth = data->bitwidth;
     output->slot = data->slot;
-    SlotInfo *cur_slot_info = get_slot_info(output->slot);
+    SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
     if (cur_slot_info) {
         cur_slot_info->user = model->layer_idx;
     }
@@ -669,7 +669,7 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 
         // XXX: touching nodes is dirty :(
         Node *nodes = (Node*)(model + 1);
-        nodes[get_slot_info(output->slot)->user].max_output_id |= MAX_OUTPUT_ID_INVALID; // no longer used
+        nodes[get_slot_info(model, output->slot)->user].max_output_id |= MAX_OUTPUT_ID_INVALID; // no longer used
         scaled->slot = new_slot;
 #ifdef WITH_PROGRESS_EMBEDDING
         flip_state_bit(model, scaled);
@@ -838,12 +838,12 @@ void iterate_chunks(Model *model, ParameterInfo *param, uint16_t start_offset, u
 
     uint16_t cur_chunk_len;
 #ifdef WITH_PROGRESS_EMBEDDING
-    dump_turning_points_debug(param);
+    dump_turning_points_debug(model, param);
 
     state_bit = get_state_bit(model, param->slot);
     uint8_t turning_point_idx = 0;
     int16_t next_turning_point = -1;
-    SlotInfo *cur_slot_info = get_slot_info(param->slot);
+    SlotInfo *cur_slot_info = get_slot_info(model, param->slot);
     uint16_t n_turning_points = cur_slot_info ? cur_slot_info->n_turning_points : 0;
     uint8_t turning_point_found = 0;
     while (turning_point_idx < n_turning_points) {

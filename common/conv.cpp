@@ -334,7 +334,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     int16_t input_src_offset;
     input_src_offset = input_offset + (conv_params->input_h + h_start) * conv_params->W * conv_params->cur_input_tile_c + (conv_params->input_w + w_start) * conv_params->cur_input_tile_c;
 #ifdef WITH_PROGRESS_EMBEDDING
-    dump_turning_points_debug(conv_params->real_conv_input);
+    dump_turning_points_debug(model, conv_params->real_conv_input);
 
     int16_t offset, next_turning_point;
     uint8_t turning_point_idx;

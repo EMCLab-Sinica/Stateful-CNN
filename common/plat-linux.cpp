@@ -25,7 +25,7 @@
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
 const uint8_t *parameters_data, *parameters2_data, *samples_data, *labels_data;
-uint8_t *model_data, *parameters_info_data, *slots_info_data;
+uint8_t *model_data, *parameters_info_data;
 uint16_t dma_invocations[COUNTERS_LEN];
 uint16_t dma_bytes[COUNTERS_LEN];
 
@@ -74,8 +74,7 @@ int main(int argc, char* argv[]) {
     parameters2_data = parameters_data + PARAMETERS_DATA_LEN;
     samples_data = parameters2_data + PARAMETERS2_DATA_LEN;
     model_data = const_cast<uint8_t*>(samples_data + PLAT_SAMPLES_DATA_LEN);
-    slots_info_data = model_data + MODEL_DATA_LEN;
-    parameters_info_data = slots_info_data + SLOTS_INFO_DATA_LEN;
+    parameters_info_data = model_data + MODEL_DATA_LEN;
     labels_data = parameters_info_data + PARAMETERS_INFO_DATA_LEN;
 
 #ifdef USE_ARM_CMSIS

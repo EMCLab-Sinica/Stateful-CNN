@@ -69,7 +69,7 @@ void dump_params(struct Model *model, struct ParameterInfo *cur_param);
 void dump_params_nhwc(struct Model *model, struct ParameterInfo *cur_param, size_t offset);
 void dump_model(struct Model *model, struct Node *nodes);
 #ifdef WITH_PROGRESS_EMBEDDING
-void dump_turning_points(ParameterInfo *output);
+void dump_turning_points(Model *model, ParameterInfo *output);
 #endif
 
 #if MY_DEBUG >= 2
