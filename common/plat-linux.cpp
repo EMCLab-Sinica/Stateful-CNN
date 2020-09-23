@@ -133,7 +133,13 @@ void my_memcpy(void* dest, const void* src, size_t n) {
     usleep(MEMCPY_DELAY_US);
 #endif
     // my_printf_debug("%s copied %zu bytes" NEWLINE, __func__, n);
-    memcpy(dest, src, n);
+    // Not using memcpy here so that it is more likely that power fails during
+    // memcpy, which is the case for external FRAM
+    uint8_t *dest_u = reinterpret_cast<uint8_t*>(dest);
+    const uint8_t *src_u = reinterpret_cast<const uint8_t*>(src);
+    for (size_t idx = 0; idx < n; idx++) {
+        dest_u[idx] = src_u[idx];
+    }
 }
 
 void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, const void *src, size_t n) {
