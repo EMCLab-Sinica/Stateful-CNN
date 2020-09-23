@@ -5,8 +5,10 @@
 
 uint8_t dump_integer = 1;
 
+#if MY_DEBUG >= 1
 template<>
 void my_printf_wrapper() {}
+#endif
 
 ValueInfo::ValueInfo(ParameterInfo *cur_param, Model *model) {
     this->scale = cur_param->scale;
