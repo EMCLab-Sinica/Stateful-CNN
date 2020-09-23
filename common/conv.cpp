@@ -131,14 +131,17 @@ static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t cur_out
 static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     // cur_output_tile_c should be signed, or MAX_VAL below is broken with TI's compiler
     int16_t cur_output_tile_c = MIN_VAL(conv_params->output->tile_c, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx);
-    MY_ASSERT(cur_output_tile_c);
+    int16_t cur_output_tile_c_full = MIN_VAL(conv_params->output->tile_c, conv_params->OUTPUT_CHANNEL - conv_params->conv_idx_base);
+    my_printf_debug("cur_output_tile_c = %d, cur_output_tile_c_full = %d" NEWLINE, cur_output_tile_c, cur_output_tile_c_full);
+    MY_ASSERT(cur_output_tile_c > 0);
+    MY_ASSERT(cur_output_tile_c_full > 0);
 
     // use NWHC so that output is written continuously on the address space
     int16_t cur_output_data_offset =
             conv_params->OUTPUT_W * conv_params->OUTPUT_H * (conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL + conv_params->conv_idx_base) +   // n
-            conv_params->input_w / conv_params->stride * conv_params->OUTPUT_H * cur_output_tile_c +     // w
-            (conv_params->input_h + offset_h) / conv_params->stride * cur_output_tile_c +                // h
-            conv_params->conv_idx - conv_params->conv_idx_base;                                          // c
+            conv_params->input_w / conv_params->stride * conv_params->OUTPUT_H * cur_output_tile_c_full +       // w
+            (conv_params->input_h + offset_h) / conv_params->stride * cur_output_tile_c_full +                  // h
+            conv_params->conv_idx - conv_params->conv_idx_base;                                                 // c
 
 #if STATEFUL_CNN
     SlotInfo *cur_slot_info = conv_params->cur_slot_info;
@@ -485,7 +488,8 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, No
     conv_params->conv_idx_base = 0;
     conv_params->conv_idx = 0;
 #if STATEFUL_CNN
-    uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
+    // Force recovery from an even OFM index as most DSPLib function does not like odd dimensions
+    uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output) / 2 * 2;
 
     find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point,
                            &conv_params->cur_slot_info, first_unfinished_value_offset, model, output);
