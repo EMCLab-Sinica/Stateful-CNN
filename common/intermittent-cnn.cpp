@@ -209,6 +209,34 @@ void reset_everything(Model *model) {
 }
 
 #if STATEFUL_CNN
+
+static void check_feature_map_states(Model *model, ParameterInfo* output, uint32_t first_unfinished_value_offset, uint32_t len, const char* func) {
+#if MY_DEBUG >= 1
+    uint8_t turning_point_idx = 0;
+    uint16_t next_turning_point = -1;
+    const SlotInfo* cur_slot_info = get_slot_info(model, output->slot);
+    if (turning_point_idx < cur_slot_info->n_turning_points) {
+        next_turning_point = cur_slot_info->turning_points[turning_point_idx];
+    }
+    uint8_t cur_state_bit = get_state_bit(model, output->slot) ^ 1;
+    for (uint32_t idx = 0; idx < len; idx++) {
+        if (idx == next_turning_point) {
+            cur_state_bit ^= 1;
+            turning_point_idx++;
+            if (turning_point_idx < cur_slot_info->n_turning_points) {
+                next_turning_point = cur_slot_info->turning_points[turning_point_idx];
+            }
+        }
+        if (idx == first_unfinished_value_offset) {
+            cur_state_bit ^= 1;
+        }
+        int16_t val = get_q15_param(output, idx);
+        MY_ASSERT(get_value_state_bit(val) == cur_state_bit,
+            "Value %d at index %d does not have expected state bit %d" NEWLINE, val, idx, cur_state_bit);
+    }
+#endif
+}
+
 void flip_state_bit(Model *model, ParameterInfo *output) {
     int16_t new_turning_point = output->params_len / 2;
     my_printf_debug("New turning point=%d" NEWLINE, new_turning_point);
@@ -244,28 +272,8 @@ void flip_state_bit(Model *model, ParameterInfo *output) {
 
     cur_slot_info->state_bit ^= 1;
 
-#if MY_DEBUG >= 1
-    // dump_matrix_debug(output, 0, output->params_len / 2, ValueInfo(output));
-    uint8_t cur_state_bit = get_state_bit(model, output->slot);
-    uint8_t turning_point_idx = 0;
-    uint16_t next_turning_point = -1;
-    if (turning_point_idx < cur_slot_info->n_turning_points) {
-        next_turning_point = cur_slot_info->turning_points[turning_point_idx];
-    }
-    for (uint32_t idx = 0; idx < INTERMEDIATE_VALUES_SIZE / sizeof(int16_t); idx++) {
-        if (idx == next_turning_point) {
-            cur_state_bit ^= 1;
-            turning_point_idx++;
-            if (turning_point_idx < cur_slot_info->n_turning_points) {
-                next_turning_point = cur_slot_info->turning_points[turning_point_idx];
-            }
-        }
-        int16_t val = get_q15_param(output, idx);
-        MY_ASSERT(get_value_state_bit(val) == cur_state_bit,
-            "Value %d at index %d does not have expected state bit %d" NEWLINE, val, idx, cur_state_bit);
-    }
-    // dump_matrix_debug(output, 0, new_turning_point, ValueInfo(output));
-#endif
+    // Use first_unfinished_value_offset = 0 here as all values finished and the initial state bit is flipped above
+    check_feature_map_states(model, output, 0, INTERMEDIATE_VALUES_SIZE / sizeof(int16_t), __func__);
 }
 
 uint8_t get_state_bit(Model *model, uint8_t slot_id) {
@@ -348,14 +356,7 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
         after_recovery = 0;
     }
 
-#if MY_DEBUG >= 1
-    for (uint32_t idx = 0; idx < first_unfinished_value_offset; idx++) {
-        MY_ASSERT(get_value_state_bit(get_q15_param(output, idx)) != param_state_bit(model, output, idx));
-    }
-    for (uint32_t idx = first_unfinished_value_offset; idx < output->params_len / 2; idx++) {
-        MY_ASSERT(get_value_state_bit(get_q15_param(output, idx)) == param_state_bit(model, output, idx));
-    }
-#endif
+    check_feature_map_states(model, output, first_unfinished_value_offset, output->params_len / 2, __func__);
 
     return first_unfinished_value_offset;
 }
