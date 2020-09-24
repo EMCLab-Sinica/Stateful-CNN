@@ -33,7 +33,6 @@ class Constants:
     COUNTERS_LEN = 64
     # To make the Node struct exactly 64 bytes
     NODE_NAME_LEN = 54
-    MAX_OUTPUT_ID_INVALID = 0x8000
     EXTRA_INFO_LEN = 3  # for memory alignment
     TURNING_POINTS_LEN = 8
     STATEFUL_CNN = 1

@@ -655,11 +655,11 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     if (A->scale < B->scale) {
         scale = 1.0f * A->scale / B->scale;
         scaled = A;
-        output->scale = A->scale = B->scale;
+        output->scale = B->scale;
     } else if (A->scale > B->scale) {
         scale = 1.0f * B->scale / A->scale;
         scaled = B;
-        output->scale = B->scale = A->scale;
+        output->scale = A->scale;
     }
     if (scaled) {
         uint8_t new_slot = get_next_slot(model, scaled);
@@ -669,9 +669,6 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 
         iterate_chunks(model, scaled, 0, 0, ConcatInputChunkHandler(model, scaled, scale, &param_in_new_slot));
 
-        // XXX: touching nodes is dirty :(
-        Node *nodes = (Node*)(model + 1);
-        nodes[get_slot_info(model, output->slot)->user].max_output_id |= MAX_OUTPUT_ID_INVALID; // no longer used
         scaled->slot = new_slot;
 #if STATEFUL_CNN
         flip_state_bit(model, scaled);

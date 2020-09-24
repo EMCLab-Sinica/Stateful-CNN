@@ -90,9 +90,6 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
             SlotInfo *cur_slot_info = get_slot_info(model, idx);
             cur_slot_info->user = -1;
         }
-        for (uint16_t node_idx = 0; node_idx < model->nodes_len; node_idx++) {
-            nodes[node_idx].max_output_id &= ~MAX_OUTPUT_ID_INVALID;
-        }
         model->running = 1;
     }
 

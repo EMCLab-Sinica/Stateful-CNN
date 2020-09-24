@@ -93,7 +93,13 @@ uint16_t get_next_slot(Model *model, ParameterInfo *param) {
             break;
         }
         Node *slot_user = &(nodes[slot_user_id]);
-        if ((slot_user->max_output_id & MAX_OUTPUT_ID_INVALID) || (slot_user->max_output_id < model->layer_idx)) {
+        if (slot_user->max_output_id < model->layer_idx) {
+            break;
+        }
+        // The recorded slot user is not the actual user. This happens when Concat
+        // uses a new slot for scaled IFM. The old slot is actually used by nobody
+        // and available for allocation.
+        if (get_parameter_info(model->n_input + slot_user_id)->slot != next_slot_id) {
             break;
         }
     }
