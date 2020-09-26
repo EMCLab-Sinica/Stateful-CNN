@@ -611,33 +611,6 @@ private:
     uint32_t offset;
 };
 
-class ConcatInputChunkHandler : public ChunkHandler {
-public:
-    ConcatInputChunkHandler(Model *_model, const ParameterInfo *_scaled, float _scale, ParameterInfo *_param_in_new_slot)
-        : model(_model), scaled(_scaled), scale(_scale), param_in_new_slot(_param_in_new_slot) {}
-
-    void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
-        my_printf_debug("scaled range_offset=%d range_len=%d state_bit=%d" NEWLINE, offset, real_chunk_len, state_bit);
-        my_memcpy_from_param(model, lea_buffer, scaled, offset, real_chunk_len * sizeof(int16_t));
-#if STATEFUL_CNN
-        if (state_bit) {
-            my_offset_q15(lea_buffer, -0x4000, lea_buffer, real_chunk_len);
-        }
-#endif
-        my_scale_q15(lea_buffer, scale * 32768, 0, lea_buffer, real_chunk_len);
-#if STATEFUL_CNN
-        iterate_chunks(model, param_in_new_slot, offset, real_chunk_len, ConcatOutputChunkHandler(offset));
-#endif
-        my_memcpy_to_param(param_in_new_slot, offset, lea_buffer, real_chunk_len * sizeof(int16_t));
-    }
-
-private:
-    Model *model;
-    const ParameterInfo *scaled;
-    float scale;
-    ParameterInfo *param_in_new_slot;
-};
-
 void handle_concat(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
     my_printf_debug("Concat!" NEWLINE);
 
@@ -649,32 +622,8 @@ void handle_concat(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     output->dims[1] *= 2;
     output->flags |= SEPARATE_TILING;
 
-    float scale;
-    const ParameterInfo *scaled = NULL;
     // The one with smaller `scale` (with larger values) is scaled down
-    if (A->scale < B->scale) {
-        scale = 1.0f * A->scale / B->scale;
-        scaled = A;
-        output->scale = B->scale;
-    } else if (A->scale > B->scale) {
-        scale = 1.0f * B->scale / A->scale;
-        scaled = B;
-        output->scale = A->scale;
-    }
-    if (scaled) {
-        uint8_t new_slot = get_next_slot(model, scaled);
-        ParameterInfo param_in_new_slot;
-        my_memcpy(&param_in_new_slot, scaled, sizeof(struct ParameterInfo));
-        param_in_new_slot.slot = new_slot;
-
-        iterate_chunks(model, scaled, 0, 0, ConcatInputChunkHandler(model, scaled, scale, &param_in_new_slot));
-
-        // TODO
-        // scaled->slot = new_slot;
-#if STATEFUL_CNN
-        flip_state_bit(model, scaled);
-#endif
-    }
+    output->scale = MAX_VAL(A->scale, B->scale);
 
     // saving slots here as it might be changed during the downscaling loop above
     output->extra_info[0] = A->parameter_info_idx;

@@ -369,6 +369,12 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         check_next_turning_point(offset, turning_point_idx, next_turning_point, input_slot_info, input_src_offset);
 #endif
     }
+    if (conv_params->real_conv_input->scale != conv_params->conv_input->scale) {
+        int16_t scaleFract;
+        uint8_t shift;
+        float_to_scale_params(&scaleFract, &shift, 1.0f * conv_params->real_conv_input->scale / conv_params->conv_input->scale);
+        my_scale_q15(lea_buffer, scaleFract, shift, lea_buffer, inputs_len);
+    }
 #if STATEFUL_CNN && MY_DEBUG >= 2
     int16_t *ptr = lea_buffer;
     for (size_t idx = 0; idx < inputs_len; idx++) {
