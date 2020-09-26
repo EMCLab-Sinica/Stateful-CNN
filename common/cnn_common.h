@@ -17,7 +17,7 @@ struct NodeFlags {
 typedef struct Node {
     char name[NODE_NAME_LEN];
     uint16_t inputs_len;
-    uint16_t inputs_offset;
+    int16_t inputs[NUM_INPUTS];
     uint16_t max_output_id;
     uint16_t op_type;
     NodeFlags flags;
@@ -72,10 +72,9 @@ typedef struct Model {
     uint16_t layer_idx;
     uint16_t sample_idx;
     SlotInfo slots_info[NUM_SLOTS];
-    Node nodes[MODEL_NODES_LEN];
 } Model;
 
-static_assert(sizeof(Model) == 12 + 32 * MODEL_NODES_LEN + NUM_SLOTS * (2 + STATEFUL_CNN * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
+static_assert(sizeof(Model) == 12  + NUM_SLOTS * (2 + STATEFUL_CNN * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
 
 typedef struct {
     uint16_t time_counters[COUNTERS_LEN];
@@ -89,8 +88,8 @@ static_assert(sizeof(Counters) == 4 * COUNTERS_LEN + 2, "Unexpected size of Coun
 /**********************************
  *          Global data           *
  **********************************/
-extern uint8_t *inputs_data;
 extern uint8_t *parameters_info_data;
+extern const uint8_t *nodes_data;
 Counters *counters(void);
 
 
@@ -115,17 +114,17 @@ const uint8_t* get_param_base_pointer(const ParameterInfo *param, uint32_t *limi
 int16_t get_q15_param(Model* model, const ParameterInfo *param, uint16_t offset_in_word);
 void put_q15_param(ParameterInfo *param, uint16_t offset_in_word, int16_t val);
 int64_t get_int64_param(const ParameterInfo *param, size_t i);
-int16_t node_input(Node *node, size_t i);
 uint16_t get_next_slot(Model *model, const ParameterInfo *param);
 ParameterInfo* get_parameter_info(size_t i);
+const Node* get_node(size_t i);
 SlotInfo * get_slot_info(Model* model, uint8_t i);
 void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n);
 
 /**********************************
  *       Operation handlers       *
  **********************************/
-typedef void (*handler)(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags);
-typedef void (*allocator)(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags);
+typedef void (*handler)(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags);
+typedef void (*allocator)(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags);
 // below are defined in ops.c
 extern uint8_t expected_inputs_len[];
 extern handler handlers[];

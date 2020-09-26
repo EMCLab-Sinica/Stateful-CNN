@@ -2,14 +2,12 @@
 #include "my_debug.h"
 #include "platform.h"
 
-uint8_t *inputs_data;
-
-static int16_t* node_input_ptr(Node *node, size_t i) {
-    return (int16_t*)(inputs_data + node->inputs_offset) + i;
-}
-
 ParameterInfo* get_parameter_info(size_t i) {
     return reinterpret_cast<ParameterInfo*>(parameters_info_data) + i;
+}
+
+const Node* get_node(size_t i) {
+    return reinterpret_cast<const Node*>(nodes_data) + i;
 }
 
 SlotInfo* get_slot_info(Model* model, uint8_t i) {
@@ -20,10 +18,6 @@ SlotInfo* get_slot_info(Model* model, uint8_t i) {
     } else {
         ERROR_OCCURRED();
     }
-}
-
-int16_t node_input(Node *node, size_t i) {
-    return *node_input_ptr(node, i) / 2;
 }
 
 const uint8_t* get_param_base_pointer(const ParameterInfo *param, uint32_t *limit_p) {
@@ -92,7 +86,7 @@ uint16_t get_next_slot(Model *model, const ParameterInfo *param) {
         if (slot_user_id == model->layer_idx) {
             break;
         }
-        Node *slot_user = &(model->nodes[slot_user_id]);
+        const Node *slot_user = get_node(slot_user_id);
         if (slot_user->max_output_id < model->layer_idx) {
             break;
         }

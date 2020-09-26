@@ -411,7 +411,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     }
 }
 
-void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags) {
+void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
     const ParameterInfo *conv_input = input[0], *conv_filter = input[1];
 
     MY_ASSERT(conv_input->bitwidth == 16 && conv_filter->bitwidth == 16);
@@ -455,7 +455,7 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     output->scale = conv_input->scale * conv_filter->scale;
 }
 
-void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *conv_input = input[0], *conv_filter = input[1], *conv_bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 
@@ -587,7 +587,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 }
 
-void alloc_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void alloc_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *data = input[0];
 
     my_memcpy(output, data, sizeof(struct ParameterInfo));
@@ -636,7 +636,7 @@ private:
     uint32_t tiling_results_offset;
 };
 
-void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct ParameterInfo *output, NodeFlags*) {
+void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct ParameterInfo *output, const NodeFlags*) {
     // XXX: make this function idempotent
 
     // Do not use conv_params here as its intialization in alloc_conv and

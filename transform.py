@@ -32,11 +32,13 @@ class Constants:
     SLOT_INTERMEDIATE_VALUES = 0b01
     COUNTERS_LEN = 64
     # To make the Node struct exactly 32 bytes
-    NODE_NAME_LEN = 22
+    NODE_NAME_LEN = 18
     EXTRA_INFO_LEN = 3  # for memory alignment
     TURNING_POINTS_LEN = 8
     STATEFUL_CNN = 1
     MODEL_NODES_LEN = 0
+    INPUTS_DATA_LEN = 0
+    NUM_INPUTS = 3
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
@@ -321,12 +323,12 @@ def nchw2nhwc(arr, dims):
                     ret[new_idx] = arr[old_idx]
     return ret, (N, H, W, C)
 
-inputs_data = io.BytesIO()
 outputs = {
     'parameters': io.BytesIO(),
     'parameters2': io.BytesIO(),
     'samples': io.BytesIO(),
     'model': io.BytesIO(),
+    'nodes': io.BytesIO(),
     'parameters_info': io.BytesIO(),
     'labels': io.BytesIO(),
     'counters': io.BytesIO(),
@@ -359,18 +361,16 @@ parameters2_slot = ParametersSlot(offset=0, target=outputs['parameters2'], slot_
 
 for node in model:
     node_name = node.name[:Constants.NODE_NAME_LEN]
-    outputs['model'].write(node_name.encode('ascii') + b'\0' * (Constants.NODE_NAME_LEN - len(node_name)))
-    outputs['model'].write(to_bytes(len(node.inputs)))
-    outputs['model'].write(to_bytes(inputs_data.tell()))  # Node.inputs_offset
-    outputs['model'].write(to_bytes(node.max_output_id))
+    outputs['nodes'].write(node_name.encode('ascii') + b'\0' * (Constants.NODE_NAME_LEN - len(node_name)))
+    outputs['nodes'].write(to_bytes(len(node.inputs)))
+    assert len(node.inputs) <= Constants.NUM_INPUTS
     for inp in node.inputs:
-        # the lowest bit is used as a flag in topological sort
-        inputs_data.write(to_bytes(inp * 2))
-    outputs['model'].write(to_bytes(list(ops.keys()).index(node.op_type)))
-    outputs['model'].write(to_bytes(node.flags.as_bytes))
-
-inputs_data.seek(0)
-outputs['model'].write(inputs_data.read())
+        outputs['nodes'].write(to_bytes(inp))
+    for _ in range(Constants.NUM_INPUTS - len(node.inputs)):
+        outputs['nodes'].write(to_bytes(0))
+    outputs['nodes'].write(to_bytes(node.max_output_id))
+    outputs['nodes'].write(to_bytes(list(ops.keys()).index(node.op_type)))
+    outputs['nodes'].write(to_bytes(node.flags.as_bytes))
 
 labels, images = config['data_loader'](config['input_file'], start=0, limit=config['n_samples'])
 
@@ -530,8 +530,8 @@ struct NodeFlags;
     output_c.write('};\n\n')
 
     for op in keys:
-        output_h.write('void alloc_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, struct NodeFlags* flags);\n'.format(op.lower()))
-        output_h.write('void handle_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, struct NodeFlags* flags);\n'.format(op.lower()))
+        output_h.write('void alloc_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, const struct NodeFlags* flags);\n'.format(op.lower()))
+        output_h.write('void handle_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, const struct NodeFlags* flags);\n'.format(op.lower()))
     output_c.write('handler handlers[] = {\n')
     for op in keys:
         output_c.write(f'    handle_{op},\n'.lower())
@@ -543,7 +543,7 @@ struct NodeFlags;
     for op in keys:
         if ops[op][1]:
             output_c.write(textwrap.dedent(f'''
-                void alloc_{op.lower()}(struct Model *model, const struct ParameterInfo *[], struct ParameterInfo *output, struct NodeFlags*) {{
+                void alloc_{op.lower()}(struct Model *model, const struct ParameterInfo *[], struct ParameterInfo *output, const struct NodeFlags*) {{
                     SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
                     if (cur_slot_info) {{
                         cur_slot_info->user = model->layer_idx;

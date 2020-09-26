@@ -56,7 +56,7 @@ void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_
 }
 #endif
 
-void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags) {
+void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
     uint16_t stride = flags->stride;
 
     const ParameterInfo *data = input[0];
@@ -73,7 +73,7 @@ void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     output->dims[3] = new_W;
 }
 
-static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, NodeFlags* flags, const ParameterInfo *data, Model *model) {
+static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, const NodeFlags* flags, const ParameterInfo *data, Model *model) {
     const uint16_t CHANNEL = data->dims[1], W = data->dims[3];
     uint16_t stride = flags->stride;
     uint16_t kernel_size = flags->kernel_size;
@@ -110,7 +110,7 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, N
     return max_val;
 }
 
-void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags) {
+void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
     my_printf_debug("MaxPool!" NEWLINE);
 
     uint16_t stride = flags->stride;
@@ -229,7 +229,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     }
 }
 
-void alloc_add(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void alloc_add(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *A = input[0];
     MY_ASSERT(A->bitwidth == 16 && input[1]->bitwidth == 16);
 
@@ -251,7 +251,7 @@ private:
     int16_t *buffer;
 };
 
-void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     /* Add: Y = X + W */
     my_printf_debug("Add!" NEWLINE);
 
@@ -306,7 +306,7 @@ void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *outpu
     dump_params_debug(model, output);
 }
 
-void alloc_matmul(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void alloc_matmul(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *A = input[0], *B = input[1];
 
     uint16_t output_len = A->dims[0] * B->dims[1];
@@ -349,7 +349,7 @@ private:
     int16_t *buffer_matmul;
 };
 
-void handle_matmul(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_matmul(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *A = input[0], *B = input[1];
 
     my_printf_debug("handle_matmul inputs" NEWLINE);
@@ -412,13 +412,13 @@ void handle_matmul(Model *model, const ParameterInfo *input[], ParameterInfo *ou
 #endif
 }
 
-void alloc_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void alloc_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *data = input[0];
     output->slot = get_next_slot(model, data);
     output->flags &= ~TRANSPOSED;
 }
 
-void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     my_printf_debug("ReLu!" NEWLINE);
 
     const ParameterInfo *X = input[0];
@@ -520,7 +520,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     dump_params_nhwc_debug(model, output, 0);
 }
 
-void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     my_printf_debug("Reshape!" NEWLINE);
 
     const ParameterInfo *data = input[0], *shape = input[1];
@@ -570,7 +570,7 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
     MY_ASSERT(new_len * sizeof(int16_t) == output->params_len);
 }
 
-void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     my_printf_debug("Squeeze!" NEWLINE);
 
     const ParameterInfo *data = input[0];
@@ -591,7 +591,7 @@ void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *o
     }
 }
 
-void alloc_concat(Model *, const ParameterInfo *[], ParameterInfo*, NodeFlags*) {
+void alloc_concat(Model *, const ParameterInfo *[], ParameterInfo*, const NodeFlags*) {
 }
 
 class ConcatOutputChunkHandler : public ChunkHandler {
@@ -611,7 +611,7 @@ private:
     uint32_t offset;
 };
 
-void handle_concat(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_concat(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     my_printf_debug("Concat!" NEWLINE);
 
     const ParameterInfo *A = input[0], *B = input[1];
@@ -634,11 +634,11 @@ void handle_concat(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     dump_params_nhwc_debug(model, B, 0);
 }
 
-void handle_dropout(Model*, const ParameterInfo*[], ParameterInfo*, NodeFlags*) {
+void handle_dropout(Model*, const ParameterInfo*[], ParameterInfo*, const NodeFlags*) {
     ERROR_OCCURRED();
 }
 
-void alloc_globalaveragepool(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void alloc_globalaveragepool(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *data = input[0];
 
     MY_ASSERT(data->dims[0] == 1);
@@ -651,7 +651,7 @@ void alloc_globalaveragepool(Model *model, const ParameterInfo *input[], Paramet
     output->slot = get_next_slot(model, data);
 }
 
-void handle_globalaveragepool(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_globalaveragepool(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     my_printf_debug("GlobalAveragePool!" NEWLINE);
 
     const ParameterInfo *data = input[0];
@@ -695,12 +695,12 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
     dump_params_debug(model, output);
 }
 
-void handle_softmax(Model*, const ParameterInfo*[], ParameterInfo*, NodeFlags*) {
+void handle_softmax(Model*, const ParameterInfo*[], ParameterInfo*, const NodeFlags*) {
     // Do nothing - softmax does not change the relative order of values.
     // Just let run_model determine the max value
 }
 
-void handle_transpose(Model*, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_transpose(Model*, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     my_printf_debug("Transpose!" NEWLINE);
 
     const ParameterInfo *X = input[0];

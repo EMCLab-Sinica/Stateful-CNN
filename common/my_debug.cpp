@@ -108,7 +108,7 @@ void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, size_t offse
 void dump_model(Model *model) {
     uint16_t i, j;
     for (i = 0; i < MODEL_NODES_LEN; i++) {
-        Node *cur_node = &(model->nodes[i]);
+        const Node *cur_node = get_node(i);
         if (model->layer_idx > i) {
             my_printf("scheduled     ");
         } else {
@@ -116,7 +116,7 @@ void dump_model(Model *model) {
         }
         my_printf("(");
         for (j = 0; j < cur_node->inputs_len; j++) {
-            my_printf("%d", node_input(cur_node, j));
+            my_printf("%d", cur_node->inputs[j]);
             if (j != cur_node->inputs_len - 1) {
                 my_printf(", ");
             }
