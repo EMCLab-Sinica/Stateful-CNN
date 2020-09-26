@@ -26,9 +26,6 @@ const uint8_t* get_param_base_pointer(const ParameterInfo *param, uint32_t *limi
         case SLOT_PARAMETERS:
             *limit_p = PARAMETERS_DATA_LEN;
             return parameters_data;
-        case SLOT_PARAMETERS2:
-            *limit_p = PARAMETERS2_DATA_LEN;
-            return parameters2_data;
         case SLOT_TEST_SET:
             *limit_p = PLAT_SAMPLES_DATA_LEN;
             return samples_data;

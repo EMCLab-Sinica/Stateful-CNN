@@ -25,7 +25,6 @@ Indexing policy:
 """
 
 class Constants:
-    SLOT_PARAMETERS2 = 0xf1
     SLOT_PARAMETERS = 0xf0
     SLOT_TEST_SET = 0xff
     SLOT_CONSTANTS_MIN = SLOT_PARAMETERS
@@ -325,7 +324,6 @@ def nchw2nhwc(arr, dims):
 
 outputs = {
     'parameters': io.BytesIO(),
-    'parameters2': io.BytesIO(),
     'samples': io.BytesIO(),
     'model': io.BytesIO(),
     'nodes': io.BytesIO(),
@@ -357,7 +355,6 @@ class ParametersSlot:
     slot_id: int
 
 parameters_slot = ParametersSlot(offset=0, target=outputs['parameters'], slot_id=Constants.SLOT_PARAMETERS)
-parameters2_slot = ParametersSlot(offset=0, target=outputs['parameters2'], slot_id=Constants.SLOT_PARAMETERS2)
 
 for node in model:
     node_name = node.name[:Constants.NODE_NAME_LEN]
@@ -373,12 +370,6 @@ for node in model:
     outputs['nodes'].write(to_bytes(node.flags.as_bytes))
 
 labels, images = config['data_loader'](config['input_file'], start=0, limit=config['n_samples'])
-
-def select_parameters_slot(data_len):
-    if data_len <= 1024:  # XXX: random heuristic
-        return parameters_slot
-    else:
-        return parameters2_slot
 
 parameter_info_idx = 0
 
@@ -405,7 +396,7 @@ for params in parameters:
                 float_data = list(map(lambda t: t[0], struct.iter_unpack('f', params.raw_data)))
             data_len = len(float_data)
             assert data_len > 0
-            slot = select_parameters_slot(data_len * 2)
+            slot = parameters_slot
             outputs['parameters_info'].write(to_bytes(slot.offset, size=32))  # params_offset
             outputs['parameters_info'].write(to_bytes(data_len * 2, size=32))  # A _q15 is 16-bit
             if params.name in conv_param_names:
@@ -417,7 +408,7 @@ for params in parameters:
             outputs['parameters_info'].write(to_bytes(16, size=8)) # bitwidth
         elif params.data_type == onnx.TensorProto.INT64:
             data_len = len(params.int64_data)
-            slot = select_parameters_slot(data_len * 8)
+            slot = parameters_slot
             outputs['parameters_info'].write(to_bytes(slot.offset, size=32))  # params_offset
             outputs['parameters_info'].write(to_bytes(data_len * 8, size=32))
             for param in params.int64_data:

@@ -272,7 +272,6 @@ void flip_state_bit(Model *model, const ParameterInfo *output) {
 uint8_t get_state_bit(Model *model, uint8_t slot_id) {
     switch (slot_id) {
         case SLOT_PARAMETERS:
-        case SLOT_PARAMETERS2:
         case SLOT_TEST_SET:
             return 0;
         default:
