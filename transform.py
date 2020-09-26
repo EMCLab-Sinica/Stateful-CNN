@@ -31,8 +31,8 @@ class Constants:
     SLOT_CONSTANTS_MIN = SLOT_PARAMETERS
     SLOT_INTERMEDIATE_VALUES = 0b01
     COUNTERS_LEN = 64
-    # To make the Node struct exactly 64 bytes
-    NODE_NAME_LEN = 54
+    # To make the Node struct exactly 32 bytes
+    NODE_NAME_LEN = 22
     EXTRA_INFO_LEN = 3  # for memory alignment
     TURNING_POINTS_LEN = 8
     STATEFUL_CNN = 1
@@ -340,8 +340,8 @@ outputs['model'].write(to_bytes(0))  # Model.layer_idx
 outputs['model'].write(to_bytes(0))  # Model.sample_idx
 for _ in range(config['num_slots']): # Model.slots_info
     if Constants.STATEFUL_CNN:
-        outputs['model'].write(to_bytes(0))        # SlotInfo.state_bit
-        outputs['model'].write(to_bytes(0))        # SlotInfo.n_turning_points
+        outputs['model'].write(to_bytes(0, size=8)) # SlotInfo.state_bit
+        outputs['model'].write(to_bytes(0, size=8)) # SlotInfo.n_turning_points
         for __ in range(Constants.TURNING_POINTS_LEN):
             outputs['model'].write(to_bytes(-1))   # SlotInfo.turning_points
     outputs['model'].write(to_bytes(-1))       # SlotInfo.user
@@ -356,8 +356,8 @@ parameters_slot = ParametersSlot(offset=0, target=outputs['parameters'], slot_id
 parameters2_slot = ParametersSlot(offset=0, target=outputs['parameters2'], slot_id=Constants.SLOT_PARAMETERS2)
 
 for node in model:
-    assert len(node.name) < Constants.NODE_NAME_LEN
-    outputs['model'].write(node.name.encode('ascii') + b'\0' * (Constants.NODE_NAME_LEN - len(node.name)))
+    node_name = node.name[:Constants.NODE_NAME_LEN]
+    outputs['model'].write(node_name.encode('ascii') + b'\0' * (Constants.NODE_NAME_LEN - len(node_name)))
     outputs['model'].write(to_bytes(len(node.inputs)))
     outputs['model'].write(to_bytes(inputs_data.tell()))  # Node.inputs_offset
     outputs['model'].write(to_bytes(node.max_output_id))

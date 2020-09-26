@@ -24,7 +24,7 @@ typedef struct Node {
 } Node;
 
 // _Static_assert in C11 or static_assert in C++11 requires the message
-static_assert(sizeof(Node) == 64, "Unexpected size for Node");
+static_assert(sizeof(Node) == 32, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct ParameterInfo {
@@ -57,8 +57,8 @@ static_assert(sizeof(ParameterInfo) == 28, "Unexpected size for ParameterInfo");
 typedef struct SlotInfo {
     SlotInfo() {}
 #if STATEFUL_CNN
-    uint16_t state_bit;
-    uint16_t n_turning_points;
+    uint8_t state_bit;
+    uint8_t n_turning_points;
     uint16_t turning_points[TURNING_POINTS_LEN];
 #endif
     int16_t user;
@@ -75,7 +75,7 @@ typedef struct Model {
     SlotInfo slots_info[NUM_SLOTS];
 } Model;
 
-static_assert(sizeof(Model) == 14 + NUM_SLOTS * (2 + STATEFUL_CNN * (4 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
+static_assert(sizeof(Model) == 14 + NUM_SLOTS * (2 + STATEFUL_CNN * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
 
 typedef struct {
     uint16_t time_counters[COUNTERS_LEN];
