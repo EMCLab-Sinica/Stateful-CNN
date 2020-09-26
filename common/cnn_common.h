@@ -65,7 +65,6 @@ typedef struct SlotInfo {
 } SlotInfo;
 
 typedef struct Model {
-    uint16_t nodes_len;
     uint16_t n_input;
     uint16_t running;
     uint16_t first_time;
@@ -73,9 +72,10 @@ typedef struct Model {
     uint16_t layer_idx;
     uint16_t sample_idx;
     SlotInfo slots_info[NUM_SLOTS];
+    Node nodes[MODEL_NODES_LEN];
 } Model;
 
-static_assert(sizeof(Model) == 14 + NUM_SLOTS * (2 + STATEFUL_CNN * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
+static_assert(sizeof(Model) == 12 + 32 * MODEL_NODES_LEN + NUM_SLOTS * (2 + STATEFUL_CNN * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
 
 typedef struct {
     uint16_t time_counters[COUNTERS_LEN];

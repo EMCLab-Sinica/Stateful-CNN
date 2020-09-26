@@ -36,6 +36,7 @@ class Constants:
     EXTRA_INFO_LEN = 3  # for memory alignment
     TURNING_POINTS_LEN = 8
     STATEFUL_CNN = 1
+    MODEL_NODES_LEN = 0
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
@@ -331,7 +332,8 @@ outputs = {
     'counters': io.BytesIO(),
 }
 
-outputs['model'].write(to_bytes(len(model)))
+Constants.MODEL_NODES_LEN = len(model)
+
 outputs['model'].write(to_bytes(n_input))
 outputs['model'].write(to_bytes(0))  # Model.running
 outputs['model'].write(to_bytes(1))  # Model.first_time

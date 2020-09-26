@@ -105,10 +105,10 @@ void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, size_t offse
     }
 }
 
-void dump_model(Model *model, Node *nodes) {
+void dump_model(Model *model) {
     uint16_t i, j;
-    for (i = 0; i < model->nodes_len; i++) {
-        Node *cur_node = &(nodes[i]);
+    for (i = 0; i < MODEL_NODES_LEN; i++) {
+        Node *cur_node = &(model->nodes[i]);
         if (model->layer_idx > i) {
             my_printf("scheduled     ");
         } else {

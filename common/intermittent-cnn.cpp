@@ -8,11 +8,11 @@
 #include "data.h"
 #include "my_debug.h"
 
-static void handle_node(Model *model, Node *nodes, uint16_t node_idx) {
+static void handle_node(Model *model, uint16_t node_idx) {
     my_printf_debug("Current node: %d, ", node_idx);
 
     /* schedule it */
-    Node *cur_node = &(nodes[node_idx]);
+    Node *cur_node = &(model->nodes[node_idx]);
     my_printf_debug("name = %s, ", cur_node->name);
     my_printf_debug("op_type = %d" NEWLINE, cur_node->op_type);
 
@@ -67,15 +67,14 @@ static void handle_node(Model *model, Node *nodes, uint16_t node_idx) {
     MY_ASSERT(output->bitwidth);
 #endif
 
-    if (node_idx == model->nodes_len - 1) {
+    if (node_idx == MODEL_NODES_LEN - 1) {
         model->running = 0;
         model->run_counter++;
     }
 }
 
 int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
-    Node *nodes = (Node*)(model + 1);
-    inputs_data = reinterpret_cast<uint8_t*>(nodes + model->nodes_len);
+    inputs_data = reinterpret_cast<uint8_t*>(model->nodes + MODEL_NODES_LEN);
 
     my_printf_debug("model->n_input = %d" NEWLINE, model->n_input);
 
@@ -92,17 +91,17 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
 
     counters()->power_counters[counters()->counter_idx]++;
 
-    dump_model_debug(model, nodes);
+    dump_model_debug(model);
 
-    for (uint16_t node_idx = model->layer_idx; node_idx < model->nodes_len; node_idx++) {
-        handle_node(model, nodes, node_idx);
+    for (uint16_t node_idx = model->layer_idx; node_idx < MODEL_NODES_LEN; node_idx++) {
+        handle_node(model, node_idx);
         model->layer_idx++;
 
-        dump_model_debug(model, nodes);
+        dump_model_debug(model);
     }
 
     /* XXX: is the last node always the output node? */
-    ParameterInfo *output_node = get_parameter_info(model->nodes_len + model->n_input - 1);
+    ParameterInfo *output_node = get_parameter_info(MODEL_NODES_LEN + model->n_input - 1);
     if (output_node_ptr) {
         *output_node_ptr = output_node;
     }
@@ -123,9 +122,8 @@ static void print_results(Model *model, ParameterInfo *output_node) {
     dump_params(model, output_node);
 
     my_printf("op types:" NEWLINE);
-    Node *nodes = (Node*)(model + 1);
     for (uint8_t i = 0; i < counters()->counter_idx; i++) {
-        my_printf("% 5d ", nodes[i].op_type);
+        my_printf("% 5d ", model->nodes[i].op_type);
         if (i % 16 == 15) {
             my_printf(NEWLINE);
         }

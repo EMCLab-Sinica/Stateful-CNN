@@ -72,7 +72,6 @@ int64_t get_int64_param(const ParameterInfo *param, size_t i) {
 }
 
 uint16_t get_next_slot(Model *model, const ParameterInfo *param) {
-    Node *nodes = (Node*)(model + 1);
     uint16_t slot_id = param->slot;
     /* pick the next unused slot */
     uint16_t next_slot_id = slot_id;
@@ -93,7 +92,7 @@ uint16_t get_next_slot(Model *model, const ParameterInfo *param) {
         if (slot_user_id == model->layer_idx) {
             break;
         }
-        Node *slot_user = &(nodes[slot_user_id]);
+        Node *slot_user = &(model->nodes[slot_user_id]);
         if (slot_user->max_output_id < model->layer_idx) {
             break;
         }

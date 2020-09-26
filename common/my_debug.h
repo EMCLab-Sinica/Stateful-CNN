@@ -67,7 +67,7 @@ void dump_matrix(Model* model, ParameterInfo *param, uint16_t offset, uint16_t l
 void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_info);
 void dump_params(struct Model *model, const ParameterInfo *cur_param);
 void dump_params_nhwc(struct Model *model, const ParameterInfo *cur_param, size_t offset);
-void dump_model(struct Model *model, struct Node *nodes);
+void dump_model(struct Model *model);
 #if STATEFUL_CNN
 void dump_turning_points(Model *model, const ParameterInfo *output);
 #endif
