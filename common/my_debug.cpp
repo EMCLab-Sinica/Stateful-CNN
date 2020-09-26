@@ -10,7 +10,7 @@ template<>
 void my_printf_wrapper() {}
 #endif
 
-ValueInfo::ValueInfo(ParameterInfo *cur_param, Model *model) {
+ValueInfo::ValueInfo(const ParameterInfo *cur_param, Model *model) {
     this->scale = cur_param->scale;
 }
 
@@ -36,9 +36,9 @@ static void print_q15(int16_t val, const ValueInfo& val_info) {
     }
 }
 
-void dump_value(Model *model, ParameterInfo *cur_param, size_t offset) {
+void dump_value(Model *model, const ParameterInfo *cur_param, size_t offset) {
     if (cur_param->bitwidth == 16) {
-        print_q15(get_q15_param(cur_param, offset), ValueInfo(cur_param, model));
+        print_q15(get_q15_param(model, cur_param, offset), ValueInfo(cur_param, model));
     } else if (cur_param->bitwidth == 64) {
         my_printf("%" PRId64 " ", get_int64_param(cur_param, offset));
     } else {
@@ -57,10 +57,10 @@ void dump_matrix(const int16_t *mat, size_t len, const ValueInfo& val_info) {
     my_printf(NEWLINE);
 }
 
-void dump_matrix(ParameterInfo *param, uint16_t offset, uint16_t len, const ValueInfo& val_info) {
+void dump_matrix(Model* model, ParameterInfo *param, uint16_t offset, uint16_t len, const ValueInfo& val_info) {
     my_printf("Scale: %d" NEWLINE, val_info.scale);
     for (size_t j = 0; j < len; j++) {
-        print_q15(get_q15_param(param, offset + j), val_info);
+        print_q15(get_q15_param(model, param, offset + j), val_info);
         if (j && (j % 16 == 15)) {
             my_printf(NEWLINE);
         }
@@ -68,7 +68,7 @@ void dump_matrix(ParameterInfo *param, uint16_t offset, uint16_t len, const Valu
     my_printf(NEWLINE);
 }
 
-void dump_params_nhwc(Model *model, ParameterInfo *cur_param, size_t offset) {
+void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, size_t offset) {
     uint16_t NUM, H, W, CHANNEL;
     // tensor
     NUM = cur_param->dims[0];
@@ -125,7 +125,7 @@ void dump_model(Model *model, Node *nodes) {
     }
 }
 
-static void check_params_len(ParameterInfo *cur_param) {
+static void check_params_len(const ParameterInfo *cur_param) {
     uint32_t expected_params_len = sizeof(int16_t);
     for (uint8_t i = 0; i < 4; i++) {
         if (cur_param->dims[i]) {
@@ -136,7 +136,7 @@ static void check_params_len(ParameterInfo *cur_param) {
 }
 
 // dump in NCHW format
-void dump_params(Model *model, ParameterInfo *cur_param) {
+void dump_params(Model *model, const ParameterInfo *cur_param) {
     uint16_t NUM, H, W, CHANNEL;
     if (cur_param->dims[2] && cur_param->dims[3]) {
         // tensor
@@ -172,7 +172,7 @@ void dump_params(Model *model, ParameterInfo *cur_param) {
 }
 
 #if STATEFUL_CNN
-void dump_turning_points(Model *model, ParameterInfo *output) {
+void dump_turning_points(Model *model, const ParameterInfo *output) {
     SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
     if (!cur_slot_info) {
         my_printf("%d is not a normal slot" NEWLINE, output->slot);

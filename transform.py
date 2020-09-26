@@ -528,8 +528,8 @@ struct NodeFlags;
     output_c.write('};\n\n')
 
     for op in keys:
-        output_h.write('void alloc_{}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, struct NodeFlags* flags);\n'.format(op.lower()))
-        output_h.write('void handle_{}(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, struct NodeFlags* flags);\n'.format(op.lower()))
+        output_h.write('void alloc_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, struct NodeFlags* flags);\n'.format(op.lower()))
+        output_h.write('void handle_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, struct NodeFlags* flags);\n'.format(op.lower()))
     output_c.write('handler handlers[] = {\n')
     for op in keys:
         output_c.write(f'    handle_{op},\n'.lower())
@@ -541,7 +541,7 @@ struct NodeFlags;
     for op in keys:
         if ops[op][1]:
             output_c.write(textwrap.dedent(f'''
-                void alloc_{op.lower()}(Model *model, ParameterInfo *[], struct ParameterInfo *output, struct NodeFlags*) {{
+                void alloc_{op.lower()}(struct Model *model, const struct ParameterInfo *[], struct ParameterInfo *output, struct NodeFlags*) {{
                     SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
                     if (cur_slot_info) {{
                         cur_slot_info->user = model->layer_idx;

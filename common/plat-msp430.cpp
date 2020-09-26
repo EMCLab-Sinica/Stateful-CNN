@@ -136,22 +136,14 @@ void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, co
 #endif
 }
 
-void my_memcpy_from_param(void *dest, struct ParameterInfo *param, uint16_t offset_in_word, size_t n) {
-    if (param->slot >= SLOT_CONSTANTS_MIN) {
-        uint32_t limit;
-        const uint8_t *baseptr = get_param_base_pointer(param, &limit);
-        uint32_t total_offset = param->params_offset + offset_in_word * sizeof(int16_t);
-        MY_ASSERT(total_offset + n <= limit);
-        my_memcpy(dest, baseptr + total_offset, n);
-    } else {
+void my_memcpy_from_intermediate_values(void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n) {
 #ifdef EXTERNAL_FRAM
-        SPI_ADDR addr;
-        addr.L = intermediate_values_offset(param->slot) + offset_in_word * sizeof(int16_t);
-        SPI_READ(&addr, reinterpret_cast<uint8_t*>(dest), n);
+    SPI_ADDR addr;
+    addr.L = intermediate_values_offset(param->slot) + offset_in_word * sizeof(int16_t);
+    SPI_READ(&addr, reinterpret_cast<uint8_t*>(dest), n);
 #else
 #error "TODO"
 #endif
-    }
 }
 
 void plat_print_results(void) {

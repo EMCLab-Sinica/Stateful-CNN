@@ -1,5 +1,6 @@
 #include "cnn_common.h"
 #include "my_debug.h"
+#include "platform.h"
 
 uint8_t *inputs_data;
 
@@ -25,7 +26,7 @@ int16_t node_input(Node *node, size_t i) {
     return *node_input_ptr(node, i) / 2;
 }
 
-const uint8_t* get_param_base_pointer(ParameterInfo *param, uint32_t *limit_p) {
+const uint8_t* get_param_base_pointer(const ParameterInfo *param, uint32_t *limit_p) {
     uint16_t slot_id = param->slot;
     switch (slot_id) {
         case SLOT_PARAMETERS:
@@ -42,7 +43,7 @@ const uint8_t* get_param_base_pointer(ParameterInfo *param, uint32_t *limit_p) {
     }
 }
 
-int16_t get_q15_param(ParameterInfo *param, uint16_t i) {
+int16_t get_q15_param(Model* model, const ParameterInfo *param, uint16_t i) {
     MY_ASSERT(param->bitwidth == 16);
     if (param->slot >= SLOT_CONSTANTS_MIN) {
         uint32_t limit;
@@ -52,7 +53,7 @@ int16_t get_q15_param(ParameterInfo *param, uint16_t i) {
         return *ret;
     } else {
         int16_t ret;
-        my_memcpy_from_param(&ret, param, i, sizeof(int16_t));
+        my_memcpy_from_param(model, &ret, param, i, sizeof(int16_t));
         return ret;
     }
 }
@@ -61,7 +62,7 @@ void put_q15_param(ParameterInfo *param, uint16_t i, int16_t val) {
     my_memcpy_to_param(param, i, &val, sizeof(int16_t));
 }
 
-int64_t get_int64_param(ParameterInfo *param, size_t i) {
+int64_t get_int64_param(const ParameterInfo *param, size_t i) {
     MY_ASSERT(param->bitwidth == 64);
     uint32_t limit;
     const uint8_t *baseptr = get_param_base_pointer(param, &limit);
@@ -70,7 +71,7 @@ int64_t get_int64_param(ParameterInfo *param, size_t i) {
     return *ret;
 }
 
-uint16_t get_next_slot(Model *model, ParameterInfo *param) {
+uint16_t get_next_slot(Model *model, const ParameterInfo *param) {
     Node *nodes = (Node*)(model + 1);
     uint16_t slot_id = param->slot;
     /* pick the next unused slot */
@@ -106,4 +107,22 @@ uint16_t get_next_slot(Model *model, ParameterInfo *param) {
     my_printf_debug("next_slot_id = %d" NEWLINE, next_slot_id);
     get_slot_info(model, next_slot_id)->user = model->layer_idx;
     return next_slot_id;
+}
+
+void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n) {
+    if (param->slot >= SLOT_CONSTANTS_MIN) {
+        uint32_t limit;
+        const uint8_t *baseptr = get_param_base_pointer(param, &limit);
+        uint32_t total_offset;
+        if (param->slot == SLOT_TEST_SET) {
+            total_offset = (model->sample_idx % PLAT_LABELS_DATA_LEN) * param->params_len;
+        } else {
+            total_offset = param->params_offset ;
+        }
+        total_offset += offset_in_word * sizeof(int16_t);
+        MY_ASSERT(total_offset + n <= limit);
+        my_memcpy(dest, baseptr + total_offset, n);
+    } else {
+        my_memcpy_from_intermediate_values(dest, param, offset_in_word, n);
+    }
 }

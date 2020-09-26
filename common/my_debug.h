@@ -53,7 +53,7 @@ struct Model;
 struct Node;
 
 struct ValueInfo {
-    ValueInfo(ParameterInfo *cur_param, Model *model = nullptr);
+    ValueInfo(const ParameterInfo *cur_param, Model *model = nullptr);
     ValueInfo() = delete;
 
     uint16_t scale;
@@ -61,15 +61,15 @@ struct ValueInfo {
 
 extern uint8_t dump_integer;
 
-void dump_value(struct Model *model, struct ParameterInfo *cur_param, size_t offset);
+void dump_value(struct Model *model, const ParameterInfo *cur_param, size_t offset);
 void dump_matrix(const int16_t *mat, size_t len, const ValueInfo& val_info);
-void dump_matrix(ParameterInfo *param, uint16_t offset, uint16_t len, const ValueInfo& val_info);
+void dump_matrix(Model* model, ParameterInfo *param, uint16_t offset, uint16_t len, const ValueInfo& val_info);
 void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_info);
-void dump_params(struct Model *model, struct ParameterInfo *cur_param);
-void dump_params_nhwc(struct Model *model, struct ParameterInfo *cur_param, size_t offset);
+void dump_params(struct Model *model, const ParameterInfo *cur_param);
+void dump_params_nhwc(struct Model *model, const ParameterInfo *cur_param, size_t offset);
 void dump_model(struct Model *model, struct Node *nodes);
 #if STATEFUL_CNN
-void dump_turning_points(Model *model, ParameterInfo *output);
+void dump_turning_points(Model *model, const ParameterInfo *output);
 #endif
 
 #if MY_DEBUG >= 2

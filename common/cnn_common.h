@@ -122,20 +122,21 @@ static inline int16_t int16_max(int16_t a, int16_t b) {
 /**********************************
  *       Helpers for nodes        *
  **********************************/
-const uint8_t* get_param_base_pointer(ParameterInfo *param, uint32_t *limit_p);
-int16_t get_q15_param(ParameterInfo *param, uint16_t offset_in_word);
+const uint8_t* get_param_base_pointer(const ParameterInfo *param, uint32_t *limit_p);
+int16_t get_q15_param(Model* model, const ParameterInfo *param, uint16_t offset_in_word);
 void put_q15_param(ParameterInfo *param, uint16_t offset_in_word, int16_t val);
-int64_t get_int64_param(ParameterInfo *param, size_t i);
+int64_t get_int64_param(const ParameterInfo *param, size_t i);
 int16_t node_input(Node *node, size_t i);
-uint16_t get_next_slot(Model *model, ParameterInfo *param);
+uint16_t get_next_slot(Model *model, const ParameterInfo *param);
 ParameterInfo* get_parameter_info(size_t i);
 SlotInfo * get_slot_info(Model* model, uint8_t i);
+void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n);
 
 /**********************************
  *       Operation handlers       *
  **********************************/
-typedef void (*handler)(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags);
-typedef void (*allocator)(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags);
+typedef void (*handler)(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags);
+typedef void (*allocator)(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags);
 // below are defined in ops.c
 extern uint8_t expected_inputs_len[];
 extern handler handlers[];

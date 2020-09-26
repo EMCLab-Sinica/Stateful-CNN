@@ -152,16 +152,8 @@ void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, co
     my_memcpy(dest, src, n);
 }
 
-void my_memcpy_from_param(void *dest, struct ParameterInfo *param, uint16_t offset_in_word, size_t n) {
-    if (param->slot >= SLOT_CONSTANTS_MIN) {
-        uint32_t limit;
-        const uint8_t *baseptr = get_param_base_pointer(param, &limit);
-        uint32_t total_offset = param->params_offset + offset_in_word * sizeof(int16_t);
-        MY_ASSERT(total_offset + n <= limit);
-        my_memcpy(dest, baseptr + total_offset, n);
-    } else {
-        my_memcpy(dest, intermediate_values(param->slot) + offset_in_word * sizeof(int16_t), n);
-    }
+void my_memcpy_from_intermediate_values(void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n) {
+    my_memcpy(dest, intermediate_values(param->slot) + offset_in_word * sizeof(int16_t), n);
 }
 
 [[ noreturn ]] void ERROR_OCCURRED(void) {

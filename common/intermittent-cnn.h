@@ -16,7 +16,7 @@ static inline uint8_t get_value_state_bit(int16_t val) {
     MY_ASSERT(-0x2000 <= val && val < 0x6000);
     return val >= 0x2000;
 }
-void flip_state_bit(struct Model *model, struct ParameterInfo *output);
-uint8_t param_state_bit(Model *model, ParameterInfo *param, uint16_t offset);
+void flip_state_bit(struct Model *model, const ParameterInfo *output);
+uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offset);
 uint32_t recovery_from_state_bits(struct Model *model, struct ParameterInfo *output);
 #endif

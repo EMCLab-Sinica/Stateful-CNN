@@ -27,10 +27,11 @@ static int16_t last_output_data_offset;
 
 #define CONV_TASK_FLAG_PROCESSED_FILTERS_BASE 2
 typedef struct ConvTaskParams {
-    ParameterInfo *conv_input;
-    ParameterInfo *real_conv_input; // for separate channel tiling
-    ParameterInfo *conv_filter;
-    ParameterInfo *conv_bias;
+    Model* model;
+    const ParameterInfo *conv_input;
+    const ParameterInfo *real_conv_input; // for separate channel tiling
+    const ParameterInfo *conv_filter;
+    const ParameterInfo *conv_bias;
     ParameterInfo *output;
 
     /* aux vars remaining constant for a conv layer */
@@ -75,7 +76,7 @@ static ConvTaskParams conv_params_obj;
 
 int16_t * const matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
 
-void determine_tile_c(ParameterInfo *param, ParameterInfo *filter) {
+void determine_tile_c(ParameterInfo *param, const ParameterInfo *filter) {
     // TODO: determine these values automatically
     uint16_t CHANNEL = param->dims[1], H = param->dims[2];
     uint16_t kH = 0, INPUT_CHANNEL = 0;
@@ -176,7 +177,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 int16_t *filter_dest_ptr = filter_tmp + h * conv_params->dest_offset;
                 uint16_t cur_filter_src_offset = filter_src_offset + h * conv_params->kW * conv_params->CHANNEL + conv_params->input_tile_c_offset;
                 for (uint16_t w = 0; w < conv_params->kW; w++) {
-                    my_memcpy_from_param(filter_dest_ptr, conv_params->conv_filter, cur_filter_src_offset, buffer_size);
+                    my_memcpy_from_param(conv_params->model, filter_dest_ptr, conv_params->conv_filter, cur_filter_src_offset, buffer_size);
                     filter_dest_ptr += conv_params->cur_input_tile_c;
                     cur_filter_src_offset += conv_params->CHANNEL;
                 }
@@ -193,7 +194,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 filter_tmp[conv_params->filter_offset - 1] = 0;
             }
             if (conv_params->input_tile_c_index == 0) {
-                filter_tmp[conv_params->filter_offset - 1] += -get_q15_param(conv_params->conv_bias, conv_params->conv_idx + idx) / conv_params->conv_input->scale;
+                filter_tmp[conv_params->filter_offset - 1] += -get_q15_param(conv_params->model, conv_params->conv_bias, conv_params->conv_idx + idx) / conv_params->conv_input->scale;
             }
 
 #ifndef USE_ARM_CMSIS
@@ -349,7 +350,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         int16_t input_src_offset_end = input_src_offset + size;
         my_printf_debug("Load %ld IFM values from range [%d, %d)" NEWLINE, size, input_src_offset, input_src_offset_end);
         my_memcpy_from_param(
-            dest_addr,
+            model, dest_addr,
             conv_params->real_conv_input, input_src_offset,
             size * sizeof(int16_t));
 #if STATEFUL_CNN
@@ -393,8 +394,8 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     }
 }
 
-void alloc_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags) {
-    ParameterInfo *conv_input = input[0], *conv_filter = input[1];
+void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags) {
+    const ParameterInfo *conv_input = input[0], *conv_filter = input[1];
 
     MY_ASSERT(conv_input->bitwidth == 16 && conv_filter->bitwidth == 16);
 
@@ -406,6 +407,8 @@ void alloc_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, Nod
                    OUTPUT_CHANNEL = conv_filter->dims[0];
 
     ConvTaskParams *conv_params = &conv_params_obj;
+
+    conv_params->model = model;
 
     conv_params->kH = conv_filter->dims[2];
     conv_params->kW = conv_filter->dims[3];
@@ -435,8 +438,8 @@ void alloc_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, Nod
     output->scale = conv_input->scale * conv_filter->scale;
 }
 
-void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
-    ParameterInfo *conv_input = input[0], *conv_filter = input[1], *conv_bias = input[2];
+void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+    const ParameterInfo *conv_input = input[0], *conv_filter = input[1], *conv_bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 
     setOutputValue(1);
@@ -567,8 +570,8 @@ void handle_conv(Model *model, ParameterInfo *input[], ParameterInfo *output, No
 #endif
 }
 
-void alloc_convmerge(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
-    ParameterInfo *data = input[0];
+void alloc_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+    const ParameterInfo *data = input[0];
 
     my_memcpy(output, data, sizeof(struct ParameterInfo));
 
@@ -616,12 +619,12 @@ private:
     uint32_t tiling_results_offset;
 };
 
-void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct ParameterInfo *output, NodeFlags*) {
+void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct ParameterInfo *output, NodeFlags*) {
     // XXX: make this function idempotent
 
     // Do not use conv_params here as its intialization in alloc_conv and
     // handle_conv might be skipped if the Conv node has finished.
-    ParameterInfo *data = input[0];
+    const ParameterInfo *data = input[0];
     uint16_t OUTPUT_CHANNEL = data->dims[1],
              OUTPUT_H = data->dims[2],
              OUTPUT_W = data->dims[3];
@@ -649,7 +652,7 @@ void handle_convmerge(struct Model *model, struct ParameterInfo *input[], struct
         for (uint16_t input_tile_c_index = 0; input_tile_c_index < n_tiles_c; input_tile_c_index++) {
             int16_t *to_add = lea_buffer + input_tile_c_index * chunk_len;
             uint16_t data_offset = input_tile_c_index * tiling_results_len + tiling_results_offset;
-            my_memcpy_from_param(to_add, data, data_offset, real_chunk_len * sizeof(int16_t));
+            my_memcpy_from_param(model, to_add, data, data_offset, real_chunk_len * sizeof(int16_t));
 #if STATEFUL_CNN
             iterate_chunks(model, data, data_offset, real_chunk_len, ConvMergeInputChunkHandler(to_add, data_offset));
 #endif

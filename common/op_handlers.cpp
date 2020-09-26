@@ -15,7 +15,7 @@ int16_t lea_buffer[LEA_BUFFER_SIZE];
 #define RESHAPE_AUTO_DIM (uint16_t)(-1)
 
 #if STATEFUL_CNN
-void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, ParameterInfo* param) {
+void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param) {
     *p_offset = get_state_bit(model, param->slot) ? 0x4000 : 0;
     *p_turning_point_idx = 0;
     *p_next_turning_point = -1;
@@ -56,10 +56,10 @@ void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_
 }
 #endif
 
-void alloc_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags) {
+void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags) {
     uint16_t stride = flags->stride;
 
-    ParameterInfo *data = input[0];
+    const ParameterInfo *data = input[0];
 
     const uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
     uint16_t new_H = H / stride;
@@ -73,7 +73,7 @@ void alloc_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     output->dims[3] = new_W;
 }
 
-static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, NodeFlags* flags, ParameterInfo *data, Model *model) {
+static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, NodeFlags* flags, const ParameterInfo *data, Model *model) {
     const uint16_t CHANNEL = data->dims[1], W = data->dims[3];
     uint16_t stride = flags->stride;
     uint16_t kernel_size = flags->kernel_size;
@@ -90,7 +90,7 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, N
     for (uint16_t sH = 0; sH < kernel_size; sH++) {
         for (uint16_t sW = 0; sW < kernel_size; sW++) {
             uint16_t val_offset = (output_h*stride+sH) * offset_h + (output_w*stride+sW) * offset_w + c;
-            int16_t val = get_q15_param(data, val_offset);
+            int16_t val = get_q15_param(model, data, val_offset);
 #if STATEFUL_CNN
             if (get_value_state_bit(val)) {
                 // assuming input state bits are correct...
@@ -110,14 +110,14 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, N
     return max_val;
 }
 
-void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags) {
+void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags* flags) {
     my_printf_debug("MaxPool!" NEWLINE);
 
     uint16_t stride = flags->stride;
     uint8_t need_nhwc2nchw = (flags->generic == NHWC2NCHW);
 
     /* XXX: add flags; assume no padding for now */
-    ParameterInfo *data = input[0];
+    const ParameterInfo *data = input[0];
 
     my_printf_debug("handle_maxpool input" NEWLINE);
     dump_params_debug(model, data);
@@ -229,8 +229,8 @@ void handle_maxpool(Model *model, ParameterInfo *input[], ParameterInfo *output,
     }
 }
 
-void alloc_add(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
-    ParameterInfo *A = input[0];
+void alloc_add(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+    const ParameterInfo *A = input[0];
     MY_ASSERT(A->bitwidth == 16 && input[1]->bitwidth == 16);
 
     output->slot = get_next_slot(model, A);
@@ -251,11 +251,11 @@ private:
     int16_t *buffer;
 };
 
-void handle_add(Model* model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
     /* Add: Y = X + W */
     my_printf_debug("Add!" NEWLINE);
 
-    ParameterInfo *A = input[0], *B = input[1];
+    const ParameterInfo *A = input[0], *B = input[1];
 
     my_printf_debug("handle_add input A" NEWLINE);
     dump_params_debug(model, A);
@@ -266,8 +266,8 @@ void handle_add(Model* model, ParameterInfo *input[], ParameterInfo *output, Nod
 
     int16_t *buffer_a = lea_buffer,
             *buffer_b = lea_buffer + vector_size;
-    my_memcpy_from_param(buffer_a, A, 0, output->params_len);
-    my_memcpy_from_param(buffer_b, B, 0, output->params_len);
+    my_memcpy_from_param(model, buffer_a, A, 0, output->params_len);
+    my_memcpy_from_param(model, buffer_b, B, 0, output->params_len);
 
 #if STATEFUL_CNN
     // XXX: use LEA?
@@ -306,8 +306,8 @@ void handle_add(Model* model, ParameterInfo *input[], ParameterInfo *output, Nod
     dump_params_debug(model, output);
 }
 
-void alloc_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
-    ParameterInfo *A = input[0], *B = input[1];
+void alloc_matmul(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+    const ParameterInfo *A = input[0], *B = input[1];
 
     uint16_t output_len = A->dims[0] * B->dims[1];
 
@@ -349,8 +349,8 @@ private:
     int16_t *buffer_matmul;
 };
 
-void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
-    ParameterInfo *A = input[0], *B = input[1];
+void handle_matmul(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+    const ParameterInfo *A = input[0], *B = input[1];
 
     my_printf_debug("handle_matmul inputs" NEWLINE);
     // dump_params_debug(model, A);
@@ -370,7 +370,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 
     my_fill_q15(0, buffer_matmul, 256);
 
-    my_memcpy_from_param(buffer_a, A, 0, A->dims[0] * A->dims[1] * sizeof(uint16_t));
+    my_memcpy_from_param(model, buffer_a, A, 0, A->dims[0] * A->dims[1] * sizeof(uint16_t));
 
 #if STATEFUL_CNN
     iterate_chunks(model, A, 0, 0, MatMulInputChunkHandler(buffer_a));
@@ -381,7 +381,7 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     for (uint16_t i = 0; i < B->dims[0]; i = (uint16_t)(i + step)) {
         uint16_t current_width = (uint16_t)MIN_VAL(step, B->dims[0] - i);
 
-        my_memcpy_from_param(buffer_b,
+        my_memcpy_from_param(model, buffer_b,
                   B, i * B->dims[1],
                   current_width * B->dims[1] * sizeof(uint16_t));
 
@@ -412,16 +412,16 @@ void handle_matmul(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 #endif
 }
 
-void alloc_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
-    ParameterInfo *data = input[0];
+void alloc_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+    const ParameterInfo *data = input[0];
     output->slot = get_next_slot(model, data);
     output->flags &= ~TRANSPOSED;
 }
 
-void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
     my_printf_debug("ReLu!" NEWLINE);
 
-    ParameterInfo *X = input[0];
+    const ParameterInfo *X = input[0];
     my_printf_debug("handle_relu input" NEWLINE);
     dump_params_nhwc_debug(model, X, 0);
 
@@ -470,7 +470,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, No
                     int16_t input_tile_c_offset = c % X->tile_c;
                     uint16_t cur_input_tile_c = MIN_VAL(X->tile_c, CHANNEL - input_tile_c_index * X->tile_c);
                     int16_t val_offset = input_tile_c_index * W * H * X->tile_c + output_w * H * cur_input_tile_c + output_h * cur_input_tile_c + input_tile_c_offset;
-                    int16_t input_val = get_q15_param(X, val_offset);
+                    int16_t input_val = get_q15_param(model, X, val_offset);
                     output_offset = output_h * W * CHANNEL + output_w * CHANNEL + c;
 #if STATEFUL_CNN
                     // assuming input state bits are correct...
@@ -504,7 +504,7 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, No
         ERROR_OCCURRED(); // TODO: adapt to range-based state assignments
 #endif
         for (; i < data_len; i++) {
-            put_q15_param(output, output_offset, MAX_VAL(get_q15_param(X, data_offset), 0));
+            put_q15_param(output, output_offset, MAX_VAL(get_q15_param(model, X, data_offset), 0));
             data_offset++;
             output_offset++;
         }
@@ -520,10 +520,10 @@ void handle_relu(Model *model, ParameterInfo *input[], ParameterInfo *output, No
     dump_params_nhwc_debug(model, output, 0);
 }
 
-void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
     my_printf_debug("Reshape!" NEWLINE);
 
-    ParameterInfo *data = input[0], *shape = input[1];
+    const ParameterInfo *data = input[0], *shape = input[1];
     output->params_offset = data->params_offset;
     output->params_len = data->params_len;
     output->bitwidth = data->bitwidth;
@@ -570,10 +570,10 @@ void handle_reshape(Model *model, ParameterInfo *input[], ParameterInfo *output,
     MY_ASSERT(new_len * sizeof(int16_t) == output->params_len);
 }
 
-void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
     my_printf_debug("Squeeze!" NEWLINE);
 
-    ParameterInfo *data = input[0];
+    const ParameterInfo *data = input[0];
     /* XXX: add flags; assume squeeze all one-size axes */
     output->params_offset = data->params_offset;
     output->params_len = data->params_len;
@@ -591,7 +591,7 @@ void handle_squeeze(Model *model, ParameterInfo *input[], ParameterInfo *output,
     }
 }
 
-void alloc_concat(Model *, ParameterInfo *[], ParameterInfo*, NodeFlags*) {
+void alloc_concat(Model *, const ParameterInfo *[], ParameterInfo*, NodeFlags*) {
 }
 
 class ConcatOutputChunkHandler : public ChunkHandler {
@@ -613,12 +613,12 @@ private:
 
 class ConcatInputChunkHandler : public ChunkHandler {
 public:
-    ConcatInputChunkHandler(Model *_model, ParameterInfo *_scaled, float _scale, ParameterInfo *_param_in_new_slot)
+    ConcatInputChunkHandler(Model *_model, const ParameterInfo *_scaled, float _scale, ParameterInfo *_param_in_new_slot)
         : model(_model), scaled(_scaled), scale(_scale), param_in_new_slot(_param_in_new_slot) {}
 
     void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
         my_printf_debug("scaled range_offset=%d range_len=%d state_bit=%d" NEWLINE, offset, real_chunk_len, state_bit);
-        my_memcpy_from_param(lea_buffer, scaled, offset, real_chunk_len * sizeof(int16_t));
+        my_memcpy_from_param(model, lea_buffer, scaled, offset, real_chunk_len * sizeof(int16_t));
 #if STATEFUL_CNN
         if (state_bit) {
             my_offset_q15(lea_buffer, -0x4000, lea_buffer, real_chunk_len);
@@ -633,15 +633,15 @@ public:
 
 private:
     Model *model;
-    ParameterInfo *scaled;
+    const ParameterInfo *scaled;
     float scale;
     ParameterInfo *param_in_new_slot;
 };
 
-void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_concat(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
     my_printf_debug("Concat!" NEWLINE);
 
-    ParameterInfo *A = input[0], *B = input[1];
+    const ParameterInfo *A = input[0], *B = input[1];
     // XXX: assume concatenating 2 tensors at the CHANNEL dimension and they
     // have the same number of channels.
     MY_ASSERT(A->dims[1] == B->dims[1]);
@@ -650,7 +650,7 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     output->flags |= SEPARATE_TILING;
 
     float scale;
-    ParameterInfo *scaled = NULL;
+    const ParameterInfo *scaled = NULL;
     // The one with smaller `scale` (with larger values) is scaled down
     if (A->scale < B->scale) {
         scale = 1.0f * A->scale / B->scale;
@@ -669,7 +669,8 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
 
         iterate_chunks(model, scaled, 0, 0, ConcatInputChunkHandler(model, scaled, scale, &param_in_new_slot));
 
-        scaled->slot = new_slot;
+        // TODO
+        // scaled->slot = new_slot;
 #if STATEFUL_CNN
         flip_state_bit(model, scaled);
 #endif
@@ -684,12 +685,12 @@ void handle_concat(Model *model, ParameterInfo *input[], ParameterInfo *output, 
     dump_params_nhwc_debug(model, B, 0);
 }
 
-void handle_dropout(Model*, ParameterInfo*[], ParameterInfo*, NodeFlags*) {
+void handle_dropout(Model*, const ParameterInfo*[], ParameterInfo*, NodeFlags*) {
     ERROR_OCCURRED();
 }
 
-void alloc_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
-    ParameterInfo *data = input[0];
+void alloc_globalaveragepool(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+    const ParameterInfo *data = input[0];
 
     MY_ASSERT(data->dims[0] == 1);
     uint16_t output_len = data->dims[1];
@@ -701,10 +702,10 @@ void alloc_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInfo
     output->slot = get_next_slot(model, data);
 }
 
-void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_globalaveragepool(Model *model, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
     my_printf_debug("GlobalAveragePool!" NEWLINE);
 
-    ParameterInfo *data = input[0];
+    const ParameterInfo *data = input[0];
 
 #if STATEFUL_CNN
     int16_t offset, next_output_turning_point;
@@ -721,7 +722,7 @@ void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInf
         for (uint16_t h = 0; h < H; h++) {
             for (uint16_t w = 0; w < W; w++) {
                 // Input is from Conv, which uses NHWC
-                int16_t val = get_q15_param(data, h * W * CHANNEL + w * CHANNEL + c);
+                int16_t val = get_q15_param(model, data, h * W * CHANNEL + w * CHANNEL + c);
 #if STATEFUL_CNN
                 if (get_value_state_bit(val)) {
                     val -= 0x4000;
@@ -745,15 +746,15 @@ void handle_globalaveragepool(Model *model, ParameterInfo *input[], ParameterInf
     dump_params_debug(model, output);
 }
 
-void handle_softmax(Model*, ParameterInfo*[], ParameterInfo*, NodeFlags*) {
+void handle_softmax(Model*, const ParameterInfo*[], ParameterInfo*, NodeFlags*) {
     // Do nothing - softmax does not change the relative order of values.
     // Just let run_model determine the max value
 }
 
-void handle_transpose(Model*, ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
+void handle_transpose(Model*, const ParameterInfo *input[], ParameterInfo *output, NodeFlags*) {
     my_printf_debug("Transpose!" NEWLINE);
 
-    ParameterInfo *X = input[0];
+    const ParameterInfo *X = input[0];
     // not actually transpose data as we happen to need NHWC
     // XXX: assume NHWC -> NCHW
     output->dims[1] = X->dims[3];
@@ -763,7 +764,7 @@ void handle_transpose(Model*, ParameterInfo *input[], ParameterInfo *output, Nod
 
 class OverflowChunkHandler : public ChunkHandler {
 public:
-    OverflowChunkHandler(Model *_model, ParameterInfo *_param, uint16_t *_overflow_factor)
+    OverflowChunkHandler(Model *_model, const ParameterInfo *_param, uint16_t *_overflow_factor)
         : model(_model), param(_param), overflow_factor(_overflow_factor) {}
 
     void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
@@ -776,7 +777,7 @@ public:
         int16_t max_val, min_val;
         uint16_t index;
 
-        my_memcpy_from_param(lea_buffer, param, offset, real_chunk_len * sizeof(int16_t));
+        my_memcpy_from_param(model, lea_buffer, param, offset, real_chunk_len * sizeof(int16_t));
 
         // dump_matrix(lea_buffer, real_chunk_len, ValueInfo(param));
 
@@ -802,11 +803,11 @@ public:
     }
 private:
     Model *model;
-    ParameterInfo *param;
+    const ParameterInfo *param;
     uint16_t *overflow_factor;
 };
 
-uint16_t find_overflow_factor(Model *model, ParameterInfo *param) {
+uint16_t find_overflow_factor(Model *model, const ParameterInfo *param) {
     uint16_t overflow_factor = 1;
 
     iterate_chunks(model, param, 0, 0, OverflowChunkHandler(model, param, &overflow_factor));
@@ -825,7 +826,7 @@ void float_to_scale_params(int16_t *scaleFract, uint8_t *shift, float scale) {
     *scaleFract = scale * 32768;
 }
 
-void iterate_chunks(Model *model, ParameterInfo *param, uint16_t start_offset, uint16_t len, const ChunkHandler& callback) {
+void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_offset, uint16_t len, const ChunkHandler& callback) {
     uint16_t params_len;
     if (!len) {
         params_len = param->params_len / sizeof(int16_t);

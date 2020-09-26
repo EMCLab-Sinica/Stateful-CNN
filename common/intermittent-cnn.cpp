@@ -17,15 +17,12 @@ static void handle_node(Model *model, Node *nodes, uint16_t node_idx) {
     my_printf_debug("op_type = %d" NEWLINE, cur_node->op_type);
 
     int16_t input_id[3];
-    ParameterInfo *input[3];
+    const ParameterInfo *input[3];
     MY_ASSERT(cur_node->inputs_len == expected_inputs_len[cur_node->op_type]);
     for (uint16_t j = 0; j < cur_node->inputs_len; j++) {
         input_id[j] = node_input(cur_node, j);
         my_printf_debug("input_id[%d] = %d ", j, input_id[j]);
         input[j] = get_parameter_info(input_id[j]);
-        if (input[j]->slot == SLOT_TEST_SET) {
-            input[j]->params_offset = (model->sample_idx % PLAT_LABELS_DATA_LEN) * input[j]->params_len;
-        }
         // dump_params(input[j]);
     }
     my_printf_debug(NEWLINE);
@@ -111,7 +108,7 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
     }
     int16_t max = INT16_MIN;
     for (uint16_t i = 0; i < output_node->dims[1]; i++) {
-        int16_t val = get_q15_param(output_node, i);
+        int16_t val = get_q15_param(model, output_node, i);
         if (val > max) {
             *ansptr = (uint8_t)i;
             max = val;
@@ -210,7 +207,7 @@ void reset_everything(Model *model) {
 
 #if STATEFUL_CNN
 
-static void check_feature_map_states(Model *model, ParameterInfo* output, uint32_t first_unfinished_value_offset, uint32_t len, const char* func) {
+static void check_feature_map_states(Model *model, const ParameterInfo* output, uint32_t first_unfinished_value_offset, uint32_t len, const char* func) {
 #if MY_DEBUG >= 1
     uint8_t turning_point_idx = 0;
     uint16_t next_turning_point = -1;
@@ -230,14 +227,14 @@ static void check_feature_map_states(Model *model, ParameterInfo* output, uint32
         if (idx == first_unfinished_value_offset) {
             cur_state_bit ^= 1;
         }
-        int16_t val = get_q15_param(output, idx);
+        int16_t val = get_q15_param(model, output, idx);
         MY_ASSERT(get_value_state_bit(val) == cur_state_bit,
             "Value %d at index %d does not have expected state bit %d" NEWLINE, val, idx, cur_state_bit);
     }
 #endif
 }
 
-void flip_state_bit(Model *model, ParameterInfo *output) {
+void flip_state_bit(Model *model, const ParameterInfo *output) {
     int16_t new_turning_point = output->params_len / 2;
     my_printf_debug("New turning point=%d" NEWLINE, new_turning_point);
     SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
@@ -287,7 +284,7 @@ uint8_t get_state_bit(Model *model, uint8_t slot_id) {
     }
 }
 
-uint8_t param_state_bit(Model *model, ParameterInfo *param, uint16_t offset) {
+uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offset) {
     uint8_t ret = get_state_bit(model, param->slot);
     SlotInfo *cur_slot_info = get_slot_info(model, param->slot);
     for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
@@ -320,12 +317,12 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
 
     while (1) {
 #if 1
-        dump_matrix_debug(output, cur_begin_offset, cur_end_offset - cur_begin_offset, ValueInfo(output));
+        dump_matrix_debug(model, output, cur_begin_offset, cur_end_offset - cur_begin_offset, ValueInfo(output));
 #endif
         if (cur_end_offset - cur_begin_offset <= 1) {
-            if (get_value_state_bit(get_q15_param(output, cur_begin_offset)) == param_state_bit(model, output, cur_begin_offset)) {
+            if (get_value_state_bit(get_q15_param(model, output, cur_begin_offset)) == param_state_bit(model, output, cur_begin_offset)) {
                 first_unfinished_value_offset = 0;
-            } else if (get_value_state_bit(get_q15_param(output, cur_end_offset)) == param_state_bit(model, output, cur_end_offset)) {
+            } else if (get_value_state_bit(get_q15_param(model, output, cur_end_offset)) == param_state_bit(model, output, cur_end_offset)) {
                 first_unfinished_value_offset = cur_end_offset;
             } else if (cur_end_offset == end_offset) {
                 // all values finished - power failure just before the state
@@ -337,7 +334,7 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
             break;
         }
         uint32_t middle_offset = cur_begin_offset + (cur_end_offset - cur_begin_offset) / 2;
-        if (get_value_state_bit(get_q15_param(output, middle_offset)) != param_state_bit(model, output, middle_offset)) {
+        if (get_value_state_bit(get_q15_param(model, output, middle_offset)) != param_state_bit(model, output, middle_offset)) {
             cur_begin_offset = middle_offset;
         } else {
             cur_end_offset = middle_offset;
