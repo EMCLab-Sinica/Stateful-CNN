@@ -108,17 +108,6 @@ Counters *counters(void);
 // WORK (!?).
 #define LIMIT_DMA_SIZE(x) MIN_VAL(512, x)
 
-/* Better to not use macros
- * https://stackoverflow.com/a/3437484/3786245
- */
-static inline int16_t int16_min(int16_t a, int16_t b) {
-    return a < b ? a : b;
-}
-
-static inline int16_t int16_max(int16_t a, int16_t b) {
-    return a > b ? a : b;
-}
-
 /**********************************
  *       Helpers for nodes        *
  **********************************/

@@ -25,6 +25,17 @@
 
 static int16_t last_output_data_offset;
 
+/* Better to not use macros
+ * https://stackoverflow.com/a/3437484/3786245
+ */
+static inline int16_t int16_min(int16_t a, int16_t b) {
+    return a < b ? a : b;
+}
+
+static inline int16_t int16_max(int16_t a, int16_t b) {
+    return a > b ? a : b;
+}
+
 #define CONV_TASK_FLAG_PROCESSED_FILTERS_BASE 2
 typedef struct ConvTaskParams {
     Model* model;
