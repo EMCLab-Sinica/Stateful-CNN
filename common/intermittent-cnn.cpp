@@ -107,7 +107,7 @@ int run_model(Model *model, int8_t *ansptr, const ParameterInfo **output_node_pt
     for (uint16_t i = 0; i < output_node->dims[1]; i++) {
         int16_t val = get_q15_param(model, output_node, i);
         if (val > max) {
-            *ansptr = (uint8_t)i;
+            *ansptr = i;
             max = val;
         }
     }
@@ -150,7 +150,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
         n_samples = PLAT_LABELS_DATA_LEN;
     }
     const ParameterInfo *output_node;
-    Model *model = (Model*)model_data;
+    Model *model = reinterpret_cast<Model*>(model_data);
     const uint8_t *labels = labels_data;
     for (uint16_t i = 0; i < n_samples; i++) {
         model->sample_idx = i;

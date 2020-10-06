@@ -258,10 +258,10 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     my_printf_debug("output_h=%d ", (conv_params->input_h + offset_h) / conv_params->stride);
     my_printf_debug("output_w=%d" NEWLINE, conv_params->input_w / conv_params->stride);
 
-    my_printf_debug("input_buffer_addr = lea_buffer + %d" NEWLINE, (int)(input_buffer_addr - lea_buffer));
+    my_printf_debug("input_buffer_addr = lea_buffer + %d" NEWLINE, static_cast<int>(input_buffer_addr - lea_buffer));
     my_printf_debug("input" NEWLINE);
     dump_matrix2_debug(input_buffer_addr, A_rows, A_cols, ValueInfo(conv_params->conv_input));
-    my_printf_debug("filter_buffer_addr = lea_buffer + LEA_BUFFER_SIZE - %d" NEWLINE, (int)(lea_buffer + LEA_BUFFER_SIZE - filter_buffer_addr));
+    my_printf_debug("filter_buffer_addr = lea_buffer + LEA_BUFFER_SIZE - %d" NEWLINE, static_cast<int>(lea_buffer + LEA_BUFFER_SIZE - filter_buffer_addr));
     my_printf_debug("filter" NEWLINE);
 #ifndef USE_ARM_CMSIS
     dump_matrix2_debug(filter_buffer_addr, B_rows, B_cols, ValueInfo(conv_params->conv_filter));
@@ -345,7 +345,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
 
     size_t size = (w_end - w_start + 1) * conv_params->cur_input_tile_c;
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
-                    (int)(dest - lea_buffer));
+                    static_cast<int>(dest - lea_buffer));
     int16_t input_src_offset;
     input_src_offset = input_offset + (conv_params->input_h + h_start) * conv_params->W * conv_params->cur_input_tile_c + (conv_params->input_w + w_start) * conv_params->cur_input_tile_c;
 #if STATEFUL_CNN

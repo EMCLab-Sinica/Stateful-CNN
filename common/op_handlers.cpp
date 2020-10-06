@@ -12,7 +12,7 @@
 #endif
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
-#define RESHAPE_AUTO_DIM (uint16_t)(-1)
+#define RESHAPE_AUTO_DIM static_cast<uint16_t>(-1)
 
 #if STATEFUL_CNN
 void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param) {
@@ -377,23 +377,23 @@ void handle_matmul(Model *model, const ParameterInfo *input[], ParameterInfo *ou
 #endif
 
     /* LEA wants addresses to be 4-aligned */
-    uint16_t step = (uint16_t)((256 / B->dims[1]) / 4 * 4);
-    for (uint16_t i = 0; i < B->dims[0]; i = (uint16_t)(i + step)) {
-        uint16_t current_width = (uint16_t)MIN_VAL(step, B->dims[0] - i);
+    uint16_t step = (256 / B->dims[1]) / 4 * 4;
+    for (uint16_t i = 0; i < B->dims[0]; i += step) {
+        uint16_t current_width = MIN_VAL(step, B->dims[0] - i);
 
         my_memcpy_from_param(model, buffer_b,
                   B, i * B->dims[1],
                   current_width * B->dims[1] * sizeof(uint16_t));
 
         my_printf_debug("strip for A" NEWLINE);
-        dump_matrix_debug(buffer_a + A->dims[0] * i, (size_t)(A->dims[0] * current_width), ValueInfo(A, model));
+        dump_matrix_debug(buffer_a + A->dims[0] * i, A->dims[0] * current_width, ValueInfo(A, model));
         my_printf_debug("B" NEWLINE);
-        dump_matrix_debug(buffer_b, (size_t)(current_width * B->dims[1]), ValueInfo(B, model));
+        dump_matrix_debug(buffer_b, current_width * B->dims[1], ValueInfo(B, model));
 
         my_matrix_mpy_q15(A->dims[0], current_width, current_width, B->dims[1], buffer_a + A->dims[0] * i, buffer_b, buffer_temp, 0);
 
         my_printf_debug("temp" NEWLINE);
-        dump_matrix_debug(buffer_temp, (size_t)(A->dims[0] * B->dims[1]), ValueInfo(output, model));
+        dump_matrix_debug(buffer_temp, A->dims[0] * B->dims[1], ValueInfo(output, model));
 
         my_add_q15(buffer_matmul, buffer_temp, buffer_matmul, output->params_len / sizeof(int16_t));
     }
@@ -543,7 +543,7 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
      * */
     uint32_t new_len = 1;
     for (uint8_t i = 0; i < 4 && i < shape->dims[0]; i++) {
-        output->dims[i] = (uint16_t)get_int64_param(shape, i);
+        output->dims[i] = get_int64_param(shape, i);
         if (!output->dims[i]) {
             output->dims[i] = data->dims[i];
         }

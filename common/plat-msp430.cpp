@@ -33,7 +33,7 @@ static uint8_t *intermediate_values(uint8_t slot_id) {
 #endif
 
 Counters *counters() {
-    return (Counters*)counters_data;
+    return reinterpret_cast<Counters*>(counters_data);
 }
 
 #ifdef __MSP430__
@@ -163,7 +163,7 @@ static uint32_t delay_counter;
 #endif
 
 void IntermittentCNNTest() {
-    Model *model = (Model*)model_data;
+    Model *model = reinterpret_cast<Model*>(model_data);
 
 #ifdef EXTERNAL_FRAM
     initSPI();
@@ -209,7 +209,7 @@ void button_pushed(uint16_t button1_status, uint16_t button2_status) {
         return;
     }
 
-    Model *model = (Model*)model_data;
+    Model *model = reinterpret_cast<Model*>(model_data);
     my_printf("%d" NEWLINE, model->run_counter);
 
     reset_everything(model);

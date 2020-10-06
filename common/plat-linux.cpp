@@ -25,7 +25,7 @@
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
 const uint8_t *parameters_data, *samples_data, *labels_data, *nodes_data, *model_parameters_info_data;
-uint8_t *model_data, *intermediate_parameters_info_data;
+uint8_t *model_data, *intermediate_parameters_info_data, *counters_data;
 uint16_t dma_invocations[COUNTERS_LEN];
 uint16_t dma_bytes[COUNTERS_LEN];
 
@@ -34,7 +34,7 @@ static uint8_t *intermediate_values(uint8_t slot_id) {
 }
 
 Counters *counters() {
-    return (Counters*)(labels_data + PLAT_LABELS_DATA_LEN);
+    return reinterpret_cast<Counters*>(counters_data);
 }
 
 int main(int argc, char* argv[]) {
@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
     chdir(MY_SOURCE_DIR);
 
     int nvm_fd = open("nvm.bin", O_RDWR);
-    nvm = (uint8_t*)mmap(NULL, NVM_SIZE, PROT_READ|PROT_WRITE, read_only ? MAP_PRIVATE : MAP_SHARED, nvm_fd, 0);
+    nvm = reinterpret_cast<uint8_t*>(mmap(NULL, NVM_SIZE, PROT_READ|PROT_WRITE, read_only ? MAP_PRIVATE : MAP_SHARED, nvm_fd, 0));
     if (nvm == MAP_FAILED) {
         perror("mmap() failed");
         goto exit;
@@ -77,6 +77,7 @@ int main(int argc, char* argv[]) {
     model_parameters_info_data = nodes_data + NODES_DATA_LEN;
     intermediate_parameters_info_data = const_cast<uint8_t*>(model_parameters_info_data + MODEL_PARAMETERS_INFO_DATA_LEN);
     labels_data = intermediate_parameters_info_data + INTERMEDIATE_PARAMETERS_INFO_DATA_LEN;
+    counters_data = const_cast<uint8_t*>(labels_data + PLAT_LABELS_DATA_LEN);
 
 #ifdef USE_ARM_CMSIS
     my_printf("Use DSP from ARM CMSIS pack" NEWLINE);
