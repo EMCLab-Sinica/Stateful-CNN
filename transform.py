@@ -38,6 +38,7 @@ class Constants:
     MODEL_NODES_LEN = 0
     INPUTS_DATA_LEN = 0
     NUM_INPUTS = 3
+    N_INPUT = 0
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
@@ -114,7 +115,7 @@ class ONNXNodeWrapper:
 
 
 def get_prev_node(n):
-    return nodes[names[n.input[0]] - n_input]
+    return nodes[names[n.input[0]] - Constants.N_INPUT]
 
 # intermediate_values_size should < 65536, or TI's compiler gets confused
 configs = {
@@ -219,8 +220,8 @@ for idx, initializer in enumerate(g.initializer):
     if initializer.name not in names:
         names[initializer.name] = idx + inputs_len
 
-n_input = len(names.keys())
-print("n_input = {}".format(n_input))
+Constants.N_INPUT = len(names.keys())
+print("Constants.N_INPUT = {}".format(Constants.N_INPUT))
 
 def get_attr(node, attr_name):
     for attr in node.attribute:
@@ -253,7 +254,7 @@ for idx, n in enumerate(nodes):
         n.flags.b.stride = stride
     if n.op_type == 'Reshape' and prev_node and prev_node.op_type == 'MaxPool':
         prev_node.flags.b.generic += op_flag('NHWC2NCHW')
-    names[output[0]] = idx + n_input
+    names[output[0]] = idx + Constants.N_INPUT
     prev_node = n
 
 pprint.pprint(names)
@@ -272,9 +273,9 @@ for n in nodes:
 
 for idx, node in enumerate(model):
     for inp in node.inputs:
-        if inp < n_input:
+        if inp < Constants.N_INPUT:
             continue
-        used_node = model[inp - n_input]
+        used_node = model[inp - Constants.N_INPUT]
         used_node.max_output_id = max([idx, used_node.max_output_id])
 
 # Inputs of Concat should be kept until Concat is processed
@@ -282,12 +283,12 @@ for idx, node in enumerate(model):
     if node.op_type != 'Concat':
         continue
     for inp in node.inputs:
-        if inp < n_input:
+        if inp < Constants.N_INPUT:
             continue
-        used_node = model[inp - n_input]
+        used_node = model[inp - Constants.N_INPUT]
         used_node.max_output_id = max([used_node.max_output_id, node.max_output_id])
 
-parameters = [None for _ in range(n_input)]
+parameters = [None for _ in range(Constants.N_INPUT)]
 
 for params in g.initializer:
     if params.data_type not in (onnx.TensorProto.FLOAT, onnx.TensorProto.INT64):
@@ -327,14 +328,14 @@ outputs = {
     'samples': io.BytesIO(),
     'model': io.BytesIO(),
     'nodes': io.BytesIO(),
-    'parameters_info': io.BytesIO(),
+    'model_parameters_info': io.BytesIO(),
+    'intermediate_parameters_info': io.BytesIO(),
     'labels': io.BytesIO(),
     'counters': io.BytesIO(),
 }
 
 Constants.MODEL_NODES_LEN = len(model)
 
-outputs['model'].write(to_bytes(n_input))
 outputs['model'].write(to_bytes(0))  # Model.running
 outputs['model'].write(to_bytes(1))  # Model.first_time
 outputs['model'].write(to_bytes(0))  # Model.run_counter
@@ -373,20 +374,21 @@ labels, images = config['data_loader'](config['input_file'], start=0, limit=conf
 
 parameter_info_idx = 0
 
+model_parameters_info = outputs['model_parameters_info']
 for params in parameters:
     if params is None:  # input
         # Actual data for test samples are added last
         _, input_channel, dimX, dimY = images[0].shape
-        outputs['parameters_info'].write(to_bytes(parameters_slot.offset, size=32))  # params_offset
-        outputs['parameters_info'].write(to_bytes(input_channel* dimX * dimY * 2, size=32))  # A _q15 is 16-bit
-        outputs['parameters_info'].write(to_bytes(16, size=8))                # bitwidth
-        outputs['parameters_info'].write(to_bytes(Constants.SLOT_TEST_SET, size=8))     # slot
-        outputs['parameters_info'].write(to_bytes(input_channel, size=16))    # tile_c
+        model_parameters_info.write(to_bytes(parameters_slot.offset, size=32))  # params_offset
+        model_parameters_info.write(to_bytes(input_channel* dimX * dimY * 2, size=32))  # A _q15 is 16-bit
+        model_parameters_info.write(to_bytes(16, size=8))                # bitwidth
+        model_parameters_info.write(to_bytes(Constants.SLOT_TEST_SET, size=8))     # slot
+        model_parameters_info.write(to_bytes(input_channel, size=16))    # tile_c
         # extend_dims
-        outputs['parameters_info'].write(to_bytes(1))
-        outputs['parameters_info'].write(to_bytes(input_channel))
-        outputs['parameters_info'].write(to_bytes(dimX))
-        outputs['parameters_info'].write(to_bytes(dimY))
+        model_parameters_info.write(to_bytes(1))
+        model_parameters_info.write(to_bytes(input_channel))
+        model_parameters_info.write(to_bytes(dimX))
+        model_parameters_info.write(to_bytes(dimY))
     else:
         assert len(params.dims) <= 4
         if params.data_type == onnx.TensorProto.FLOAT:
@@ -397,61 +399,62 @@ for params in parameters:
             data_len = len(float_data)
             assert data_len > 0
             slot = parameters_slot
-            outputs['parameters_info'].write(to_bytes(slot.offset, size=32))  # params_offset
-            outputs['parameters_info'].write(to_bytes(data_len * 2, size=32))  # A _q15 is 16-bit
+            model_parameters_info.write(to_bytes(slot.offset, size=32))  # params_offset
+            model_parameters_info.write(to_bytes(data_len * 2, size=32))  # A _q15 is 16-bit
             if params.name in conv_param_names:
                 print(f'Reorder conv param {params.name}')
                 float_data, _ = nchw2nhwc(float_data, params.dims)
             for param in float_data:
                 slot.target.write(to_bytes(_Q15(param / config['scale'])))
                 slot.offset += 2
-            outputs['parameters_info'].write(to_bytes(16, size=8)) # bitwidth
+            model_parameters_info.write(to_bytes(16, size=8)) # bitwidth
         elif params.data_type == onnx.TensorProto.INT64:
             data_len = len(params.int64_data)
             slot = parameters_slot
-            outputs['parameters_info'].write(to_bytes(slot.offset, size=32))  # params_offset
-            outputs['parameters_info'].write(to_bytes(data_len * 8, size=32))
+            model_parameters_info.write(to_bytes(slot.offset, size=32))  # params_offset
+            model_parameters_info.write(to_bytes(data_len * 8, size=32))
             for param in params.int64_data:
                 slot.target.write(to_bytes(param, size=64))
                 slot.offset += 8
-            outputs['parameters_info'].write(to_bytes(64, size=8)) # bitwidth
+            model_parameters_info.write(to_bytes(64, size=8)) # bitwidth
         else:
             assert False
-        outputs['parameters_info'].write(to_bytes(slot.slot_id, size=8))  # slot
+        model_parameters_info.write(to_bytes(slot.slot_id, size=8))  # slot
         if len(params.dims) == 4:
             tile_c = params.dims[1]
         else:
             tile_c = 0
-        outputs['parameters_info'].write(to_bytes(tile_c, size=16))       # tile_c
+        model_parameters_info.write(to_bytes(tile_c, size=16))       # tile_c
         print('dims = {}, length = {}'.format(params.dims, data_len))
         for dim in params.dims:
-            outputs['parameters_info'].write(to_bytes(dim))
+            model_parameters_info.write(to_bytes(dim))
         # dims are always 4 uint16_t's in C++
         for _ in range(4 - len(params.dims)):
-            outputs['parameters_info'].write(to_bytes(0))
+            model_parameters_info.write(to_bytes(0))
 
     # common to input and non-inputs
-    outputs['parameters_info'].write(to_bytes(0, size=8))                 # flags
+    model_parameters_info.write(to_bytes(0, size=8))                 # flags
     for _ in range(Constants.EXTRA_INFO_LEN):
-        outputs['parameters_info'].write(to_bytes(0, size=8))             # extra_info
-    outputs['parameters_info'].write(to_bytes(config['scale']))           # scale
-    outputs['parameters_info'].write(to_bytes(parameter_info_idx))        # parameter_info_idx
+        model_parameters_info.write(to_bytes(0, size=8))             # extra_info
+    model_parameters_info.write(to_bytes(config['scale']))           # scale
+    model_parameters_info.write(to_bytes(parameter_info_idx))        # parameter_info_idx
     parameter_info_idx += 1
 
 # Placeholder for ParameterInfo of intermediate values
+intermediate_parameters_info = outputs['intermediate_parameters_info']
 for idx, n in enumerate(nodes):
-    outputs['parameters_info'].write(to_bytes(0, size=32))  # params_offset
-    outputs['parameters_info'].write(to_bytes(0, size=32))  # params_len
-    outputs['parameters_info'].write(to_bytes(0, size=8))  # bitwidth
-    outputs['parameters_info'].write(to_bytes(0, size=8))  # slot
-    outputs['parameters_info'].write(to_bytes(0, size=16))  # tile_c
+    intermediate_parameters_info.write(to_bytes(0, size=32))  # params_offset
+    intermediate_parameters_info.write(to_bytes(0, size=32))  # params_len
+    intermediate_parameters_info.write(to_bytes(0, size=8))  # bitwidth
+    intermediate_parameters_info.write(to_bytes(0, size=8))  # slot
+    intermediate_parameters_info.write(to_bytes(0, size=16))  # tile_c
     for _ in range(4):  # dims[4]
-        outputs['parameters_info'].write(to_bytes(0))
-    outputs['parameters_info'].write(to_bytes(0, size=8))     # flags
+        intermediate_parameters_info.write(to_bytes(0))
+    intermediate_parameters_info.write(to_bytes(0, size=8))     # flags
     for _ in range(Constants.EXTRA_INFO_LEN):
-        outputs['parameters_info'].write(to_bytes(0, size=8)) # extra_info
-    outputs['parameters_info'].write(to_bytes(config['scale']))   # scale
-    outputs['parameters_info'].write(to_bytes(parameter_info_idx))             # parameter_info_idx
+        intermediate_parameters_info.write(to_bytes(0, size=8)) # extra_info
+    intermediate_parameters_info.write(to_bytes(config['scale']))   # scale
+    intermediate_parameters_info.write(to_bytes(parameter_info_idx))             # parameter_info_idx
     parameter_info_idx += 1
 
 for idx, im in enumerate(images):
@@ -557,13 +560,9 @@ extern {const_qualifier}uint8_t *{var_name};
 #define {var_name.upper()}_LEN {len(data)}
 ''')
         # #define with _Pragma seems to be broken :/
-        if var_name == 'parameters_data':
-            section = 'nvm'
-        else:
-            section = 'nvm2'
         output_c.write(f'''
 #ifdef NEED_DATA_VARS
-#pragma DATA_SECTION(".{section}")
+#pragma DATA_SECTION(".nvm")
 {const_qualifier}uint8_t _{var_name}[{len(data)}] = {{
 ''')
         n_pieces, remaining = divmod(len(data), 16)
@@ -582,7 +581,7 @@ extern {const_qualifier}uint8_t *{var_name};
         full_var_name = var_name + '_data'
         data_obj.seek(0)
         define_var(full_var_name, data_obj.read(),
-                   will_modify=var_name in ('model', 'parameters_info', 'counters'))
+                   will_modify=var_name in ('model', 'intermediate_parameters_info', 'counters'))
 
     outputs['samples'].seek(0)
     samples_data = outputs['samples'].read()

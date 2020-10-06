@@ -29,7 +29,7 @@ static void handle_node(Model *model, uint16_t node_idx) {
 
     /* Allocate an ParameterInfo for output. Details are filled by
      * individual operation handlers */
-    ParameterInfo *output = get_parameter_info(node_idx + model->n_input);
+    ParameterInfo *output = get_writable_parameter_info(node_idx);
     uint16_t parameter_info_idx_saved = output->parameter_info_idx;
     my_memcpy(output, input[0], sizeof(ParameterInfo));
     output->parameter_info_idx = parameter_info_idx_saved;
@@ -73,8 +73,8 @@ static void handle_node(Model *model, uint16_t node_idx) {
     }
 }
 
-int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
-    my_printf_debug("model->n_input = %d" NEWLINE, model->n_input);
+int run_model(Model *model, int8_t *ansptr, const ParameterInfo **output_node_ptr) {
+    my_printf_debug("N_INPUT = %d" NEWLINE, N_INPUT);
 
     if (!model->running) {
         counters()->counter_idx = 0;
@@ -99,7 +99,7 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
     }
 
     /* XXX: is the last node always the output node? */
-    ParameterInfo *output_node = get_parameter_info(MODEL_NODES_LEN + model->n_input - 1);
+    const ParameterInfo *output_node = get_parameter_info(MODEL_NODES_LEN + N_INPUT - 1);
     if (output_node_ptr) {
         *output_node_ptr = output_node;
     }
@@ -116,7 +116,7 @@ int run_model(Model *model, int8_t *ansptr, ParameterInfo **output_node_ptr) {
 }
 
 #if MY_DEBUG >= 1
-static void print_results(Model *model, ParameterInfo *output_node) {
+static void print_results(Model *model, const ParameterInfo *output_node) {
     dump_params(model, output_node);
 
     my_printf("op types:" NEWLINE);
@@ -149,7 +149,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
     if (!n_samples) {
         n_samples = PLAT_LABELS_DATA_LEN;
     }
-    ParameterInfo *output_node;
+    const ParameterInfo *output_node;
     Model *model = (Model*)model_data;
     const uint8_t *labels = labels_data;
     for (uint16_t i = 0; i < n_samples; i++) {

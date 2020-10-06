@@ -2,8 +2,16 @@
 #include "my_debug.h"
 #include "platform.h"
 
-ParameterInfo* get_parameter_info(size_t i) {
-    return reinterpret_cast<ParameterInfo*>(parameters_info_data) + i;
+const ParameterInfo* get_parameter_info(uint8_t i) {
+    if (i < N_INPUT) {
+        return reinterpret_cast<const ParameterInfo*>(model_parameters_info_data) + i;
+    } else {
+        return reinterpret_cast<ParameterInfo*>(intermediate_parameters_info_data) + i - N_INPUT;
+    }
+}
+
+ParameterInfo* get_writable_parameter_info(uint8_t i) {
+    return reinterpret_cast<ParameterInfo*>(intermediate_parameters_info_data) + i;
 }
 
 const Node* get_node(size_t i) {
@@ -90,7 +98,7 @@ uint16_t get_next_slot(Model *model, const ParameterInfo *param) {
         // The recorded slot user is not the actual user. This happens when Concat
         // uses a new slot for scaled IFM. The old slot is actually used by nobody
         // and available for allocation.
-        if (get_parameter_info(model->n_input + slot_user_id)->slot != next_slot_id) {
+        if (get_parameter_info(N_INPUT + slot_user_id)->slot != next_slot_id) {
             break;
         }
     }
