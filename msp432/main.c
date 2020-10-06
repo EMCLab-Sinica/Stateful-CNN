@@ -8,7 +8,8 @@
  * main.c
  */
 
-void timerinit(void);
+static void prvSetupHardware( void );
+static void timerinit(void);
 
 void main(void)
 {
@@ -19,12 +20,38 @@ void main(void)
     // XXX: disabled - timer intterupts appear to interfere DMA read for external FRAM
     // timerinit();
 
+    prvSetupHardware();
+
     IntermittentCNNTest();
 }
 
 // See timer_a_upmode_gpio_toggle.c in MSP432 examples for code below
 
 #define TIMER_PERIOD    375
+
+static void prvSetupHardware( void ) {
+    // Ref: MSP432 example gpio_input_interrupt.c
+
+    /* Configuring P1.1 as an input and enabling interrupts */
+    MAP_GPIO_setAsInputPinWithPullUpResistor(GPIO_PORT_P1, GPIO_PIN1|GPIO_PIN4);
+    MAP_GPIO_clearInterruptFlag(GPIO_PORT_P1, GPIO_PIN1|GPIO_PIN4);
+    MAP_GPIO_enableInterrupt(GPIO_PORT_P1, GPIO_PIN1|GPIO_PIN4);
+    MAP_Interrupt_enableInterrupt(INT_PORT1);
+
+    /* Enabling MASTER interrupts */
+    MAP_Interrupt_enableMaster();
+}
+
+/* GPIO ISR */
+void PORT1_IRQHandler(void)
+{
+    uint32_t status;
+
+    status = MAP_GPIO_getEnabledInterruptStatus(GPIO_PORT_P1);
+    MAP_GPIO_clearInterruptFlag(GPIO_PORT_P1, status);
+
+    button_pushed(status & GPIO_PIN1, status & GPIO_PIN4);
+}
 
 /* Timer_A UpMode Configuration Parameter */
 static const Timer_A_UpModeConfig upConfig = {
