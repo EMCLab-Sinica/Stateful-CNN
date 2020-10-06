@@ -29,9 +29,9 @@ correct = 0
 limit = 1
 
 if 'mnist' in args.onnx_model:
-    labels, images = load_data(args.input_file, limit=limit)
+    labels, images = load_data(args.input_file, start=0, limit=limit)
 elif 'cifar10' in args.onnx_model:
-    labels, images = load_data_cifar10(args.input_file, limit=limit)
+    labels, images = load_data_cifar10(args.input_file, start=0, limit=limit)
 else:
     raise NotImplementedError
 
