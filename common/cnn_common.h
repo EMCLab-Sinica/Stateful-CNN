@@ -87,9 +87,8 @@ static_assert(sizeof(Counters) == 4 * COUNTERS_LEN + 2, "Unexpected size of Coun
 /**********************************
  *          Global data           *
  **********************************/
-extern uint8_t *intermediate_parameters_info_data;
-extern const uint8_t *nodes_data, *model_parameters_info_data;
 Counters *counters(void);
+extern ParameterInfo intermediate_parameters_info_vm[MODEL_NODES_LEN];
 
 
 /**********************************
@@ -115,7 +114,6 @@ void put_q15_param(ParameterInfo *param, uint16_t offset_in_word, int16_t val);
 int64_t get_int64_param(const ParameterInfo *param, size_t i);
 uint16_t get_next_slot(Model *model, const ParameterInfo *param);
 const ParameterInfo* get_parameter_info(uint8_t i);
-ParameterInfo* get_writable_parameter_info(uint8_t i);
 const Node* get_node(size_t i);
 SlotInfo * get_slot_info(Model* model, uint8_t i);
 void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n);

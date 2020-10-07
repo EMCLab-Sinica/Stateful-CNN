@@ -2,16 +2,14 @@
 #include "my_debug.h"
 #include "platform.h"
 
+ParameterInfo intermediate_parameters_info_vm[MODEL_NODES_LEN];
+
 const ParameterInfo* get_parameter_info(uint8_t i) {
     if (i < N_INPUT) {
         return reinterpret_cast<const ParameterInfo*>(model_parameters_info_data) + i;
     } else {
-        return reinterpret_cast<ParameterInfo*>(intermediate_parameters_info_data) + i - N_INPUT;
+        return get_intermediate_parameter_info(i - N_INPUT);
     }
-}
-
-ParameterInfo* get_writable_parameter_info(uint8_t i) {
-    return reinterpret_cast<ParameterInfo*>(intermediate_parameters_info_data) + i;
 }
 
 const Node* get_node(size_t i) {

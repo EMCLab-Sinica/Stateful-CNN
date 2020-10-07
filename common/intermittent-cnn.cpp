@@ -29,7 +29,7 @@ static void handle_node(Model *model, uint16_t node_idx) {
 
     /* Allocate an ParameterInfo for output. Details are filled by
      * individual operation handlers */
-    ParameterInfo *output = get_writable_parameter_info(node_idx);
+    ParameterInfo *output = get_intermediate_parameter_info(node_idx);
     uint16_t parameter_info_idx_saved = output->parameter_info_idx;
     my_memcpy(output, input[0], sizeof(ParameterInfo));
     output->parameter_info_idx = parameter_info_idx_saved;
@@ -66,6 +66,8 @@ static void handle_node(Model *model, uint16_t node_idx) {
     MY_ASSERT(has_dims);
     MY_ASSERT(output->bitwidth);
 #endif
+
+    commit_intermediate_parameter_info(node_idx);
 
     if (node_idx == MODEL_NODES_LEN - 1) {
         model->running = 0;

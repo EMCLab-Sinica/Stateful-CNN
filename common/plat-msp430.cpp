@@ -14,23 +14,22 @@
 #include "data.h"
 #include "my_debug.h"
 
-/* on FRAM */
+/* external FRAM layout:
+ * 0, +NUM_SLOTS * INTERMEDIATE_VALUES_SIZE: intermediate values
+ * INTERMEDIATE_PARAMETERS_INFO_OFFSET, +INTERMEDIATE_PARAMETERS_INFO_DATA_LEN: intermediate parameters info
+ */
 
-#define EXTERNAL_FRAM
+#define INTERMEDIATE_PARAMETERS_INFO_OFFSET 0x70000
 
-#ifdef EXTERNAL_FRAM
+static_assert(INTERMEDIATE_PARAMETERS_INFO_OFFSET > NUM_SLOTS * SLOT_INTERMEDIATE_VALUES, "Incorrect external NVM layout");
+
 static uint32_t intermediate_values_offset(uint8_t slot_id) {
-    // Currently only intermediate values are on external FRAM, so starting
-    // from FRAM address 0.
     return 0 + slot_id * INTERMEDIATE_VALUES_SIZE;
 }
-#else
-#pragma DATA_SECTION(".nvm2")
-static uint8_t _intermediate_values[NUM_SLOTS][INTERMEDIATE_VALUES_SIZE];
-static uint8_t *intermediate_values(uint8_t slot_id) {
-    return _intermediate_values[slot_id];
+
+static uint32_t intermediate_parameters_info_addr(uint8_t i) {
+    return INTERMEDIATE_PARAMETERS_INFO_OFFSET + i * sizeof(ParameterInfo);
 }
-#endif
 
 Counters *counters() {
     return reinterpret_cast<Counters*>(counters_data);
@@ -127,23 +126,30 @@ void my_memcpy(void* dest, const void* src, size_t n) {
 
 // XXX: consolidate common code between POSIX and MSP430
 void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, const void *src, size_t n) {
-#ifdef EXTERNAL_FRAM
     SPI_ADDR addr;
     addr.L = intermediate_values_offset(param->slot) + offset_in_word * sizeof(int16_t);
     SPI_WRITE(&addr, reinterpret_cast<const uint8_t*>(src), n);
-#else
-#error "TODO"
-#endif
 }
 
 void my_memcpy_from_intermediate_values(void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n) {
-#ifdef EXTERNAL_FRAM
     SPI_ADDR addr;
     addr.L = intermediate_values_offset(param->slot) + offset_in_word * sizeof(int16_t);
     SPI_READ(&addr, reinterpret_cast<uint8_t*>(dest), n);
-#else
-#error "TODO"
-#endif
+}
+
+ParameterInfo* get_intermediate_parameter_info(uint8_t i) {
+    ParameterInfo* dst = intermediate_parameters_info_vm + i;
+    SPI_ADDR addr;
+    addr.L = intermediate_parameters_info_addr(i);
+    SPI_READ(&addr, reinterpret_cast<uint8_t*>(dst), sizeof(ParameterInfo));
+    return dst;
+}
+
+void commit_intermediate_parameter_info(uint8_t i) {
+    SPI_ADDR addr;
+    addr.L = intermediate_parameters_info_addr(i);
+    const ParameterInfo* src = intermediate_parameters_info_vm + i;
+    SPI_WRITE(&addr, reinterpret_cast<const uint8_t*>(src), sizeof(ParameterInfo));
 }
 
 void plat_print_results(void) {
@@ -165,10 +171,8 @@ static uint32_t delay_counter;
 void IntermittentCNNTest() {
     Model *model = reinterpret_cast<Model*>(model_data);
 
-#ifdef EXTERNAL_FRAM
     initSPI();
     // testSPI();
-#endif
 
     if (model->first_time) {
 #if DELAY_START_SECONDS > 0

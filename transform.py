@@ -581,7 +581,7 @@ extern {const_qualifier}uint8_t *{var_name};
         full_var_name = var_name + '_data'
         data_obj.seek(0)
         define_var(full_var_name, data_obj.read(),
-                   will_modify=var_name in ('model', 'intermediate_parameters_info', 'counters'))
+                   will_modify=var_name in ('model', 'counters'))
 
     outputs['samples'].seek(0)
     samples_data = outputs['samples'].read()

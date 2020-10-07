@@ -24,10 +24,13 @@
 
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
-const uint8_t *parameters_data, *samples_data, *labels_data, *nodes_data, *model_parameters_info_data;
-uint8_t *model_data, *intermediate_parameters_info_data, *counters_data;
+const uint8_t *parameters_data, *samples_data, *labels_data, *nodes_data, *model_parameters_info_data, *intermediate_parameters_info_data;
+uint8_t *model_data, *counters_data;
+uint8_t *intermediate_parameters_info_data_nvm;
 uint16_t dma_invocations[COUNTERS_LEN];
 uint16_t dma_bytes[COUNTERS_LEN];
+
+const uint32_t intermediate_parameters_info_data_nvm_offset = 0x70000;
 
 static uint8_t *intermediate_values(uint8_t slot_id) {
     return nvm + slot_id * INTERMEDIATE_VALUES_SIZE;
@@ -75,9 +78,13 @@ int main(int argc, char* argv[]) {
     model_data = const_cast<uint8_t*>(samples_data + PLAT_SAMPLES_DATA_LEN);
     nodes_data = model_data + MODEL_DATA_LEN;
     model_parameters_info_data = nodes_data + NODES_DATA_LEN;
-    intermediate_parameters_info_data = const_cast<uint8_t*>(model_parameters_info_data + MODEL_PARAMETERS_INFO_DATA_LEN);
+    intermediate_parameters_info_data = model_parameters_info_data + MODEL_PARAMETERS_INFO_DATA_LEN;
     labels_data = intermediate_parameters_info_data + INTERMEDIATE_PARAMETERS_INFO_DATA_LEN;
     counters_data = const_cast<uint8_t*>(labels_data + PLAT_LABELS_DATA_LEN);
+
+    MY_ASSERT(nvm + intermediate_parameters_info_data_nvm_offset > counters_data + COUNTERS_DATA_LEN);
+
+    intermediate_parameters_info_data_nvm = nvm + intermediate_parameters_info_data_nvm_offset;
 
 #ifdef USE_ARM_CMSIS
     my_printf("Use DSP from ARM CMSIS pack" NEWLINE);
@@ -95,6 +102,7 @@ int main(int argc, char* argv[]) {
 #if STATEFUL_CNN
     if (model->first_time) {
         memset(intermediate_values(0), 0, INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
+        my_memcpy(intermediate_parameters_info_data_nvm, intermediate_parameters_info_data, INTERMEDIATE_PARAMETERS_INFO_DATA_LEN);
         model->first_time = 0;
     }
 #endif
@@ -156,6 +164,19 @@ void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, co
 
 void my_memcpy_from_intermediate_values(void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n) {
     my_memcpy(dest, intermediate_values(param->slot) + offset_in_word * sizeof(int16_t), n);
+}
+
+ParameterInfo* get_intermediate_parameter_info(uint8_t i) {
+    ParameterInfo* dst = intermediate_parameters_info_vm + i;
+    const ParameterInfo* src = reinterpret_cast<ParameterInfo*>(intermediate_parameters_info_data_nvm) + i;
+    my_memcpy(dst, src, sizeof(ParameterInfo));
+    return dst;
+}
+
+void commit_intermediate_parameter_info(uint8_t i) {
+    ParameterInfo* dst = reinterpret_cast<ParameterInfo*>(intermediate_parameters_info_data_nvm) + i;
+    const ParameterInfo* src = intermediate_parameters_info_vm + i;
+    my_memcpy(dst, src, sizeof(ParameterInfo));
 }
 
 [[ noreturn ]] void ERROR_OCCURRED(void) {
