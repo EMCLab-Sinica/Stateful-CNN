@@ -15,7 +15,7 @@ static void handle_node(Model *model, uint16_t node_idx) {
 
     /* schedule it */
     const Node *cur_node = get_node(node_idx);
-    my_printf_debug("name = %s, ", cur_node->name);
+    my_printf_debug("name = %.*s, ", NODE_NAME_LEN, cur_node->name);
     my_printf_debug("op_type = %d" NEWLINE, cur_node->op_type);
 
     int16_t input_id[3];
