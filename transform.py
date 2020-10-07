@@ -39,6 +39,8 @@ class Constants:
     INPUTS_DATA_LEN = 0
     NUM_INPUTS = 3
     N_INPUT = 0
+    # Match the size of external FRAM
+    NVM_SIZE = 512 * 1024
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
@@ -117,6 +119,7 @@ class ONNXNodeWrapper:
 def get_prev_node(n):
     return nodes[names[n.input[0]] - Constants.N_INPUT]
 
+
 # intermediate_values_size should < 65536, or TI's compiler gets confused
 configs = {
     'mnist': {
@@ -126,7 +129,6 @@ configs = {
         'scale': 8,
         'num_slots': 2,
         'intermediate_values_size': 20000,
-        'nvm_size': 256 * 1024,
         'data_loader': load_data,
         'n_samples': 20,
         'n_all_samples': 10000,
@@ -138,7 +140,6 @@ configs = {
         'scale': 8,
         'num_slots': 3,
         'intermediate_values_size': 30000,
-        'nvm_size': 1024 * 1024,
         'data_loader': load_data_cifar10,
         'n_samples': 20,
         'n_all_samples': 10000,
@@ -154,7 +155,7 @@ parser.add_argument('--write-images', action='store_true')
 args = parser.parse_args()
 config = configs[args.config]
 if args.all_samples:
-    config['nvm_size'] *= 64
+    Constants.NVM_SIZE *= 64
     config['n_samples'] = config['n_all_samples']
 
 if args.without_stateful_cnn:
@@ -267,25 +268,25 @@ class Node:
     flags: NodeFlags
     max_output_id: int
 
-model = []
+graph = []
 for n in nodes:
-    model.append(Node(n.name, [names[i] for i in n.input], n.op_type, n.flags, 0))
+    graph.append(Node(n.name, [names[i] for i in n.input], n.op_type, n.flags, 0))
 
-for idx, node in enumerate(model):
+for idx, node in enumerate(graph):
     for inp in node.inputs:
         if inp < Constants.N_INPUT:
             continue
-        used_node = model[inp - Constants.N_INPUT]
+        used_node = graph[inp - Constants.N_INPUT]
         used_node.max_output_id = max([idx, used_node.max_output_id])
 
 # Inputs of Concat should be kept until Concat is processed
-for idx, node in enumerate(model):
+for idx, node in enumerate(graph):
     if node.op_type != 'Concat':
         continue
     for inp in node.inputs:
         if inp < Constants.N_INPUT:
             continue
-        used_node = model[inp - Constants.N_INPUT]
+        used_node = graph[inp - Constants.N_INPUT]
         used_node.max_output_id = max([used_node.max_output_id, node.max_output_id])
 
 parameters = [None for _ in range(Constants.N_INPUT)]
@@ -297,7 +298,7 @@ for params in g.initializer:
     assert parameters[names[params.name]] is None
     parameters[names[params.name]] = params
 
-pprint.pprint(model)
+pprint.pprint(graph)
 
 def to_bytes(i, size=16):
     if size == 8:
@@ -334,20 +335,21 @@ outputs = {
     'counters': io.BytesIO(),
 }
 
-Constants.MODEL_NODES_LEN = len(model)
+Constants.MODEL_NODES_LEN = len(graph)
 
-outputs['model'].write(to_bytes(0))  # Model.running
-outputs['model'].write(to_bytes(1))  # Model.first_time
-outputs['model'].write(to_bytes(0))  # Model.run_counter
-outputs['model'].write(to_bytes(0))  # Model.layer_idx
-outputs['model'].write(to_bytes(0))  # Model.sample_idx
+model = outputs['model']
+model.write(to_bytes(0))  # Model.running
+model.write(to_bytes(1))  # Model.first_time
+model.write(to_bytes(0))  # Model.run_counter
+model.write(to_bytes(0))  # Model.layer_idx
 for _ in range(config['num_slots']): # Model.slots_info
     if Constants.STATEFUL_CNN:
-        outputs['model'].write(to_bytes(0, size=8)) # SlotInfo.state_bit
-        outputs['model'].write(to_bytes(0, size=8)) # SlotInfo.n_turning_points
+        model.write(to_bytes(0, size=8)) # SlotInfo.state_bit
+        model.write(to_bytes(0, size=8)) # SlotInfo.n_turning_points
         for __ in range(Constants.TURNING_POINTS_LEN):
-            outputs['model'].write(to_bytes(-1))   # SlotInfo.turning_points
-    outputs['model'].write(to_bytes(-1))       # SlotInfo.user
+            model.write(to_bytes(-1))   # SlotInfo.turning_points
+    model.write(to_bytes(-1))       # SlotInfo.user
+model.write(to_bytes(0))  # Model.version
 
 @dataclasses.dataclass
 class ParametersSlot:
@@ -357,7 +359,7 @@ class ParametersSlot:
 
 parameters_slot = ParametersSlot(offset=0, target=outputs['parameters'], slot_id=Constants.SLOT_PARAMETERS)
 
-for node in model:
+for node in graph:
     node_name = node.name[:Constants.NODE_NAME_LEN]
     outputs['nodes'].write(node_name.encode('ascii') + b'\0' * (Constants.NODE_NAME_LEN - len(node_name)))
     outputs['nodes'].write(to_bytes(len(node.inputs)))
@@ -581,7 +583,7 @@ extern {const_qualifier}uint8_t *{var_name};
         full_var_name = var_name + '_data'
         data_obj.seek(0)
         define_var(full_var_name, data_obj.read(),
-                   will_modify=var_name in ('model', 'counters'))
+                   will_modify=var_name in ('counters',))
 
     outputs['samples'].seek(0)
     samples_data = outputs['samples'].read()
@@ -592,10 +594,10 @@ extern {const_qualifier}uint8_t *{var_name};
     define_var('labels_data', labels_data[:len(labels_data)//len(labels)], False)
 
 with open('nvm.bin', 'wb') as f:
-    f.write(config['nvm_size'] * b'\0')
+    f.write(Constants.NVM_SIZE * b'\0')
     f.seek(config['num_slots'] * config['intermediate_values_size'])
     for data_obj in outputs.values():
         data_obj.seek(0)
         f.write(data_obj.read())
         needed_nvm_size = f.tell()
-        assert needed_nvm_size < config['nvm_size'], f'Need NVM size {needed_nvm_size}'
+        assert needed_nvm_size < Constants.NVM_SIZE, f'Need NVM size {needed_nvm_size}'

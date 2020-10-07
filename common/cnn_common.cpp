@@ -1,8 +1,10 @@
 #include "cnn_common.h"
 #include "my_debug.h"
 #include "platform.h"
+#include "intermittent-cnn.h"
 
 ParameterInfo intermediate_parameters_info_vm[MODEL_NODES_LEN];
+Model model_vm;
 
 const ParameterInfo* get_parameter_info(uint8_t i) {
     if (i < N_INPUT) {
@@ -111,7 +113,7 @@ void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, 
         const uint8_t *baseptr = get_param_base_pointer(param, &limit);
         uint32_t total_offset;
         if (param->slot == SLOT_TEST_SET) {
-            total_offset = (model->sample_idx % PLAT_LABELS_DATA_LEN) * param->params_len;
+            total_offset = (sample_idx % PLAT_LABELS_DATA_LEN) * param->params_len;
         } else {
             total_offset = param->params_offset ;
         }

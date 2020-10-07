@@ -69,8 +69,8 @@ typedef struct Model {
     uint16_t first_time;
     uint16_t run_counter;
     uint16_t layer_idx;
-    uint16_t sample_idx;
     SlotInfo slots_info[NUM_SLOTS];
+    uint16_t version; // must be the last field in this struct
 } Model;
 
 static_assert(sizeof(Model) == 10  + NUM_SLOTS * (2 + STATEFUL_CNN * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
@@ -89,6 +89,7 @@ static_assert(sizeof(Counters) == 4 * COUNTERS_LEN + 2, "Unexpected size of Coun
  **********************************/
 Counters *counters(void);
 extern ParameterInfo intermediate_parameters_info_vm[MODEL_NODES_LEN];
+extern Model model_vm;
 
 
 /**********************************

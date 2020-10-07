@@ -15,6 +15,8 @@ void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, co
 void my_memcpy_from_intermediate_values(void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n);
 ParameterInfo* get_intermediate_parameter_info(uint8_t i);
 void commit_intermediate_parameter_info(uint8_t i);
+Model* get_model(void);
+void commit_model(void);
 void plat_print_results(void);
 void setOutputValue(uint8_t value);
 void registerCheckpointing(uint8_t *addr, size_t len);

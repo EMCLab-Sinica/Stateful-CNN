@@ -24,13 +24,14 @@
 
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
-const uint8_t *parameters_data, *samples_data, *labels_data, *nodes_data, *model_parameters_info_data, *intermediate_parameters_info_data;
-uint8_t *model_data, *counters_data;
-uint8_t *intermediate_parameters_info_data_nvm;
+const uint8_t *parameters_data, *samples_data, *labels_data, *nodes_data, *model_data, *model_parameters_info_data, *intermediate_parameters_info_data;
+uint8_t *counters_data;
+uint8_t *intermediate_parameters_info_data_nvm, *model_data_nvm;
 uint16_t dma_invocations[COUNTERS_LEN];
 uint16_t dma_bytes[COUNTERS_LEN];
 
 const uint32_t intermediate_parameters_info_data_nvm_offset = 0x70000;
+const uint32_t model_data_nvm_offset = 0x72000;
 
 static uint8_t *intermediate_values(uint8_t slot_id) {
     return nvm + slot_id * INTERMEDIATE_VALUES_SIZE;
@@ -83,8 +84,10 @@ int main(int argc, char* argv[]) {
     counters_data = const_cast<uint8_t*>(labels_data + PLAT_LABELS_DATA_LEN);
 
     MY_ASSERT(nvm + intermediate_parameters_info_data_nvm_offset > counters_data + COUNTERS_DATA_LEN);
+    MY_ASSERT(model_data_nvm_offset > intermediate_parameters_info_data_nvm_offset + INTERMEDIATE_PARAMETERS_INFO_DATA_LEN);
 
     intermediate_parameters_info_data_nvm = nvm + intermediate_parameters_info_data_nvm_offset;
+    model_data_nvm = nvm + model_data_nvm_offset;
 
 #ifdef USE_ARM_CMSIS
     my_printf("Use DSP from ARM CMSIS pack" NEWLINE);
@@ -92,7 +95,7 @@ int main(int argc, char* argv[]) {
     my_printf("Use TI DSPLib" NEWLINE);
 #endif
 
-    model = reinterpret_cast<Model*>(model_data);
+    model = get_model();
 
     // emulating button_pushed - treating as a fresh run
     if (button_pushed) {
@@ -103,6 +106,8 @@ int main(int argc, char* argv[]) {
     if (model->first_time) {
         memset(intermediate_values(0), 0, INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
         my_memcpy(intermediate_parameters_info_data_nvm, intermediate_parameters_info_data, INTERMEDIATE_PARAMETERS_INFO_DATA_LEN);
+        my_memcpy(model_data_nvm, model_data, MODEL_DATA_LEN);
+        my_memcpy(model_data_nvm + sizeof(Model), model_data, MODEL_DATA_LEN);
         model->first_time = 0;
     }
 #endif
@@ -177,6 +182,33 @@ void commit_intermediate_parameter_info(uint8_t i) {
     ParameterInfo* dst = reinterpret_cast<ParameterInfo*>(intermediate_parameters_info_data_nvm) + i;
     const ParameterInfo* src = intermediate_parameters_info_vm + i;
     my_memcpy(dst, src, sizeof(ParameterInfo));
+}
+
+static uint8_t get_newer_model_copy_id(void) {
+    Model *model_nvm[2];
+    model_nvm[0] = reinterpret_cast<Model*>(model_data_nvm);
+    model_nvm[1] = reinterpret_cast<Model*>(model_data_nvm) + 1;
+    if (model_nvm[0]->version > model_nvm[1]->version) {
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
+Model* get_model(void) {
+    Model *dst = &model_vm;
+    uint8_t newer_model_copy_id = get_newer_model_copy_id();
+    my_memcpy(dst, reinterpret_cast<Model*>(model_data_nvm) + newer_model_copy_id, sizeof(Model));
+    my_printf_debug("Using model copy %d, version %d" NEWLINE, newer_model_copy_id, dst->version);
+    return dst;
+}
+
+void commit_model(void) {
+    uint8_t newer_model_copy_id = get_newer_model_copy_id();
+    uint8_t older_model_copy_id = newer_model_copy_id ^ 1;
+    model_vm.version++;
+    my_memcpy(reinterpret_cast<Model*>(model_data_nvm) + older_model_copy_id, &model_vm, sizeof(Model));
+    my_printf_debug("Commiting version %d to model copy %d" NEWLINE, model_vm.version, older_model_copy_id);
 }
 
 [[ noreturn ]] void ERROR_OCCURRED(void) {

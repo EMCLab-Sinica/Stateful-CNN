@@ -8,6 +8,8 @@
 #include "data.h"
 #include "my_debug.h"
 
+uint16_t sample_idx;
+
 static void handle_node(Model *model, uint16_t node_idx) {
     my_printf_debug("Current node: %d, ", node_idx);
 
@@ -75,9 +77,10 @@ static void handle_node(Model *model, uint16_t node_idx) {
     }
 }
 
-int run_model(Model *model, int8_t *ansptr, const ParameterInfo **output_node_ptr) {
+static int run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     my_printf_debug("N_INPUT = %d" NEWLINE, N_INPUT);
 
+    Model *model = get_model();
     if (!model->running) {
         counters()->counter_idx = 0;
         // reset model
@@ -96,6 +99,8 @@ int run_model(Model *model, int8_t *ansptr, const ParameterInfo **output_node_pt
     for (uint16_t node_idx = model->layer_idx; node_idx < MODEL_NODES_LEN; node_idx++) {
         handle_node(model, node_idx);
         model->layer_idx++;
+
+        commit_model();
 
         dump_model_debug(model);
     }
@@ -118,7 +123,9 @@ int run_model(Model *model, int8_t *ansptr, const ParameterInfo **output_node_pt
 }
 
 #if MY_DEBUG >= 1
-static void print_results(Model *model, const ParameterInfo *output_node) {
+static void print_results(const ParameterInfo *output_node) {
+    Model *model = get_model();
+
     dump_params(model, output_node);
 
     my_printf("op types:" NEWLINE);
@@ -152,19 +159,18 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
         n_samples = PLAT_LABELS_DATA_LEN;
     }
     const ParameterInfo *output_node;
-    Model *model = reinterpret_cast<Model*>(model_data);
     const uint8_t *labels = labels_data;
     for (uint16_t i = 0; i < n_samples; i++) {
-        model->sample_idx = i;
+        sample_idx = i;
         label = labels[i];
-        run_model(model, &predicted, &output_node);
+        run_model(&predicted, &output_node);
         total++;
         if (label == predicted) {
             correct++;
         }
 #if MY_DEBUG >= 1
         if (i % 100 == 0) {
-            my_printf("Sample %d finished" NEWLINE, model->sample_idx);
+            my_printf("Sample %d finished" NEWLINE, sample_idx);
             // stdout is not flushed at \n if it is not a terminal
             my_flush();
         }
@@ -173,7 +179,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
     }
 #if MY_DEBUG >= 1
     if (n_samples == 1) {
-        print_results(model, output_node);
+        print_results(output_node);
     }
     my_printf("correct=%" PRId32 " ", correct);
     my_printf("total=%" PRId32 " ", total);
@@ -185,10 +191,6 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
         return 1;
     }
     return 0;
-}
-
-void set_sample_index(Model *model, uint8_t index) {
-    model->sample_idx = index;
 }
 
 void reset_everything(Model *model) {
