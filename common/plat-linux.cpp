@@ -30,8 +30,8 @@ uint8_t *intermediate_parameters_info_data_nvm, *model_data_nvm;
 uint16_t dma_invocations[COUNTERS_LEN];
 uint16_t dma_bytes[COUNTERS_LEN];
 
-const uint32_t intermediate_parameters_info_data_nvm_offset = 0x70000;
-const uint32_t model_data_nvm_offset = 0x72000;
+const uint32_t intermediate_parameters_info_data_nvm_offset = NVM_SIZE - 0x10000;
+const uint32_t model_data_nvm_offset = NVM_SIZE - 0x8000;
 
 static uint8_t *intermediate_values(uint8_t slot_id) {
     return nvm + slot_id * INTERMEDIATE_VALUES_SIZE;
