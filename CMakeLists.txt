@@ -8,7 +8,12 @@ set(MY_DEBUG "1" CACHE STRING "Local debug flag. See my_debug.h for details.")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Too many parameters are unused if some features are not enabled
-set(COMMON_FLAGS "-Wall -Wextra -Wshadow -Wundef -Wno-unused-parameter -g -O0 -pedantic")
+set(COMMON_FLAGS "-Wall -Wextra -Wshadow -Wundef -Wno-unused-parameter -pedantic")
+if (${MY_DEBUG} GREATER 1)
+    set(COMMON_FLAGS "${COMMON_FLAGS} -g -O0")
+else ()
+    set(COMMON_FLAGS "${COMMON_FLAGS} -O3")
+endif ()
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS} -Wstrict-prototypes -std=c11")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -std=c++11 -Wold-style-cast")
 

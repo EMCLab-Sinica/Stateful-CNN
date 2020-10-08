@@ -131,12 +131,13 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
 
     uint16_t tile_c_offset = 0;
-    uint16_t initial_real_tile_c;
 
     uint16_t output_h = 0, output_w = 0, c = 0;
     uint16_t output_offset = 0;
 
 #if STATEFUL_CNN
+    uint16_t initial_real_tile_c;
+
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
     if (first_unfinished_value_offset * sizeof(int16_t) == output->params_len) {
         // give up early, or initial_real_tile_c may be zero and results in SIGFPE
@@ -223,9 +224,8 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 
     MY_ASSERT(output_offset == output->params_len / sizeof(int16_t));
 
-finished:
-
 #if STATEFUL_CNN
+finished:
     flip_state_bit(model, output);
 #endif
 

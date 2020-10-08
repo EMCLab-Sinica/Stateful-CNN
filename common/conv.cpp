@@ -358,13 +358,13 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
 #endif
     for (int32_t h = h_start; h <= h_end; h++) {
         int16_t *dest_addr = dest + (w_start + field_size) * conv_params->cur_input_tile_c;
-        int16_t input_src_offset_end = input_src_offset + size;
-        my_printf_debug("Load %ld IFM values from range [%d, %d)" NEWLINE, size, input_src_offset, input_src_offset_end);
+        my_printf_debug("Load %ld IFM values from range [%d, %d)" NEWLINE, size, input_src_offset, input_src_offset + size);
         my_memcpy_from_param(
             model, dest_addr,
             conv_params->real_conv_input, input_src_offset,
             size * sizeof(int16_t));
 #if STATEFUL_CNN
+        int16_t input_src_offset_end = input_src_offset + size;
         if (offset) {
             MY_ASSERT(static_cast<uint16_t>(next_turning_point) > input_src_offset);
             my_offset_q15(dest_addr, -offset, dest_addr, MIN_VAL(static_cast<int16_t>(size), static_cast<uint16_t>(next_turning_point) - input_src_offset));
