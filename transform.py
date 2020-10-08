@@ -132,6 +132,8 @@ configs = {
         'data_loader': load_data,
         'n_samples': 20,
         'n_all_samples': 10000,
+        # multiply by 2 for Q15
+        'sample_size': 2 * 28 * 28,
         'fp32_accuracy': 0.9889,
     },
     'cifar10': {
@@ -143,6 +145,7 @@ configs = {
         'data_loader': load_data_cifar10,
         'n_samples': 20,
         'n_all_samples': 10000,
+        'sample_size': 2 * 32 * 32 * 3,
         'fp32_accuracy': 0.7704,
     },
 }
@@ -155,7 +158,7 @@ parser.add_argument('--write-images', action='store_true')
 args = parser.parse_args()
 config = configs[args.config]
 if args.all_samples:
-    Constants.NVM_SIZE *= 64
+    Constants.NVM_SIZE += config['n_all_samples'] * config['sample_size']
     config['n_samples'] = config['n_all_samples']
 
 if args.without_stateful_cnn:
