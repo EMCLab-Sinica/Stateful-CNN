@@ -102,15 +102,16 @@ int main(int argc, char* argv[]) {
         reset_everything(model);
     }
 
+    if (!model->version) {
+        // the first time
 #if STATEFUL_CNN
-    if (model->first_time) {
         memset(intermediate_values(0), 0, INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
+#endif
         my_memcpy(intermediate_parameters_info_data_nvm, intermediate_parameters_info_data, INTERMEDIATE_PARAMETERS_INFO_DATA_LEN);
         my_memcpy(model_data_nvm, model_data, MODEL_DATA_LEN);
         my_memcpy(model_data_nvm + sizeof(Model), model_data, MODEL_DATA_LEN);
-        model->first_time = 0;
+        commit_model();
     }
-#endif
 
     ret = run_cnn_tests(n_samples);
 
@@ -174,14 +175,18 @@ void my_memcpy_from_intermediate_values(void *dest, const ParameterInfo *param, 
 ParameterInfo* get_intermediate_parameter_info(uint8_t i) {
     ParameterInfo* dst = intermediate_parameters_info_vm + i;
     const ParameterInfo* src = reinterpret_cast<ParameterInfo*>(intermediate_parameters_info_data_nvm) + i;
+    MY_ASSERT(src->parameter_info_idx == i + N_INPUT);
     my_memcpy(dst, src, sizeof(ParameterInfo));
+    my_printf_debug("Load intermediate parameter info %d from NVM" NEWLINE, i);
     return dst;
 }
 
 void commit_intermediate_parameter_info(uint8_t i) {
     ParameterInfo* dst = reinterpret_cast<ParameterInfo*>(intermediate_parameters_info_data_nvm) + i;
     const ParameterInfo* src = intermediate_parameters_info_vm + i;
+    MY_ASSERT(src->parameter_info_idx == i + N_INPUT);
     my_memcpy(dst, src, sizeof(ParameterInfo));
+    my_printf_debug("Committing intermediate parameter info %d to NVM" NEWLINE, i);
 }
 
 static uint8_t get_newer_model_copy_id(void) {
@@ -208,7 +213,7 @@ void commit_model(void) {
     uint8_t older_model_copy_id = newer_model_copy_id ^ 1;
     model_vm.version++;
     my_memcpy(reinterpret_cast<Model*>(model_data_nvm) + older_model_copy_id, &model_vm, sizeof(Model));
-    my_printf_debug("Commiting version %d to model copy %d" NEWLINE, model_vm.version, older_model_copy_id);
+    my_printf_debug("Committing version %d to model copy %d" NEWLINE, model_vm.version, older_model_copy_id);
 }
 
 [[ noreturn ]] void ERROR_OCCURRED(void) {

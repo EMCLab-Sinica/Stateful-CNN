@@ -32,9 +32,7 @@ static void handle_node(Model *model, uint16_t node_idx) {
     /* Allocate an ParameterInfo for output. Details are filled by
      * individual operation handlers */
     ParameterInfo *output = get_intermediate_parameter_info(node_idx);
-    uint16_t parameter_info_idx_saved = output->parameter_info_idx;
-    my_memcpy(output, input[0], sizeof(ParameterInfo));
-    output->parameter_info_idx = parameter_info_idx_saved;
+    my_memcpy(output, input[0], sizeof(ParameterInfo) - sizeof(uint16_t)); // don't overwrite parameter_info_idx
     output->params_offset = 0;
     allocators[cur_node->op_type](model, input, output, &cur_node->flags);
     my_printf_debug("Needed mem = %d" NEWLINE, output->params_len);
@@ -194,7 +192,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
 }
 
 void reset_everything(Model *model) {
-    model->first_time = 1;
+    model->version = 0;
     model->running = 0;
 #if STATEFUL_CNN
     for (uint8_t idx = 0; idx < NUM_SLOTS; idx++) {

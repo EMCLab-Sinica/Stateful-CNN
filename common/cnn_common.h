@@ -28,6 +28,8 @@ static_assert(sizeof(Node) == 32, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct ParameterInfo {
+    ParameterInfo() : parameter_info_idx(static_cast<uint16_t>(-1)) {}
+
     uint32_t params_offset;
     uint32_t params_len;  /* in bytes */
     /* Known bitwidth values:
@@ -49,7 +51,7 @@ typedef struct ParameterInfo {
     // use signed type for scale as TI's compiler does not handle
     // multiplication/division with mixed signed and unsigned numbers correctly
     int16_t scale;
-    uint16_t parameter_info_idx;
+    const uint16_t parameter_info_idx; // must be the last member of this struct
 } ParameterInfo;
 
 static_assert(sizeof(ParameterInfo) == 28, "Unexpected size for ParameterInfo");
@@ -66,14 +68,13 @@ typedef struct SlotInfo {
 
 typedef struct Model {
     uint16_t running;
-    uint16_t first_time;
     uint16_t run_counter;
     uint16_t layer_idx;
     SlotInfo slots_info[NUM_SLOTS];
     uint16_t version; // must be the last field in this struct
 } Model;
 
-static_assert(sizeof(Model) == 10  + NUM_SLOTS * (2 + STATEFUL_CNN * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
+static_assert(sizeof(Model) == 8 + NUM_SLOTS * (2 + STATEFUL_CNN * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
 
 typedef struct {
     uint16_t time_counters[COUNTERS_LEN];

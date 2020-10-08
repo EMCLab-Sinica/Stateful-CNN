@@ -131,12 +131,18 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
 
     uint16_t tile_c_offset = 0;
+    uint16_t initial_real_tile_c;
 
     uint16_t output_h = 0, output_w = 0, c = 0;
     uint16_t output_offset = 0;
 
 #if STATEFUL_CNN
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
+    if (first_unfinished_value_offset * sizeof(int16_t) == output->params_len) {
+        // give up early, or initial_real_tile_c may be zero and results in SIGFPE
+        goto finished;
+    }
+
     uint16_t initial_n, initial_c, initial_h, initial_w;
     initial_n = first_unfinished_value_offset / (new_H * new_W * tile_c);
 
@@ -148,7 +154,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
     offset ^= 0x4000;
 
-    uint16_t initial_real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
+    initial_real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
     output_offset = first_unfinished_value_offset;
     if (!need_nhwc2nchw) {
         initial_c = first_unfinished_value_offset % initial_real_tile_c;
@@ -216,6 +222,8 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     }
 
     MY_ASSERT(output_offset == output->params_len / sizeof(int16_t));
+
+finished:
 
 #if STATEFUL_CNN
     flip_state_bit(model, output);

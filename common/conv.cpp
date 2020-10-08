@@ -590,8 +590,6 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 void alloc_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *data = input[0];
 
-    my_memcpy(output, data, sizeof(struct ParameterInfo));
-
     uint16_t OUTPUT_CHANNEL = data->dims[1],
              OUTPUT_H = data->dims[2],
              OUTPUT_W = data->dims[3];
