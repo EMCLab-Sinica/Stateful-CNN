@@ -108,7 +108,7 @@ extern Model model_vm;
 #define LIMIT_DMA_SIZE(x) MIN_VAL(512, x)
 
 /**********************************
- *       Helpers for nodes        *
+ * Helpers for the model & nodes  *
  **********************************/
 const uint8_t* get_param_base_pointer(const ParameterInfo *param, uint32_t *limit_p);
 int16_t get_q15_param(Model* model, const ParameterInfo *param, uint16_t offset_in_word);
@@ -119,6 +119,8 @@ const ParameterInfo* get_parameter_info(uint8_t i);
 const Node* get_node(size_t i);
 SlotInfo * get_slot_info(Model* model, uint8_t i);
 void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n);
+uint8_t get_newer_model_copy_id(uint16_t version0, uint16_t version1);
+void bump_model_version(Model *model);
 
 /**********************************
  *       Operation handlers       *

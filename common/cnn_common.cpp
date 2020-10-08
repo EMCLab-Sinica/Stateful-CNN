@@ -124,3 +124,29 @@ void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, 
         my_memcpy_from_intermediate_values(dest, param, offset_in_word, n);
     }
 }
+
+uint8_t get_newer_model_copy_id(uint16_t version0, uint16_t version1) {
+    if (abs(version0 - version1) == 1) {
+        if (version0 > version1) {
+            return 0;
+        } else {
+            return 1;
+        }
+    } else {
+        if (version0 > version1) {
+            // ex: versions = 65535, 1
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+}
+
+void bump_model_version(Model *model) {
+    model->version++;
+    if (!model->version) {
+        // don't use version 0 as it indicates the first run
+        model->version++;
+    }
+}
+

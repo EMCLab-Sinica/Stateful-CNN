@@ -189,30 +189,21 @@ void commit_intermediate_parameter_info(uint8_t i) {
     my_printf_debug("Committing intermediate parameter info %d to NVM" NEWLINE, i);
 }
 
-static uint8_t get_newer_model_copy_id(void) {
-    Model *model_nvm[2];
-    model_nvm[0] = reinterpret_cast<Model*>(model_data_nvm);
-    model_nvm[1] = reinterpret_cast<Model*>(model_data_nvm) + 1;
-    if (model_nvm[0]->version > model_nvm[1]->version) {
-        return 0;
-    } else {
-        return 1;
-    }
-}
-
 Model* get_model(void) {
     Model *dst = &model_vm;
-    uint8_t newer_model_copy_id = get_newer_model_copy_id();
-    my_memcpy(dst, reinterpret_cast<Model*>(model_data_nvm) + newer_model_copy_id, sizeof(Model));
+    Model *model_nvm = reinterpret_cast<Model*>(model_data_nvm);
+    uint8_t newer_model_copy_id = get_newer_model_copy_id(model_nvm->version, (model_nvm + 1)->version);
+    my_memcpy(dst, model_nvm + newer_model_copy_id, sizeof(Model));
     my_printf_debug("Using model copy %d, version %d" NEWLINE, newer_model_copy_id, dst->version);
     return dst;
 }
 
 void commit_model(void) {
-    uint8_t newer_model_copy_id = get_newer_model_copy_id();
+    Model *model_nvm = reinterpret_cast<Model*>(model_data_nvm);
+    uint8_t newer_model_copy_id = get_newer_model_copy_id(model_nvm->version, (model_nvm + 1)->version);
     uint8_t older_model_copy_id = newer_model_copy_id ^ 1;
-    model_vm.version++;
-    my_memcpy(reinterpret_cast<Model*>(model_data_nvm) + older_model_copy_id, &model_vm, sizeof(Model));
+    bump_model_version(&model_vm);
+    my_memcpy(model_nvm + older_model_copy_id, &model_vm, sizeof(Model));
     my_printf_debug("Committing version %d to model copy %d" NEWLINE, model_vm.version, older_model_copy_id);
 }
 
