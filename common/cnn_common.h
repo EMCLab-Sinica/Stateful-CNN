@@ -76,6 +76,7 @@ typedef struct Model {
 
 static_assert(sizeof(Model) == 8 + NUM_SLOTS * (2 + STATEFUL_CNN * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
 
+#define COUNTERS_LEN 64
 typedef struct {
     uint16_t time_counters[COUNTERS_LEN];
     uint16_t power_counters[COUNTERS_LEN];

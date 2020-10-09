@@ -40,8 +40,9 @@ static uint32_t model_addr(uint8_t i) {
     return MODEL_OFFSET + i * sizeof(Model);
 }
 
+static Counters counters_data;
 Counters *counters() {
-    return reinterpret_cast<Counters*>(counters_data);
+    return &counters_data;
 }
 
 #ifdef __MSP430__
@@ -240,11 +241,6 @@ void IntermittentCNNTest() {
         SPI_WRITE(&addr, model_data, MODEL_DATA_LEN);
         addr.L = model_addr(1);
         SPI_WRITE(&addr, model_data, MODEL_DATA_LEN);
-
-        for (uint8_t i = 0; i < COUNTERS_LEN; i++) {
-            counters()->time_counters[i] = 0;
-            counters()->power_counters[i] = 0;
-        }
 
         model->run_counter = 0;
         commit_model();

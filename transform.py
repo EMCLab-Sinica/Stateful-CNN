@@ -29,7 +29,6 @@ class Constants:
     SLOT_TEST_SET = 0xff
     SLOT_CONSTANTS_MIN = SLOT_PARAMETERS
     SLOT_INTERMEDIATE_VALUES = 0b01
-    COUNTERS_LEN = 64
     # To make the Node struct exactly 32 bytes
     NODE_NAME_LEN = 18
     EXTRA_INFO_LEN = 3  # for memory alignment
@@ -335,7 +334,6 @@ outputs = {
     'model_parameters_info': io.BytesIO(),
     'intermediate_parameters_info': io.BytesIO(),
     'labels': io.BytesIO(),
-    'counters': io.BytesIO(),
 }
 
 Constants.MODEL_NODES_LEN = len(graph)
@@ -483,8 +481,6 @@ if args.write_images:
     with open('images/ans.txt', 'w') as f:
         f.write(' '.join(map(str, labels)))
 
-outputs['counters'].write(b'\0' * (4 * Constants.COUNTERS_LEN + 2))
-
 with open('common/data.cpp', 'w') as output_c, open('common/data.h', 'w') as output_h:
     output_h.write('''
 #pragma once
@@ -556,18 +552,16 @@ struct NodeFlags;
     def hex_str(arr):
         return '  ' + ', '.join([f'0x{num:02x}' for num in arr]) + ',\n'
 
-    def define_var(var_name, data, will_modify):
-        const_qualifier = 'const ' if not will_modify else ''
-
+    def define_var(var_name, data):
         output_h.write(f'''
-extern {const_qualifier}uint8_t *{var_name};
+extern const uint8_t *{var_name};
 #define {var_name.upper()}_LEN {len(data)}
 ''')
         # #define with _Pragma seems to be broken :/
         output_c.write(f'''
 #ifdef NEED_DATA_VARS
 #pragma DATA_SECTION(".nvm")
-{const_qualifier}uint8_t _{var_name}[{len(data)}] = {{
+const uint8_t _{var_name}[{len(data)}] = {{
 ''')
         n_pieces, remaining = divmod(len(data), 16)
         for idx in range(n_pieces):
@@ -575,7 +569,7 @@ extern {const_qualifier}uint8_t *{var_name};
         if remaining:
             output_c.write(hex_str(data[len(data) - remaining:len(data)]))
         output_c.write(f'''}};
-{const_qualifier}uint8_t *{var_name} = _{var_name};
+const uint8_t *{var_name} = _{var_name};
 #endif
 ''')
 
@@ -584,16 +578,15 @@ extern {const_qualifier}uint8_t *{var_name};
             continue
         full_var_name = var_name + '_data'
         data_obj.seek(0)
-        define_var(full_var_name, data_obj.read(),
-                   will_modify=var_name in ('counters',))
+        define_var(full_var_name, data_obj.read())
 
     outputs['samples'].seek(0)
     samples_data = outputs['samples'].read()
     outputs['labels'].seek(0)
     labels_data = outputs['labels'].read()
 
-    define_var('samples_data', samples_data[:len(samples_data)//len(labels)], False)
-    define_var('labels_data', labels_data[:len(labels_data)//len(labels)], False)
+    define_var('samples_data', samples_data[:len(samples_data)//len(labels)])
+    define_var('labels_data', labels_data[:len(labels_data)//len(labels)])
 
 with open('nvm.bin', 'wb') as f:
     f.write(Constants.NVM_SIZE * b'\0')

@@ -32,6 +32,10 @@ uint16_t dma_bytes[COUNTERS_LEN];
 
 const uint32_t intermediate_parameters_info_data_nvm_offset = NVM_SIZE - 0x10000;
 const uint32_t model_data_nvm_offset = NVM_SIZE - 0x8000;
+const uint32_t counters_data_offset = NVM_SIZE - 0x7800;
+
+static_assert(model_data_nvm_offset > intermediate_parameters_info_data_nvm_offset + INTERMEDIATE_PARAMETERS_INFO_DATA_LEN, "Incorrect NVM layout");
+static_assert(counters_data_offset > model_data_nvm_offset + 2 * MODEL_DATA_LEN, "Incorrect NVM layout");
 
 static uint8_t *intermediate_values(uint8_t slot_id) {
     return nvm + slot_id * INTERMEDIATE_VALUES_SIZE;
@@ -81,13 +85,12 @@ int main(int argc, char* argv[]) {
     model_parameters_info_data = nodes_data + NODES_DATA_LEN;
     intermediate_parameters_info_data = model_parameters_info_data + MODEL_PARAMETERS_INFO_DATA_LEN;
     labels_data = intermediate_parameters_info_data + INTERMEDIATE_PARAMETERS_INFO_DATA_LEN;
-    counters_data = const_cast<uint8_t*>(labels_data + PLAT_LABELS_DATA_LEN);
 
-    MY_ASSERT(nvm + intermediate_parameters_info_data_nvm_offset > counters_data + COUNTERS_DATA_LEN);
-    MY_ASSERT(model_data_nvm_offset > intermediate_parameters_info_data_nvm_offset + INTERMEDIATE_PARAMETERS_INFO_DATA_LEN);
+    MY_ASSERT(nvm + intermediate_parameters_info_data_nvm_offset > labels_data + LABELS_DATA_LEN);
 
     intermediate_parameters_info_data_nvm = nvm + intermediate_parameters_info_data_nvm_offset;
     model_data_nvm = nvm + model_data_nvm_offset;
+    counters_data = nvm + counters_data_offset;
 
 #ifdef USE_ARM_CMSIS
     my_printf("Use DSP from ARM CMSIS pack" NEWLINE);
