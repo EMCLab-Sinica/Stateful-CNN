@@ -76,7 +76,7 @@ int main(int argc, char* argv[]) {
     // Keep the order consistent with `outputs` in transform.py
     parameters_data = intermediate_values(NUM_SLOTS);
     samples_data = parameters_data + PARAMETERS_DATA_LEN;
-    model_data = const_cast<uint8_t*>(samples_data + PLAT_SAMPLES_DATA_LEN);
+    model_data = samples_data + PLAT_SAMPLES_DATA_LEN;
     nodes_data = model_data + MODEL_DATA_LEN;
     model_parameters_info_data = nodes_data + NODES_DATA_LEN;
     intermediate_parameters_info_data = model_parameters_info_data + MODEL_PARAMETERS_INFO_DATA_LEN;
