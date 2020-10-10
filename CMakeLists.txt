@@ -27,28 +27,39 @@ target_include_directories(fake-msp430sdk
         ${CMAKE_CURRENT_SOURCE_DIR}/fake-msp430sdk
 )
 
-# ARM CMSIS is alway built as plat-msp430 needs it
-# Keep this list in sync with ARM-CMSIS/create_symlinks.sh
-set(ARM_CMSIS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/ARM-CMSIS)
-add_library(arm_cmsis_dsp
-    ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_add_q15.c
-    ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_offset_q15.c
-    ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_scale_q15.c
-    ${ARM_CMSIS_PATH}/DSP/Source/MatrixFunctions/arm_mat_init_q15.c
-    ${ARM_CMSIS_PATH}/DSP/Source/MatrixFunctions/arm_mat_mult_fast_q15.c
-    ${ARM_CMSIS_PATH}/DSP/Source/StatisticsFunctions/arm_max_q15.c
-    ${ARM_CMSIS_PATH}/DSP/Source/StatisticsFunctions/arm_min_q15.c
-    ${ARM_CMSIS_PATH}/DSP/Source/SupportFunctions/arm_fill_q15.c
-)
-target_include_directories(arm_cmsis_dsp
-    PUBLIC
-        ${ARM_CMSIS_PATH}/Core/Include
-        ${ARM_CMSIS_PATH}/DSP/Include
-)
-target_compile_definitions(arm_cmsis_dsp
-    PRIVATE
-        ARM_MATH_MATRIX_CHECK
-)
+file(GLOB CCS_ROOT $ENV{HOME}/ti/ccs*)
+if (NOT "${CCS_ROOT}" STREQUAL "")
+    message(STATUS "Found CCS at ${CCS_ROOT}")
+    set (BUILD_MSP432 ON)
+else ()
+    message(WARNING "No CCS found. Not building plat-msp432.")
+    set (BUILD_MSP432 OFF)
+endif ()
+
+# MSP432 needs ARM CMSIS
+if (USE_ARM_CMSIS OR BUILD_MSP432)
+    # Keep this list in sync with ARM-CMSIS/create_symlinks.sh
+    set(ARM_CMSIS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/ARM-CMSIS)
+    add_library(arm_cmsis_dsp
+        ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_add_q15.c
+        ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_offset_q15.c
+        ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_scale_q15.c
+        ${ARM_CMSIS_PATH}/DSP/Source/MatrixFunctions/arm_mat_init_q15.c
+        ${ARM_CMSIS_PATH}/DSP/Source/MatrixFunctions/arm_mat_mult_fast_q15.c
+        ${ARM_CMSIS_PATH}/DSP/Source/StatisticsFunctions/arm_max_q15.c
+        ${ARM_CMSIS_PATH}/DSP/Source/StatisticsFunctions/arm_min_q15.c
+        ${ARM_CMSIS_PATH}/DSP/Source/SupportFunctions/arm_fill_q15.c
+    )
+    target_include_directories(arm_cmsis_dsp
+        PUBLIC
+            ${ARM_CMSIS_PATH}/Core/Include
+            ${ARM_CMSIS_PATH}/DSP/Include
+    )
+    target_compile_definitions(arm_cmsis_dsp
+        PRIVATE
+            ARM_MATH_MATRIX_CHECK
+    )
+endif ()
 
 if (NOT USE_ARM_CMSIS)
     set(DSPLIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/TI-DSPLib)
@@ -100,27 +111,22 @@ endif (USE_ARM_CMSIS)
 
 # Below is not actually used for the build on PC. I added it here so that
 # clangd can identify platform-dependent codes
-file(GLOB CCS_ROOT $ENV{HOME}/ti/ccs*)
 
-if (NOT "${CCS_ROOT}" STREQUAL "")
-    message(STATUS "Found CCS at ${CCS_ROOT}")
-
-    add_library(plat-msp430 ${COMMON_SRC_PATH}/plat-msp430.cpp)
-    target_include_directories(plat-msp430
+if (BUILD_MSP432)
+    add_library(plat-msp432 ${COMMON_SRC_PATH}/plat-msp430.cpp)
+    target_include_directories(plat-msp432
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/msp432
     )
-    target_include_directories(plat-msp430
+    target_include_directories(plat-msp432
         SYSTEM PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/msp432/driverlib/MSP432P4xx
             ${CCS_ROOT}/ccs/ccs_base/arm/include
             $<TARGET_PROPERTY:arm_cmsis_dsp,INCLUDE_DIRECTORIES>
     )
-    target_compile_definitions(plat-msp430
+    target_compile_definitions(plat-msp432
         PRIVATE
             __MSP432__
             __MSP432P401R__
     )
-else ()
-    message(WARNING "No CCS found. Not building plat-msp430.")
 endif ()
