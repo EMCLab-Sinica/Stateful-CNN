@@ -1,4 +1,5 @@
 nvm.bin
+samples.bin
 *.pyc
 /images/*
 !/images/.keep

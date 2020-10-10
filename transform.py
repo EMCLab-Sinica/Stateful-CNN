@@ -157,7 +157,6 @@ parser.add_argument('--write-images', action='store_true')
 args = parser.parse_args()
 config = configs[args.config]
 if args.all_samples:
-    Constants.NVM_SIZE += config['n_all_samples'] * config['sample_size']
     config['n_samples'] = config['n_all_samples']
 
 if args.without_stateful_cnn:
@@ -559,8 +558,6 @@ extern const uint8_t *{var_name};
 ''')
         # #define with _Pragma seems to be broken :/
         output_c.write(f'''
-#ifdef NEED_DATA_VARS
-#pragma DATA_SECTION(".nvm")
 const uint8_t _{var_name}[{len(data)}] = {{
 ''')
         n_pieces, remaining = divmod(len(data), 16)
@@ -570,29 +567,18 @@ const uint8_t _{var_name}[{len(data)}] = {{
             output_c.write(hex_str(data[len(data) - remaining:len(data)]))
         output_c.write(f'''}};
 const uint8_t *{var_name} = _{var_name};
-#endif
 ''')
 
     for var_name, data_obj in outputs.items():
-        if var_name in ('samples', 'labels'):
-            continue
         full_var_name = var_name + '_data'
         data_obj.seek(0)
-        define_var(full_var_name, data_obj.read())
+        if full_var_name == 'samples_data':
+            data = data_obj.read(config['sample_size'])
+        else:
+            data = data_obj.read()
+        define_var(full_var_name, data)
 
-    outputs['samples'].seek(0)
-    samples_data = outputs['samples'].read()
-    outputs['labels'].seek(0)
-    labels_data = outputs['labels'].read()
-
-    define_var('samples_data', samples_data[:len(samples_data)//len(labels)])
-    define_var('labels_data', labels_data[:len(labels_data)//len(labels)])
-
-with open('nvm.bin', 'wb') as f:
-    f.write(Constants.NVM_SIZE * b'\0')
-    f.seek(config['num_slots'] * config['intermediate_values_size'])
-    for data_obj in outputs.values():
-        data_obj.seek(0)
-        f.write(data_obj.read())
-        needed_nvm_size = f.tell()
-        assert needed_nvm_size < Constants.NVM_SIZE, f'Need NVM size {needed_nvm_size}'
+with open('samples.bin', 'wb') as f:
+    samples = outputs['samples']
+    samples.seek(0)
+    f.write(samples.read())

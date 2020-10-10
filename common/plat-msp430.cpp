@@ -25,8 +25,9 @@
 #define MODEL_OFFSET 0x72000
 #define FIRST_RUN_OFFSET 0x72400
 
-static_assert(INTERMEDIATE_PARAMETERS_INFO_OFFSET > NUM_SLOTS * SLOT_INTERMEDIATE_VALUES, "Incorrect external NVM layout");
+static_assert(INTERMEDIATE_PARAMETERS_INFO_OFFSET > NUM_SLOTS * INTERMEDIATE_VALUES_SIZE, "Incorrect external NVM layout");
 static_assert(MODEL_OFFSET > INTERMEDIATE_PARAMETERS_INFO_OFFSET + INTERMEDIATE_PARAMETERS_INFO_DATA_LEN, "Incorrect external NVM layout");
+static_assert(FIRST_RUN_OFFSET > MODEL_OFFSET + 2 * sizeof(Model), "Incorrect external NVM layout");
 
 static uint32_t intermediate_values_offset(uint8_t slot_id) {
     return 0 + slot_id * INTERMEDIATE_VALUES_SIZE;
@@ -219,14 +220,13 @@ void IntermittentCNNTest() {
     initSPI();
     // testSPI();
 
-    Model *model = get_model();
-
     uint8_t first_run = 0;
     SPI_ADDR addr;
     addr.L = FIRST_RUN_OFFSET;
     SPI_READ(&addr, &first_run, 1);
 
     if (first_run) {
+        my_printf_debug("First run, resetting everything..." NEWLINE);
 #if DELAY_START_SECONDS > 0
         delay_counter = 0;
 #endif
@@ -242,8 +242,9 @@ void IntermittentCNNTest() {
         addr.L = model_addr(1);
         SPI_WRITE(&addr, model_data, MODEL_DATA_LEN);
 
-        model->run_counter = 0;
+        get_model(); // refresh model_vm
         commit_model();
+
         first_run = 0;
         addr.L = FIRST_RUN_OFFSET;
         SPI_WRITE(&addr, &first_run, 1);
@@ -277,6 +278,4 @@ void button_pushed(uint16_t button1_status, uint16_t button2_status) {
 
     Model *model = get_model();
     my_printf("%d" NEWLINE, model->run_counter);
-
-    reset_everything(model);
 }

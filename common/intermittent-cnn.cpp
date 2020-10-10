@@ -191,18 +191,6 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
     return 0;
 }
 
-void reset_everything(Model *model) {
-    model->version = 0;
-    model->running = 0;
-#if STATEFUL_CNN
-    for (uint8_t idx = 0; idx < NUM_SLOTS; idx++) {
-        SlotInfo *cur_slot_info = get_slot_info(model, idx);
-        cur_slot_info->state_bit = 0;
-        cur_slot_info->n_turning_points = 0;
-    }
-#endif
-}
-
 #if STATEFUL_CNN
 
 static void check_feature_map_states(Model *model, const ParameterInfo* output, uint32_t first_unfinished_value_offset, uint32_t len, const char* func) {

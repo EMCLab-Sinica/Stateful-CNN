@@ -15,6 +15,7 @@
 #include <getopt.h>
 #include <unistd.h>
 #include <signal.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -24,7 +25,6 @@
 
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
-const uint8_t *parameters_data, *samples_data, *labels_data, *nodes_data, *model_data, *model_parameters_info_data, *intermediate_parameters_info_data;
 uint8_t *counters_data;
 uint8_t *intermediate_parameters_info_data_nvm, *model_data_nvm;
 uint16_t dma_invocations[COUNTERS_LEN];
@@ -34,6 +34,7 @@ const uint32_t intermediate_parameters_info_data_nvm_offset = NVM_SIZE - 0x10000
 const uint32_t model_data_nvm_offset = NVM_SIZE - 0x8000;
 const uint32_t counters_data_offset = NVM_SIZE - 0x7800;
 
+static_assert(intermediate_parameters_info_data_nvm_offset > NUM_SLOTS * INTERMEDIATE_VALUES_SIZE, "Incorrect NVM layout");
 static_assert(model_data_nvm_offset > intermediate_parameters_info_data_nvm_offset + INTERMEDIATE_PARAMETERS_INFO_DATA_LEN, "Incorrect NVM layout");
 static_assert(counters_data_offset > model_data_nvm_offset + 2 * MODEL_DATA_LEN, "Incorrect NVM layout");
 
@@ -48,6 +49,7 @@ Counters *counters() {
 int main(int argc, char* argv[]) {
     int ret = 0, opt_ch, button_pushed = 0, read_only = 0, n_samples = 0;
     Model *model;
+    int nvm_fd = -1, samples_fd = -1;
 
     while((opt_ch = getopt(argc, argv, "bfr")) != -1) {
         switch (opt_ch) {
@@ -71,22 +73,29 @@ int main(int argc, char* argv[]) {
 
     chdir(MY_SOURCE_DIR);
 
-    int nvm_fd = open("nvm.bin", O_RDWR);
+    struct stat stat_buf;
+    if (stat("nvm.bin", &stat_buf) != 0) {
+        if (errno != ENOENT) {
+            perror("Checking nvm.bin failed");
+            goto exit;
+        }
+        nvm_fd = open("nvm.bin", O_RDWR|O_CREAT, 0600);
+        ftruncate(nvm_fd, NVM_SIZE);
+    } else {
+        nvm_fd = open("nvm.bin", O_RDWR);
+    }
     nvm = reinterpret_cast<uint8_t*>(mmap(NULL, NVM_SIZE, PROT_READ|PROT_WRITE, read_only ? MAP_PRIVATE : MAP_SHARED, nvm_fd, 0));
     if (nvm == MAP_FAILED) {
         perror("mmap() failed");
         goto exit;
     }
-    // Keep the order consistent with `outputs` in transform.py
-    parameters_data = intermediate_values(NUM_SLOTS);
-    samples_data = parameters_data + PARAMETERS_DATA_LEN;
-    model_data = samples_data + PLAT_SAMPLES_DATA_LEN;
-    nodes_data = model_data + MODEL_DATA_LEN;
-    model_parameters_info_data = nodes_data + NODES_DATA_LEN;
-    intermediate_parameters_info_data = model_parameters_info_data + MODEL_PARAMETERS_INFO_DATA_LEN;
-    labels_data = intermediate_parameters_info_data + INTERMEDIATE_PARAMETERS_INFO_DATA_LEN;
 
-    MY_ASSERT(nvm + intermediate_parameters_info_data_nvm_offset > labels_data + LABELS_DATA_LEN);
+    samples_fd = open("samples.bin", O_RDONLY);
+    samples_data = reinterpret_cast<uint8_t*>(mmap(NULL, SAMPLE_SIZE * N_SAMPLES, PROT_READ, MAP_PRIVATE, samples_fd, 0));
+    if (samples_data == MAP_FAILED) {
+        perror("mmap() for samples failed");
+        goto exit;
+    }
 
     intermediate_parameters_info_data_nvm = nvm + intermediate_parameters_info_data_nvm_offset;
     model_data_nvm = nvm + model_data_nvm_offset;
@@ -102,7 +111,7 @@ int main(int argc, char* argv[]) {
 
     // emulating button_pushed - treating as a fresh run
     if (button_pushed) {
-        reset_everything(model);
+        model->version = 0;
     }
 
     if (!model->version) {
@@ -113,6 +122,8 @@ int main(int argc, char* argv[]) {
         my_memcpy(intermediate_parameters_info_data_nvm, intermediate_parameters_info_data, INTERMEDIATE_PARAMETERS_INFO_DATA_LEN);
         my_memcpy(model_data_nvm, model_data, MODEL_DATA_LEN);
         my_memcpy(model_data_nvm + sizeof(Model), model_data, MODEL_DATA_LEN);
+
+        get_model(); // refresh model_vm
         commit_model();
     }
 

@@ -34,9 +34,6 @@ const uint8_t* get_param_base_pointer(const ParameterInfo *param, uint32_t *limi
         case SLOT_PARAMETERS:
             *limit_p = PARAMETERS_DATA_LEN;
             return parameters_data;
-        case SLOT_TEST_SET:
-            *limit_p = PLAT_SAMPLES_DATA_LEN;
-            return samples_data;
         default:
             ERROR_OCCURRED();
     }
@@ -108,16 +105,13 @@ uint16_t get_next_slot(Model *model, const ParameterInfo *param) {
 }
 
 void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n) {
-    if (param->slot >= SLOT_CONSTANTS_MIN) {
+    if (param->slot == SLOT_TEST_SET) {
+        // `samples_data` will be re-targeted to samples.bin on PC
+        my_memcpy(dest, samples_data + (sample_idx % PLAT_LABELS_DATA_LEN) * SAMPLE_SIZE + offset_in_word * sizeof(int16_t), n);
+    } else if (param->slot >= SLOT_CONSTANTS_MIN) {
         uint32_t limit;
         const uint8_t *baseptr = get_param_base_pointer(param, &limit);
-        uint32_t total_offset;
-        if (param->slot == SLOT_TEST_SET) {
-            total_offset = (sample_idx % PLAT_LABELS_DATA_LEN) * param->params_len;
-        } else {
-            total_offset = param->params_offset ;
-        }
-        total_offset += offset_in_word * sizeof(int16_t);
+        uint32_t total_offset = param->params_offset + offset_in_word * sizeof(int16_t);
         MY_ASSERT(total_offset + n <= limit);
         my_memcpy(dest, baseptr + total_offset, n);
     } else {
