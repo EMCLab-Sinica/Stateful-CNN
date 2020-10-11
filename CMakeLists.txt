@@ -19,13 +19,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -std=c++11 -Wold-style-c
 
 set(COMMON_SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/common)
 
-add_library(fake-msp430sdk
-    fake-msp430sdk/msp430.c
-)
-target_include_directories(fake-msp430sdk
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/fake-msp430sdk
-)
 
 file(GLOB CCS_ROOT $ENV{HOME}/ti/ccs*)
 if (NOT "${CCS_ROOT}" STREQUAL "")
@@ -77,7 +70,10 @@ if (NOT USE_ARM_CMSIS)
         SYSTEM PUBLIC
             ${DSPLIB_PATH}/include
     )
-    target_link_libraries(dsplib fake-msp430sdk)
+    target_include_directories(dsplib
+        PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/fake-msp430sdk
+    )
 endif ()
 
 add_executable(intermittent-cnn
@@ -90,7 +86,7 @@ add_executable(intermittent-cnn
     ${COMMON_SRC_PATH}/plat-linux.cpp
     ${COMMON_SRC_PATH}/my_dsplib.cpp
 )
-target_link_libraries(intermittent-cnn fake-msp430sdk)
+target_link_libraries(intermittent-cnn)
 
 target_compile_definitions(intermittent-cnn
     PRIVATE
