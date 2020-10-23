@@ -5,3 +5,6 @@
 [submodule "Tools"]
 	path = Tools
 	url = ssh://git@github.com/EMCLab-Sinica/Tools.git
+[submodule "data/ML-KWS-for-MCU"]
+	path = data/ML-KWS-for-MCU
+	url = https://github.com/ARM-software/ML-KWS-for-MCU

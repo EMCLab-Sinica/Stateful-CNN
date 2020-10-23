@@ -144,11 +144,15 @@ void dump_params(Model *model, const ParameterInfo *cur_param) {
         CHANNEL = cur_param->dims[1];
         H = cur_param->dims[2];
         W = cur_param->dims[3];
-    } else {
+    } else if (cur_param->dims[1]) {
         // matrix
         NUM = CHANNEL = 1;
         H = cur_param->dims[0];
         W = cur_param->dims[1];
+    } else {
+        // vector
+        NUM = CHANNEL = H = 1;
+        W = cur_param->dims[0];
     }
     check_params_len(cur_param);
     my_printf("Slot: %d" NEWLINE, cur_param->slot);

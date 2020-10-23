@@ -654,7 +654,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 
     uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
 
-    uint16_t overflow_factor = find_overflow_factor(model, data) * n_tiles_c;
+    uint16_t overflow_factor = find_overflow_factor(model, data, nullptr) * n_tiles_c;
     float scale_f = 1.0 * SCALE / overflow_factor;
     int16_t scaleFract;
     uint8_t shift;

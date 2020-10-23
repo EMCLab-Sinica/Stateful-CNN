@@ -314,7 +314,7 @@ void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *outpu
     dump_params_debug(model, output);
 }
 
-void alloc_matmul(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
+void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *A = input[0], *B = input[1];
 
     uint16_t output_len = A->dims[0] * B->dims[1];
@@ -327,9 +327,9 @@ void alloc_matmul(Model *model, const ParameterInfo *input[], ParameterInfo *out
     output->scale = A->scale * B->scale;
 }
 
-class MatMulInputChunkHandler : public ChunkHandler {
+class GemmInputChunkHandler : public ChunkHandler {
 public:
-    MatMulInputChunkHandler(int16_t *_buffer_a) : buffer_a(_buffer_a) {}
+    GemmInputChunkHandler(int16_t *_buffer_a) : buffer_a(_buffer_a) {}
 
     void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
         if (state_bit) {
@@ -342,50 +342,56 @@ private:
     int16_t *buffer_a;
 };
 
-class MatMulOutputChunkHandler : public ChunkHandler {
+class GemmOutputChunkHandler : public ChunkHandler {
 public:
-    MatMulOutputChunkHandler(int16_t *_buffer_matmul) : buffer_matmul(_buffer_matmul) {}
+    GemmOutputChunkHandler(int16_t *_buffer_gemm) : buffer_gemm(_buffer_gemm) {}
 
     void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
         if (!state_bit) {
-            int16_t* to_offset = buffer_matmul + offset;
+            int16_t* to_offset = buffer_gemm + offset;
             my_offset_q15(to_offset, 0x4000, to_offset, real_chunk_len);
         }
     }
 
 private:
-    int16_t *buffer_matmul;
+    int16_t *buffer_gemm;
 };
 
-void handle_matmul(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
-    const ParameterInfo *A = input[0], *B = input[1];
+void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
+    const ParameterInfo *A = input[0], *B = input[1], *C = input[2];
 
-    my_printf_debug("handle_matmul inputs" NEWLINE);
-    // dump_params_debug(model, A);
-    my_printf_debug("B" NEWLINE);
-    dump_params_debug(model, B);
-    my_printf_debug("MatMul! A: (%dx%d), B: (%dx%d)" NEWLINE,
+    my_printf_debug("Gemm! A: (%dx%d), B: (%dx%d)" NEWLINE,
               A->dims[0], A->dims[1], B->dims[0], B->dims[1]);
 
-    MY_ASSERT(A->dims[0] * A->dims[1] <= 256);
+    my_printf_debug("A" NEWLINE);
+    dump_params_debug(model, A);
+    my_printf_debug("B" NEWLINE);
+    dump_params_debug(model, B);
 
-    int16_t A_len = A->dims[0] * A->dims[1];
+    int16_t A_len = A->dims[0] * A->dims[1],
+            output_len = A->dims[0] * B->dims[1];
 
     int16_t *buffer_a = lea_buffer,
             *buffer_temp = buffer_a + A_len,
-            *buffer_matmul = buffer_temp + A->dims[0] * B->dims[1],
-            *buffer_b = buffer_matmul + A->dims[0] * B->dims[1];
+            *buffer_gemm = buffer_temp + output_len,
+            *buffer_c = buffer_gemm + output_len,
+            *buffer_b = buffer_c + output_len;
 
-    my_fill_q15(0, buffer_matmul, 256);
+    int16_t buffer_b_len = lea_buffer + LEA_BUFFER_SIZE - buffer_b;
+    my_printf_debug("buffer_b_len = %d" NEWLINE, buffer_b_len);
 
-    my_memcpy_from_param(model, buffer_a, A, 0, A->dims[0] * A->dims[1] * sizeof(uint16_t));
+    my_fill_q15(0, buffer_gemm, output_len);
+
+    my_memcpy_from_param(model, buffer_a, A, 0, A_len * sizeof(uint16_t));
 
 #if STATEFUL_CNN
-    iterate_chunks(model, A, 0, 0, MatMulInputChunkHandler(buffer_a));
+    iterate_chunks(model, A, 0, 0, GemmInputChunkHandler(buffer_a));
 #endif
 
     /* LEA wants addresses to be 4-aligned */
-    uint16_t step = (256 / B->dims[1]) / 4 * 4;
+    uint16_t step = (buffer_b_len / B->dims[1]) / 4 * 4;
+    my_printf_debug("step size = %d" NEWLINE, step);
+    MY_ASSERT(step != 0);
     for (uint16_t i = 0; i < B->dims[0]; i += step) {
         uint16_t current_width = MIN_VAL(step, B->dims[0] - i);
 
@@ -401,18 +407,37 @@ void handle_matmul(Model *model, const ParameterInfo *input[], ParameterInfo *ou
         my_matrix_mpy_q15(A->dims[0], current_width, current_width, B->dims[1], buffer_a + A->dims[0] * i, buffer_b, buffer_temp, 0);
 
         my_printf_debug("temp" NEWLINE);
-        dump_matrix_debug(buffer_temp, A->dims[0] * B->dims[1], ValueInfo(output, model));
+        dump_matrix_debug(buffer_temp, output_len, ValueInfo(output, model));
 
-        my_add_q15(buffer_matmul, buffer_temp, buffer_matmul, output->params_len / sizeof(int16_t));
+        my_add_q15(buffer_gemm, buffer_temp, buffer_gemm, output_len);
+        my_printf_debug("buffer_gemm" NEWLINE);
+        dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
+        my_printf_debug(NEWLINE);
     }
 
+    my_memcpy_from_param(model, buffer_c, C, 0, output_len);
+
+    // TODO: scale up to avoid scale overflow after many Gemm layers
+
+    my_printf_debug("buffer_gemm after scaling up" NEWLINE);
+    dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
+
+    my_printf_debug("C" NEWLINE);
+    dump_params_debug(model, C);
+
+    int16_t scaleFract;
+    uint8_t shift;
+    float_to_scale_params(&scaleFract, &shift, 1.0f * C->scale / (A->scale * B->scale));
+    my_scale_q15(buffer_c, scaleFract, shift, buffer_c, output_len);
+    my_add_q15(buffer_gemm, buffer_c, buffer_gemm, output_len);
+
 #if STATEFUL_CNN
-    iterate_chunks(model, output, 0, 0, MatMulOutputChunkHandler(buffer_matmul));
+    iterate_chunks(model, output, 0, 0, GemmOutputChunkHandler(buffer_gemm));
 #endif
 
-    my_memcpy_to_param(output, 0, buffer_matmul, output->params_len);
+    my_memcpy_to_param(output, 0, buffer_gemm, output->params_len);
 
-    my_printf_debug("handle_matmul output" NEWLINE);
+    my_printf_debug("handle_gemm output" NEWLINE);
     dump_params_debug(model, output);
 
 #if STATEFUL_CNN
@@ -430,8 +455,6 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     my_printf_debug("ReLu!" NEWLINE);
 
     const ParameterInfo *X = input[0];
-    my_printf_debug("handle_relu input" NEWLINE);
-    dump_params_nhwc_debug(model, X, 0);
 
     uint16_t CHANNEL = X->dims[1];
 
@@ -451,7 +474,9 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     output_offset += first_unfinished_value_offset;
 #endif
 
+    my_printf_debug("handle_relu input" NEWLINE);
     if (X->flags & TRANSPOSED) {
+        dump_params_nhwc_debug(model, X, 0);
         // input is in NWHC
         // TODO: state-aware recovery
         uint16_t H = X->dims[2], W = X->dims[3];
@@ -507,9 +532,10 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             output_w = 0;
         }
     } else {
+        dump_params_debug(model, X);
         uint16_t i = 0;
 #if STATEFUL_CNN
-        ERROR_OCCURRED(); // TODO: adapt to range-based state assignments
+        MY_ASSERT(false); // TODO: adapt to range-based state assignments
 #endif
         for (; i < data_len; i++) {
             put_q15_param(output, output_offset, MAX_VAL(get_q15_param(model, X, data_offset), 0));
@@ -525,7 +551,11 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
     my_printf_debug("handle_relu output" NEWLINE);
-    dump_params_nhwc_debug(model, output, 0);
+    if (X->flags & TRANSPOSED) {
+        dump_params_nhwc_debug(model, output, 0);
+    } else {
+        dump_params_debug(model, output);
+    }
 }
 
 void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
@@ -721,8 +751,8 @@ void handle_transpose(Model*, const ParameterInfo *input[], ParameterInfo *outpu
 
 class OverflowChunkHandler : public ChunkHandler {
 public:
-    OverflowChunkHandler(Model *_model, const ParameterInfo *_param, uint16_t *_overflow_factor)
-        : model(_model), param(_param), overflow_factor(_overflow_factor) {}
+    OverflowChunkHandler(Model *_model, const ParameterInfo *_param, const int16_t* _buffer, uint16_t *_overflow_factor)
+        : model(_model), param(_param), buffer(_buffer), overflow_factor(_overflow_factor) {}
 
     void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
 #if !STATEFUL_CNN
@@ -734,11 +764,17 @@ public:
         int16_t max_val, min_val;
         uint16_t index;
 
-        my_memcpy_from_param(model, lea_buffer, param, offset, real_chunk_len * sizeof(int16_t));
+        const int16_t* cur_buffer;
+        if (!buffer) {
+            my_memcpy_from_param(model, lea_buffer, param, offset, real_chunk_len * sizeof(int16_t));
+            cur_buffer = lea_buffer;
+        } else {
+            cur_buffer = buffer + offset;
+        }
 
-        // dump_matrix(lea_buffer, real_chunk_len, ValueInfo(param));
+        // dump_matrix(cur_buffer, real_chunk_len, ValueInfo(param));
 
-        my_max_q15(lea_buffer, real_chunk_len, &max_val, &index);
+        my_max_q15(cur_buffer, real_chunk_len, &max_val, &index);
 #if STATEFUL_CNN
         max_val += val_offset;
 #endif
@@ -748,7 +784,7 @@ public:
             (*overflow_factor) *= 2;
         }
 
-        my_min_q15(lea_buffer, real_chunk_len, &min_val, &index);
+        my_min_q15(cur_buffer, real_chunk_len, &min_val, &index);
 #if STATEFUL_CNN
         min_val += val_offset;
 #endif
@@ -761,13 +797,14 @@ public:
 private:
     Model *model;
     const ParameterInfo *param;
+    const int16_t* buffer;
     uint16_t *overflow_factor;
 };
 
-uint16_t find_overflow_factor(Model *model, const ParameterInfo *param) {
+uint16_t find_overflow_factor(Model *model, const ParameterInfo *param, const int16_t* buffer) {
     uint16_t overflow_factor = 1;
 
-    iterate_chunks(model, param, 0, 0, OverflowChunkHandler(model, param, &overflow_factor));
+    iterate_chunks(model, param, 0, 0, OverflowChunkHandler(model, param, buffer, &overflow_factor));
 
     my_printf_debug("Overflow factor = %d" NEWLINE, overflow_factor);
 

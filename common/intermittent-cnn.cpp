@@ -23,7 +23,7 @@ static void handle_node(Model *model, uint16_t node_idx) {
     MY_ASSERT(cur_node->inputs_len == expected_inputs_len[cur_node->op_type]);
     for (uint16_t j = 0; j < cur_node->inputs_len; j++) {
         input_id[j] = cur_node->inputs[j];
-        my_printf_debug("input_id[%d] = %d ", j, input_id[j]);
+        my_printf_debug("input_id[%d] = %d" NEWLINE, j, input_id[j]);
         input[j] = get_parameter_info(input_id[j]);
         // dump_params(input[j]);
     }
@@ -45,7 +45,8 @@ static void handle_node(Model *model, uint16_t node_idx) {
 #endif
     handlers[cur_node->op_type](model, input, output, &cur_node->flags);
     // For some operations (e.g., ConvMerge), scale is determined in the handlers
-    my_printf_debug("Scale = %d" NEWLINE, output->scale);
+    my_printf_debug("Output scale = %d" NEWLINE, output->scale);
+    MY_ASSERT(output->scale > 0);  // fail when overflow
 #if STATEFUL_CNN
     my_printf_debug("New output state bit=%d" NEWLINE, get_state_bit(model, output->slot));
 #endif
@@ -272,6 +273,9 @@ uint8_t get_state_bit(Model *model, uint8_t slot_id) {
 uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offset) {
     uint8_t ret = get_state_bit(model, param->slot);
     SlotInfo *cur_slot_info = get_slot_info(model, param->slot);
+    if (!cur_slot_info) {
+        return 0;
+    }
     for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
         if (offset >= cur_slot_info->turning_points[idx]) {
             ret = ret ^ 1;

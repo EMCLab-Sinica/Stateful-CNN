@@ -4,6 +4,7 @@ import ctypes
 import dataclasses
 import io
 import itertools
+import logging
 import pprint
 import struct
 import textwrap
@@ -15,7 +16,13 @@ import onnx.helper
 import onnx.optimizer
 import numpy as np
 
-from utils import load_data, load_data_cifar10
+from utils import (
+    load_data_mnist,
+    load_data_cifar10,
+    load_data_google_speech_mfcc,
+)
+
+logger = logging.getLogger(__name__)
 
 """
 Goal: Mapping name-based nodes to integer-based ones.
@@ -40,6 +47,7 @@ class Constants:
     N_INPUT = 0
     # Match the size of external FRAM
     NVM_SIZE = 512 * 1024
+    N_SAMPLES = 20
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
@@ -50,8 +58,8 @@ ops = {
     'Conv': [3, 0],
     'ConvMerge': [1, 0],
     'Dropout': [1, 1],
+    'Gemm': [3, 0],
     'GlobalAveragePool': [1, 0],
-    'MatMul': [2, 0],
     'MaxPool': [1, 0],
     'Relu': [1, 0],
     'Reshape': [2, 1],
@@ -60,6 +68,8 @@ ops = {
     # XXX: Transpose does nothing as we happens to need NHWC
     'Transpose': [1, 1],
 }
+
+audio_ops = ['DecodeWav', 'AudioSpectrogram', 'Mfcc']
 
 other_flags = [
     'AUTO_PAD_VALID',
@@ -124,12 +134,10 @@ configs = {
     'mnist': {
         # https://github.com/onnx/models/raw/master/vision/classification/mnist/model/mnist-8.onnx
         'onnx_model': 'data/mnist-8.onnx',
-        'input_file': 'data/MNIST/Test-28x28_cntk_text.txt',
         'scale': 8,
         'num_slots': 2,
         'intermediate_values_size': 20000,
-        'data_loader': load_data,
-        'n_samples': 20,
+        'data_loader': load_data_mnist,
         'n_all_samples': 10000,
         # multiply by 2 for Q15
         'sample_size': 2 * 28 * 28,
@@ -137,17 +145,26 @@ configs = {
     },
     'cifar10': {
         'onnx_model': 'data/squeezenet_cifar10.onnx',
-        'input_file': 'data/cifar-10-batches-py/test_batch',
         'scale': 8,
         'num_slots': 3,
         'intermediate_values_size': 30000,
         'data_loader': load_data_cifar10,
-        'n_samples': 20,
         'n_all_samples': 10000,
         'sample_size': 2 * 32 * 32 * 3,
         'fp32_accuracy': 0.7704,
     },
+    'kws': {
+        'onnx_model': 'data/KWS-DNN_S.onnx',
+        'scale': 8,
+        'num_slots': 2,
+        'intermediate_values_size': 20000,
+        'data_loader': load_data_google_speech_mfcc,
+        'n_all_samples': 100,
+        'sample_size': 2 * 25 * 10,  # MFCC gives 25x10 tensors
+        'fp32_accuracy': 0.8,
+    },
 }
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('config', choices=configs.keys())
@@ -157,18 +174,23 @@ parser.add_argument('--write-images', action='store_true')
 args = parser.parse_args()
 config = configs[args.config]
 if args.all_samples:
-    config['n_samples'] = config['n_all_samples']
+    Constants.N_SAMPLES = config['n_all_samples']
+model_data = config['data_loader'](start=0, limit=Constants.N_SAMPLES)
 
 if args.without_stateful_cnn:
     Constants.STATEFUL_CNN = 0
 
-original_model = onnx.load(config['onnx_model'])
+onnx_model = onnx.load(config['onnx_model'])
 try:
     # https://zhuanlan.zhihu.com/p/41255090
-    onnx_model = onnx.optimizer.optimize(original_model, ['fuse_add_bias_into_conv'])
+    onnx_model = onnx.optimizer.optimize(onnx_model, [
+        'fuse_add_bias_into_conv',
+        'fuse_matmul_add_bias_into_gemm',
+    ])
+    onnx.save_model(onnx_model, config['onnx_model'].replace('.onnx', '-opt.onnx'))
 except IndexError:
     # Somehow the optimizer cannot handle models transformed from keras2onnx
-    onnx_model = original_model
+    pass
 g = onnx_model.graph
 names = {}
 
@@ -192,16 +214,20 @@ for n in g.node:
 # Split Conv into Conv and ConvMerge (for OFM scaling up and merge of OFMs from  channel tiling)
 new_nodes = []
 for idx, n in enumerate(g.node):
-    new_nodes.append(n)
-    if n.op_type != 'Conv':
+    if n.op_type in audio_ops:
+        logger.warning('skipping audio operator %s', n.op_type)
         continue
-    output_name = n.output[0]
-    new_node = onnx.NodeProto()
-    new_node.name = n.name + ':merge'
-    new_node.op_type = 'ConvMerge'
-    new_node.input[:] = n.output[:] = [output_name + '_before_merge']
-    new_node.output[:] = [output_name]
-    new_nodes.append(new_node)
+    new_nodes.append(n)
+    if n.op_type == 'Conv':
+        output_name = n.output[0]
+        new_node = onnx.NodeProto()
+        new_node.name = n.name + ':merge'
+        new_node.op_type = 'ConvMerge'
+        new_node.input[:] = n.output[:] = [output_name + '_before_merge']
+        new_node.output[:] = [output_name]
+        new_nodes.append(new_node)
+    elif n.op_type == 'Gemm':
+        pass  # TODO
 
 new_nodes = [n for n in new_nodes if n.output[0] not in replaced_squeeze_map.keys()]
 for n in new_nodes:
@@ -212,8 +238,10 @@ nodes = [ONNXNodeWrapper(n) for n in new_nodes]
 
 conv_param_names = set()
 
+input_mapping = model_data.input_mapping
 for idx, inp in enumerate(g.input):
-    names[inp.name] = idx
+    inp_name = input_mapping.get(inp.name, inp.name)
+    names[inp_name] = idx
 
 # For some ONNX models (e.g., squeezenet-cifar10 converted from Keras), inputs
 # do not include initializers. Merge them here.
@@ -271,7 +299,11 @@ class Node:
 
 graph = []
 for n in nodes:
-    graph.append(Node(n.name, [names[i] for i in n.input], n.op_type, n.flags, 0))
+    graph.append(Node(name=n.name or n.op_type,
+                      inputs=[names[i] for i in n.input],
+                      op_type=n.op_type,
+                      flags=n.flags,
+                      max_output_id=0))
 
 for idx, node in enumerate(graph):
     for inp in node.inputs:
@@ -371,15 +403,20 @@ for node in graph:
     outputs['nodes'].write(to_bytes(list(ops.keys()).index(node.op_type)))
     outputs['nodes'].write(to_bytes(node.flags.as_bytes))
 
-labels, images = config['data_loader'](config['input_file'], start=0, limit=config['n_samples'])
-
 parameter_info_idx = 0
+
+def decode_raw_data(params):
+    format_char = {
+        onnx.TensorProto.FLOAT: 'f',
+        onnx.TensorProto.INT64: 'q',
+    }[params.data_type]
+    return list(map(lambda t: t[0], struct.iter_unpack(format_char, params.raw_data)))
 
 model_parameters_info = outputs['model_parameters_info']
 for params in parameters:
     if params is None:  # input
         # Actual data for test samples are added last
-        _, input_channel, dimX, dimY = images[0].shape
+        _, input_channel, dimX, dimY = model_data.images[0].shape
         model_parameters_info.write(to_bytes(parameters_slot.offset, size=32))  # params_offset
         model_parameters_info.write(to_bytes(input_channel* dimX * dimY * 2, size=32))  # A _q15 is 16-bit
         model_parameters_info.write(to_bytes(16, size=8))                # bitwidth
@@ -396,7 +433,7 @@ for params in parameters:
             if params.float_data:
                 float_data = params.float_data
             else:
-                float_data = list(map(lambda t: t[0], struct.iter_unpack('f', params.raw_data)))
+                float_data = decode_raw_data(params)
             data_len = len(float_data)
             assert data_len > 0
             slot = parameters_slot
@@ -410,11 +447,16 @@ for params in parameters:
                 slot.offset += 2
             model_parameters_info.write(to_bytes(16, size=8)) # bitwidth
         elif params.data_type == onnx.TensorProto.INT64:
-            data_len = len(params.int64_data)
+            if params.int64_data:
+                int64_data = params.int64_data
+            else:
+                int64_data = decode_raw_data(params)
+            data_len = len(int64_data)
+            assert data_len > 0
             slot = parameters_slot
             model_parameters_info.write(to_bytes(slot.offset, size=32))  # params_offset
             model_parameters_info.write(to_bytes(data_len * 8, size=32))
-            for param in params.int64_data:
+            for param in int64_data:
                 slot.target.write(to_bytes(param, size=64))
                 slot.offset += 8
             model_parameters_info.write(to_bytes(64, size=8)) # bitwidth
@@ -458,7 +500,7 @@ for idx, n in enumerate(nodes):
     intermediate_parameters_info.write(to_bytes(parameter_info_idx))             # parameter_info_idx
     parameter_info_idx += 1
 
-for idx, im in enumerate(images):
+for idx, im in enumerate(model_data.images):
     # load_data returns NCHW
     for idx_c in range(im.shape[1]):
         for idx_h in range(im.shape[2]):
@@ -473,12 +515,12 @@ for idx, im in enumerate(images):
             im = 255 - im
         cv2.imwrite(f'images/test{idx:02d}.png', im)
 
-for label in labels:
+for label in model_data.labels:
     outputs['labels'].write(to_bytes(label, size=8))
 
 if args.write_images:
     with open('images/ans.txt', 'w') as f:
-        f.write(' '.join(map(str, labels)))
+        f.write(' '.join(map(str, model_data.labels)))
 
 with open('common/data.cpp', 'w') as output_c, open('common/data.h', 'w') as output_h:
     output_h.write('''
