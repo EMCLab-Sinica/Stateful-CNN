@@ -244,9 +244,9 @@ void alloc_add(Model *model, const ParameterInfo *input[], ParameterInfo *output
     output->slot = get_next_slot(model, A);
 }
 
-class AddOutputChunkHandler : public ChunkHandler {
+class OutputChunkHandler : public ChunkHandler {
 public:
-    AddOutputChunkHandler(int16_t *_buffer) : buffer(_buffer) {}
+    OutputChunkHandler(int16_t *_buffer) : buffer(_buffer) {}
 
     void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
         if (!state_bit) {
@@ -301,7 +301,7 @@ void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *outpu
     my_add_q15(buffer_a, buffer_b, buffer_a, vector_size);
 
 #if STATEFUL_CNN
-    iterate_chunks(model, output, 0, vector_size, AddOutputChunkHandler(buffer_a));
+    iterate_chunks(model, output, 0, vector_size, OutputChunkHandler(buffer_a));
 #endif
 
     my_memcpy_to_param(output, 0, buffer_a, output->params_len);
@@ -314,6 +314,12 @@ void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *outpu
     dump_params_debug(model, output);
 }
 
+static int16_t gemm_tile_size = 0;
+
+static inline int16_t upper_gauss(int16_t a, int16_t b) {
+    return (a + b - 1) / b;
+}
+
 void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *A = input[0], *B = input[1];
 
@@ -321,10 +327,22 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 
     output->dims[0] = A->dims[0];
     output->dims[1] = B->dims[1];
-    output->params_len = output_len * sizeof(int16_t);
     output->bitwidth = 16;
     output->slot = get_next_slot(model, A);
     output->scale = A->scale * B->scale;
+
+    int16_t total_buffer_size = LEA_BUFFER_SIZE - A->dims[0] * A->dims[1];
+    /* LEA wants addresses to be 4 byte-aligned, or 2 Q15-aligned */
+    gemm_tile_size = (total_buffer_size / B->dims[1]) / 2 * 2;
+    for (; gemm_tile_size > 0; gemm_tile_size -= 2) {
+        if (total_buffer_size - gemm_tile_size * B->dims[1] >= output_len * upper_gauss(B->dims[0], gemm_tile_size)) {
+            break;
+        }
+    }
+    my_printf_debug("gemm_tile_size = %d" NEWLINE, gemm_tile_size);
+    MY_ASSERT(gemm_tile_size > 0);
+
+    output->params_len = output_len * upper_gauss(B->dims[0], gemm_tile_size) * sizeof(int16_t);
 }
 
 class GemmInputChunkHandler : public ChunkHandler {
@@ -342,29 +360,14 @@ private:
     int16_t *buffer_a;
 };
 
-class GemmOutputChunkHandler : public ChunkHandler {
-public:
-    GemmOutputChunkHandler(int16_t *_buffer_gemm) : buffer_gemm(_buffer_gemm) {}
-
-    void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
-        if (!state_bit) {
-            int16_t* to_offset = buffer_gemm + offset;
-            my_offset_q15(to_offset, 0x4000, to_offset, real_chunk_len);
-        }
-    }
-
-private:
-    int16_t *buffer_gemm;
-};
-
 void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
-    const ParameterInfo *A = input[0], *B = input[1], *C = input[2];
+    const ParameterInfo *A = input[0], *B = input[1];
 
     my_printf_debug("Gemm! A: (%dx%d), B: (%dx%d)" NEWLINE,
               A->dims[0], A->dims[1], B->dims[0], B->dims[1]);
 
-    my_printf_debug("A" NEWLINE);
-    dump_params_debug(model, A);
+    // my_printf_debug("A" NEWLINE);
+    // dump_params_debug(model, A);
     my_printf_debug("B" NEWLINE);
     dump_params_debug(model, B);
 
@@ -373,27 +376,22 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     int16_t *buffer_a = lea_buffer,
             *buffer_temp = buffer_a + A_len,
-            *buffer_gemm = buffer_temp + output_len,
-            *buffer_c = buffer_gemm + output_len,
-            *buffer_b = buffer_c + output_len;
-
-    int16_t buffer_b_len = lea_buffer + LEA_BUFFER_SIZE - buffer_b;
-    my_printf_debug("buffer_b_len = %d" NEWLINE, buffer_b_len);
-
-    my_fill_q15(0, buffer_gemm, output_len);
+            *buffer_b = buffer_temp + output_len * upper_gauss(B->dims[0], gemm_tile_size);
 
     my_memcpy_from_param(model, buffer_a, A, 0, A_len * sizeof(uint16_t));
 
 #if STATEFUL_CNN
     iterate_chunks(model, A, 0, 0, GemmInputChunkHandler(buffer_a));
+
+    int16_t offset, next_output_turning_point;
+    uint8_t output_turning_point_idx;
+    SlotInfo *output_slot_info;
+    find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, 0 /*TODO: first_unfinished_value_offset*/, model, output);
+    offset ^= 0x4000;
 #endif
 
-    /* LEA wants addresses to be 4-aligned */
-    uint16_t step = (buffer_b_len / B->dims[1]) / 4 * 4;
-    my_printf_debug("step size = %d" NEWLINE, step);
-    MY_ASSERT(step != 0);
-    for (uint16_t i = 0; i < B->dims[0]; i += step) {
-        uint16_t current_width = MIN_VAL(step, B->dims[0] - i);
+    for (uint16_t i = 0, tile = 0; i < B->dims[0]; i += gemm_tile_size, tile++) {
+        uint16_t current_width = MIN_VAL(gemm_tile_size, B->dims[0] - i);
 
         my_memcpy_from_param(model, buffer_b,
                   B, i * B->dims[1],
@@ -408,31 +406,61 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
         my_printf_debug("temp" NEWLINE);
         dump_matrix_debug(buffer_temp, output_len, ValueInfo(output, model));
+        my_printf_debug(NEWLINE);
 
+        check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, i);
+        my_offset_q15(buffer_temp, offset, buffer_temp, output_len);
+
+        my_memcpy_to_param(output, tile * output_len, buffer_temp, output_len * sizeof(int16_t));
+    }
+
+#if STATEFUL_CNN
+    flip_state_bit(model, output);
+#endif
+}
+
+void alloc_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const struct NodeFlags *flags) {
+    output->slot = get_next_slot(model, input[0]);
+}
+
+void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const struct NodeFlags *flags) {
+    const ParameterInfo *X = input[0], *C = input[1];
+
+    int16_t output_len = X->dims[0] * X->dims[1];
+
+    int16_t *buffer_temp = lea_buffer,
+            *buffer_gemm = buffer_temp + output_len,
+            *buffer_c = buffer_gemm + output_len;
+
+    my_fill_q15(0, buffer_gemm, output_len);
+
+    int16_t n_tiles = X->params_len / output_len / sizeof(int16_t);
+
+    for (uint16_t tile = 0; tile < n_tiles; tile++) {
+        my_memcpy_from_param(model, buffer_temp, input[0], tile * output_len, output_len);
         my_add_q15(buffer_gemm, buffer_temp, buffer_gemm, output_len);
         my_printf_debug("buffer_gemm" NEWLINE);
         dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
-        my_printf_debug(NEWLINE);
     }
 
     my_memcpy_from_param(model, buffer_c, C, 0, output_len);
-
-    // TODO: scale up to avoid scale overflow after many Gemm layers
-
-    my_printf_debug("buffer_gemm after scaling up" NEWLINE);
-    dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
 
     my_printf_debug("C" NEWLINE);
     dump_params_debug(model, C);
 
     int16_t scaleFract;
     uint8_t shift;
-    float_to_scale_params(&scaleFract, &shift, 1.0f * C->scale / (A->scale * B->scale));
+    float_to_scale_params(&scaleFract, &shift, 1.0f * C->scale / X->scale);
     my_scale_q15(buffer_c, scaleFract, shift, buffer_c, output_len);
     my_add_q15(buffer_gemm, buffer_c, buffer_gemm, output_len);
 
+    // TODO: scale up to avoid scale overflow after many Gemm layers
+
+    my_printf_debug("buffer_gemm after scaling up" NEWLINE);
+    dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
+
 #if STATEFUL_CNN
-    iterate_chunks(model, output, 0, 0, GemmOutputChunkHandler(buffer_gemm));
+    iterate_chunks(model, output, 0, 0, OutputChunkHandler(buffer_gemm));
 #endif
 
     my_memcpy_to_param(output, 0, buffer_gemm, output->params_len);
@@ -440,9 +468,6 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     my_printf_debug("handle_gemm output" NEWLINE);
     dump_params_debug(model, output);
 
-#if STATEFUL_CNN
-    flip_state_bit(model, output);
-#endif
 }
 
 void alloc_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {

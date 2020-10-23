@@ -59,6 +59,7 @@ ops = {
     'ConvMerge': [1, 0],
     'Dropout': [1, 1],
     'Gemm': [3, 0],
+    'GemmMerge': [1, 0],
     'GlobalAveragePool': [1, 0],
     'MaxPool': [1, 0],
     'Relu': [1, 0],
@@ -241,18 +242,18 @@ def replace_nodes():
 
 replace_nodes()
 
-# Split Conv into Conv and ConvMerge (for OFM scaling up and merge of OFMs from  channel tiling)
+# Split Conv/Gemm into Conv/Gemm and ConvMerge/GemmMerge (for OFM scaling up and merge of OFMs from channel tiling)
 new_nodes = []
 for idx, n in enumerate(g.node):
     if n.op_type in audio_ops:
         logger.warning('skipping audio operator %s', n.op_type)
         continue
     new_nodes.append(n)
-    if n.op_type == 'Conv':
+    if n.op_type in ('Conv', 'Gemm'):
         output_name = n.output[0]
         new_node = onnx.NodeProto()
         new_node.name = n.name + ':merge'
-        new_node.op_type = 'ConvMerge'
+        new_node.op_type = n.op_type + 'Merge'
         new_node.input[:] = n.output[:] = [output_name + '_before_merge']
         new_node.output[:] = [output_name]
         new_nodes.append(new_node)
