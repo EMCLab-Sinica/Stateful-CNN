@@ -194,22 +194,52 @@ except IndexError:
 g = onnx_model.graph
 names = {}
 
-# Remoe Squeeze nodes with constants as the input
-replaced_squeeze_map = {}
-for n in g.node:
-    if n.op_type != 'Squeeze':
-        continue
-    input_name = n.input[0]
-    for inp in g.initializer:
-        if input_name != inp.name:
+def get_attr(node, attr_name):
+    for attr in node.attribute:
+        if attr.name != attr_name:
             continue
-        axes = next(attr.ints for attr in n.attribute if attr.name == 'axes')
-        new_dims = [dim for dim_idx, dim in enumerate(inp.dims) if dim_idx not in axes]
-        # Repeated fields cannot be assigned directly
-        # https://developers.google.com/protocol-buffers/docs/reference/python-generated#repeated-fields
-        inp.dims[:] = new_dims
-        replaced_squeeze_map[n.output[0]] = input_name
-        break
+        return onnx.helper.get_attribute_value(attr)
+
+    # Not found
+    return None
+
+# Remove Squeeze and Reshape nodes with constants as the input
+replaced_nodes_map = {}
+
+def replace_squeeze(node, inp):
+    axes = get_attr(node, 'axes')
+    new_dims = [dim for dim_idx, dim in enumerate(inp.dims) if dim_idx not in axes]
+    # Repeated fields cannot be assigned directly
+    # https://developers.google.com/protocol-buffers/docs/reference/python-generated#repeated-fields
+    inp.dims[:] = new_dims
+
+def replace_reshape(node, inp):
+    new_dims = None
+    dims_name = node.input[1]
+    for initializer in g.initializer:
+        if initializer.name == dims_name:
+            new_dims = initializer.int64_data
+            break
+    assert new_dims
+    inp.dims[:] = new_dims
+
+replace_handlers = {
+    'Squeeze': replace_squeeze,
+    'Reshape': replace_reshape,
+}
+
+def replace_nodes():
+    for n in g.node:
+        if n.op_type not in ('Squeeze', 'Reshape'):
+            continue
+        for inp in g.initializer:
+            if n.input[0] != inp.name:
+                continue
+            replace_handlers[n.op_type](n, inp)
+            replaced_nodes_map[n.output[0]] = n.input[0]
+            break
+
+replace_nodes()
 
 # Split Conv into Conv and ConvMerge (for OFM scaling up and merge of OFMs from  channel tiling)
 new_nodes = []
@@ -226,13 +256,11 @@ for idx, n in enumerate(g.node):
         new_node.input[:] = n.output[:] = [output_name + '_before_merge']
         new_node.output[:] = [output_name]
         new_nodes.append(new_node)
-    elif n.op_type == 'Gemm':
-        pass  # TODO
 
-new_nodes = [n for n in new_nodes if n.output[0] not in replaced_squeeze_map.keys()]
+new_nodes = [n for n in new_nodes if n.output[0] not in replaced_nodes_map.keys()]
 for n in new_nodes:
     for idx, inp in enumerate(n.input):
-        n.input[idx] = replaced_squeeze_map.get(inp, inp)
+        n.input[idx] = replaced_nodes_map.get(inp, inp)
 
 nodes = [ONNXNodeWrapper(n) for n in new_nodes]
 
@@ -252,15 +280,6 @@ for idx, initializer in enumerate(g.initializer):
 
 Constants.N_INPUT = len(names.keys())
 print("Constants.N_INPUT = {}".format(Constants.N_INPUT))
-
-def get_attr(node, attr_name):
-    for attr in node.attribute:
-        if attr.name != attr_name:
-            continue
-        return onnx.helper.get_attribute_value(attr)
-
-    # Not found
-    return None
 
 prev_node = None
 for idx, n in enumerate(nodes):
