@@ -42,7 +42,7 @@ void dump_value(Model *model, const ParameterInfo *cur_param, size_t offset) {
     } else if (cur_param->bitwidth == 64) {
         my_printf("%" PRId64 " ", get_int64_param(cur_param, offset));
     } else {
-        ERROR_OCCURRED();
+        MY_ASSERT(false);
     }
 }
 
@@ -75,8 +75,6 @@ void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, size_t offse
     CHANNEL = cur_param->dims[1];
     H = cur_param->dims[2];
     W = cur_param->dims[3];
-    // XXX: re-enable this check
-    // check_params_len(cur_param);
     my_printf("Slot: %d" NEWLINE, cur_param->slot);
     my_printf("Scale: %d" NEWLINE, cur_param->scale);
     for (uint16_t n = 0; n < NUM; n++) {
@@ -125,16 +123,6 @@ void dump_model(Model *model) {
     }
 }
 
-static void check_params_len(const ParameterInfo *cur_param) {
-    uint32_t expected_params_len = sizeof(int16_t);
-    for (uint8_t i = 0; i < 4; i++) {
-        if (cur_param->dims[i]) {
-            expected_params_len *= cur_param->dims[i];
-        }
-    }
-    MY_ASSERT(cur_param->params_len == expected_params_len);
-}
-
 // dump in NCHW format
 void dump_params(Model *model, const ParameterInfo *cur_param) {
     uint16_t NUM, H, W, CHANNEL;
@@ -154,7 +142,6 @@ void dump_params(Model *model, const ParameterInfo *cur_param) {
         NUM = CHANNEL = H = 1;
         W = cur_param->dims[0];
     }
-    check_params_len(cur_param);
     my_printf("Slot: %d" NEWLINE, cur_param->slot);
     my_printf("Scale: %d" NEWLINE, cur_param->scale);
     for (uint16_t i = 0; i < NUM; i++) {
