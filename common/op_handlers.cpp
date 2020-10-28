@@ -432,22 +432,26 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
             my_matrix_mpy_q15(1, tile_channels, tile_channels, tile_width, buffer_a + i, buffer_b, buffer_temp, 0);
 
-            my_printf_debug("temp" NEWLINE);
-            dump_matrix_debug(buffer_temp, tile_width, ValueInfo(output, model));
-            my_printf_debug(NEWLINE);
-
+            int16_t output_offset = tile * output_len + j;
 #if STATEFUL_CNN
-            check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, i);
+            check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
             my_offset_q15(buffer_temp, offset, buffer_temp, tile_width);
 #endif
 
-            my_memcpy_to_param(output, tile * output_len + j, buffer_temp, tile_width * sizeof(int16_t));
+            my_printf_debug("temp with states" NEWLINE);
+            dump_matrix_debug(buffer_temp, tile_width, ValueInfo(output, model));
+            my_printf_debug(NEWLINE);
+
+            my_memcpy_to_param(output, output_offset, buffer_temp, tile_width * sizeof(int16_t));
         }
     }
 
 #if STATEFUL_CNN
     flip_state_bit(model, output);
 #endif
+
+    my_printf_debug("handle_gemm output" NEWLINE);
+    dump_params_debug(model, output);
 }
 
 void alloc_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const struct NodeFlags *flags) {
@@ -470,6 +474,12 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
 
     for (uint16_t tile = 0; tile < n_tiles; tile++) {
         my_memcpy_from_param(model, buffer_temp, input[0], tile * output_len, output_len * sizeof(int16_t));
+#if STATEFUL_CNN
+        if (get_value_state_bit(buffer_temp[0])) {
+            // XXX: assume all values in the tile have the same state bit
+            my_offset_q15(buffer_temp, -0x4000, buffer_temp, output_len);
+        }
+#endif
         my_add_q15(buffer_gemm, buffer_temp, buffer_gemm, output_len);
         my_printf_debug("buffer_gemm" NEWLINE);
         dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
@@ -497,9 +507,8 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
 
     my_memcpy_to_param(output, 0, buffer_gemm, output->params_len);
 
-    my_printf_debug("handle_gemm output" NEWLINE);
+    my_printf_debug("handle_gemmmerge output" NEWLINE);
     dump_params_debug(model, output);
-
 }
 
 void alloc_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
