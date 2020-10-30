@@ -10,14 +10,14 @@ struct SlotInfo;
 
 class ChunkHandler {
 public:
-    virtual void operator () (uint32_t output_offset, uint16_t output_chunk_len, uint8_t old_output_state_bit) const = 0;
+    virtual void handle_chunk(uint32_t output_offset, uint16_t output_chunk_len, uint8_t old_output_state_bit) const = 0;
 };
 
 class OutputChunkHandler : public ChunkHandler {
 public:
     OutputChunkHandler(int16_t *_buffer) : buffer(_buffer) {}
 
-    void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override;
+    void handle_chunk(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override;
 
 private:
     int16_t *buffer;

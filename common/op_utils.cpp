@@ -10,7 +10,7 @@
 #endif
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
-void OutputChunkHandler::operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const {
+void OutputChunkHandler::handle_chunk(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const {
     if (!state_bit) {
         int16_t* to_offset = buffer + offset;
         my_offset_q15(to_offset, 0x4000, to_offset, real_chunk_len);
@@ -22,7 +22,7 @@ public:
     MaxMultiplierChunkHandler(Model *_model, const ParameterInfo *_param, const int16_t* _buffer, uint16_t *_max_multiplier)
         : model(_model), param(_param), buffer(_buffer), max_multiplier(_max_multiplier) {}
 
-    void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
+    void handle_chunk(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
 #if !STATEFUL_CNN
         uint16_t bound = 32768;
 #else
@@ -93,7 +93,7 @@ void float_to_scale_params(int16_t *scaleFract, uint8_t *shift, float scale) {
     *scaleFract = scale * 32768;
 }
 
-void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_offset, uint16_t len, const ChunkHandler& callback) {
+void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_offset, uint16_t len, const ChunkHandler& chunk_handler) {
     uint16_t params_len;
     if (!len) {
         params_len = param->params_len / sizeof(int16_t);
@@ -143,7 +143,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
         }
 #endif
         MY_ASSERT(cur_chunk_len != 0);
-        callback(offset, cur_chunk_len, state_bit);
+        chunk_handler.handle_chunk(offset, cur_chunk_len, state_bit);
 #if STATEFUL_CNN
         if (next_state_flipped) {
             state_bit ^= 1;

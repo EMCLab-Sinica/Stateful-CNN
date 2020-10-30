@@ -57,7 +57,7 @@ class GemmInputChunkHandler : public ChunkHandler {
 public:
     GemmInputChunkHandler(int16_t *_buffer_a) : buffer_a(_buffer_a) {}
 
-    void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
+    void handle_chunk(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
         if (state_bit) {
             int16_t* to_offset = buffer_a + offset;
             my_offset_q15(to_offset, -0x4000, to_offset, real_chunk_len);

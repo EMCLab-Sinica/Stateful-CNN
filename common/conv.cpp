@@ -578,7 +578,7 @@ public:
     ConvMergeInputChunkHandler(int16_t *_to_add, uint16_t _data_offset)
         : to_add(_to_add), data_offset(_data_offset) {}
 
-    void operator () (uint32_t range_offset, uint16_t range_len, uint8_t state_bit) const override {
+    void handle_chunk(uint32_t range_offset, uint16_t range_len, uint8_t state_bit) const override {
         my_printf_debug("input range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
         int16_t *to_offset = to_add + range_offset - data_offset;
         if (state_bit) {
@@ -596,7 +596,7 @@ public:
     ConvMergeOutputChunkHandler(uint32_t _tiling_results_offset)
         : tiling_results_offset(_tiling_results_offset) {}
 
-    void operator () (uint32_t range_offset, uint16_t range_len, uint8_t state_bit) const override {
+    void handle_chunk(uint32_t range_offset, uint16_t range_len, uint8_t state_bit) const override {
         my_printf_debug("output range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
         int16_t *to_offset = lea_buffer + range_offset - tiling_results_offset;
         // output state bit has not been flipped yet

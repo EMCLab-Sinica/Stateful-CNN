@@ -440,7 +440,7 @@ class ConcatOutputChunkHandler : public ChunkHandler {
 public:
     ConcatOutputChunkHandler(uint32_t _offset) : offset(_offset) {}
 
-    void operator () (uint32_t output_offset, uint16_t output_chunk_len, uint8_t old_output_state_bit) const override {
+    void handle_chunk(uint32_t output_offset, uint16_t output_chunk_len, uint8_t old_output_state_bit) const override {
         my_printf_debug("output output_offset=%d output_chunk_len=%d old_output_state_bit=%d" NEWLINE, output_offset, output_chunk_len, old_output_state_bit);
         // every output chunk has the same starting offset as corresponding scaled input chunk
         int16_t *output_to_offset = lea_buffer + output_offset - offset;
