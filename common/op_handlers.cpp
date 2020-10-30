@@ -817,16 +817,20 @@ void handle_transpose(Model*, const ParameterInfo *input[], ParameterInfo *outpu
 
 class OverflowChunkHandler : public ChunkHandler {
 public:
-    OverflowChunkHandler(Model *_model, const ParameterInfo *_param, const int16_t* _buffer, uint16_t *_overflow_factor)
-        : model(_model), param(_param), buffer(_buffer), overflow_factor(_overflow_factor) {}
+    OverflowChunkHandler(Model *_model, const ParameterInfo *_param, const int16_t* _buffer, uint16_t *_max_multiplier)
+        : model(_model), param(_param), buffer(_buffer), max_multiplier(_max_multiplier) {}
 
     void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
 #if !STATEFUL_CNN
-        int16_t bound = 32768 / SCALE;
+        int16_t bound = 32768;
 #else
-        int16_t bound = 8192 / SCALE;
+        int16_t bound = 8192;
         int16_t val_offset = param_state_bit(model, param, offset) ? -16384 : 0;
 #endif
+        if (!*max_multiplier) {
+            *max_multiplier = bound;
+        }
+
         int16_t max_val, min_val;
         uint16_t index;
 
@@ -846,8 +850,8 @@ public:
 #endif
         my_printf_debug("Max value %d", max_val);
         my_printf_debug(" occurs at index %d" NEWLINE, index);
-        while (max_val && abs(max_val) >= bound * (*overflow_factor)) {
-            (*overflow_factor) *= 2;
+        while (max_val && abs(max_val) * (*max_multiplier) >= bound) {
+            (*max_multiplier) /= 2;
         }
 
         my_min_q15(cur_buffer, real_chunk_len, &min_val, &index);
@@ -856,25 +860,26 @@ public:
 #endif
         my_printf_debug("Min value %d", min_val);
         my_printf_debug(" occurs at index %d" NEWLINE, index);
-        while (min_val && abs(min_val) >= bound * (*overflow_factor)) {
-            (*overflow_factor) *= 2;
+        while (min_val && abs(min_val) * (*max_multiplier) >= bound) {
+            (*max_multiplier) /= 2;
         }
+        my_printf_debug("max_multiplier = %d" NEWLINE, *max_multiplier);
     }
 private:
     Model *model;
     const ParameterInfo *param;
     const int16_t* buffer;
-    uint16_t *overflow_factor;
+    uint16_t *max_multiplier;
 };
 
-uint16_t find_overflow_factor(Model *model, const ParameterInfo *param, const int16_t* buffer) {
-    uint16_t overflow_factor = 1;
+uint16_t find_max_multiplier(Model *model, const ParameterInfo *param, const int16_t* buffer) {
+    uint16_t max_multiplier = 0;
 
-    iterate_chunks(model, param, 0, 0, OverflowChunkHandler(model, param, buffer, &overflow_factor));
+    iterate_chunks(model, param, 0, 0, OverflowChunkHandler(model, param, buffer, &max_multiplier));
 
-    my_printf_debug("Overflow factor = %d" NEWLINE, overflow_factor);
+    my_printf_debug("Overflow factor = %d" NEWLINE, max_multiplier);
 
-    return overflow_factor;
+    return max_multiplier;
 }
 
 void float_to_scale_params(int16_t *scaleFract, uint8_t *shift, float scale) {
