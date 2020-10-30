@@ -5,6 +5,7 @@
 #include "my_debug.h"
 #include "op_utils.h"
 #include "my_dsplib.h"
+#include "intermittent-cnn.h"
 
 static struct {
     int16_t tile_channel;

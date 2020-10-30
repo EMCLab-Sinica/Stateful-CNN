@@ -13,6 +13,17 @@ public:
     virtual void operator () (uint32_t output_offset, uint16_t output_chunk_len, uint8_t old_output_state_bit) const = 0;
 };
 
+class OutputChunkHandler : public ChunkHandler {
+public:
+    OutputChunkHandler(int16_t *_buffer) : buffer(_buffer) {}
+
+    void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override;
+
+private:
+    int16_t *buffer;
+};
+
+
 extern int16_t lea_buffer[LEA_BUFFER_SIZE];
 uint16_t find_max_multiplier(struct Model *model, const ParameterInfo *param, const int16_t* buffer);
 void find_max_multiplier_vector(int16_t* vector, uint16_t len, uint16_t bound, int16_t val_offset, uint16_t* max_multiplier);

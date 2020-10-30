@@ -194,21 +194,6 @@ void alloc_add(Model *model, const ParameterInfo *input[], ParameterInfo *output
     output->slot = get_next_slot(model, A);
 }
 
-class OutputChunkHandler : public ChunkHandler {
-public:
-    OutputChunkHandler(int16_t *_buffer) : buffer(_buffer) {}
-
-    void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
-        if (!state_bit) {
-            int16_t* to_offset = buffer + offset;
-            my_offset_q15(to_offset, 0x4000, to_offset, real_chunk_len);
-        }
-    }
-
-private:
-    int16_t *buffer;
-};
-
 void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     /* Add: Y = X + W */
     my_printf_debug("Add!" NEWLINE);

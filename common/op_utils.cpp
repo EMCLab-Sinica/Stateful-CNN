@@ -10,6 +10,13 @@
 #endif
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
+void OutputChunkHandler::operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const {
+    if (!state_bit) {
+        int16_t* to_offset = buffer + offset;
+        my_offset_q15(to_offset, 0x4000, to_offset, real_chunk_len);
+    }
+}
+
 class MaxMultiplierChunkHandler : public ChunkHandler {
 public:
     MaxMultiplierChunkHandler(Model *_model, const ParameterInfo *_param, const int16_t* _buffer, uint16_t *_max_multiplier)
