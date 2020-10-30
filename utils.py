@@ -60,24 +60,27 @@ def load_data_cifar10(start: int, limit: int) -> ModelData:
         images.append(im)
     return ModelData(labels=labels, images=images)
 
-def load_data_google_speech_mfcc(start: int, limit: int) -> ModelData:
+def load_data_google_speech(start: int, limit: int, for_onnx=True) -> ModelData:
     import tensorflow as tf
 
     kws_root = pathlib.Path('./data/ML-KWS-for-MCU')
-    with open(kws_root / 'Pretrained_models' / 'DNN' / 'DNN_S.pb', 'rb') as f:
-        graph_def = tf.compat.v1.GraphDef()
-        graph_def.ParseFromString(f.read())
-        tf.import_graph_def(graph_def)
-
     with open(kws_root / 'silence.wav', 'rb') as wav_file:
         wav_data = wav_file.read()
 
-    with tf.compat.v1.Session() as sess:
-        mfcc_tensor = sess.graph.get_tensor_by_name('Mfcc:0')
-        mfcc = sess.run(mfcc_tensor, {'wav_data:0': wav_data})
+    if for_onnx:
+        with open(kws_root / 'Pretrained_models' / 'DNN' / 'DNN_S.pb', 'rb') as f:
+            graph_def = tf.compat.v1.GraphDef()
+            graph_def.ParseFromString(f.read())
+            tf.import_graph_def(graph_def)
 
-    mfcc = np.expand_dims(mfcc, 0) / 8
+        with tf.compat.v1.Session() as sess:
+            mfcc_tensor = sess.graph.get_tensor_by_name('Mfcc:0')
+            mfcc = sess.run(mfcc_tensor, {'wav_data:0': wav_data})
 
-    input_mapping = {'wav_data:0': 'Mfcc:0'}
+        mfcc = np.expand_dims(mfcc, 0) / 8
 
-    return ModelData(labels=[0], images=[mfcc], input_mapping=input_mapping)
+        input_mapping = {'wav_data:0': 'Mfcc:0'}
+
+        return ModelData(labels=[0], images=[mfcc], input_mapping=input_mapping)
+    else:
+        return ModelData(labels=[0], images=[wav_data])

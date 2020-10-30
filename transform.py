@@ -19,7 +19,7 @@ import numpy as np
 from utils import (
     load_data_mnist,
     load_data_cifar10,
-    load_data_google_speech_mfcc,
+    load_data_google_speech,
 )
 
 logger = logging.getLogger(__name__)
@@ -160,7 +160,7 @@ configs = {
         'scale': 8,
         'num_slots': 2,
         'intermediate_values_size': 20000,
-        'data_loader': load_data_google_speech_mfcc,
+        'data_loader': load_data_google_speech,
         'n_all_samples': 100,
         'sample_size': 2 * 25 * 10,  # MFCC gives 25x10 tensors
         'fp32_accuracy': 0.8,
