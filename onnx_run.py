@@ -4,12 +4,11 @@ import numpy as np
 import onnx
 import onnxruntime.backend as backend
 
-from utils import load_data, load_data_cifar10
+from utils import load_data_mnist, load_data_cifar10
 
 np.set_printoptions(linewidth=1000)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('input_file', help='Input file. Can be example.png or mnist.txt.')
 parser.add_argument('onnx_model')
 args = parser.parse_args()
 
@@ -29,23 +28,23 @@ correct = 0
 limit = 1
 
 if 'mnist' in args.onnx_model:
-    labels, images = load_data(args.input_file, start=0, limit=limit)
+    model_data = load_data_mnist(start=0, limit=limit)
 elif 'cifar10' in args.onnx_model:
-    labels, images = load_data_cifar10(args.input_file, start=0, limit=limit)
+    model_data = load_data_cifar10(start=0, limit=limit)
 else:
     raise NotImplementedError
 
-for idx, im in enumerate(images):
+for idx, im in enumerate(model_data.images):
     outputs = rep.run(im.astype(np.float32))
     predicted = np.argmax(outputs[0])
-    if not labels:
+    if not model_data.labels:
         print(outputs[0])
         print(predicted)
     else:
-        expected = labels[idx]
+        expected = model_data.labels[idx]
         if isinstance(expected, list):
             expected = np.argmax(expected)
         correct += (1 if predicted == expected else 0)
 
-if labels:
-    print('Correct rate: {}'.format(correct / len(labels)))
+if model_data.labels:
+    print('Correct rate: {}'.format(correct / len(model_data.labels)))

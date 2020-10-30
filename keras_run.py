@@ -7,10 +7,10 @@ from tensorflow.keras import backend as K
 
 from utils import load_data_cifar10
 
-with open(os.path.join(sys.argv[2], 'models', 'squeeze_net.json')) as f:
+with open(os.path.join(sys.argv[1], 'models', 'squeeze_net.json')) as f:
     model_json = f.read()
 model = tf.keras.models.model_from_json(model_json)
-model.load_weights(os.path.join(sys.argv[2], 'models', 'squeeze_net.h5'))
+model.load_weights(os.path.join(sys.argv[1], 'models', 'squeeze_net.h5'))
 
 # Modified from https://stackoverflow.com/a/41712013/3786245
 inp = model.input                                           # input placeholder
@@ -19,9 +19,9 @@ functors = [K.function([inp], [out]) for out in outputs]    # evaluation functio
 
 limit = 1
 # Testing
-labels, images = load_data_cifar10(sys.argv[1], start=0, limit=limit)
+model_data = load_data_cifar10(start=0, limit=limit)
 if limit == 1:
-    layer_outs = [func([images]) for func in functors]
+    layer_outs = [func([model_data.images]) for func in functors]
     for idx in range(len(layer_outs)):
         layer_out = layer_outs[idx][0]
         shape = tf.shape(layer_out)
@@ -42,12 +42,12 @@ if limit == 1:
             print(layer_out)
 else:
     correct = 0
-    for idx, image in enumerate(images):
+    for idx, image in enumerate(model_data.images):
         layer_outs = model(image)
         # Tensorflow 2.x uses .numpy instead of .eval for eager execution
         predicted = np.argmax(layer_outs.numpy()[0])
-        if predicted == labels[idx]:
+        if predicted == model_data.labels[idx]:
             print(f'Correct at idx={idx}')
             correct += 1
-    total = len(labels)
+    total = len(model_data.labels)
     print(f'correct={correct} total={total} rate={correct/total}')
