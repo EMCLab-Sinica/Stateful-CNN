@@ -17,9 +17,9 @@ public:
 
     void operator () (uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
 #if !STATEFUL_CNN
-        int16_t bound = 32768;
+        uint16_t bound = 32768;
 #else
-        int16_t bound = 8192;
+        uint16_t bound = 8192;
         int16_t val_offset = param_state_bit(model, param, offset) ? -16384 : 0;
 #endif
         if (!*max_multiplier) {
