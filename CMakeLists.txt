@@ -82,6 +82,7 @@ add_executable(intermittent-cnn
     ${COMMON_SRC_PATH}/op_handlers.cpp
     ${COMMON_SRC_PATH}/op_utils.cpp
     ${COMMON_SRC_PATH}/conv.cpp
+    ${COMMON_SRC_PATH}/gemm.cpp
     ${COMMON_SRC_PATH}/cnn_common.cpp
     ${COMMON_SRC_PATH}/my_debug.cpp
     ${COMMON_SRC_PATH}/plat-linux.cpp
