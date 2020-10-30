@@ -79,7 +79,7 @@ uint16_t find_max_multiplier(Model *model, const ParameterInfo *param, const int
 
     iterate_chunks(model, param, 0, 0, MaxMultiplierChunkHandler(model, param, buffer, &max_multiplier));
 
-    my_printf_debug("Overflow factor = %d" NEWLINE, max_multiplier);
+    my_printf_debug("max_multiplier=%d" NEWLINE, max_multiplier);
 
     return max_multiplier;
 }

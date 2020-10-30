@@ -183,11 +183,22 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
     my_printf_debug("C" NEWLINE);
     dump_params_debug(model, C);
 
+    uint16_t max_multiplier = MIN_VAL(
+        find_max_multiplier(model, output, buffer_gemm),
+        find_max_multiplier(model, C, buffer_c)
+    );
+
     int16_t scaleFract;
     uint8_t shift;
-    float_to_scale_params(&scaleFract, &shift, 1.0f * C->scale / X->scale);
+
+    float_to_scale_params(&scaleFract, &shift, 1.0f * max_multiplier);
+    my_scale_q15(buffer_gemm, scaleFract, shift, buffer_gemm, output_len);
+
+    float_to_scale_params(&scaleFract, &shift, 1.0f * C->scale / X->scale * max_multiplier);
     my_scale_q15(buffer_c, scaleFract, shift, buffer_c, output_len);
     my_add_q15(buffer_gemm, buffer_c, buffer_gemm, output_len);
+
+    output->scale /= max_multiplier;
 
     // TODO: scale up to avoid scale overflow after many Gemm layers
 
