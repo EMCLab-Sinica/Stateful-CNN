@@ -7,7 +7,7 @@
 #include <inttypes.h> // for PRId32
 #include "cnn_common.h"
 #include "my_debug.h"
-#include "op_handlers.h"
+#include "op_utils.h"
 #include "intermittent-cnn.h"
 #include "my_dsplib.h"
 
@@ -86,31 +86,6 @@ typedef struct ConvTaskParams {
 static ConvTaskParams conv_params_obj;
 
 int16_t * const matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
-
-void determine_tile_c(ParameterInfo *param, const ParameterInfo *filter) {
-    // TODO: determine these values automatically
-    uint16_t CHANNEL = param->dims[1], H = param->dims[2];
-    uint16_t kH = 0, INPUT_CHANNEL = 0;
-    if (filter) {
-        INPUT_CHANNEL = filter->dims[1];
-        kH = filter->dims[2];
-    }
-    if (H == 14 && CHANNEL == 8) {
-        param->tile_c = 3;
-    } else if (H == 15 && CHANNEL == 64) {
-        param->tile_c = 32;
-    } else if (H == 7 && CHANNEL == 64 && kH == 3) {
-        param->tile_c = 6;
-    } else if (H == 7 && CHANNEL == 32 && INPUT_CHANNEL == 128 && kH == 1) {
-        param->tile_c = 16;
-    } else if (H == 7 && CHANNEL == 128 && INPUT_CHANNEL == 32 && kH == 1) {
-        param->tile_c = 44;
-    } else if (H == 7 && CHANNEL == 128 && INPUT_CHANNEL == 32 && kH == 3) {
-        param->tile_c = 2;
-    } else if (INPUT_CHANNEL == 256 && kH == 1) {
-        param->tile_c = 4;
-    }
-}
 
 #if STATEFUL_CNN
 static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t cur_output_tile_c, uint16_t len, uint8_t first_round) {

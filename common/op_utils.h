@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdint.h>
 #include "data.h"
 #include "platform.h"
 
@@ -17,6 +18,7 @@ uint16_t find_max_multiplier(struct Model *model, const ParameterInfo *param, co
 void find_max_multiplier_vector(int16_t* vector, uint16_t len, uint16_t bound, int16_t val_offset, uint16_t* max_multiplier);
 void float_to_scale_params(int16_t *scaleFract, uint8_t *shift, float scale);
 void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_offset, uint16_t len, const ChunkHandler& callback);
+void determine_tile_c(ParameterInfo *param, const ParameterInfo *filter = nullptr);
 #if STATEFUL_CNN
 void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param);
 

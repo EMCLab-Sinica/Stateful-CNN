@@ -3,7 +3,6 @@
 #include <inttypes.h> // for PRId32
 
 #include "intermittent-cnn.h"
-#include "op_handlers.h"
 #include "cnn_common.h"
 #include "data.h"
 #include "my_debug.h"
