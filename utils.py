@@ -62,25 +62,47 @@ def load_data_cifar10(start: int, limit: int) -> ModelData:
 
 def load_data_google_speech(start: int, limit: int, for_onnx=True) -> ModelData:
     import tensorflow as tf
+    import tensorflow_datasets as tfds
+    from tensorflow_datasets.audio import speech_commands
+
+    cache_dir = pathlib.Path('~/.cache/tensorflow_datasets').expanduser()
+
+    builder = tfds.builder('speech_commands', data_dir=cache_dir / 'data')
+    builder.download_and_prepare(download_dir=cache_dir / 'downloads')
+    dataset = builder.as_dataset(split='test', as_supervised=True)
 
     kws_root = pathlib.Path('./data/ML-KWS-for-MCU')
-    with open(kws_root / 'silence.wav', 'rb') as wav_file:
-        wav_data = wav_file.read()
 
+    # The Hello Edge paper uses a different order for labels than Google speech dataset :/
+    orig_labels = speech_commands.WORDS + [speech_commands.SILENCE, speech_commands.UNKNOWN]
+    with open(kws_root / 'Pretrained_models' / 'labels.txt') as f:
+        new_labels = f.read().strip().split()
+
+    decoded_wavs = []
+    labels = []
+    for idx, (decoded_wav, label) in enumerate(dataset):
+        decoded_wavs.append(np.expand_dims(decoded_wav, axis=-1))
+        labels.append(new_labels.index(orig_labels[label]))
+        if limit and idx == limit - 1:
+            break
     if for_onnx:
         with open(kws_root / 'Pretrained_models' / 'DNN' / 'DNN_S.pb', 'rb') as f:
             graph_def = tf.compat.v1.GraphDef()
             graph_def.ParseFromString(f.read())
             tf.import_graph_def(graph_def)
 
+        mfccs = []
         with tf.compat.v1.Session() as sess:
             mfcc_tensor = sess.graph.get_tensor_by_name('Mfcc:0')
-            mfcc = sess.run(mfcc_tensor, {'wav_data:0': wav_data})
-
-        mfcc = np.expand_dims(mfcc, 0)
+            for decoded_wav in decoded_wavs:
+                mfcc = sess.run(mfcc_tensor, {
+                    'decoded_sample_data:0': decoded_wav,
+                    'decoded_sample_data:1': 16000,
+                })
+                mfccs.append(np.expand_dims(mfcc, 0))
 
         input_mapping = {'wav_data:0': 'Mfcc:0'}
 
-        return ModelData(labels=[0], images=[mfcc], input_mapping=input_mapping)
+        return ModelData(labels=labels, images=mfccs, input_mapping=input_mapping)
     else:
-        return ModelData(labels=[0], images=[wav_data])
+        return ModelData(labels=labels, images=decoded_wavs)

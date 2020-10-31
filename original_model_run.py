@@ -9,7 +9,7 @@ from tensorflow.keras import backend as K
 
 from utils import load_data_cifar10, load_data_google_speech
 
-limit = 1
+kws_root = pathlib.Path('./data/ML-KWS-for-MCU')
 
 # Modified from https://stackoverflow.com/a/41712013/3786245
 def keras_get_intermediate_tensor(model, images):
@@ -17,17 +17,30 @@ def keras_get_intermediate_tensor(model, images):
         output = layer.output
         yield output.name, K.function([model.input], [output])(images)
 
-def tensorflow_get_intermediate_tensor(graph_def, wav_data):
+def keras_inference_one(model, images):
+    layer_outs = model(images)
+    # Tensorflow 2.x uses .numpy instead of .eval for eager execution
+    return layer_outs.numpy()[0]
+
+def tensorflow_inference_layer(decoded_wavs, idx):
+    with tf.compat.v1.Session() as sess:
+        op = sess.graph.get_operations()[idx]
+        tensor = sess.graph.get_tensor_by_name(op.outputs[0].name)
+        return sess.run(tensor, {
+            'decoded_sample_data:0': decoded_wavs[0],
+            'decoded_sample_data:1': 16000,
+        })
+
+def tensorflow_get_intermediate_tensor(graph_def, decoded_wavs):
     for idx, node in enumerate(graph_def.node):
         if node.op in ('Const', 'Identity', 'Placeholder'):
             continue
-        tensor_name = tensor_values = None
-        with tf.compat.v1.Session() as sess:
-            op = sess.graph.get_operations()[idx]
-            tensor_name = op.outputs[0].name
-            tensor = sess.graph.get_tensor_by_name(tensor_name)
-            tensor_values = sess.run(tensor, {'wav_data:0': wav_data[0][0]})
+        tensor_name = node.name
+        tensor_values = tensorflow_inference_layer(decoded_wavs, idx)
         yield tensor_name, tensor_values
+
+def tensorflow_inference_one(decoded_wav):
+    return tensorflow_inference_layer([decoded_wav], -1)[0]
 
 def print_float(val):
     print('%13.6f' % val, end='')
@@ -76,7 +89,11 @@ def print_tensor(tensor):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('config', choices=['cifar10', 'kws'])
+    parser.add_argument('--limit', type=int, default=0)
     args = parser.parse_args()
+
+    if args.limit == 0:
+        args.limit = None
 
     if args.config == 'cifar10':
         squeezenet_cifar10_path = './data/SqueezeNet_vs_CIFAR10/models'
@@ -86,28 +103,28 @@ def main():
         model.load_weights(os.path.join(squeezenet_cifar10_path, 'squeeze_net.h5'))
 
         get_intermediate_tensor = functools.partial(keras_get_intermediate_tensor, model)
-        model_data = load_data_cifar10(start=0, limit=limit)
+        inference_one = functools.partial(keras_inference_one, model)
+        model_data = load_data_cifar10(start=0, limit=args.limit)
     elif args.config == 'kws':
-        kws_root = pathlib.Path('./data/ML-KWS-for-MCU')
         with open(kws_root / 'Pretrained_models' / 'DNN' / 'DNN_S.pb', 'rb') as f:
             graph_def = tf.compat.v1.GraphDef()
             graph_def.ParseFromString(f.read())
             tf.import_graph_def(graph_def)
 
         get_intermediate_tensor = functools.partial(tensorflow_get_intermediate_tensor, graph_def)
-        model_data = load_data_google_speech(start=0, limit=limit, for_onnx=False)
+        inference_one = tensorflow_inference_one
+        model_data = load_data_google_speech(start=0, limit=args.limit, for_onnx=False)
 
     # Testing
-    if limit == 1:
-        for layer_name, layer_out in get_intermediate_tensor([model_data.images]):
+    if args.limit == 1:
+        for layer_name, layer_out in get_intermediate_tensor(model_data.images):
             print(f'Layer: {layer_name}')
             print_tensor(layer_out)
     else:
         correct = 0
         for idx, image in enumerate(model_data.images):
-            layer_outs = model(image)
-            # Tensorflow 2.x uses .numpy instead of .eval for eager execution
-            predicted = np.argmax(layer_outs.numpy()[0])
+            layer_outs = inference_one(image)
+            predicted = np.argmax(layer_outs)
             if predicted == model_data.labels[idx]:
                 print(f'Correct at idx={idx}')
                 correct += 1

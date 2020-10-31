@@ -160,13 +160,15 @@ configs = {
     'kws': {
         'onnx_model': 'data/KWS-DNN_S.onnx',
         'scale': 8,
-        'input_scale': 64,
+        'input_scale': 120,
         'num_slots': 2,
         'intermediate_values_size': 20000,
         'data_loader': load_data_google_speech,
         'n_all_samples': 100,
         'sample_size': 2 * 25 * 10,  # MFCC gives 25x10 tensors
-        'fp32_accuracy': 0.8,
+        # Much lower than reported on the paper due to mismatched window_size_ms/window_stride_ms (?)
+        # See: https://github.com/ARM-software/ML-KWS-for-MCU/issues/44
+        'fp32_accuracy': 0.6323,
     },
 }
 
