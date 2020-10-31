@@ -137,6 +137,7 @@ configs = {
         # https://github.com/onnx/models/raw/master/vision/classification/mnist/model/mnist-8.onnx
         'onnx_model': 'data/mnist-8.onnx',
         'scale': 8,
+        'input_scale': 8,
         'num_slots': 2,
         'intermediate_values_size': 20000,
         'data_loader': load_data_mnist,
@@ -148,6 +149,7 @@ configs = {
     'cifar10': {
         'onnx_model': 'data/squeezenet_cifar10.onnx',
         'scale': 8,
+        'input_scale': 8,
         'num_slots': 3,
         'intermediate_values_size': 30000,
         'data_loader': load_data_cifar10,
@@ -158,6 +160,7 @@ configs = {
     'kws': {
         'onnx_model': 'data/KWS-DNN_S.onnx',
         'scale': 8,
+        'input_scale': 64,
         'num_slots': 2,
         'intermediate_values_size': 20000,
         'data_loader': load_data_google_speech,
@@ -450,6 +453,7 @@ for params in parameters:
         model_parameters_info.write(to_bytes(input_channel))
         model_parameters_info.write(to_bytes(dimX))
         model_parameters_info.write(to_bytes(dimY))
+        model_parameters_info.write(to_bytes(config['input_scale']))     # scale
     else:
         assert len(params.dims) <= 4
         if params.data_type == onnx.TensorProto.FLOAT:
@@ -497,12 +501,12 @@ for params in parameters:
         # dims are always 4 uint16_t's in C++
         for _ in range(4 - len(params.dims)):
             model_parameters_info.write(to_bytes(0))
+        model_parameters_info.write(to_bytes(config['scale']))       # scale
 
     # common to input and non-inputs
     model_parameters_info.write(to_bytes(0, size=8))                 # flags
     for _ in range(Constants.EXTRA_INFO_LEN):
         model_parameters_info.write(to_bytes(0, size=8))             # extra_info
-    model_parameters_info.write(to_bytes(config['scale']))           # scale
     model_parameters_info.write(to_bytes(parameter_info_idx))        # parameter_info_idx
     parameter_info_idx += 1
 
@@ -528,7 +532,7 @@ for idx, im in enumerate(model_data.images):
     for idx_c in range(im.shape[1]):
         for idx_h in range(im.shape[2]):
             for idx_w in range(im.shape[3]):
-                outputs['samples'].write(to_bytes(_Q15(im[0, idx_c, idx_h, idx_w] / config['scale'])))
+                outputs['samples'].write(to_bytes(_Q15(im[0, idx_c, idx_h, idx_w] / config['input_scale'])))
     if args.write_images:
         import cv2
         # Restore conanical image format (H, W, C)

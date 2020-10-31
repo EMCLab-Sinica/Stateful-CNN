@@ -46,11 +46,11 @@ typedef struct ParameterInfo {
     uint16_t tile_c;
     // uint8_t is not enough. For example, fully connected layer in MNIST has dims 256x1
     uint16_t dims[4];
-    uint8_t flags;
-    uint8_t extra_info[EXTRA_INFO_LEN];
     // use signed type for scale as TI's compiler does not handle
     // multiplication/division with mixed signed and unsigned numbers correctly
     int16_t scale;
+    uint8_t flags;
+    uint8_t extra_info[EXTRA_INFO_LEN];
     const uint16_t parameter_info_idx; // must be the last member of this struct
 } ParameterInfo;
 

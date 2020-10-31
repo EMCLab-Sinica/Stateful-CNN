@@ -77,7 +77,7 @@ def load_data_google_speech(start: int, limit: int, for_onnx=True) -> ModelData:
             mfcc_tensor = sess.graph.get_tensor_by_name('Mfcc:0')
             mfcc = sess.run(mfcc_tensor, {'wav_data:0': wav_data})
 
-        mfcc = np.expand_dims(mfcc, 0) / 8
+        mfcc = np.expand_dims(mfcc, 0)
 
         input_mapping = {'wav_data:0': 'Mfcc:0'}
 
