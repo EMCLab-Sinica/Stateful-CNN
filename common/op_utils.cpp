@@ -27,7 +27,12 @@ public:
         uint16_t bound = 32768;
 #else
         uint16_t bound = 8192;
-        int16_t val_offset = param_state_bit(model, param, offset) ? -16384 : 0;
+        int16_t val_offset = 0;
+        if (!buffer) {
+            // if the buffer is pre-filled (e.g., in GemmMerge), its state bits
+            // should already be stripped, too
+            val_offset = param_state_bit(model, param, offset) ? -16384 : 0;
+        }
 #endif
         if (!*max_multiplier) {
             *max_multiplier = bound;
@@ -44,7 +49,7 @@ public:
             cur_buffer = buffer + offset;
         }
 
-        // dump_matrix(cur_buffer, real_chunk_len, ValueInfo(param));
+        dump_matrix_debug(cur_buffer, real_chunk_len, ValueInfo(param));
 
         my_max_q15(cur_buffer, real_chunk_len, &max_val, &index);
 #if STATEFUL_CNN
@@ -52,7 +57,8 @@ public:
 #endif
         my_printf_debug("Max value %d", max_val);
         my_printf_debug(" occurs at index %d" NEWLINE, index);
-        while (max_val && abs(max_val) * (*max_multiplier) >= bound) {
+        // use > instead of >= as the value may be exactly on the bound
+        while (max_val && abs(max_val) * (*max_multiplier) > bound) {
             (*max_multiplier) /= 2;
         }
 
@@ -62,10 +68,10 @@ public:
 #endif
         my_printf_debug("Min value %d", min_val);
         my_printf_debug(" occurs at index %d" NEWLINE, index);
-        while (min_val && abs(min_val) * (*max_multiplier) >= bound) {
+        while (min_val && abs(min_val) * (*max_multiplier) > bound) {
             (*max_multiplier) /= 2;
         }
-        my_printf_debug("max_multiplier = %d" NEWLINE, *max_multiplier);
+        my_printf_debug("Current max_multiplier=%d" NEWLINE, *max_multiplier);
     }
 private:
     Model *model;
@@ -74,12 +80,14 @@ private:
     uint16_t *max_multiplier;
 };
 
-uint16_t find_max_multiplier(Model *model, const ParameterInfo *param, const int16_t* buffer) {
-    uint16_t max_multiplier = 0;
+uint16_t find_max_multiplier(Model *model, const ParameterInfo *param, const int16_t* buffer, uint16_t len) {
+    uint16_t max_multiplier = param->scale;
 
-    iterate_chunks(model, param, 0, 0, MaxMultiplierChunkHandler(model, param, buffer, &max_multiplier));
+    iterate_chunks(model, param, 0, len, MaxMultiplierChunkHandler(model, param, buffer, &max_multiplier));
 
     my_printf_debug("max_multiplier=%d" NEWLINE, max_multiplier);
+
+    MY_ASSERT(max_multiplier != 0);
 
     return max_multiplier;
 }

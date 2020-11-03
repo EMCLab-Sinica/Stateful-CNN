@@ -35,6 +35,7 @@ static void handle_node(Model *model, uint16_t node_idx) {
     output->params_offset = 0;
     allocators[cur_node->op_type](model, input, output, &cur_node->flags);
     my_printf_debug("Needed mem = %d" NEWLINE, output->params_len);
+    MY_ASSERT(output->params_len < INTERMEDIATE_VALUES_SIZE);
     if (output->slot == SLOT_INTERMEDIATE_VALUES) {
         my_printf_debug("New params_offset = %d" NEWLINE, output->params_offset);
     }

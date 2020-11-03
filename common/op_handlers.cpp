@@ -276,6 +276,12 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
     data_offset += first_unfinished_value_offset;
     output_offset += first_unfinished_value_offset;
+
+    int16_t offset, next_output_turning_point;
+    uint8_t output_turning_point_idx;
+    SlotInfo *output_slot_info;
+    find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
+    offset ^= 0x4000;
 #endif
 
     my_printf_debug("handle_relu input" NEWLINE);
@@ -294,11 +300,6 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         my_printf_debug("initial output_w = %d, ", output_w);
         my_printf_debug("initial c = %d" NEWLINE, c);
 
-        int16_t offset, next_output_turning_point;
-        uint8_t output_turning_point_idx;
-        SlotInfo *output_slot_info;
-        find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
-        offset ^= 0x4000;
 #endif
         for (; output_h < H; output_h++) {
             for (; output_w < W; output_w++) {
@@ -338,11 +339,19 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     } else {
         dump_params_debug(model, X);
         uint16_t i = 0;
-#if STATEFUL_CNN
-        MY_ASSERT(false); // TODO: adapt to range-based state assignments
-#endif
         for (; i < data_len; i++) {
-            put_q15_param(output, output_offset, MAX_VAL(get_q15_param(model, X, data_offset), 0));
+            int16_t input_val = get_q15_param(model, X, data_offset);
+#if STATEFUL_CNN
+            if (get_value_state_bit(input_val)) {
+                input_val -= 0x4000;
+            }
+            check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
+#endif
+            int16_t output_val = MAX_VAL(input_val, 0);
+#if STATEFUL_CNN
+            output_val += offset;
+#endif
+            put_q15_param(output, output_offset, output_val);
             data_offset++;
             output_offset++;
         }

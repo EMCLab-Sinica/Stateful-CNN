@@ -25,8 +25,7 @@ private:
 
 
 extern int16_t lea_buffer[LEA_BUFFER_SIZE];
-uint16_t find_max_multiplier(struct Model *model, const ParameterInfo *param, const int16_t* buffer);
-void find_max_multiplier_vector(int16_t* vector, uint16_t len, uint16_t bound, int16_t val_offset, uint16_t* max_multiplier);
+uint16_t find_max_multiplier(struct Model *model, const ParameterInfo *param, const int16_t* buffer = nullptr, uint16_t len = 0);
 void float_to_scale_params(int16_t *scaleFract, uint8_t *shift, float scale);
 void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_offset, uint16_t len, const ChunkHandler& callback);
 void determine_tile_c(ParameterInfo *param, const ParameterInfo *filter = nullptr);

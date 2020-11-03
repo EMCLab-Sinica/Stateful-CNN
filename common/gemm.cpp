@@ -128,7 +128,16 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             int16_t output_offset = tile * output_len + j;
 #if STATEFUL_CNN
             check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
-            my_offset_q15(buffer_temp, offset, buffer_temp, tile_width);
+            uint16_t tile_width_first = tile_width;
+            if (next_output_turning_point > 0) {
+                tile_width_first = MIN_VAL(next_output_turning_point - output_offset, tile_width);
+            }
+            my_printf_debug("tile_width_first=%d" NEWLINE, tile_width_first);
+            MY_ASSERT(tile_width_first <= tile_width);
+            my_offset_q15(buffer_temp, offset, buffer_temp, tile_width_first);
+            if (tile_width_first != tile_width) {
+                my_offset_q15(buffer_temp + tile_width_first, offset ^ 0x4000, buffer_temp + tile_width_first, tile_width - tile_width_first);
+            }
 #endif
 
             my_printf_debug("temp with states" NEWLINE);
@@ -148,11 +157,16 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 }
 
 void alloc_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const struct NodeFlags *flags) {
+    const ParameterInfo *X = input[0];
+
     output->slot = get_next_slot(model, input[0]);
+    output->params_len = X->dims[0] * X->dims[1] * sizeof(int16_t);
 }
 
 void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const struct NodeFlags *flags) {
     const ParameterInfo *X = input[0], *C = input[1];
+
+    my_printf_debug("GemmMerge!" NEWLINE);
 
     int16_t output_len = X->dims[0] * X->dims[1];
 
@@ -168,9 +182,11 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
     for (uint16_t tile = 0; tile < n_tiles; tile++) {
         my_memcpy_from_param(model, buffer_temp, input[0], tile * output_len, output_len * sizeof(int16_t));
 #if STATEFUL_CNN
-        if (get_value_state_bit(buffer_temp[0])) {
-            // XXX: assume all values in the tile have the same state bit
-            my_offset_q15(buffer_temp, -0x4000, buffer_temp, output_len);
+        // XXX: use LEA?
+        for (uint16_t idx = 0; idx < output_len; idx++) {
+            if (get_value_state_bit(buffer_temp[idx])) {
+                buffer_temp[idx] -= 0x4000;
+            }
         }
 #endif
         my_add_q15(buffer_gemm, buffer_temp, buffer_gemm, output_len);
@@ -183,14 +199,16 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
     my_printf_debug("C" NEWLINE);
     dump_params_debug(model, C);
 
-    uint16_t max_multiplier = MIN_VAL(
-        find_max_multiplier(model, output, buffer_gemm),
-        find_max_multiplier(model, C, buffer_c)
-    );
+    my_printf_debug("Find max_multiplier for buffer_gemm" NEWLINE);
+    uint16_t max_multiplier_gemm = find_max_multiplier(model, output, buffer_gemm, output_len);
+    my_printf_debug("Find max_multiplier for buffer_gemm" NEWLINE);
+    uint16_t max_multiplier_c = find_max_multiplier(model, C, buffer_c);
+    uint16_t max_multiplier = MIN_VAL(max_multiplier_gemm, max_multiplier_c);
 
     int16_t scaleFract;
     uint8_t shift;
 
+    // XXX: reduce calls to find_max_multiplier?
     float_to_scale_params(&scaleFract, &shift, 1.0f * max_multiplier);
     my_scale_q15(buffer_gemm, scaleFract, shift, buffer_gemm, output_len);
 
@@ -200,16 +218,27 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
 
     output->scale /= max_multiplier;
 
-    // TODO: scale up to avoid scale overflow after many Gemm layers
+    my_printf_debug("buffer_gemm with bias" NEWLINE);
+    dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
+
+    max_multiplier = find_max_multiplier(model, output, buffer_gemm, output_len);
+    float_to_scale_params(&scaleFract, &shift, 1.0f * max_multiplier);
+    my_scale_q15(buffer_gemm, scaleFract, shift, buffer_gemm, output_len);
 
     my_printf_debug("buffer_gemm after scaling up" NEWLINE);
     dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
+
+    output->scale /= max_multiplier;
 
 #if STATEFUL_CNN
     iterate_chunks(model, output, 0, 0, OutputChunkHandler(buffer_gemm));
 #endif
 
     my_memcpy_to_param(output, 0, buffer_gemm, output->params_len);
+
+#if STATEFUL_CNN
+    flip_state_bit(model, output);
+#endif
 
     my_printf_debug("handle_gemmmerge output" NEWLINE);
     dump_params_debug(model, output);

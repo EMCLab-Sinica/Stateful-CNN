@@ -68,6 +68,12 @@ void dump_matrix(Model* model, ParameterInfo *param, uint16_t offset, uint16_t l
     my_printf(NEWLINE);
 }
 
+static void dump_params_common(const ParameterInfo* cur_param) {
+    my_printf("Slot: %d" NEWLINE, cur_param->slot);
+    my_printf("Scale: %d" NEWLINE, cur_param->scale);
+    my_printf("Params len: %d" NEWLINE, cur_param->params_len);
+}
+
 void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, size_t offset) {
     uint16_t NUM, H, W, CHANNEL;
     // tensor
@@ -75,8 +81,7 @@ void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, size_t offse
     CHANNEL = cur_param->dims[1];
     H = cur_param->dims[2];
     W = cur_param->dims[3];
-    my_printf("Slot: %d" NEWLINE, cur_param->slot);
-    my_printf("Scale: %d" NEWLINE, cur_param->scale);
+    dump_params_common(cur_param);
     for (uint16_t n = 0; n < NUM; n++) {
         my_printf("Matrix %d" NEWLINE, n);
         for (uint16_t tile_c_base = 0; tile_c_base < CHANNEL; tile_c_base += cur_param->tile_c) {
@@ -142,8 +147,7 @@ void dump_params(Model *model, const ParameterInfo *cur_param) {
         NUM = CHANNEL = H = 1;
         W = cur_param->dims[0];
     }
-    my_printf("Slot: %d" NEWLINE, cur_param->slot);
-    my_printf("Scale: %d" NEWLINE, cur_param->scale);
+    dump_params_common(cur_param);
     for (uint16_t i = 0; i < NUM; i++) {
         my_printf("Matrix %d" NEWLINE, i);
         for (uint16_t j = 0; j < CHANNEL; j++) {
@@ -169,6 +173,7 @@ void dump_turning_points(Model *model, const ParameterInfo *output) {
         my_printf("%d is not a normal slot" NEWLINE, output->slot);
         return;
     }
+    my_printf("Initial state bit for slot %d: %d" NEWLINE, output->slot, cur_slot_info->state_bit);
     my_printf("%d turning point(s) for slot %d: ", cur_slot_info->n_turning_points, output->slot);
     for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
         my_printf("%d ", cur_slot_info->turning_points[idx]);

@@ -81,6 +81,8 @@ def load_data_google_speech(start: int, limit: int, for_onnx=True) -> ModelData:
     decoded_wavs = []
     labels = []
     for idx, (decoded_wav, label) in enumerate(dataset):
+        if idx < start:
+            continue
         decoded_wavs.append(np.expand_dims(decoded_wav, axis=-1))
         labels.append(new_labels.index(orig_labels[label]))
         if limit and idx == limit - 1:
