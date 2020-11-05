@@ -197,14 +197,14 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
 static void check_feature_map_states(Model *model, const ParameterInfo* output, uint32_t first_unfinished_value_offset, uint32_t len, const char* func) {
 #if MY_DEBUG >= 1
     uint8_t turning_point_idx = 0;
-    uint16_t next_turning_point = -1;
+    int16_t next_turning_point = -1;
     const SlotInfo* cur_slot_info = get_slot_info(model, output->slot);
     if (turning_point_idx < cur_slot_info->n_turning_points) {
         next_turning_point = cur_slot_info->turning_points[turning_point_idx];
     }
     uint8_t cur_state_bit = get_state_bit(model, output->slot) ^ 1;
     for (uint32_t idx = 0; idx < len; idx++) {
-        if (idx == next_turning_point) {
+        if (idx == static_cast<uint16_t>(next_turning_point)) {
             cur_state_bit ^= 1;
             turning_point_idx++;
             if (turning_point_idx < cur_slot_info->n_turning_points) {

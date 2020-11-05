@@ -120,7 +120,7 @@ void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, 
 }
 
 uint8_t get_newer_model_copy_id(uint16_t version0, uint16_t version1) {
-    if (abs(version0 - version1) == 1) {
+    if (abs(static_cast<int>(version0 - version1)) == 1) {
         if (version0 > version1) {
             return 0;
         } else {

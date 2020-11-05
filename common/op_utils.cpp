@@ -26,7 +26,8 @@ public:
 #if !STATEFUL_CNN
         uint16_t bound = 32768;
 #else
-        uint16_t bound = 8192;
+        // For stateful CNN, values should not reach 8192, or get_value_state_bit() is confused
+        uint16_t bound = 8191;
         int16_t val_offset = 0;
         if (!buffer) {
             // if the buffer is pre-filled (e.g., in GemmMerge), its state bits
@@ -34,10 +35,6 @@ public:
             val_offset = param_state_bit(model, param, offset) ? -16384 : 0;
         }
 #endif
-        if (!*max_multiplier) {
-            *max_multiplier = bound;
-        }
-
         int16_t max_val, min_val;
         uint16_t index;
 
