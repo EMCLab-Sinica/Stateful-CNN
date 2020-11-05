@@ -7,7 +7,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import backend as K
 
-from utils import load_data_cifar10, load_data_google_speech
+from utils import load_data_cifar10, load_data_google_speech, GOOGLE_SPEECH_SAMPLE_RATE
 
 kws_root = pathlib.Path('./data/ML-KWS-for-MCU')
 
@@ -28,7 +28,7 @@ def tensorflow_inference_layer(decoded_wavs, idx):
         tensor = sess.graph.get_tensor_by_name(op.outputs[0].name)
         return sess.run(tensor, {
             'decoded_sample_data:0': decoded_wavs[0],
-            'decoded_sample_data:1': 16000,
+            'decoded_sample_data:1': GOOGLE_SPEECH_SAMPLE_RATE,
         })
 
 def tensorflow_get_intermediate_tensor(graph_def, decoded_wavs):

@@ -60,31 +60,33 @@ def load_data_cifar10(start: int, limit: int) -> ModelData:
         images.append(im)
     return ModelData(labels=labels, images=images)
 
+GOOGLE_SPEECH_URL = 'https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_test_set_v0.02.tar.gz'
+GOOGLE_SPEECH_SAMPLE_RATE = 16000
+
 def load_data_google_speech(start: int, limit: int, for_onnx=True) -> ModelData:
     import tensorflow as tf
-    import tensorflow_datasets as tfds
-    from tensorflow_datasets.audio import speech_commands
+    import torchaudio
 
-    cache_dir = pathlib.Path('~/.cache/tensorflow_datasets').expanduser()
+    cache_dir = pathlib.Path('~/.cache/torchaudio/speech_commands_v2').expanduser()
+    cache_dir.mkdir(parents=True, exist_ok=True)
 
-    builder = tfds.builder('speech_commands', data_dir=cache_dir / 'data')
-    builder.download_and_prepare(download_dir=cache_dir / 'downloads')
-    dataset = builder.as_dataset(split='test', as_supervised=True)
+    dataset = torchaudio.datasets.SPEECHCOMMANDS(root=cache_dir, url=GOOGLE_SPEECH_URL, download=True)
 
     kws_root = pathlib.Path('./data/ML-KWS-for-MCU')
 
-    # The Hello Edge paper uses a different order for labels than Google speech dataset :/
-    orig_labels = speech_commands.WORDS + [speech_commands.SILENCE, speech_commands.UNKNOWN]
     with open(kws_root / 'Pretrained_models' / 'labels.txt') as f:
         new_labels = f.read().strip().split()
 
     decoded_wavs = []
     labels = []
-    for idx, (decoded_wav, label) in enumerate(dataset):
+    # The first few _unknown_ samples are not recognized by Hello Edge's DNN model - use good ones instead
+    for idx, data in enumerate(reversed(dataset)):
         if idx < start:
             continue
-        decoded_wavs.append(np.expand_dims(decoded_wav, axis=-1))
-        labels.append(new_labels.index(orig_labels[label]))
+        waveform, sample_rate, label, _, _ = data
+        assert sample_rate == GOOGLE_SPEECH_SAMPLE_RATE
+        decoded_wavs.append(np.expand_dims(np.squeeze(waveform), axis=-1))
+        labels.append(new_labels.index(label))
         if limit and idx == limit - 1:
             break
     if for_onnx:
@@ -99,7 +101,7 @@ def load_data_google_speech(start: int, limit: int, for_onnx=True) -> ModelData:
             for decoded_wav in decoded_wavs:
                 mfcc = sess.run(mfcc_tensor, {
                     'decoded_sample_data:0': decoded_wav,
-                    'decoded_sample_data:1': 16000,
+                    'decoded_sample_data:1': GOOGLE_SPEECH_SAMPLE_RATE,
                 })
                 mfccs.append(np.expand_dims(mfcc, 0))
 
