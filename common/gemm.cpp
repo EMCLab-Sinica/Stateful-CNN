@@ -32,17 +32,17 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     int16_t total_buffer_size = LEA_BUFFER_SIZE - A->dims[0] * A->dims[1];
     gemm_params.tile_width = B->dims[1];
     while (1) {
-        my_printf_debug("gemm_params.tile_width=%d" NEWLINE, gemm_params.tile_width);
+        my_printf_debug("tile_width=%d" NEWLINE, gemm_params.tile_width);
         /* LEA wants addresses to be 4 byte-aligned, or 2 Q15-aligned */
         gemm_params.tile_channel = (total_buffer_size / gemm_params.tile_width) / 2 * 2;
         for (; gemm_params.tile_channel > 0; gemm_params.tile_channel -= 2) {
             int16_t tmp = upper_gauss(B->dims[0], gemm_params.tile_channel);
-            my_printf_debug("gemm_params.tile_channel=%d, upper_gauss(B->dims[0], gemm_params.tile_channel)=%d" NEWLINE, gemm_params.tile_channel, tmp);
+            my_printf_debug("tile_channel=%d, tmp=%d" NEWLINE, gemm_params.tile_channel, tmp);
             if (total_buffer_size - gemm_params.tile_channel * gemm_params.tile_width >= output_len * tmp) {
                 break;
             }
         }
-        my_printf_debug("gemm_params.tile_channel = %d" NEWLINE, gemm_params.tile_channel);
+        my_printf_debug("tile_channel = %d" NEWLINE, gemm_params.tile_channel);
         if (gemm_params.tile_channel > 0) {
             break;
         }
@@ -190,7 +190,7 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
         }
 #endif
         my_add_q15(buffer_gemm, buffer_temp, buffer_gemm, output_len);
-        my_printf_debug("buffer_gemm" NEWLINE);
+        my_printf_debug("accumulated buffer_gemm" NEWLINE);
         dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
     }
 
@@ -201,7 +201,7 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
 
     my_printf_debug("Find max_multiplier for buffer_gemm" NEWLINE);
     uint16_t max_multiplier_gemm = find_max_multiplier(model, output, buffer_gemm, output_len);
-    my_printf_debug("Find max_multiplier for buffer_gemm" NEWLINE);
+    my_printf_debug("Find max_multiplier for C" NEWLINE);
     uint16_t max_multiplier_c = find_max_multiplier(model, C, buffer_c);
     uint16_t max_multiplier = MIN_VAL(max_multiplier_gemm, max_multiplier_c);
 

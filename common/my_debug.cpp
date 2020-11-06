@@ -71,7 +71,7 @@ void dump_matrix(Model* model, ParameterInfo *param, uint16_t offset, uint16_t l
 static void dump_params_common(const ParameterInfo* cur_param) {
     my_printf("Slot: %d" NEWLINE, cur_param->slot);
     my_printf("Scale: %d" NEWLINE, cur_param->scale);
-    my_printf("Params len: %d" NEWLINE, cur_param->params_len);
+    my_printf("Params len: %" PRId32 NEWLINE, cur_param->params_len);
 }
 
 void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, size_t offset) {
@@ -146,6 +146,10 @@ void dump_params(Model *model, const ParameterInfo *cur_param) {
         // vector
         NUM = CHANNEL = H = 1;
         W = cur_param->dims[0];
+    }
+    if (NUM * CHANNEL * H * W * sizeof(int16_t) != cur_param->params_len) {
+        MY_ASSERT(NUM == 1);
+        NUM = cur_param->params_len / sizeof(int16_t) / (CHANNEL * H * W);
     }
     dump_params_common(cur_param);
     for (uint16_t i = 0; i < NUM; i++) {

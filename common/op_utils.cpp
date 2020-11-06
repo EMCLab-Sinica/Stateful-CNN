@@ -36,6 +36,9 @@ public:
         }
 #endif
         int16_t max_val, min_val;
+        // Apparently TI's compiler does not handle multiplication between
+        // int16_t and uint16_t correctly. Use unsigned everywhere to fix it.
+        uint32_t u_max_val, u_min_val;
         uint16_t index;
 
         const int16_t* cur_buffer;
@@ -54,8 +57,9 @@ public:
 #endif
         my_printf_debug("Max value %d", max_val);
         my_printf_debug(" occurs at index %d" NEWLINE, index);
+        u_max_val = abs(max_val);
         // use > instead of >= as the value may be exactly on the bound
-        while (max_val && abs(max_val) * (*max_multiplier) > bound) {
+        while (max_val && u_max_val * (*max_multiplier) > bound) {
             (*max_multiplier) /= 2;
         }
 
@@ -65,7 +69,8 @@ public:
 #endif
         my_printf_debug("Min value %d", min_val);
         my_printf_debug(" occurs at index %d" NEWLINE, index);
-        while (min_val && abs(min_val) * (*max_multiplier) > bound) {
+        u_min_val = abs(min_val);
+        while (min_val && u_min_val * (*max_multiplier) > bound) {
             (*max_multiplier) /= 2;
         }
         my_printf_debug("Current max_multiplier=%d" NEWLINE, *max_multiplier);
