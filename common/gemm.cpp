@@ -34,7 +34,7 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     while (1) {
         my_printf_debug("tile_width=%d" NEWLINE, gemm_params.tile_width);
         /* LEA wants addresses to be 4 byte-aligned, or 2 Q15-aligned */
-        gemm_params.tile_channel = (total_buffer_size / gemm_params.tile_width) / 2 * 2;
+        gemm_params.tile_channel = (ARM_PSTATE_LEN / gemm_params.tile_width) / 2 * 2;
         for (; gemm_params.tile_channel > 0; gemm_params.tile_channel -= 2) {
             int16_t tmp = upper_gauss(B->dims[0], gemm_params.tile_channel);
             my_printf_debug("tile_channel=%d, tmp=%d" NEWLINE, gemm_params.tile_channel, tmp);
@@ -46,8 +46,13 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
         if (gemm_params.tile_channel > 0) {
             break;
         }
-        gemm_params.tile_width /= 2;
         MY_ASSERT(gemm_params.tile_width % 2 == 0);
+        gemm_params.tile_width /= 2;
+    }
+
+    while (gemm_params.tile_width * gemm_params.tile_channel >= ARM_PSTATE_LEN) {
+        MY_ASSERT(gemm_params.tile_width % 2 == 0);
+        gemm_params.tile_width /= 2;
     }
 
     output->params_len = output_len * upper_gauss(B->dims[0], gemm_params.tile_channel) * sizeof(int16_t);

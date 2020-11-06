@@ -87,8 +87,7 @@ void my_min_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint1
 }
 
 #ifdef USE_ARM_CMSIS
-#define PSTATE_LEN 2048
-static int16_t pState[PSTATE_LEN];
+static int16_t pState[ARM_PSTATE_LEN];
 #endif
 
 void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16_t B_cols, int16_t *pSrcA, int16_t *pSrcB, int16_t *pDst, uint8_t B_transposed) {
@@ -114,7 +113,7 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
     if (B_transposed) {
         status = arm_mat_mult_fast_q15(&A, &B, &C, NULL);
     } else {
-        MY_ASSERT(B_rows * B_cols < PSTATE_LEN);
+        MY_ASSERT(B_rows * B_cols < ARM_PSTATE_LEN);
         status = arm_mat_mult_fast_q15(&A, &B, &C, pState);
     }
     MY_ASSERT(status == ARM_MATH_SUCCESS);
