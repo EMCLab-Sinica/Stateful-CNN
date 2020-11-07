@@ -213,20 +213,22 @@ def get_attr(node, attr_name):
 # Remove Squeeze and Reshape nodes with constants as the input
 replaced_nodes_map = {}
 
+def find_initializer(name):
+    for initializer in g.initializer:
+        if initializer.name == name:
+            return initializer
+
 def replace_squeeze(node, inp):
-    axes = get_attr(node, 'axes')
+    axes_name = node.input[1]
+    axes = find_initializer(axes_name).int64_data
     new_dims = [dim for dim_idx, dim in enumerate(inp.dims) if dim_idx not in axes]
     # Repeated fields cannot be assigned directly
     # https://developers.google.com/protocol-buffers/docs/reference/python-generated#repeated-fields
     inp.dims[:] = new_dims
 
 def replace_reshape(node, inp):
-    new_dims = None
     dims_name = node.input[1]
-    for initializer in g.initializer:
-        if initializer.name == dims_name:
-            new_dims = initializer.int64_data
-            break
+    new_dims = find_initializer(dims_name).int64_data
     assert new_dims
     inp.dims[:] = new_dims
 
@@ -239,12 +241,10 @@ def replace_nodes():
     for n in g.node:
         if n.op_type not in ('Squeeze', 'Reshape'):
             continue
-        for inp in g.initializer:
-            if n.input[0] != inp.name:
-                continue
+        inp = find_initializer(n.input[0])
+        if inp:
             replace_handlers[n.op_type](n, inp)
             replaced_nodes_map[n.output[0]] = n.input[0]
-            break
 
 replace_nodes()
 

@@ -7,7 +7,7 @@
 
 # Install needed Python packages
 
-* `pip3 install numpy onnx`
+* `pip3 install numpy onnx==1.8.0`
 
 If you are using Python 3.6, install one more Python package:
 
