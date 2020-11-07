@@ -119,23 +119,6 @@ void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, 
     }
 }
 
-uint8_t get_newer_model_copy_id(uint16_t version0, uint16_t version1) {
-    if (abs(static_cast<int>(version0 - version1)) == 1) {
-        if (version0 > version1) {
-            return 0;
-        } else {
-            return 1;
-        }
-    } else {
-        if (version0 > version1) {
-            // ex: versions = 65535, 1
-            return 1;
-        } else {
-            return 0;
-        }
-    }
-}
-
 void bump_model_version(Model *model) {
     model->version++;
     if (!model->version) {
@@ -143,4 +126,3 @@ void bump_model_version(Model *model) {
         model->version++;
     }
 }
-

@@ -86,6 +86,7 @@ add_executable(intermittent-cnn
     ${COMMON_SRC_PATH}/cnn_common.cpp
     ${COMMON_SRC_PATH}/my_debug.cpp
     ${COMMON_SRC_PATH}/plat-linux.cpp
+    ${COMMON_SRC_PATH}/platform.cpp
     ${COMMON_SRC_PATH}/my_dsplib.cpp
 )
 target_link_libraries(intermittent-cnn)

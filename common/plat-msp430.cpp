@@ -14,33 +14,6 @@
 #include "data.h"
 #include "my_debug.h"
 
-/* external FRAM layout:
- * 0, +NUM_SLOTS * INTERMEDIATE_VALUES_SIZE: intermediate values
- * INTERMEDIATE_PARAMETERS_INFO_OFFSET, +INTERMEDIATE_PARAMETERS_INFO_DATA_LEN: intermediate parameters info
- * MODEL_OFFSET, +2 * sizeof(Model): two shadow copies of Model
- * FIRST_RUN_OFFSET, +sizeof(uint8_t): first run?
- */
-
-#define INTERMEDIATE_PARAMETERS_INFO_OFFSET 0x70000
-#define MODEL_OFFSET 0x72000
-#define FIRST_RUN_OFFSET 0x72400
-
-static_assert(INTERMEDIATE_PARAMETERS_INFO_OFFSET > NUM_SLOTS * INTERMEDIATE_VALUES_SIZE, "Incorrect external NVM layout");
-static_assert(MODEL_OFFSET > INTERMEDIATE_PARAMETERS_INFO_OFFSET + INTERMEDIATE_PARAMETERS_INFO_DATA_LEN, "Incorrect external NVM layout");
-static_assert(FIRST_RUN_OFFSET > MODEL_OFFSET + 2 * sizeof(Model), "Incorrect external NVM layout");
-
-static uint32_t intermediate_values_offset(uint8_t slot_id) {
-    return 0 + slot_id * INTERMEDIATE_VALUES_SIZE;
-}
-
-static uint32_t intermediate_parameters_info_addr(uint8_t i) {
-    return INTERMEDIATE_PARAMETERS_INFO_OFFSET + i * sizeof(ParameterInfo);
-}
-
-static uint32_t model_addr(uint8_t i) {
-    return MODEL_OFFSET + i * sizeof(Model);
-}
-
 static Counters counters_data;
 Counters *counters() {
     return &counters_data;
@@ -138,66 +111,22 @@ void my_memcpy(void* dest, const void* src, size_t n) {
 #endif
 }
 
-// XXX: consolidate common code between POSIX and MSP430
-void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, const void *src, size_t n) {
+void read_from_nvm(void* vm_buffer, uint32_t nvm_offset, size_t n) {
     SPI_ADDR addr;
-    addr.L = intermediate_values_offset(param->slot) + offset_in_word * sizeof(int16_t);
-    SPI_WRITE(&addr, reinterpret_cast<const uint8_t*>(src), n);
+    addr.L = nvm_offset;
+    SPI_READ(&addr, reinterpret_cast<uint8_t*>(vm_buffer), n);
 }
 
-void my_memcpy_from_intermediate_values(void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n) {
+void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n) {
     SPI_ADDR addr;
-    addr.L = intermediate_values_offset(param->slot) + offset_in_word * sizeof(int16_t);
-    SPI_READ(&addr, reinterpret_cast<uint8_t*>(dest), n);
+    addr.L = nvm_offset;
+    SPI_WRITE(&addr, reinterpret_cast<const uint8_t*>(vm_buffer), n);
 }
 
-ParameterInfo* get_intermediate_parameter_info(uint8_t i) {
-    ParameterInfo* dst = intermediate_parameters_info_vm + i;
+void my_erase(uint32_t nvm_offset, size_t n) {
     SPI_ADDR addr;
-    addr.L = intermediate_parameters_info_addr(i);
-    SPI_READ(&addr, reinterpret_cast<uint8_t*>(dst), sizeof(ParameterInfo));
-    return dst;
-}
-
-void commit_intermediate_parameter_info(uint8_t i) {
-    SPI_ADDR addr;
-    addr.L = intermediate_parameters_info_addr(i);
-    const ParameterInfo* src = intermediate_parameters_info_vm + i;
-    SPI_WRITE(&addr, reinterpret_cast<const uint8_t*>(src), sizeof(ParameterInfo));
-}
-
-static uint8_t get_newer_model_copy_id_extfram(void) {
-    uint16_t version1, version2;
-    SPI_ADDR addr;
-    addr.L = model_addr(0) + offsetof(Model, version);
-    SPI_READ(&addr, reinterpret_cast<uint8_t*>(&version1), sizeof(uint16_t));
-    addr.L = model_addr(1) + offsetof(Model, version);
-    SPI_READ(&addr, reinterpret_cast<uint8_t*>(&version2), sizeof(uint16_t));
-    my_printf_debug("Versions of shadow Model copies: %d, %d" NEWLINE, version1, version2);
-    return get_newer_model_copy_id(version1, version2);
-}
-
-Model* get_model(void) {
-    Model *dst = &model_vm;
-
-    uint8_t newer_model_copy_id = get_newer_model_copy_id_extfram();
-    SPI_ADDR addr;
-    addr.L = model_addr(newer_model_copy_id);
-    SPI_READ(&addr, reinterpret_cast<uint8_t*>(dst), sizeof(Model));
-    my_printf_debug("Using model copy %d, version %d" NEWLINE, newer_model_copy_id, dst->version);
-    return dst;
-}
-
-void commit_model(void) {
-    uint8_t newer_model_copy_id = get_newer_model_copy_id_extfram();
-    uint8_t older_model_copy_id = newer_model_copy_id ^ 1;
-
-    bump_model_version(&model_vm);
-
-    SPI_ADDR addr;
-    addr.L = model_addr(older_model_copy_id);
-    SPI_WRITE(&addr, reinterpret_cast<uint8_t*>(&model_vm), sizeof(Model));
-    my_printf_debug("Committing version %d to model copy %d" NEWLINE, model_vm.version, older_model_copy_id);
+    addr.L = nvm_offset;
+    SPI_FILL_Q15(&addr, 0, n);
 }
 
 void plat_print_results(void) {
@@ -220,34 +149,18 @@ void IntermittentCNNTest() {
     initSPI();
     // testSPI();
 
-    uint8_t first_run = 0;
-    SPI_ADDR addr;
-    addr.L = FIRST_RUN_OFFSET;
-    SPI_READ(&addr, &first_run, 1);
+    uint8_t is_first_run = 0;
+    read_from_nvm(&is_first_run, FIRST_RUN_OFFSET, 1);
 
-    if (first_run) {
+    if (is_first_run) {
         my_printf_debug("First run, resetting everything..." NEWLINE);
 #if DELAY_START_SECONDS > 0
         delay_counter = 0;
 #endif
+        first_run();
 
-#if STATEFUL_CNN
-        addr.L = intermediate_values_offset(0);
-        SPI_FILL_Q15(&addr, 0, INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
-#endif
-        addr.L = intermediate_parameters_info_addr(0);
-        SPI_WRITE(&addr, intermediate_parameters_info_data, INTERMEDIATE_PARAMETERS_INFO_DATA_LEN);
-        addr.L = model_addr(0);
-        SPI_WRITE(&addr, model_data, MODEL_DATA_LEN);
-        addr.L = model_addr(1);
-        SPI_WRITE(&addr, model_data, MODEL_DATA_LEN);
-
-        get_model(); // refresh model_vm
-        commit_model();
-
-        first_run = 0;
-        addr.L = FIRST_RUN_OFFSET;
-        SPI_WRITE(&addr, &first_run, 1);
+        is_first_run = 0;
+        write_to_nvm(&is_first_run, FIRST_RUN_OFFSET, 1);
     }
 
 #if DELAY_START_SECONDS > 0
@@ -271,10 +184,8 @@ void button_pushed(uint16_t button1_status, uint16_t button2_status) {
         return;
     }
 
-    uint8_t first_run = 1;
-    SPI_ADDR addr;
-    addr.L = FIRST_RUN_OFFSET;
-    SPI_WRITE(&addr, &first_run, 1);
+    uint8_t is_first_run = 1;
+    write_to_nvm(&is_first_run, FIRST_RUN_OFFSET, 1);
 
     Model *model = get_model();
     my_printf("%d" NEWLINE, model->run_counter);
