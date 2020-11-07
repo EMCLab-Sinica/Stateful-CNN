@@ -90,6 +90,7 @@ void commit_model(void) {
 }
 
 void first_run(void) {
+    my_printf_debug("First run, resetting everything..." NEWLINE);
 #if STATEFUL_CNN
     my_erase(intermediate_values_offset(0), INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
 #endif

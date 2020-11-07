@@ -22,8 +22,6 @@
 #include <sys/mman.h>
 #include <sys/ptrace.h>
 
-#define MEMCPY_DELAY_US 0
-
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
 
@@ -116,9 +114,6 @@ void my_memcpy(void* dest, const void* src, size_t n) {
     uint16_t counter_idx = counters()->counter_idx;
     counters()->dma_invocations[counter_idx]++;
     counters()->dma_bytes[counter_idx] += n;
-#if MEMCPY_DELAY_US
-    usleep(MEMCPY_DELAY_US);
-#endif
     // my_printf_debug("%s copied %zu bytes" NEWLINE, __func__, n);
     // Not using memcpy here so that it is more likely that power fails during
     // memcpy, which is the case for external FRAM

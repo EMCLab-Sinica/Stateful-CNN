@@ -127,13 +127,6 @@ void my_erase(uint32_t nvm_offset, size_t n) {
     }
 }
 
-#define DELAY_START_SECONDS 0
-
-#if DELAY_START_SECONDS > 0
-#pragma DATA_SECTION(".nvm")
-static uint32_t delay_counter;
-#endif
-
 void IntermittentCNNTest() {
     initSPI();
     // testSPI();
@@ -142,23 +135,11 @@ void IntermittentCNNTest() {
     read_from_nvm(&is_first_run, FIRST_RUN_OFFSET, 1);
 
     if (is_first_run) {
-        my_printf_debug("First run, resetting everything..." NEWLINE);
-#if DELAY_START_SECONDS > 0
-        delay_counter = 0;
-#endif
         first_run();
 
         is_first_run = 0;
         write_to_nvm(&is_first_run, FIRST_RUN_OFFSET, 1);
     }
-
-#if DELAY_START_SECONDS > 0
-    while (delay_counter < DELAY_START_SECONDS) {
-        my_printf("%d" NEWLINE, delay_counter);
-        delay_counter++;
-        __delay_cycles(16E6);
-    }
-#endif
 
     while (1) {
         run_cnn_tests(1);
