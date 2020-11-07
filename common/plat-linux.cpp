@@ -6,6 +6,7 @@
 #include "cnn_common.h"
 #include "my_debug.h"
 #include "platform.h"
+#include "platform-private.h"
 #include "data.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -25,8 +26,6 @@
 
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
-uint16_t dma_invocations[COUNTERS_LEN];
-uint16_t dma_bytes[COUNTERS_LEN];
 
 Counters *counters() {
     return reinterpret_cast<Counters*>(nvm + COUNTERS_OFFSET);
@@ -104,8 +103,8 @@ int main(int argc, char* argv[]) {
     ret = run_cnn_tests(n_samples);
 
     for (uint16_t counter_idx = 0; counter_idx < COUNTERS_LEN; counter_idx++) {
-        dma_invocations[counter_idx] = 0;
-        dma_bytes[counter_idx] = 0;
+        counters()->dma_invocations[counter_idx] = 0;
+        counters()->dma_bytes[counter_idx] = 0;
     }
 
 exit:
@@ -113,21 +112,10 @@ exit:
     return ret;
 }
 
-void plat_print_results(void) {
-    my_printf(NEWLINE "DMA invocations:" NEWLINE);
-    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
-        my_printf("% 8d", dma_invocations[i]);
-    }
-    my_printf(NEWLINE "DMA bytes:" NEWLINE);
-    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
-        my_printf("% 8d", dma_bytes[i]);
-    }
-}
-
 void my_memcpy(void* dest, const void* src, size_t n) {
     uint16_t counter_idx = counters()->counter_idx;
-    dma_invocations[counter_idx]++;
-    dma_bytes[counter_idx] += n;
+    counters()->dma_invocations[counter_idx]++;
+    counters()->dma_bytes[counter_idx] += n;
 #if MEMCPY_DELAY_US
     usleep(MEMCPY_DELAY_US);
 #endif

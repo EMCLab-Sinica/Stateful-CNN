@@ -11,6 +11,7 @@
 #include "intermittent-cnn.h"
 #include "cnn_common.h"
 #include "platform.h"
+#include "platform-private.h"
 #include "data.h"
 #include "my_debug.h"
 
@@ -118,9 +119,6 @@ void my_erase(uint32_t nvm_offset, size_t n) {
     SPI_ADDR addr;
     addr.L = nvm_offset;
     SPI_FILL_Q15(&addr, 0, n);
-}
-
-void plat_print_results(void) {
 }
 
 [[ noreturn ]] void ERROR_OCCURRED(void) {
