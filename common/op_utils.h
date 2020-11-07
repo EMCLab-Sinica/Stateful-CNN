@@ -8,6 +8,12 @@ struct Model;
 struct ParameterInfo;
 struct SlotInfo;
 
+// Try to match JAPARI
+#define DEFAULT_TILE_H 4
+// JAPARI uses tile_c = 8, but we cannot do that as JAPARI
+// uses 1x1 convolution and we use original K-by-K convolution
+#define DEFAULT_TILE_C 4
+
 class ChunkHandler {
 public:
     virtual void handle_chunk(uint32_t output_offset, uint16_t output_chunk_len, uint8_t old_output_state_bit) const = 0;

@@ -163,28 +163,8 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 }
 
 void determine_tile_c(ParameterInfo *param, const ParameterInfo *filter) {
-    // TODO: determine these values automatically
-    uint16_t CHANNEL = param->dims[1], H = param->dims[2];
-    uint16_t kH = 0, INPUT_CHANNEL = 0;
-    if (filter) {
-        INPUT_CHANNEL = filter->dims[1];
-        kH = filter->dims[2];
-    }
-    if (H == 14 && CHANNEL == 8) {
-        param->tile_c = 3;
-    } else if (H == 15 && CHANNEL == 64) {
-        param->tile_c = 32;
-    } else if (H == 7 && CHANNEL == 64 && kH == 3) {
-        param->tile_c = 6;
-    } else if (H == 7 && CHANNEL == 32 && INPUT_CHANNEL == 128 && kH == 1) {
-        param->tile_c = 16;
-    } else if (H == 7 && CHANNEL == 128 && INPUT_CHANNEL == 32 && kH == 1) {
-        param->tile_c = 44;
-    } else if (H == 7 && CHANNEL == 128 && INPUT_CHANNEL == 32 && kH == 3) {
-        param->tile_c = 2;
-    } else if (INPUT_CHANNEL == 256 && kH == 1) {
-        param->tile_c = 4;
-    }
+    uint16_t OUTPUT_CHANNEL = param->dims[1];
+    param->tile_c = MIN_VAL(DEFAULT_TILE_C, OUTPUT_CHANNEL);
 }
 
 #if STATEFUL_CNN

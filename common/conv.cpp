@@ -11,8 +11,6 @@
 #include "intermittent-cnn.h"
 #include "my_dsplib.h"
 
-#define configCONV_STACK_SIZE 100
-
 // TODO: make these adjustable on runtime
 #define OUTPUT_LEN 100
 
@@ -220,6 +218,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     A_cols = B_rows = conv_params->filter_offset;
     B_cols = cur_output_tile_c;
     MY_ASSERT(A_rows * B_cols <= OUTPUT_LEN);
+    MY_ASSERT(input_buffer_addr + A_rows * A_cols <= filter_buffer_addr);
     my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results, 1);
 
     /* START dump data */
@@ -300,9 +299,10 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     int16_t *dest;
     // TEMP_FILTER_WIDTH additional filters for values before transpose
     uint16_t inputs_len = MIN_VAL(
-        LEA_BUFFER_SIZE - OUTPUT_LEN - (conv_params->output->tile_c + TEMP_FILTER_WIDTH) * conv_params->kH * conv_params->dest_offset,
+        LEA_BUFFER_SIZE - OUTPUT_LEN - (conv_params->output->tile_c + TEMP_FILTER_WIDTH) * conv_params->filter_offset,
         (conv_params->H + conv_params->kH - 1) * conv_params->dest_offset
     );
+    MY_ASSERT(inputs_len < LEA_BUFFER_SIZE); // make sure no overflow occurs in the previous line
 
     dest = lea_buffer;
 
@@ -378,7 +378,8 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     // state = 0 as state bits are already removed by my_offset_q15 above
     dump_matrix_debug(lea_buffer, inputs_len, ValueInfo(conv_params->real_conv_input));
 
-    for (uint16_t j = 0; j < conv_params->H - conv_params->offset_h - conv_params->input_h; j += conv_params->stride) {
+    uint16_t cur_tile_h = MIN_VAL(conv_params->H - conv_params->offset_h - conv_params->input_h, conv_params->tile_h);
+    for (uint16_t j = 0; j < cur_tile_h; j += conv_params->stride) {
         // conv_idx is set to initial_c in handle_conv
         convTask(j, conv_params);
         // reset here for further processing
@@ -426,7 +427,6 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     output->dims[3] = conv_params->OUTPUT_W = (W - conv_params->offset_w * 2) / conv_params->stride;
     output->params_len = conv_params->n_tiles_c * OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W * sizeof(int16_t);
     output->flags = TRANSPOSED;
-    output->flags |= conv_params->n_tiles_c << 4;
     output->scale = conv_input->scale * conv_filter->scale;
 }
 
@@ -443,12 +443,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     ConvTaskParams *conv_params = &conv_params_obj;
 
-    conv_params->tile_h = H; // fallback value
-    if (H == 14) {
-        conv_params->tile_h = 14;
-    } else if (H == 28) {
-        conv_params->tile_h = 28;
-    }
+    conv_params->tile_h = MIN_VAL(H, DEFAULT_TILE_H);
 
     MY_ASSERT(conv_params->tile_h / conv_params->stride * conv_params->stride == conv_params->tile_h);
 
@@ -465,8 +460,6 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     conv_params->CHANNEL = CHANNEL;
     conv_params->OUTPUT_CHANNEL = OUTPUT_CHANNEL;
-
-    // TODO: state recovery with partially done MM
 
     uint16_t input_tile_c = conv_input->tile_c;
     output->tile_c = OUTPUT_CHANNEL;
@@ -621,7 +614,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 
     my_printf_debug("ConvMerge!" NEWLINE);
 
-    uint8_t n_tiles_c = data->flags >> 4;
+    uint8_t n_tiles_c = data->params_len / sizeof(int16_t) / (OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W);
 
     MY_ASSERT(n_tiles_c);
 
