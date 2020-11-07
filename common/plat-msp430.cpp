@@ -64,15 +64,6 @@ extern "C" void TA1_0_IRQHandler(void)
 #endif
 }
 
-void setOutputValue(uint8_t value)
-{
-    if (value) {
-        GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN3);
-    } else {
-        GPIO_setOutputLowOnPin(GPIO_PORT_P1, GPIO_PIN3);
-    }
-}
-
 void my_memcpy(void* dest, const void* src, size_t n) {
 #ifdef __MSP430__
     DMA_init(&dma_params); // XXX: DMA not working without this

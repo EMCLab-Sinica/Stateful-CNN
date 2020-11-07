@@ -434,8 +434,6 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     const ParameterInfo *conv_input = input[0], *conv_filter = input[1], *conv_bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 
-    setOutputValue(1);
-
     /* input: N x C x H x W, filter: M x C x kH x kW */
     const uint16_t H = conv_input->dims[2], W = conv_input->dims[3],
                    CHANNEL = conv_filter->dims[1],
@@ -659,8 +657,6 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
     my_printf_debug("After scaling up back and merging tiling results" NEWLINE);
 
     output->scale /= scale_f;
-
-    setOutputValue(0);
 
 #if STATEFUL_CNN
     flip_state_bit(model, output);

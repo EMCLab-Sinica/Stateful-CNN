@@ -31,5 +31,3 @@ Model* get_model(void);
 void commit_model(void);
 void first_run(void);
 void plat_print_results(void);
-void setOutputValue(uint8_t value);
-void registerCheckpointing(uint8_t *addr, size_t len);

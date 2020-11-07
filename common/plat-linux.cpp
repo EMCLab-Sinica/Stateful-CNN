@@ -113,9 +113,6 @@ exit:
     return ret;
 }
 
-void plat_reset_model(void) {
-}
-
 void plat_print_results(void) {
     my_printf(NEWLINE "DMA invocations:" NEWLINE);
     for (uint8_t i = 0; i < counters()->counter_idx; i++) {
@@ -126,8 +123,6 @@ void plat_print_results(void) {
         my_printf("% 8d", dma_bytes[i]);
     }
 }
-
-void setOutputValue(uint8_t) {}
 
 void my_memcpy(void* dest, const void* src, size_t n) {
     uint16_t counter_idx = counters()->counter_idx;
