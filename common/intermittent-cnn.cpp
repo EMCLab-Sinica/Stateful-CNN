@@ -6,8 +6,12 @@
 #include "cnn_common.h"
 #include "data.h"
 #include "my_debug.h"
+#include "my_dsplib.h"
+#include "op_utils.h"
 
 uint16_t sample_idx;
+
+const uint8_t MAX_CLASSES = 20;
 
 static void handle_node(Model *model, uint16_t node_idx) {
     my_printf_debug("Current node: %d, ", node_idx);
@@ -76,7 +80,7 @@ static void handle_node(Model *model, uint16_t node_idx) {
     }
 }
 
-static int run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
+static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     my_printf_debug("N_INPUT = %d" NEWLINE, N_INPUT);
 
     Model *model = get_model();
@@ -110,15 +114,11 @@ static int run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
         *output_node_ptr = output_node;
     }
     int16_t max = INT16_MIN;
-    for (uint16_t i = 0; i < output_node->dims[1]; i++) {
-        int16_t val = get_q15_param(model, output_node, i);
-        if (val > max) {
-            *ansptr = i;
-            max = val;
-        }
-    }
-
-    return 0;
+    uint16_t u_ans;
+    uint8_t buffer_len = MIN_VAL(output_node->dims[1], MAX_CLASSES);
+    my_memcpy_from_param(model, lea_buffer, output_node, 0, buffer_len * sizeof(int16_t));
+    my_max_q15(lea_buffer, buffer_len, &max, &u_ans);
+    *ansptr = u_ans;
 }
 
 #if MY_DEBUG >= 1
