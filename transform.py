@@ -182,6 +182,7 @@ args = parser.parse_args()
 config = configs[args.config]
 if args.all_samples:
     Constants.N_SAMPLES = config['n_all_samples']
+    Constants.NVM_SIZE += config['n_all_samples'] * config['sample_size']
 model_data = config['data_loader'](start=0, limit=Constants.N_SAMPLES)
 
 if args.without_stateful_cnn:

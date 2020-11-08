@@ -106,8 +106,7 @@ uint16_t get_next_slot(Model *model, const ParameterInfo *param) {
 
 void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n) {
     if (param->slot == SLOT_TEST_SET) {
-        // `samples_data` will be re-targeted to samples.bin on PC
-        my_memcpy(dest, samples_data + (sample_idx % PLAT_LABELS_DATA_LEN) * SAMPLE_SIZE + offset_in_word * sizeof(int16_t), n);
+        read_from_samples(dest, offset_in_word, n);
     } else if (param->slot >= SLOT_CONSTANTS_MIN) {
         uint32_t limit;
         const uint8_t *baseptr = get_param_base_pointer(param, &limit);

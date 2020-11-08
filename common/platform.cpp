@@ -2,15 +2,13 @@
 #include "platform-private.h"
 #include "cnn_common.h"
 #include "my_debug.h"
+#include "intermittent-cnn.h" // for sample_idx
 
 // put offset checks here as extra headers are used
-static_assert(INTERMEDIATE_PARAMETERS_INFO_OFFSET > NUM_SLOTS * INTERMEDIATE_VALUES_SIZE, "Incorrect NVM layout");
-static_assert(MODEL_OFFSET > INTERMEDIATE_PARAMETERS_INFO_OFFSET + INTERMEDIATE_PARAMETERS_INFO_DATA_LEN, "Incorrect NVM layout");
-static_assert(FIRST_RUN_OFFSET > MODEL_OFFSET + 2 * sizeof(Model), "Incorrect NVM layout");
-static_assert(COUNTERS_OFFSET > FIRST_RUN_OFFSET + sizeof(uint8_t), "Incorrect NVM layout");
+static_assert(INTERMEDIATE_PARAMETERS_INFO_OFFSET > SAMPLES_OFFSET + SAMPLES_DATA_LEN, "Incorrect NVM layout");
 
 static uint32_t intermediate_values_offset(uint8_t slot_id) {
-    return 0 + slot_id * INTERMEDIATE_VALUES_SIZE;
+    return INTERMEDIATE_VALUES_OFFSET + slot_id * INTERMEDIATE_VALUES_SIZE;
 }
 
 static uint32_t intermediate_parameters_info_addr(uint8_t i) {
@@ -31,6 +29,10 @@ void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, co
 
 void my_memcpy_from_intermediate_values(void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n) {
     read_from_nvm(dest, intermediate_values_offset(param->slot) + offset_in_word * sizeof(int16_t), n);
+}
+
+void read_from_samples(void *dest, uint16_t offset_in_word, size_t n) {
+    read_from_nvm(dest, SAMPLES_OFFSET + (sample_idx % PLAT_LABELS_DATA_LEN) * SAMPLE_SIZE + offset_in_word * sizeof(int16_t), n);
 }
 
 ParameterInfo* get_intermediate_parameter_info(uint8_t i) {
@@ -94,6 +96,8 @@ void first_run(void) {
 #if STATEFUL_CNN
     my_erase(intermediate_values_offset(0), INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
 #endif
+    copy_samples_data();
+
     write_to_nvm(intermediate_parameters_info_data, intermediate_parameters_info_addr(0), INTERMEDIATE_PARAMETERS_INFO_DATA_LEN);
     write_to_nvm(model_data, model_addr(0), MODEL_DATA_LEN);
     write_to_nvm(model_data, model_addr(1), MODEL_DATA_LEN);

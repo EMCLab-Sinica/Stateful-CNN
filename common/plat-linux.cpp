@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/ptrace.h>
+#include <fstream>
 
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
@@ -32,7 +33,7 @@ Counters *counters() {
 int main(int argc, char* argv[]) {
     int ret = 0, opt_ch, button_pushed = 0, read_only = 0, n_samples = 0;
     Model *model;
-    int nvm_fd = -1, samples_fd = -1;
+    int nvm_fd = -1;
 
     while((opt_ch = getopt(argc, argv, "bfr")) != -1) {
         switch (opt_ch) {
@@ -70,13 +71,6 @@ int main(int argc, char* argv[]) {
     nvm = reinterpret_cast<uint8_t*>(mmap(NULL, NVM_SIZE, PROT_READ|PROT_WRITE, read_only ? MAP_PRIVATE : MAP_SHARED, nvm_fd, 0));
     if (nvm == MAP_FAILED) {
         perror("mmap() failed");
-        goto exit;
-    }
-
-    samples_fd = open("samples.bin", O_RDONLY);
-    samples_data = reinterpret_cast<uint8_t*>(mmap(NULL, SAMPLE_SIZE * N_SAMPLES, PROT_READ, MAP_PRIVATE, samples_fd, 0));
-    if (samples_data == MAP_FAILED) {
-        perror("mmap() for samples failed");
         goto exit;
     }
 
@@ -134,6 +128,23 @@ void write_to_nvm(const void *vm_buffer, uint32_t nvm_offset, size_t n) {
 
 void my_erase(uint32_t nvm_offset, size_t n) {
     memset(nvm + nvm_offset, 0, n);
+}
+
+void copy_samples_data(void) {
+    std::ifstream samples_file("samples.bin");
+    const uint16_t samples_buflen = 1024;
+    char samples_buffer[samples_buflen];
+    uint32_t samples_offset = SAMPLES_OFFSET;
+    while (true) {
+        samples_file.read(samples_buffer, samples_buflen);
+        int16_t read_len = samples_file.gcount();
+        write_to_nvm(samples_buffer, samples_offset, read_len);
+        samples_offset += read_len;
+        my_printf_debug("Copied %d bytes of samples data" NEWLINE, read_len);
+        if (read_len < samples_buflen) {
+            break;
+        }
+    }
 }
 
 [[ noreturn ]] void ERROR_OCCURRED(void) {

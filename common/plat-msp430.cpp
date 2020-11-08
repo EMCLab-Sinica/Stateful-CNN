@@ -121,6 +121,10 @@ void my_erase(uint32_t nvm_offset, size_t n) {
     SPI_FILL_Q15(&addr, 0, n);
 }
 
+void copy_samples_data(void) {
+    write_to_nvm(samples_data, SAMPLES_OFFSET, SAMPLES_DATA_LEN);
+}
+
 [[ noreturn ]] void ERROR_OCCURRED(void) {
     for (;;) {
         __no_operation();
