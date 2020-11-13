@@ -1,6 +1,3 @@
-// disable debug code in DSPLib
-//#define MSP_DISABLE_DIAGNOSTICS
-
 #ifndef USE_ARM_CMSIS
 #include <DSPLib.h>
 #endif
@@ -21,7 +18,9 @@
 #define TEMP_FILTER_WIDTH 0
 #endif
 
+#if MY_DEBUG >= 1
 static int16_t last_output_data_offset;
+#endif
 
 /* Better to not use macros
  * https://stackoverflow.com/a/3437484/3786245
@@ -65,7 +64,7 @@ typedef struct ConvTaskParams {
     uint16_t dest_offset;
     uint16_t filter_offset;
     uint8_t truncated;
-#if STATEFUL_CNN
+#if STATEFUL
     int16_t old_output_offset ;
     uint8_t turning_point_idx;
     int16_t next_turning_point;
@@ -85,7 +84,7 @@ static ConvTaskParams conv_params_obj;
 
 int16_t * const matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
 
-#if STATEFUL_CNN
+#if STATEFUL
 static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t cur_output_tile_c, uint16_t len, uint8_t first_round) {
     MY_ASSERT(len < OUTPUT_LEN);
     my_printf_debug("Flipping %d state bits in filters" NEWLINE, len);
@@ -128,7 +127,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             (conv_params->input_h + offset_h) / conv_params->stride * cur_output_tile_c_full +                  // h
             conv_params->conv_idx - conv_params->conv_idx_base;                                                 // c
 
-#if STATEFUL_CNN
+#if STATEFUL
     SlotInfo *cur_slot_info = conv_params->cur_slot_info;
     int16_t n_keep_state_bits = cur_output_tile_c;
     uint8_t need_cleanup_state_bits = 0;
@@ -166,7 +165,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                     cur_filter_src_offset += conv_params->CHANNEL;
                 }
             }
-#if STATEFUL_CNN
+#if STATEFUL
             if ((!conv_params->old_output_offset && idx < n_keep_state_bits) || (conv_params->old_output_offset && idx >= n_keep_state_bits)) {
                 my_printf_debug("Adding state bit for newly loaded filter idx=%d" NEWLINE, idx);
                 filter_tmp[conv_params->filter_offset - 1] = -0x4000;
@@ -200,7 +199,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         conv_params->cached_filter_idx = conv_params->conv_idx;
         conv_params->cached_input_tile_c_offset = conv_params->input_tile_c_offset;
     } else {
-#if STATEFUL_CNN
+#if STATEFUL
         if (n_keep_state_bits != cur_output_tile_c) {
             need_cleanup_state_bits = 1;
             int16_t n_flip_state_bits = cur_output_tile_c - n_keep_state_bits;
@@ -249,14 +248,20 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #endif
     /* END dump data */
 
+#if MY_DEBUG >= 1
     my_printf_debug("output_data offset = %d" NEWLINE, cur_output_data_offset);
     MY_ASSERT(cur_output_data_offset > last_output_data_offset);
     last_output_data_offset = cur_output_data_offset;
+#endif
 
     MY_ASSERT(cur_output_data_offset + cur_output_tile_c < INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
     my_memcpy_to_param(conv_params->output, cur_output_data_offset, matrix_mpy_results, cur_output_tile_c * sizeof(int16_t));
 
-#if STATEFUL_CNN
+#if HAWAII
+    write_hawaii_layer_footprint(conv_params->model->layer_idx, cur_output_data_offset);
+#endif
+
+#if STATEFUL
     if (n_keep_state_bits != cur_output_tile_c) {
         check_next_turning_point(conv_params->old_output_offset, conv_params->turning_point_idx,
                                  conv_params->next_turning_point, conv_params->cur_slot_info, cur_output_data_offset + cur_output_tile_c);
@@ -323,7 +328,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
                     static_cast<int>(dest - lea_buffer));
     int16_t input_src_offset;
     input_src_offset = input_offset + (conv_params->input_h + h_start) * conv_params->W * conv_params->cur_input_tile_c + (conv_params->input_w + w_start) * conv_params->cur_input_tile_c;
-#if STATEFUL_CNN
+#if STATEFUL
     dump_turning_points_debug(model, conv_params->real_conv_input);
 
     int16_t offset, next_turning_point;
@@ -338,7 +343,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
             model, dest_addr,
             conv_params->real_conv_input, input_src_offset,
             size * sizeof(int16_t));
-#if STATEFUL_CNN
+#if STATEFUL
         int16_t input_src_offset_end = input_src_offset + size;
         if (offset) {
             MY_ASSERT(static_cast<uint16_t>(next_turning_point) > input_src_offset);
@@ -351,7 +356,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
 #endif
         dest += conv_params->dest_offset;
         input_src_offset += conv_params->W * conv_params->cur_input_tile_c;
-#if STATEFUL_CNN
+#if STATEFUL
         check_next_turning_point(offset, turning_point_idx, next_turning_point, input_slot_info, input_src_offset);
 #endif
     }
@@ -361,7 +366,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         float_to_scale_params(&scaleFract, &shift, 1.0f * conv_params->real_conv_input->scale / conv_params->conv_input->scale);
         my_scale_q15(lea_buffer, scaleFract, shift, lea_buffer, inputs_len);
     }
-#if STATEFUL_CNN && MY_DEBUG >= 2
+#if STATEFUL && MY_DEBUG >= 2
     int16_t *ptr = lea_buffer;
     for (size_t idx = 0; idx < inputs_len; idx++) {
         MY_ASSERT(!get_value_state_bit(*ptr));
@@ -465,7 +470,9 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     uint16_t output_tile_c = output->tile_c;
     my_printf_debug("output_tile_c = %d" NEWLINE, output_tile_c);
 
+#if MY_DEBUG >= 1
     last_output_data_offset = -1;
+#endif
 
     conv_params->input_tile_c_offset = 0;
     conv_params->input_tile_c_index = 0;
@@ -473,14 +480,22 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     conv_params->input_h = conv_params->offset_h;
     conv_params->conv_idx_base = 0;
     conv_params->conv_idx = 0;
-#if STATEFUL_CNN
-    // Force recovery from an even OFM index as most DSPLib function does not like odd dimensions
-    uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output) / 2 * 2;
+#if INTERMITTENT
 
+#if STATEFUL
+    uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
+#elif HAWAII
+    uint32_t first_unfinished_value_offset = read_hawaii_layer_footprint(model->layer_idx);
+#endif
+    // Force recovery from an even OFM index as most DSPLib function does not like odd dimensions
+    first_unfinished_value_offset = first_unfinished_value_offset / 2 * 2;
+
+#if STATEFUL
     find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point,
                            &conv_params->cur_slot_info, first_unfinished_value_offset, model, output);
 
     my_printf_debug("old_output_offset = %d" NEWLINE, conv_params->old_output_offset);
+#endif
 
     // Dimensions: channel-tiled NWHC
     uint16_t slice_size_input_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL;
@@ -539,7 +554,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         conv_params->conv_idx = conv_params->conv_idx_base = 0;
     }
 
-#if STATEFUL_CNN
+#if STATEFUL
     flip_state_bit(model, output);
 #endif
 
@@ -633,7 +648,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
             int16_t *to_add = lea_buffer + input_tile_c_index * chunk_len;
             uint16_t data_offset = input_tile_c_index * tiling_results_len + tiling_results_offset;
             my_memcpy_from_param(model, to_add, data, data_offset, real_chunk_len * sizeof(int16_t));
-#if STATEFUL_CNN
+#if STATEFUL
             iterate_chunks(model, data, data_offset, real_chunk_len, ConvMergeInputChunkHandler(to_add, data_offset));
 #endif
             // scale up results as in convolution values are scaled down twice (input & weights)
@@ -648,7 +663,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
                 my_add_q15(lea_buffer, to_add, lea_buffer, real_chunk_len);
             }
         }
-#if STATEFUL_CNN
+#if STATEFUL
         iterate_chunks(model, output, tiling_results_offset, real_chunk_len, ConvMergeOutputChunkHandler(tiling_results_offset));
 #endif
         my_memcpy_to_param(output, tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));
@@ -658,7 +673,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 
     output->scale /= scale_f;
 
-#if STATEFUL_CNN
+#if STATEFUL
     flip_state_bit(model, output);
 #endif
 

@@ -40,7 +40,6 @@ class Constants:
     NODE_NAME_LEN = 18
     EXTRA_INFO_LEN = 3  # for memory alignment
     TURNING_POINTS_LEN = 8
-    STATEFUL_CNN = 1
     MODEL_NODES_LEN = 0
     INPUTS_DATA_LEN = 0
     NUM_INPUTS = 3
@@ -48,6 +47,10 @@ class Constants:
     # Match the size of external FRAM
     NVM_SIZE = 512 * 1024
     N_SAMPLES = 20
+
+    STATEFUL = 0
+    HAWAII = 0
+    INTERMITTENT = 0
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
@@ -175,9 +178,12 @@ configs = {
 
 parser = argparse.ArgumentParser()
 parser.add_argument('config', choices=configs.keys())
-parser.add_argument('--without-stateful-cnn', action='store_true')
 parser.add_argument('--all-samples', action='store_true')
 parser.add_argument('--write-images', action='store_true')
+intermittent_methodology = parser.add_mutually_exclusive_group(required=True)
+intermittent_methodology.add_argument('--baseline', action='store_true')
+intermittent_methodology.add_argument('--hawaii', action='store_true')
+intermittent_methodology.add_argument('--stateful', action='store_true')
 args = parser.parse_args()
 config = configs[args.config]
 if args.all_samples:
@@ -185,8 +191,11 @@ if args.all_samples:
     Constants.NVM_SIZE += config['n_all_samples'] * config['sample_size']
 model_data = config['data_loader'](start=0, limit=Constants.N_SAMPLES)
 
-if args.without_stateful_cnn:
-    Constants.STATEFUL_CNN = 0
+if args.stateful:
+    Constants.STATEFUL = 1
+if args.hawaii:
+    Constants.HAWAII = 1
+Constants.INTERMITTENT = Constants.STATEFUL | Constants.HAWAII
 
 onnx_model = onnx.load(config['onnx_model'])
 try:
@@ -403,7 +412,7 @@ model.write(to_bytes(0))  # Model.running
 model.write(to_bytes(0))  # Model.run_counter
 model.write(to_bytes(0))  # Model.layer_idx
 for _ in range(config['num_slots']): # Model.slots_info
-    if Constants.STATEFUL_CNN:
+    if Constants.STATEFUL:
         model.write(to_bytes(0, size=8)) # SlotInfo.state_bit
         model.write(to_bytes(0, size=8)) # SlotInfo.n_turning_points
         for __ in range(Constants.TURNING_POINTS_LEN):
@@ -419,18 +428,21 @@ class ParametersSlot:
 
 parameters_slot = ParametersSlot(offset=0, target=outputs['parameters'], slot_id=Constants.SLOT_PARAMETERS)
 
+output_nodes = outputs['nodes']
 for node in graph:
     node_name = node.name[:Constants.NODE_NAME_LEN]
-    outputs['nodes'].write(node_name.encode('ascii') + b'\0' * (Constants.NODE_NAME_LEN - len(node_name)))
-    outputs['nodes'].write(to_bytes(len(node.inputs)))
+    output_nodes.write(node_name.encode('ascii') + b'\0' * (Constants.NODE_NAME_LEN - len(node_name)))
+    output_nodes.write(to_bytes(len(node.inputs)))
     assert len(node.inputs) <= Constants.NUM_INPUTS
     for inp in node.inputs:
-        outputs['nodes'].write(to_bytes(inp))
+        output_nodes.write(to_bytes(inp))
     for _ in range(Constants.NUM_INPUTS - len(node.inputs)):
-        outputs['nodes'].write(to_bytes(0))
-    outputs['nodes'].write(to_bytes(node.max_output_id))
-    outputs['nodes'].write(to_bytes(list(ops.keys()).index(node.op_type)))
-    outputs['nodes'].write(to_bytes(node.flags.as_bytes))
+        output_nodes.write(to_bytes(0))
+    output_nodes.write(to_bytes(node.max_output_id))
+    output_nodes.write(to_bytes(list(ops.keys()).index(node.op_type)))
+    output_nodes.write(to_bytes(node.flags.as_bytes))
+    if Constants.HAWAII:
+        output_nodes.write(to_bytes(0))  # footprint
 
 parameter_info_idx = 0
 

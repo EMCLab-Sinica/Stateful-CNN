@@ -93,7 +93,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     my_memcpy_from_param(model, buffer_a, A, 0, A_len * sizeof(uint16_t));
 
-#if STATEFUL_CNN
+#if STATEFUL
     iterate_chunks(model, A, 0, 0, GemmInputChunkHandler(buffer_a));
 
     int16_t offset, next_output_turning_point;
@@ -131,7 +131,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             my_matrix_mpy_q15(1, tile_channels, tile_channels, tile_width, buffer_a + i, buffer_b, buffer_temp, 0);
 
             int16_t output_offset = tile * output_len + j;
-#if STATEFUL_CNN
+#if STATEFUL
             check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
             uint16_t tile_width_first = tile_width;
             if (next_output_turning_point > 0) {
@@ -153,7 +153,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         }
     }
 
-#if STATEFUL_CNN
+#if STATEFUL
     flip_state_bit(model, output);
 #endif
 
@@ -186,7 +186,7 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
 
     for (uint16_t tile = 0; tile < n_tiles; tile++) {
         my_memcpy_from_param(model, buffer_temp, input[0], tile * output_len, output_len * sizeof(int16_t));
-#if STATEFUL_CNN
+#if STATEFUL
         // XXX: use LEA?
         for (uint16_t idx = 0; idx < output_len; idx++) {
             if (get_value_state_bit(buffer_temp[idx])) {
@@ -235,13 +235,13 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
 
     output->scale /= max_multiplier;
 
-#if STATEFUL_CNN
+#if STATEFUL
     iterate_chunks(model, output, 0, 0, OutputChunkHandler(buffer_gemm));
 #endif
 
     my_memcpy_to_param(output, 0, buffer_gemm, output->params_len);
 
-#if STATEFUL_CNN
+#if STATEFUL
     flip_state_bit(model, output);
 #endif
 

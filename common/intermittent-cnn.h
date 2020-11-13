@@ -9,7 +9,7 @@ extern uint16_t sample_idx;
 struct ParameterInfo;
 struct Model;
 uint8_t run_cnn_tests(uint16_t n_samples);
-#if STATEFUL_CNN
+#if STATEFUL
 uint8_t get_state_bit(struct Model *model, uint8_t slot_id);
 static inline uint8_t get_value_state_bit(int16_t val) {
     MY_ASSERT(-0x2000 <= val && val < 0x6000,

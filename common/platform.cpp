@@ -5,7 +5,7 @@
 #include "intermittent-cnn.h" // for sample_idx
 
 // put offset checks here as extra headers are used
-static_assert(INTERMEDIATE_PARAMETERS_INFO_OFFSET > SAMPLES_OFFSET + SAMPLES_DATA_LEN, "Incorrect NVM layout");
+static_assert(NODES_OFFSET > SAMPLES_OFFSET + SAMPLES_DATA_LEN, "Incorrect NVM layout");
 
 static uint32_t intermediate_values_offset(uint8_t slot_id) {
     return INTERMEDIATE_VALUES_OFFSET + slot_id * INTERMEDIATE_VALUES_SIZE;
@@ -93,7 +93,7 @@ void commit_model(void) {
 
 void first_run(void) {
     my_printf_debug("First run, resetting everything..." NEWLINE);
-#if STATEFUL_CNN
+#if STATEFUL
     my_erase(intermediate_values_offset(0), INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
 #endif
     copy_samples_data();
@@ -105,3 +105,21 @@ void first_run(void) {
     get_model(); // refresh model_vm
     commit_model();
 }
+
+#if HAWAII
+static uint32_t hawaii_layer_footprint_offset(uint16_t layer_idx) {
+    return NODES_OFFSET + layer_idx * sizeof(Node) + offsetof(Node, footprint);
+}
+
+void write_hawaii_layer_footprint(uint16_t layer_idx, int16_t footprint) {
+    write_to_nvm(&footprint, hawaii_layer_footprint_offset(layer_idx), sizeof(int16_t));
+    my_printf_debug("Write HAWAII layer footprint %d for layer %d" NEWLINE, footprint, layer_idx);
+}
+
+int16_t read_hawaii_layer_footprint(uint16_t layer_idx) {
+    int16_t footprint = 0;
+    read_from_nvm(&footprint, hawaii_layer_footprint_offset(layer_idx), sizeof(int16_t));
+    my_printf_debug("HAWAII layer footprint=%d for layer %d" NEWLINE, footprint, layer_idx);
+    return footprint;
+}
+#endif

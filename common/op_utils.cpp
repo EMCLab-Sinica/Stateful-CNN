@@ -23,7 +23,7 @@ public:
         : model(_model), param(_param), buffer(_buffer), max_multiplier(_max_multiplier) {}
 
     void handle_chunk(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
-#if !STATEFUL_CNN
+#if !STATEFUL
         uint16_t bound = 32768;
 #else
         // For stateful CNN, values should not reach 8192, or get_value_state_bit() is confused
@@ -52,7 +52,7 @@ public:
         dump_matrix_debug(cur_buffer, real_chunk_len, ValueInfo(param));
 
         my_max_q15(cur_buffer, real_chunk_len, &max_val, &index);
-#if STATEFUL_CNN
+#if STATEFUL
         max_val += val_offset;
 #endif
         my_printf_debug("Max value %d", max_val);
@@ -64,7 +64,7 @@ public:
         }
 
         my_min_q15(cur_buffer, real_chunk_len, &min_val, &index);
-#if STATEFUL_CNN
+#if STATEFUL
         min_val += val_offset;
 #endif
         my_printf_debug("Min value %d", min_val);
@@ -114,7 +114,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
     uint8_t state_bit = 0;
 
     uint16_t cur_chunk_len;
-#if STATEFUL_CNN
+#if STATEFUL
     dump_turning_points_debug(model, param);
 
     state_bit = get_state_bit(model, param->slot);
@@ -139,7 +139,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 #endif
     for (uint32_t offset = start_offset; offset < params_len; offset += cur_chunk_len) {
         cur_chunk_len = MIN_VAL(chunk_len, params_len - offset);
-#if STATEFUL_CNN
+#if STATEFUL
         uint8_t next_state_flipped = 0;
         // Use <= here as turning_point_idx is actually index for the _next_ turning point
         if (next_turning_point > 0 && turning_point_idx <= cur_slot_info->n_turning_points) {
@@ -154,7 +154,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 #endif
         MY_ASSERT(cur_chunk_len != 0);
         chunk_handler.handle_chunk(offset, cur_chunk_len, state_bit);
-#if STATEFUL_CNN
+#if STATEFUL
         if (next_state_flipped) {
             state_bit ^= 1;
         }
@@ -167,7 +167,7 @@ void determine_tile_c(ParameterInfo *param, const ParameterInfo *filter) {
     param->tile_c = MIN_VAL(DEFAULT_TILE_C, OUTPUT_CHANNEL);
 }
 
-#if STATEFUL_CNN
+#if STATEFUL
 void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param) {
     *p_offset = get_state_bit(model, param->slot) ? 0x4000 : 0;
     *p_turning_point_idx = 0;

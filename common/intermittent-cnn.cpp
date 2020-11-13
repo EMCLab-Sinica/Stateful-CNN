@@ -44,14 +44,14 @@ static void handle_node(Model *model, uint16_t node_idx) {
         my_printf_debug("New params_offset = %d" NEWLINE, output->params_offset);
     }
 
-#if STATEFUL_CNN
+#if STATEFUL
     my_printf_debug("Old output state bit=%d" NEWLINE, get_state_bit(model, output->slot));
 #endif
     handlers[cur_node->op_type](model, input, output, &cur_node->flags);
     // For some operations (e.g., ConvMerge), scale is determined in the handlers
     my_printf_debug("Output scale = %d" NEWLINE, output->scale);
     MY_ASSERT(output->scale > 0);  // fail when overflow
-#if STATEFUL_CNN
+#if STATEFUL
     my_printf_debug("New output state bit=%d" NEWLINE, get_state_bit(model, output->slot));
 #endif
 
@@ -92,7 +92,13 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
             SlotInfo *cur_slot_info = get_slot_info(model, idx);
             cur_slot_info->user = -1;
         }
+#if HAWAII
+        for (uint16_t node_idx = 0; node_idx < MODEL_NODES_LEN; node_idx++) {
+            write_hawaii_layer_footprint(node_idx, 0);
+        }
+#endif
         model->running = 1;
+        commit_model();
     }
 
     counters()->power_counters[counters()->counter_idx]++;
@@ -199,7 +205,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
     return 0;
 }
 
-#if STATEFUL_CNN
+#if STATEFUL
 
 static void check_feature_map_states(Model *model, const ParameterInfo* output, uint32_t first_unfinished_value_offset, uint32_t len, const char* func) {
 #if MY_DEBUG >= 1

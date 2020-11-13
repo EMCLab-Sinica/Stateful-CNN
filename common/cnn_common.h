@@ -21,10 +21,13 @@ typedef struct Node {
     uint16_t max_output_id;
     uint16_t op_type;
     NodeFlags flags;
+#if HAWAII
+    int16_t footprint;
+#endif
 } Node;
 
 // _Static_assert in C11 or static_assert in C++11 requires the message
-static_assert(sizeof(Node) == 32, "Unexpected size for Node");
+static_assert(sizeof(Node) == 32 + HAWAII * 2, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct ParameterInfo {
@@ -58,7 +61,7 @@ static_assert(sizeof(ParameterInfo) == 28, "Unexpected size for ParameterInfo");
 
 typedef struct SlotInfo {
     SlotInfo() {}
-#if STATEFUL_CNN
+#if STATEFUL
     uint8_t state_bit;
     uint8_t n_turning_points;
     uint16_t turning_points[TURNING_POINTS_LEN];
@@ -74,7 +77,7 @@ typedef struct Model {
     uint16_t version; // must be the last field in this struct
 } Model;
 
-static_assert(sizeof(Model) == 8 + NUM_SLOTS * (2 + STATEFUL_CNN * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
+static_assert(sizeof(Model) == 8 + NUM_SLOTS * (2 + STATEFUL * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
 
 #define COUNTERS_LEN 64
 typedef struct {

@@ -41,7 +41,7 @@ static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, c
         for (uint16_t sW = 0; sW < kernel_size; sW++) {
             uint16_t val_offset = (output_h*stride+sH) * offset_h + (output_w*stride+sW) * offset_w + c;
             int16_t val = get_q15_param(model, data, val_offset);
-#if STATEFUL_CNN
+#if STATEFUL
             if (get_value_state_bit(val)) {
                 // assuming input state bits are correct...
                 val -= 0x4000;
@@ -85,10 +85,14 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     uint16_t output_h = 0, output_w = 0, c = 0;
     uint16_t output_offset = 0;
 
-#if STATEFUL_CNN
+#if INTERMITTENT
     uint16_t initial_real_tile_c;
 
+#if STATEFUL
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
+#elif HAWAII
+    uint32_t first_unfinished_value_offset = read_hawaii_layer_footprint(model->layer_idx);
+#endif
     if (first_unfinished_value_offset * sizeof(int16_t) == output->params_len) {
         // give up early, or initial_real_tile_c may be zero and results in SIGFPE
         goto finished;
@@ -99,11 +103,13 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 
     tile_c_offset = initial_n * tile_c;
 
+#if STATEFUL
     int16_t offset, next_output_turning_point;
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
     offset ^= 0x4000;
+#endif
 
     initial_real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
     output_offset = first_unfinished_value_offset;
@@ -138,11 +144,14 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                     for (; c < real_tile_c; c++) {
                         int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
                         my_printf_debug("output_offset=%d" NEWLINE, output_offset);
-#if STATEFUL_CNN
+#if STATEFUL
                         check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
                         max_val += offset;
 #endif
                         put_q15_param(output, output_offset, max_val);
+#if HAWAII
+                        write_hawaii_layer_footprint(model->layer_idx, output_offset);
+#endif
                         output_offset++;
                     }
                     c = 0;
@@ -157,11 +166,14 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                     for (; output_w < new_W; output_w++) {
                         int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
                         my_printf_debug("output_offset=%d" NEWLINE, output_offset);
-#if STATEFUL_CNN
+#if STATEFUL
                         check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
                         max_val += offset;
 #endif
                         put_q15_param(output, output_offset, max_val);
+#if HAWAII
+                        write_hawaii_layer_footprint(model->layer_idx, output_offset);
+#endif
                         output_offset++;
                     }
                     output_w = 0;
@@ -174,8 +186,8 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 
     MY_ASSERT(output_offset == output->params_len / sizeof(int16_t));
 
-#if STATEFUL_CNN
 finished:
+#if STATEFUL
     flip_state_bit(model, output);
 #endif
 
@@ -212,7 +224,7 @@ void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *outpu
     my_memcpy_from_param(model, buffer_a, A, 0, output->params_len);
     my_memcpy_from_param(model, buffer_b, B, 0, output->params_len);
 
-#if STATEFUL_CNN
+#if STATEFUL
     // XXX: use LEA?
     for (uint16_t idx = 0; idx < vector_size; idx++) {
         if (get_value_state_bit(buffer_a[idx])) {
@@ -235,13 +247,13 @@ void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *outpu
     }
     my_add_q15(buffer_a, buffer_b, buffer_a, vector_size);
 
-#if STATEFUL_CNN
+#if STATEFUL
     iterate_chunks(model, output, 0, vector_size, OutputChunkHandler(buffer_a));
 #endif
 
     my_memcpy_to_param(output, 0, buffer_a, output->params_len);
 
-#if STATEFUL_CNN
+#if STATEFUL
     flip_state_bit(model, output);
 #endif
 
@@ -267,21 +279,26 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     MY_ASSERT(bitwidth == 16);
     int16_t data_len = X->params_len / (bitwidth / 8);
 
-#if STATEFUL_CNN
-#endif
-
     uint16_t data_offset = 0;
     uint16_t output_offset = 0;
-#if STATEFUL_CNN
+#if INTERMITTENT
+
+#if STATEFUL
     uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
+#elif HAWAII
+    uint32_t first_unfinished_value_offset = read_hawaii_layer_footprint(model->layer_idx);
+#endif
     data_offset += first_unfinished_value_offset;
     output_offset += first_unfinished_value_offset;
 
+#if STATEFUL
     int16_t offset, next_output_turning_point;
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
     offset ^= 0x4000;
+#endif
+
 #endif
 
     my_printf_debug("handle_relu input" NEWLINE);
@@ -291,7 +308,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         // TODO: state-aware recovery
         uint16_t H = X->dims[2], W = X->dims[3];
         uint16_t output_h = 0, output_w = 0, c = 0;
-#if STATEFUL_CNN
+#if STATEFUL
         output_h = first_unfinished_value_offset / (W * CHANNEL);
         first_unfinished_value_offset %= (W * CHANNEL);
         output_w = first_unfinished_value_offset / CHANNEL;
@@ -310,7 +327,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     int16_t val_offset = input_tile_c_index * W * H * X->tile_c + output_w * H * cur_input_tile_c + output_h * cur_input_tile_c + input_tile_c_offset;
                     int16_t input_val = get_q15_param(model, X, val_offset);
                     output_offset = output_h * W * CHANNEL + output_w * CHANNEL + c;
-#if STATEFUL_CNN
+#if STATEFUL
                     // assuming input state bits are correct...
                     if (get_value_state_bit(input_val)) {
                         input_val -= 0x4000;
@@ -318,11 +335,11 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
 #endif
                     int16_t output_val = MAX_VAL(input_val, 0);
-#if STATEFUL_CNN
+#if STATEFUL
                     output_val += offset;
 #endif
                     put_q15_param(output, output_offset, output_val);
-#if STATEFUL_CNN
+#if STATEFUL
                     my_printf_debug(
                         "output_h=% 3d, output_w=% 3d, c=% 3d, val_offset=% 6d, offset=% 6d, input val=% 6d, output_offset=% 6d, output val=% 6d" NEWLINE,
                         output_h, output_w, c, val_offset, offset, input_val, output_offset, output_val);
@@ -330,6 +347,9 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     my_printf_debug(
                         "output_h=% 3d, output_w=% 3d, c=% 3d, val_offset=% 6d, input val=% 6d, output_offset=% 6d, output val=% 6d" NEWLINE,
                         output_h, output_w, c, val_offset, input_val, output_offset, output_val);
+#endif
+#if HAWAII
+                    write_hawaii_layer_footprint(model->layer_idx, output_offset);
 #endif
                 }
                 c = 0;
@@ -341,17 +361,20 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         uint16_t i = 0;
         for (; i < data_len; i++) {
             int16_t input_val = get_q15_param(model, X, data_offset);
-#if STATEFUL_CNN
+#if STATEFUL
             if (get_value_state_bit(input_val)) {
                 input_val -= 0x4000;
             }
             check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
 #endif
             int16_t output_val = MAX_VAL(input_val, 0);
-#if STATEFUL_CNN
+#if STATEFUL
             output_val += offset;
 #endif
             put_q15_param(output, output_offset, output_val);
+#if HAWAII
+            write_hawaii_layer_footprint(model->layer_idx, output_offset);
+#endif
             data_offset++;
             output_offset++;
         }
@@ -359,7 +382,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     output->tile_c = CHANNEL;
 
-#if STATEFUL_CNN
+#if STATEFUL
     flip_state_bit(model, output);
 #endif
 
@@ -507,7 +530,7 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
 
     const ParameterInfo *data = input[0];
 
-#if STATEFUL_CNN
+#if STATEFUL
     int16_t offset, next_output_turning_point;
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
@@ -523,7 +546,7 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
             for (uint16_t w = 0; w < W; w++) {
                 // Input is from Conv, which uses NHWC
                 int16_t val = get_q15_param(model, data, h * W * CHANNEL + w * CHANNEL + c);
-#if STATEFUL_CNN
+#if STATEFUL
                 if (get_value_state_bit(val)) {
                     val -= 0x4000;
                 }
@@ -532,14 +555,14 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
             }
         }
         int16_t avg = total / len;
-#if STATEFUL_CNN
+#if STATEFUL
         check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, c);
         avg += offset;
 #endif
         put_q15_param(output, c, avg);
     }
 
-#if STATEFUL_CNN
+#if STATEFUL
     flip_state_bit(model, output);
 #endif
 

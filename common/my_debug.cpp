@@ -19,7 +19,7 @@ static void print_q15(int16_t val, const ValueInfo& val_info) {
         my_printf("% 6d ", val);
     } else {
         uint8_t use_prefix = 0;
-#if STATEFUL_CNN
+#if STATEFUL
         if (val != -0x8000) {
             if (val < -0x2000) {
                 // happens in the last value of each filter column (state embedding)
@@ -170,7 +170,7 @@ void dump_params(Model *model, const ParameterInfo *cur_param) {
     }
 }
 
-#if STATEFUL_CNN
+#if STATEFUL
 void dump_turning_points(Model *model, const ParameterInfo *output) {
     SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
     if (!cur_slot_info) {
