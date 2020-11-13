@@ -301,8 +301,8 @@ uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offse
 
 static uint8_t after_recovery = 1;
 
-uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
-#if MY_DEBUG >= 1
+uint32_t run_recovery(Model *model, ParameterInfo *output) {
+#if MY_DEBUG < 1
     if (!after_recovery) {
         return 0;
     }
@@ -360,4 +360,20 @@ uint32_t recovery_from_state_bits(Model *model, ParameterInfo *output) {
     return first_unfinished_value_offset;
 }
 
+#endif
+
+#if HAWAII
+uint32_t run_recovery(Model* model, ParameterInfo*) {
+    return read_hawaii_layer_footprint(model->layer_idx);
+}
+#endif
+
+#if JAPARI
+int16_t get_layer_sign(Model *model) {
+    return get_node(model->layer_idx)->layer_sign;
+}
+uint32_t run_recovery(Model *model, ParameterInfo *output) {
+    // TODO
+    return 0;
+}
 #endif

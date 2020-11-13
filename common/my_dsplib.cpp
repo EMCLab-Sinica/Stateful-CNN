@@ -90,13 +90,14 @@ void my_min_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint1
 static int16_t pState[ARM_PSTATE_LEN];
 #endif
 
-void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16_t B_cols, int16_t *pSrcA, int16_t *pSrcB, int16_t *pDst, uint8_t B_transposed) {
-#ifndef USE_ARM_CMSIS
+void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16_t B_cols, int16_t *pSrcA, int16_t *pSrcB, int16_t *pDst) {
     // XXX: LEA doc requires all matrix dimensions to be even, while LEA
     // appears to still give correct results when srcARows is odd
     // srcBCols should really be even, though
     // http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/716353?MSP430FR5992-MSP-DSPLib-msp-matrix-mpy-q15
     MY_ASSERT((A_cols & 1) || (B_cols & 1) == 0);
+    MY_ASSERT(B_rows * B_cols < ARM_PSTATE_LEN);
+#ifndef USE_ARM_CMSIS
     msp_matrix_mpy_q15_params matrix_mpy_params;
     matrix_mpy_params.srcARows = A_rows;
     matrix_mpy_params.srcACols = A_cols;
@@ -110,12 +111,7 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
     arm_mat_init_q15(&B, B_rows, B_cols, pSrcB);
     arm_mat_init_q15(&C, A_rows, B_cols, pDst);
     arm_status status;
-    if (B_transposed) {
-        status = arm_mat_mult_fast_q15(&A, &B, &C, NULL);
-    } else {
-        MY_ASSERT(B_rows * B_cols < ARM_PSTATE_LEN);
-        status = arm_mat_mult_fast_q15(&A, &B, &C, pState);
-    }
+    status = arm_mat_mult_fast_q15(&A, &B, &C, pState);
     MY_ASSERT(status == ARM_MATH_SUCCESS);
 #endif
 }
@@ -133,3 +129,20 @@ void my_scale_q15(const int16_t *pSrc, int16_t scaleFract, uint8_t shift, int16_
 #endif
 }
 
+void my_interleave_q15(const int16_t *pSrc, uint16_t channel, uint16_t numChannels, int16_t *pDst, uint32_t blockSize) {
+#ifndef USE_ARM_CMSIS
+    msp_interleave_q15_params params;
+    params.length = blockSize;
+    params.numChannels = numChannels;
+    params.channel = channel;
+    msp_status status = msp_interleave_q15(&params, pSrc, pDst);
+    msp_checkStatus(status);
+#else
+    // CMSIS does not have interleave (yet)
+    for (uint32_t idx = 0; idx < blockSize; idx++) {
+        *(pDst + channel) = *pSrc;
+        pSrc++;
+        pDst += numChannels;
+    }
+#endif
+}

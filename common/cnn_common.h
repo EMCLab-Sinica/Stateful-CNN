@@ -24,10 +24,13 @@ typedef struct Node {
 #if HAWAII
     int16_t footprint;
 #endif
+#if JAPARI
+    int16_t layer_sign;
+#endif
 } Node;
 
 // _Static_assert in C11 or static_assert in C++11 requires the message
-static_assert(sizeof(Node) == 32 + HAWAII * 2, "Unexpected size for Node");
+static_assert(sizeof(Node) == 32 + HAWAII * 2 + JAPARI * 2, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct ParameterInfo {

@@ -18,5 +18,10 @@ static inline uint8_t get_value_state_bit(int16_t val) {
 }
 void flip_state_bit(struct Model *model, const ParameterInfo *output);
 uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offset);
-uint32_t recovery_from_state_bits(struct Model *model, struct ParameterInfo *output);
 #endif
+
+#if JAPARI
+int16_t get_layer_sign(Model *model);
+#endif
+
+uint32_t run_recovery(struct Model *model, struct ParameterInfo *output);

@@ -74,6 +74,14 @@ static void dump_params_common(const ParameterInfo* cur_param) {
     my_printf("Params len: %" PRId32 NEWLINE, cur_param->params_len);
 }
 
+static int16_t find_real_num(int16_t NUM, int16_t CHANNEL, int16_t H, int16_t W, const ParameterInfo* cur_param) {
+    if (NUM * CHANNEL * H * W * sizeof(int16_t) != cur_param->params_len) {
+        MY_ASSERT(NUM == 1);
+        return cur_param->params_len / sizeof(int16_t) / (CHANNEL * H * W);
+    }
+    return NUM;
+}
+
 void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, size_t offset) {
     uint16_t NUM, H, W, CHANNEL;
     // tensor
@@ -81,11 +89,16 @@ void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, size_t offse
     CHANNEL = cur_param->dims[1];
     H = cur_param->dims[2];
     W = cur_param->dims[3];
+    NUM = find_real_num(NUM, CHANNEL, H, W, cur_param);
     dump_params_common(cur_param);
+    int16_t output_tile_c = cur_param->tile_c;
+#if JAPARI
+    output_tile_c *= 2;
+#endif
     for (uint16_t n = 0; n < NUM; n++) {
         my_printf("Matrix %d" NEWLINE, n);
-        for (uint16_t tile_c_base = 0; tile_c_base < CHANNEL; tile_c_base += cur_param->tile_c) {
-            uint16_t cur_tile_c = MIN_VAL(cur_param->tile_c, CHANNEL - tile_c_base);
+        for (uint16_t tile_c_base = 0; tile_c_base < CHANNEL; tile_c_base += output_tile_c) {
+            uint16_t cur_tile_c = MIN_VAL(output_tile_c, CHANNEL - tile_c_base);
             for (uint16_t c = 0; c < cur_tile_c; c++) {
                 my_printf("Channel %d" NEWLINE, tile_c_base + c);
                 for (uint16_t h = 0; h < H; h++) {
@@ -147,10 +160,7 @@ void dump_params(Model *model, const ParameterInfo *cur_param) {
         NUM = CHANNEL = H = 1;
         W = cur_param->dims[0];
     }
-    if (NUM * CHANNEL * H * W * sizeof(int16_t) != cur_param->params_len) {
-        MY_ASSERT(NUM == 1);
-        NUM = cur_param->params_len / sizeof(int16_t) / (CHANNEL * H * W);
-    }
+    NUM = find_real_num(NUM, CHANNEL, H, W, cur_param);
     dump_params_common(cur_param);
     for (uint16_t i = 0; i < NUM; i++) {
         my_printf("Matrix %d" NEWLINE, i);

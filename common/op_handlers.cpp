@@ -88,11 +88,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 #if INTERMITTENT
     uint16_t initial_real_tile_c;
 
-#if STATEFUL
-    uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
-#elif HAWAII
-    uint32_t first_unfinished_value_offset = read_hawaii_layer_footprint(model->layer_idx);
-#endif
+    uint32_t first_unfinished_value_offset = run_recovery(model, output);
     if (first_unfinished_value_offset * sizeof(int16_t) == output->params_len) {
         // give up early, or initial_real_tile_c may be zero and results in SIGFPE
         goto finished;
@@ -186,9 +182,11 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 
     MY_ASSERT(output_offset == output->params_len / sizeof(int16_t));
 
+#if INTERMITTENT
 finished:
 #if STATEFUL
     flip_state_bit(model, output);
+#endif
 #endif
 
     my_printf_debug("handle_maxpool output" NEWLINE);
@@ -283,11 +281,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     uint16_t output_offset = 0;
 #if INTERMITTENT
 
-#if STATEFUL
-    uint32_t first_unfinished_value_offset = recovery_from_state_bits(model, output);
-#elif HAWAII
-    uint32_t first_unfinished_value_offset = read_hawaii_layer_footprint(model->layer_idx);
-#endif
+    uint32_t first_unfinished_value_offset = run_recovery(model, output);
     data_offset += first_unfinished_value_offset;
     output_offset += first_unfinished_value_offset;
 
@@ -467,23 +461,6 @@ void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *o
 
 void alloc_concat(Model *, const ParameterInfo *[], ParameterInfo*, const NodeFlags*) {
 }
-
-class ConcatOutputChunkHandler : public ChunkHandler {
-public:
-    ConcatOutputChunkHandler(uint32_t _offset) : offset(_offset) {}
-
-    void handle_chunk(uint32_t output_offset, uint16_t output_chunk_len, uint8_t old_output_state_bit) const override {
-        my_printf_debug("output output_offset=%d output_chunk_len=%d old_output_state_bit=%d" NEWLINE, output_offset, output_chunk_len, old_output_state_bit);
-        // every output chunk has the same starting offset as corresponding scaled input chunk
-        int16_t *output_to_offset = lea_buffer + output_offset - offset;
-        if (!old_output_state_bit) {
-            my_offset_q15(output_to_offset, 0x4000, output_to_offset, output_chunk_len);
-        }
-    }
-
-private:
-    uint32_t offset;
-};
 
 void handle_concat(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     my_printf_debug("Concat!" NEWLINE);

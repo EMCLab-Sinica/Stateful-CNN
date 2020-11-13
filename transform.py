@@ -50,6 +50,7 @@ class Constants:
 
     STATEFUL = 0
     HAWAII = 0
+    JAPARI = 0
     INTERMITTENT = 0
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
@@ -183,6 +184,7 @@ parser.add_argument('--write-images', action='store_true')
 intermittent_methodology = parser.add_mutually_exclusive_group(required=True)
 intermittent_methodology.add_argument('--baseline', action='store_true')
 intermittent_methodology.add_argument('--hawaii', action='store_true')
+intermittent_methodology.add_argument('--japari', action='store_true')
 intermittent_methodology.add_argument('--stateful', action='store_true')
 args = parser.parse_args()
 config = configs[args.config]
@@ -195,7 +197,10 @@ if args.stateful:
     Constants.STATEFUL = 1
 if args.hawaii:
     Constants.HAWAII = 1
-Constants.INTERMITTENT = Constants.STATEFUL | Constants.HAWAII
+if args.japari:
+    Constants.JAPARI = 1
+    config['intermediate_values_size'] *= 2
+Constants.INTERMITTENT = Constants.STATEFUL | Constants.HAWAII | Constants.JAPARI
 
 onnx_model = onnx.load(config['onnx_model'])
 try:
@@ -429,6 +434,7 @@ class ParametersSlot:
 parameters_slot = ParametersSlot(offset=0, target=outputs['parameters'], slot_id=Constants.SLOT_PARAMETERS)
 
 output_nodes = outputs['nodes']
+layer_sign = 1
 for node in graph:
     node_name = node.name[:Constants.NODE_NAME_LEN]
     output_nodes.write(node_name.encode('ascii') + b'\0' * (Constants.NODE_NAME_LEN - len(node_name)))
@@ -443,6 +449,9 @@ for node in graph:
     output_nodes.write(to_bytes(node.flags.as_bytes))
     if Constants.HAWAII:
         output_nodes.write(to_bytes(0))  # footprint
+    if Constants.JAPARI:
+        output_nodes.write(to_bytes(layer_sign))
+        layer_sign = -layer_sign
 
 parameter_info_idx = 0
 

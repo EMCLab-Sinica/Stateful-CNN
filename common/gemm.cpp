@@ -128,7 +128,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             my_printf_debug("Tile for B" NEWLINE);
             dump_matrix_debug(buffer_b, tile_channels * tile_width, ValueInfo(B, model));
 
-            my_matrix_mpy_q15(1, tile_channels, tile_channels, tile_width, buffer_a + i, buffer_b, buffer_temp, 0);
+            my_matrix_mpy_q15(1, tile_channels, tile_channels, tile_width, buffer_a + i, buffer_b, buffer_temp);
 
             int16_t output_offset = tile * output_len + j;
 #if STATEFUL
