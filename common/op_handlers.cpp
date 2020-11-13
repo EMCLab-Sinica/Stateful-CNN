@@ -70,7 +70,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     const ParameterInfo *data = input[0];
 
     my_printf_debug("handle_maxpool input" NEWLINE);
-    dump_params_debug(model, data);
+    dump_params_nhwc_debug(model, data, 0);
 
     const uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
     uint16_t new_H = H / stride;
@@ -78,6 +78,9 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 
     determine_tile_c(output);
     uint16_t tile_c = output->tile_c;
+#if JAPARI
+    tile_c *= 2;
+#endif
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
 
     uint16_t tile_c_offset = 0;
@@ -132,13 +135,21 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 #endif
 
     for (; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
-        uint16_t real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
+        uint16_t cur_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
         if (!need_nhwc2nchw) {
             // NHWC
             for (; output_h < new_H; output_h++) {
                 for (; output_w < new_W; output_w++) {
-                    for (; c < real_tile_c; c++) {
-                        int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
+                    for (; c < cur_tile_c; c++) {
+                        int16_t max_val;
+#if JAPARI
+                        if (c % 2) {
+                            max_val = get_layer_sign(model);
+                        } else
+#endif
+                        {
+                            max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
+                        }
                         my_printf_debug("output_offset=%d" NEWLINE, output_offset);
 #if STATEFUL
                         check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
@@ -157,10 +168,18 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
             output_h = 0;
         } else {
             // NCHW
-            for (; c < real_tile_c; c++) {
+            for (; c < cur_tile_c; c++) {
                 for (; output_h < new_H; output_h++) {
                     for (; output_w < new_W; output_w++) {
-                        int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
+                        int16_t max_val;
+#if JAPARI
+                        if (c % 2) {
+                            max_val = get_layer_sign(model);
+                        } else
+#endif
+                        {
+                            max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
+                        }
                         my_printf_debug("output_offset=%d" NEWLINE, output_offset);
 #if STATEFUL
                         check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
@@ -312,26 +331,38 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         my_printf_debug("initial c = %d" NEWLINE, c);
 
 #endif
+        int16_t real_input_tile_c = X->tile_c;
+#if JAPARI
+        real_input_tile_c *= 2;
+#endif
         for (; output_h < H; output_h++) {
             for (; output_w < W; output_w++) {
                 for (; c < CHANNEL; c++) {
-                    int16_t input_tile_c_index = c / X->tile_c;
-                    int16_t input_tile_c_offset = c % X->tile_c;
-                    uint16_t cur_input_tile_c = MIN_VAL(X->tile_c, CHANNEL - input_tile_c_index * X->tile_c);
-                    int16_t val_offset = input_tile_c_index * W * H * X->tile_c + output_w * H * cur_input_tile_c + output_h * cur_input_tile_c + input_tile_c_offset;
-                    int16_t input_val = get_q15_param(model, X, val_offset);
+                    int16_t input_tile_c_index = c / real_input_tile_c;
+                    int16_t input_tile_c_offset = c % real_input_tile_c;
+                    uint16_t cur_input_tile_c = MIN_VAL(real_input_tile_c, CHANNEL - input_tile_c_index * real_input_tile_c);
+                    int16_t val_offset = input_tile_c_index * W * H * real_input_tile_c + output_w * H * cur_input_tile_c + output_h * cur_input_tile_c + input_tile_c_offset;
                     output_offset = output_h * W * CHANNEL + output_w * CHANNEL + c;
+                    int16_t input_val = 0, output_val;
+#if JAPARI
+                    if (c % 2) {
+                        output_val = get_layer_sign(model);
+                    } else
+#endif
+                    {
+                        input_val = get_q15_param(model, X, val_offset);
 #if STATEFUL
-                    // assuming input state bits are correct...
-                    if (get_value_state_bit(input_val)) {
-                        input_val -= 0x4000;
+                        // assuming input state bits are correct...
+                        if (get_value_state_bit(input_val)) {
+                            input_val -= 0x4000;
+                        }
+                        check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
+#endif
+                        output_val = MAX_VAL(input_val, 0);
+#if STATEFUL
+                        output_val += offset;
+#endif
                     }
-                    check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
-#endif
-                    int16_t output_val = MAX_VAL(input_val, 0);
-#if STATEFUL
-                    output_val += offset;
-#endif
                     put_q15_param(output, output_offset, output_val);
 #if STATEFUL
                     my_printf_debug(
@@ -354,14 +385,22 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         dump_params_debug(model, X);
         uint16_t i = 0;
         for (; i < data_len; i++) {
-            int16_t input_val = get_q15_param(model, X, data_offset);
-#if STATEFUL
-            if (get_value_state_bit(input_val)) {
-                input_val -= 0x4000;
-            }
-            check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
+            int16_t output_val;
+#if JAPARI
+            if (i % 2) {
+                output_val = get_layer_sign(model);
+            } else
 #endif
-            int16_t output_val = MAX_VAL(input_val, 0);
+            {
+                int16_t input_val = get_q15_param(model, X, data_offset);
+#if STATEFUL
+                if (get_value_state_bit(input_val)) {
+                    input_val -= 0x4000;
+                }
+                check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
+#endif
+                output_val = MAX_VAL(input_val, 0);
+            }
 #if STATEFUL
             output_val += offset;
 #endif

@@ -63,6 +63,7 @@ if (NOT USE_ARM_CMSIS)
         ${DSPLIB_PATH}/source/vector/msp_max_q15.c
         ${DSPLIB_PATH}/source/vector/msp_min_q15.c
         ${DSPLIB_PATH}/source/vector/msp_scale_q15.c
+        ${DSPLIB_PATH}/source/utility/msp_deinterleave_q15.c
         ${DSPLIB_PATH}/source/utility/msp_interleave_q15.c
         ${DSPLIB_PATH}/source/utility/msp_fill_q15.c
     )

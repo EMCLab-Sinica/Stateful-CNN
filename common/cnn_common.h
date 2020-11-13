@@ -129,6 +129,7 @@ const Node* get_node(size_t i);
 SlotInfo * get_slot_info(Model* model, uint8_t i);
 void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n);
 void bump_model_version(Model *model);
+uint8_t is_intermediate_data(const ParameterInfo* cur_param);
 
 /**********************************
  *       Operation handlers       *
