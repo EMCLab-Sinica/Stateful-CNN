@@ -58,20 +58,13 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     output->params_len = output_len * upper_gauss(B->dims[0], gemm_params.tile_channel) * sizeof(int16_t);
 }
 
-class GemmInputChunkHandler : public ChunkHandler {
-public:
-    GemmInputChunkHandler(int16_t *_buffer_a) : buffer_a(_buffer_a) {}
-
-    void handle_chunk(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
-        if (state_bit) {
-            int16_t* to_offset = buffer_a + offset;
-            my_offset_q15(to_offset, -0x4000, to_offset, real_chunk_len);
-        }
+void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params) {
+    int16_t* buffer_a = reinterpret_cast<int16_t*>(_params);
+    if (state_bit) {
+        int16_t* to_offset = buffer_a + offset;
+        my_offset_q15(to_offset, -0x4000, to_offset, real_chunk_len);
     }
-
-private:
-    int16_t *buffer_a;
-};
+}
 
 void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *A = input[0], *B = input[1];
@@ -107,7 +100,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
 #if STATEFUL
-    iterate_chunks(model, A, 0, 0, GemmInputChunkHandler(buffer_a));
+    iterate_chunks(model, A, 0, 0, GemmInputChunkHandler, buffer_a);
 
     int16_t offset, next_output_turning_point;
     uint8_t output_turning_point_idx;
@@ -249,7 +242,7 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
     output->scale /= max_multiplier;
 
 #if STATEFUL
-    iterate_chunks(model, output, 0, 0, OutputChunkHandler(buffer_gemm));
+    iterate_chunks(model, output, 0, 0, OutputChunkHandler, buffer_gemm);
 #endif
 
     my_memcpy_to_param(output, 0, buffer_gemm, output->params_len);

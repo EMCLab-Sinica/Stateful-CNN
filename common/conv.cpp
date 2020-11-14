@@ -629,41 +629,33 @@ void alloc_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo *
 }
 
 #if STATEFUL
-class ConvMergeInputChunkHandler : public ChunkHandler {
-public:
-    ConvMergeInputChunkHandler(int16_t *_to_add, uint16_t _data_offset)
-        : to_add(_to_add), data_offset(_data_offset) {}
-
-    void handle_chunk(uint32_t range_offset, uint16_t range_len, uint8_t state_bit) const override {
-        my_printf_debug("input range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
-        int16_t *to_offset = to_add + range_offset - data_offset;
-        if (state_bit) {
-            my_offset_q15(to_offset, -0x4000, to_offset, range_len);
-        }
-    }
-
-private:
+struct ConvMergeInputChunkHandlerParams {
     int16_t *to_add;
     uint16_t data_offset;
 };
 
-class ConvMergeOutputChunkHandler : public ChunkHandler {
-public:
-    ConvMergeOutputChunkHandler(uint32_t _tiling_results_offset)
-        : tiling_results_offset(_tiling_results_offset) {}
-
-    void handle_chunk(uint32_t range_offset, uint16_t range_len, uint8_t state_bit) const override {
-        my_printf_debug("output range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
-        int16_t *to_offset = lea_buffer + range_offset - tiling_results_offset;
-        // output state bit has not been flipped yet
-        if (!state_bit) {
-            my_offset_q15(to_offset, 0x4000, to_offset, range_len);
-        }
+void ConvMergeInputChunkHandler(uint32_t range_offset, uint16_t range_len, uint8_t state_bit, void* _params) {
+    ConvMergeInputChunkHandlerParams* params = reinterpret_cast<ConvMergeInputChunkHandlerParams*>(_params);
+    my_printf_debug("input range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
+    int16_t *to_offset = params->to_add + range_offset - params->data_offset;
+    if (state_bit) {
+        my_offset_q15(to_offset, -0x4000, to_offset, range_len);
     }
+}
 
-private:
+struct ConvMergeOutputChunkHandlerParams {
     uint32_t tiling_results_offset;
 };
+
+void ConvMergeOutputChunkHandler(uint32_t range_offset, uint16_t range_len, uint8_t state_bit, void* _params) {
+    ConvMergeOutputChunkHandlerParams* params = reinterpret_cast<ConvMergeOutputChunkHandlerParams*>(_params);
+    my_printf_debug("output range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
+    int16_t *to_offset = lea_buffer + range_offset - params->tiling_results_offset;
+    // output state bit has not been flipped yet
+    if (!state_bit) {
+        my_offset_q15(to_offset, 0x4000, to_offset, range_len);
+    }
+}
 #endif
 
 void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct ParameterInfo *output, const NodeFlags*) {
@@ -700,7 +692,8 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
             uint16_t data_offset = input_tile_c_index * tiling_results_len + tiling_results_offset;
             my_memcpy_from_param(model, to_add, data, data_offset, real_chunk_len * sizeof(int16_t));
 #if STATEFUL
-            iterate_chunks(model, data, data_offset, real_chunk_len, ConvMergeInputChunkHandler(to_add, data_offset));
+            ConvMergeInputChunkHandlerParams params({to_add, data_offset});
+            iterate_chunks(model, data, data_offset, real_chunk_len, ConvMergeInputChunkHandler, &params);
 #endif
             // scale up results as in convolution values are scaled down twice (input & weights)
             my_printf_debug("Before my_scale_q15" NEWLINE);
@@ -715,7 +708,8 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
             }
         }
 #if STATEFUL
-        iterate_chunks(model, output, tiling_results_offset, real_chunk_len, ConvMergeOutputChunkHandler(tiling_results_offset));
+        ConvMergeOutputChunkHandlerParams params({tiling_results_offset});
+        iterate_chunks(model, output, tiling_results_offset, real_chunk_len, ConvMergeOutputChunkHandler, &params);
 #endif
 #if JAPARI
         for (uint16_t idx = 1; idx < real_chunk_len; idx += 2) {

@@ -267,7 +267,7 @@ void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *outpu
     my_add_q15(buffer_a, buffer_b, buffer_a, vector_size);
 
 #if STATEFUL
-    iterate_chunks(model, output, 0, vector_size, OutputChunkHandler(buffer_a));
+    iterate_chunks(model, output, 0, vector_size, OutputChunkHandler, buffer_a);
 #endif
 
     my_memcpy_to_param(output, 0, buffer_a, output->params_len);

@@ -14,82 +14,81 @@ int16_t lea_buffer[LEA_BUFFER_SIZE];
 int16_t input_buffer_with_footprints[INPUT_BUFFER_WITH_FOOTPRINTS_LEN];
 #endif
 
-void OutputChunkHandler::handle_chunk(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const {
+void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params) {
+    int16_t* buffer = reinterpret_cast<int16_t*>(_params);
     if (!state_bit) {
         int16_t* to_offset = buffer + offset;
         my_offset_q15(to_offset, 0x4000, to_offset, real_chunk_len);
     }
 }
 
-class MaxMultiplierChunkHandler : public ChunkHandler {
-public:
-    MaxMultiplierChunkHandler(Model *_model, const ParameterInfo *_param, const int16_t* _buffer, uint16_t *_max_multiplier)
-        : model(_model), param(_param), buffer(_buffer), max_multiplier(_max_multiplier) {}
-
-    void handle_chunk(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const override {
-#if !STATEFUL
-        uint16_t bound = 32768;
-#else
-        // For stateful CNN, values should not reach 8192, or get_value_state_bit() is confused
-        uint16_t bound = 8191;
-        int16_t val_offset = 0;
-        if (!buffer) {
-            // if the buffer is pre-filled (e.g., in GemmMerge), its state bits
-            // should already be stripped, too
-            val_offset = param_state_bit(model, param, offset) ? -16384 : 0;
-        }
-#endif
-        int16_t max_val, min_val;
-        // Apparently TI's compiler does not handle multiplication between
-        // int16_t and uint16_t correctly. Use unsigned everywhere to fix it.
-        uint32_t u_max_val, u_min_val;
-        uint16_t index;
-
-        const int16_t* cur_buffer;
-        if (!buffer) {
-            my_memcpy_from_param(model, lea_buffer, param, offset, real_chunk_len * sizeof(int16_t));
-            cur_buffer = lea_buffer;
-        } else {
-            cur_buffer = buffer + offset;
-        }
-
-        dump_matrix_debug(cur_buffer, real_chunk_len, ValueInfo(param));
-
-        my_max_q15(cur_buffer, real_chunk_len, &max_val, &index);
-#if STATEFUL
-        max_val += val_offset;
-#endif
-        my_printf_debug("Max value %d", max_val);
-        my_printf_debug(" occurs at index %d" NEWLINE, index);
-        u_max_val = abs(max_val);
-        // use > instead of >= as the value may be exactly on the bound
-        while (max_val && u_max_val * (*max_multiplier) > bound) {
-            (*max_multiplier) /= 2;
-        }
-
-        my_min_q15(cur_buffer, real_chunk_len, &min_val, &index);
-#if STATEFUL
-        min_val += val_offset;
-#endif
-        my_printf_debug("Min value %d", min_val);
-        my_printf_debug(" occurs at index %d" NEWLINE, index);
-        u_min_val = abs(min_val);
-        while (min_val && u_min_val * (*max_multiplier) > bound) {
-            (*max_multiplier) /= 2;
-        }
-        my_printf_debug("Current max_multiplier=%d" NEWLINE, *max_multiplier);
-    }
-private:
+struct MaxMultiplierChunkHandlerParams {
     Model *model;
     const ParameterInfo *param;
     const int16_t* buffer;
     uint16_t *max_multiplier;
 };
 
+void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params) {
+    MaxMultiplierChunkHandlerParams* params = reinterpret_cast<MaxMultiplierChunkHandlerParams*>(_params);
+#if !STATEFUL
+    uint16_t bound = 32768;
+#else
+    // For stateful CNN, values should not reach 8192, or get_value_state_bit() is confused
+    uint16_t bound = 8191;
+    int16_t val_offset = 0;
+    if (!params->buffer) {
+        // if the buffer is pre-filled (e.g., in GemmMerge), its state bits
+        // should already be stripped, too
+        val_offset = param_state_bit(params->model, params->param, offset) ? -16384 : 0;
+    }
+#endif
+    int16_t max_val, min_val;
+    // Apparently TI's compiler does not handle multiplication between
+    // int16_t and uint16_t correctly. Use unsigned everywhere to fix it.
+    uint32_t u_max_val, u_min_val;
+    uint16_t index;
+
+    const int16_t* cur_buffer;
+    if (!params->buffer) {
+        my_memcpy_from_param(params->model, lea_buffer, params->param, offset, real_chunk_len * sizeof(int16_t));
+        cur_buffer = lea_buffer;
+    } else {
+        cur_buffer = params->buffer + offset;
+    }
+
+    dump_matrix_debug(cur_buffer, real_chunk_len, ValueInfo(params->param));
+
+    my_max_q15(cur_buffer, real_chunk_len, &max_val, &index);
+#if STATEFUL
+    max_val += val_offset;
+#endif
+    my_printf_debug("Max value %d", max_val);
+    my_printf_debug(" occurs at index %d" NEWLINE, index);
+    u_max_val = abs(max_val);
+    // use > instead of >= as the value may be exactly on the bound
+    while (max_val && u_max_val * (*params->max_multiplier) > bound) {
+        (*params->max_multiplier) /= 2;
+    }
+
+    my_min_q15(cur_buffer, real_chunk_len, &min_val, &index);
+#if STATEFUL
+    min_val += val_offset;
+#endif
+    my_printf_debug("Min value %d", min_val);
+    my_printf_debug(" occurs at index %d" NEWLINE, index);
+    u_min_val = abs(min_val);
+    while (min_val && u_min_val * (*params->max_multiplier) > bound) {
+        (*params->max_multiplier) /= 2;
+    }
+    my_printf_debug("Current max_multiplier=%d" NEWLINE, *params->max_multiplier);
+}
+
 uint16_t find_max_multiplier(Model *model, const ParameterInfo *param, const int16_t* buffer, uint16_t len) {
     uint16_t max_multiplier = param->scale;
 
-    iterate_chunks(model, param, 0, len, MaxMultiplierChunkHandler(model, param, buffer, &max_multiplier));
+    MaxMultiplierChunkHandlerParams params({model, param, buffer, &max_multiplier});
+    iterate_chunks(model, param, 0, len, MaxMultiplierChunkHandler, &params);
 
     my_printf_debug("max_multiplier=%d" NEWLINE, max_multiplier);
 
@@ -107,7 +106,7 @@ void float_to_scale_params(int16_t *scaleFract, uint8_t *shift, float scale) {
     *scaleFract = scale * 32768;
 }
 
-void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_offset, uint16_t len, const ChunkHandler& chunk_handler) {
+void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_offset, uint16_t len, const ChunkHandler& chunk_handler, void* params) {
     uint16_t params_len;
     if (!len) {
         params_len = param->params_len / sizeof(int16_t);
@@ -157,7 +156,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
         }
 #endif
         MY_ASSERT(cur_chunk_len != 0);
-        chunk_handler.handle_chunk(offset, cur_chunk_len, state_bit);
+        chunk_handler(offset, cur_chunk_len, state_bit, params);
 #if STATEFUL
         if (next_state_flipped) {
             state_bit ^= 1;
