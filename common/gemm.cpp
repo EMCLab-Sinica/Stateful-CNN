@@ -12,10 +12,6 @@ static struct {
     int16_t tile_width;
 } gemm_params;
 
-static inline int16_t upper_gauss(int16_t a, int16_t b) {
-    return (a + b - 1) / b;
-}
-
 void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *A = input[0], *B = input[1];
 

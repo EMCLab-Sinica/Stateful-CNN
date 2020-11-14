@@ -110,10 +110,10 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     int16_t channel_offset_n = conv_params->conv_idx_base;
     int16_t channel_offset_c = conv_params->conv_idx - conv_params->conv_idx_base;
 #if JAPARI
-    n_filters *= 2;
-    cur_output_tile_c_full *= 2;
-    channel_offset_n *= 2;
-    channel_offset_c *= 2;
+    n_filters = extend_for_footprints(n_filters);
+    cur_output_tile_c_full = extend_for_footprints(cur_output_tile_c_full);
+    channel_offset_n = channel_offset_n / BATCH_SIZE * EXTENDED_BATCH_SIZE;
+    channel_offset_c = extend_for_footprints(channel_offset_c);
 #endif
     // use NWHC so that output is written continuously on the address space
     int16_t cur_output_data_offset =
@@ -140,7 +140,14 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         int16_t *filter_tmp = matrix_mpy_results - conv_params->filter_offset; // before transpose
         uint16_t fill_length = conv_params->filter_offset;
         my_fill_q15(0, filter_tmp, fill_length);
-
+#if JAPARI
+        for (uint16_t idx = EXTENDED_BATCH_SIZE - 1; idx < n_filters; idx += EXTENDED_BATCH_SIZE) {
+            my_interleave_q15(filter_tmp, idx, n_filters, conv_params->filter_buffer_addr, conv_params->filter_offset);
+            if (BATCH_SIZE + 1 != EXTENDED_BATCH_SIZE) {
+                my_interleave_q15(filter_tmp, idx - 1, n_filters, conv_params->filter_buffer_addr, conv_params->filter_offset);
+            }
+        }
+#endif
         uint16_t buffer_size = sizeof(int16_t) * conv_params->cur_filter_tile_c;
         uint16_t filter_len = conv_params->kH * conv_params->kW * conv_params->CHANNEL;
         for (uint16_t idx = 0; idx < cur_output_tile_c; idx++) {
@@ -151,7 +158,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 uint16_t cur_filter_src_offset = filter_src_offset + h * conv_params->kW * conv_params->CHANNEL;
 #if JAPARI
                 if (conv_params->conv_input_is_intermediate_data) {
-                    cur_filter_src_offset += conv_params->input_tile_c_offset / 2;
+                    cur_filter_src_offset += conv_params->input_tile_c_offset / EXTENDED_BATCH_SIZE * BATCH_SIZE;
                 } else
 #endif
                 {
@@ -180,12 +187,12 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
             uint16_t channel = idx;
 #if JAPARI
-            channel *= 2;
+            channel += channel / BATCH_SIZE;
 #endif
             my_interleave_q15(filter_tmp, channel, n_filters, conv_params->filter_buffer_addr, conv_params->filter_offset);
         }
 #if JAPARI
-        for (int16_t idx = 0; idx < cur_output_tile_c; idx++) {
+        for (int16_t idx = 0; idx < cur_output_tile_c; idx += BATCH_SIZE) {
             conv_params->filter_buffer_addr[n_filters * conv_params->filter_offset - 2 * idx - 1] = -get_layer_sign(conv_params->model);
         }
 #endif
@@ -240,7 +247,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
 #if MY_DEBUG >= 1
     my_printf_debug("output_data offset = %d" NEWLINE, cur_output_data_offset);
-    MY_ASSERT(cur_output_data_offset > last_output_data_offset);
+    MY_ASSERT(!cur_output_data_offset || cur_output_data_offset == last_output_data_offset + n_filters);
     last_output_data_offset = cur_output_data_offset;
 #endif
 
@@ -350,10 +357,18 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
             model, dest_addr,
             conv_params->real_conv_input, input_src_offset,
             input_row_len * sizeof(int16_t));
+        dump_matrix_debug(dest_addr, input_row_len, ValueInfo(conv_params->real_conv_input));
 
 #if JAPARI
         if (conv_params->conv_input_is_intermediate_data) {
-            my_deinterleave_q15(dest_addr, 0, 2, orig_dest_addr, input_row_len / 2);
+            int16_t* pDst = orig_dest_addr;
+            for (uint16_t idx = 0; idx < input_row_len; idx++) {
+                while (is_footprint_channel(idx) || is_footprint_padding_channel(idx)) {
+                    idx++;
+                }
+                *pDst = *(dest_addr + idx);
+                pDst++;
+            }
         }
 #endif
 
@@ -411,22 +426,15 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 
     MY_ASSERT(conv_input->bitwidth == 16 && conv_filter->bitwidth == 16);
 
-#if JAPARI
-    if (is_intermediate_data(conv_input)) {
-        MY_ASSERT(conv_input->dims[1] == conv_filter->dims[1] * 2);
-    } else
+#if !JAPARI
+    // skip the check for JAPARI as it is too complex
+    MY_ASSERT(conv_input->dims[1] == conv_filter->dims[1]);
 #endif
-    {
-        MY_ASSERT(conv_input->dims[1] == conv_filter->dims[1]);
-    }
 
     /* input: N x C x H x W, filter: M x C x kH x kW */
     const uint16_t H = conv_input->dims[2], W = conv_input->dims[3],
                    CHANNEL = conv_filter->dims[1];
     uint16_t OUTPUT_CHANNEL = conv_filter->dims[0];
-#if JAPARI
-    OUTPUT_CHANNEL *= 2;
-#endif
 
     ConvTaskParams *conv_params = &conv_params_obj;
 
@@ -443,15 +451,19 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
         conv_params->offset_h = conv_params->offset_w = 0;
     }
     uint16_t input_tile_c = conv_input->tile_c;
-    conv_params->n_tiles_c = (CHANNEL + input_tile_c - 1) / input_tile_c;
+    conv_params->n_tiles_c = upper_gauss(CHANNEL, input_tile_c);
+    // set dims[1] here so that determine_tile_c works
+    output->dims[1] = output->tile_c = OUTPUT_CHANNEL;
+    determine_tile_c(output, conv_filter);
+#if JAPARI
+    OUTPUT_CHANNEL = upper_gauss(OUTPUT_CHANNEL, output->tile_c) * EXTENDED_BATCH_SIZE;
+    output->dims[1] = OUTPUT_CHANNEL;
+#endif
 
     /* XXX: extend flags; assume dilation=(1, 1) for now */
     output->bitwidth = 16;
     output->slot = get_next_slot(model, conv_input);
     output->dims[0] = 1;
-    // Although handle_conv requires more memory than params_len, only the first OUTPUT_CHANNEL
-    // channels are useful after merging results from tiling
-    output->dims[1] = OUTPUT_CHANNEL;
     output->dims[2] = conv_params->OUTPUT_H = (H - conv_params->offset_h * 2) / conv_params->stride;
     output->dims[3] = conv_params->OUTPUT_W = (W - conv_params->offset_w * 2) / conv_params->stride;
     output->params_len = conv_params->n_tiles_c * OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W * sizeof(int16_t);
@@ -489,19 +501,15 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     conv_params->CHANNEL = CHANNEL;
     conv_params->OUTPUT_CHANNEL = output->dims[1];
-    conv_params->N_FILTERS = conv_params->OUTPUT_CHANNEL;
-#if JAPARI
-    conv_params->N_FILTERS /= 2;
-#endif
+    conv_params->N_FILTERS = conv_filter->dims[0];
 
     uint16_t input_tile_c = conv_input->tile_c;
 #if JAPARI
     if (conv_params->conv_input_is_intermediate_data) {
-        input_tile_c *= 2;
+        input_tile_c = extend_for_footprints(input_tile_c);
+        MY_ASSERT(input_tile_c == EXTENDED_BATCH_SIZE);
     }
 #endif
-    output->tile_c = conv_params->N_FILTERS;
-    determine_tile_c(output, conv_filter);
     uint16_t output_tile_c = output->tile_c;
     my_printf_debug("output_tile_c = %d" NEWLINE, output_tile_c);
 
@@ -555,25 +563,20 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     my_printf_debug("initial output C = %d" NEWLINE, conv_params->conv_idx);
 #endif
 
-    int16_t input_channels = CHANNEL;
-#if JAPARI
-    if (conv_params->conv_input_is_intermediate_data) {
-        input_channels *= 2;
-    }
-#endif
+    int16_t input_channels = conv_input->dims[1];
     for (; conv_params->input_tile_c_offset < input_channels; conv_params->input_tile_c_offset += input_tile_c, conv_params->input_tile_c_index++) {
         conv_params->cur_input_tile_c = MIN_VAL(input_tile_c, input_channels - conv_params->input_tile_c_offset);
         conv_params->cur_filter_tile_c = conv_params->cur_input_tile_c;
 #if JAPARI
         if (conv_params->conv_input_is_intermediate_data) {
-            conv_params->cur_filter_tile_c /= 2;
+            conv_params->cur_filter_tile_c = conv_params->cur_filter_tile_c / EXTENDED_BATCH_SIZE * BATCH_SIZE;
         }
 #endif
         my_printf_debug("cur_input_tile_c = %d" NEWLINE, conv_params->cur_input_tile_c);
         conv_params->dest_offset = conv_params->kH * conv_params->cur_input_tile_c;
 #if JAPARI
         if (conv_params->conv_input_is_intermediate_data) {
-            conv_params->dest_offset /= 2;
+            conv_params->dest_offset = conv_params->dest_offset / EXTENDED_BATCH_SIZE * BATCH_SIZE;
         }
 #endif
         // +1 for bias
@@ -677,6 +680,9 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
     uint32_t tiling_results_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
 
     uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
+#if JAPARI
+    chunk_len = chunk_len / EXTENDED_BATCH_SIZE * EXTENDED_BATCH_SIZE;
+#endif
 
     float scale_f = 1.0 * find_max_multiplier(model, data) / n_tiles_c;
     int16_t scaleFract;
@@ -712,7 +718,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
         iterate_chunks(model, output, tiling_results_offset, real_chunk_len, ConvMergeOutputChunkHandler, &params);
 #endif
 #if JAPARI
-        for (uint16_t idx = 1; idx < real_chunk_len; idx += 2) {
+        for (uint16_t idx = EXTENDED_BATCH_SIZE - 1; idx < real_chunk_len; idx += EXTENDED_BATCH_SIZE) {
             lea_buffer[idx] = get_layer_sign(model);
         }
 #endif

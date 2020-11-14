@@ -79,7 +79,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     determine_tile_c(output);
     uint16_t tile_c = output->tile_c;
 #if JAPARI
-    tile_c *= 2;
+    tile_c = extend_for_footprints(tile_c);
 #endif
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
 
@@ -143,8 +143,10 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                     for (; c < cur_tile_c; c++) {
                         int16_t max_val;
 #if JAPARI
-                        if (c % 2) {
+                        if (is_footprint_channel(c)) {
                             max_val = get_layer_sign(model);
+                        } else if (is_footprint_padding_channel(c)) {
+                            max_val = 0;
                         } else
 #endif
                         {
@@ -335,7 +337,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
         int16_t real_input_tile_c = X->tile_c;
 #if JAPARI
-        real_input_tile_c *= 2;
+        real_input_tile_c = extend_for_footprints(real_input_tile_c);
 #endif
         for (; output_h < H; output_h++) {
             for (; output_w < W; output_w++) {
@@ -347,8 +349,10 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     output_offset = output_h * W * CHANNEL + output_w * CHANNEL + c;
                     int16_t input_val = 0, output_val;
 #if JAPARI
-                    if (c % 2) {
+                    if (is_footprint_channel(c)) {
                         output_val = get_layer_sign(model);
+                    } else if (is_footprint_padding_channel(c)) {
+                        output_val = 0;
                     } else
 #endif
                     {

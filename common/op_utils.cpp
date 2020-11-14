@@ -12,7 +12,26 @@ int16_t lea_buffer[LEA_BUFFER_SIZE];
 
 #if JAPARI
 int16_t input_buffer_with_footprints[INPUT_BUFFER_WITH_FOOTPRINTS_LEN];
+
+int16_t extend_for_footprints(int16_t val) {
+    return (val + val / BATCH_SIZE + 1) / 2 * 2;
+}
+
+uint8_t is_footprint_channel(int16_t c) {
+    return c % EXTENDED_BATCH_SIZE == EXTENDED_BATCH_SIZE - 1;
+}
+
+uint8_t is_footprint_padding_channel(int16_t c) {
+    if (EXTENDED_BATCH_SIZE != BATCH_SIZE + 1) {
+        return c % EXTENDED_BATCH_SIZE == EXTENDED_BATCH_SIZE - 2;
+    }
+    return 0;
+}
 #endif
+
+int16_t upper_gauss(int16_t a, int16_t b) {
+    return (a + b - 1) / b;
+}
 
 void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params) {
     int16_t* buffer = reinterpret_cast<int16_t*>(_params);
