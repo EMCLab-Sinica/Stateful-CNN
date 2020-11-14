@@ -10,6 +10,10 @@
 #endif
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
+#if JAPARI
+int16_t input_buffer_with_footprints[INPUT_BUFFER_WITH_FOOTPRINTS_LEN];
+#endif
+
 void OutputChunkHandler::handle_chunk(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit) const {
     if (!state_bit) {
         int16_t* to_offset = buffer + offset;

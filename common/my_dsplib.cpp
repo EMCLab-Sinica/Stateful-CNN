@@ -148,19 +148,10 @@ void my_interleave_q15(const int16_t *pSrc, uint16_t channel, uint16_t numChanne
 }
 
 void my_deinterleave_q15(const int16_t *pSrc, uint16_t channel, uint16_t numChannels, int16_t *pDst, uint32_t blockSize) {
-#ifndef USE_ARM_CMSIS
-    msp_deinterleave_q15_params params;
-    params.length = blockSize;
-    params.numChannels = numChannels;
-    params.channel = channel;
-    msp_status status = msp_deinterleave_q15(&params, pSrc, pDst);
-    msp_checkStatus(status);
-#else
-    // CMSIS does not have deinterleave (yet)
+    // XXX: not using LEA here as I didn't allocate LEA memory for inputs with footprints
     for (uint32_t idx = 0; idx < blockSize; idx++) {
         *pDst = *(pSrc + channel);
         pSrc += numChannels;
         pDst++;
     }
-#endif
 }

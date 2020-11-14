@@ -91,7 +91,20 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             *buffer_temp = buffer_a + A_len,
             *buffer_b = buffer_temp + output_len * upper_gauss(B->dims[0], gemm_params.tile_channel);
 
-    my_memcpy_from_param(model, buffer_a, A, 0, A_len * sizeof(uint16_t));
+    int16_t* data_ptr;
+    int16_t input_len = A_len;
+#if JAPARI
+    MY_ASSERT(is_intermediate_data(A));
+    data_ptr = input_buffer_with_footprints;
+    input_len *= 2;
+    MY_ASSERT(input_len < INPUT_BUFFER_WITH_FOOTPRINTS_LEN);
+#else
+    data_ptr = buffer_a;
+#endif
+    my_memcpy_from_param(model, data_ptr, A, 0, input_len * sizeof(uint16_t));
+#if JAPARI
+    my_deinterleave_q15(data_ptr, 0, 2, buffer_a, A_len);
+#endif
 
 #if STATEFUL
     iterate_chunks(model, A, 0, 0, GemmInputChunkHandler(buffer_a));

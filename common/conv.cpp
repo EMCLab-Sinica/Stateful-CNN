@@ -264,10 +264,6 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #endif
 }
 
-#if JAPARI
-#define INPUT_BUFFER_WITH_FOOTPRINTS_LEN 40
-int16_t input_buffer_with_footprints[INPUT_BUFFER_WITH_FOOTPRINTS_LEN];
-#endif
 static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     int8_t field_size = (conv_params->kH - 1) / 2;
 
@@ -362,10 +358,10 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
 #endif
 
 #if STATEFUL
-        int16_t input_src_offset_end = input_src_offset + size;
+        int16_t input_src_offset_end = input_src_offset + input_row_len;
         if (offset) {
             MY_ASSERT(static_cast<uint16_t>(next_turning_point) > input_src_offset);
-            my_offset_q15(dest_addr, -offset, dest_addr, MIN_VAL(static_cast<int16_t>(size), static_cast<uint16_t>(next_turning_point) - input_src_offset));
+            my_offset_q15(dest_addr, -offset, dest_addr, MIN_VAL(static_cast<int16_t>(input_row_len), static_cast<uint16_t>(next_turning_point) - input_src_offset));
         } else if (static_cast<uint16_t>(next_turning_point) < input_src_offset_end) {
             MY_ASSERT(next_turning_point >= input_src_offset);
             int16_t *to_offset  = dest_addr + next_turning_point - input_src_offset;

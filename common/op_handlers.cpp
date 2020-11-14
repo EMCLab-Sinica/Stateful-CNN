@@ -168,18 +168,16 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
             output_h = 0;
         } else {
             // NCHW
-            for (; c < cur_tile_c; c++) {
+            uint8_t channel_stride = 1;
+#if JAPARI
+            if (is_intermediate_data(data)) {
+                channel_stride = 2;
+            }
+#endif
+            for (; c < cur_tile_c; c += channel_stride) {
                 for (; output_h < new_H; output_h++) {
                     for (; output_w < new_W; output_w++) {
-                        int16_t max_val;
-#if JAPARI
-                        if (c % 2) {
-                            max_val = get_layer_sign(model);
-                        } else
-#endif
-                        {
-                            max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
-                        }
+                        int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
                         my_printf_debug("output_offset=%d" NEWLINE, output_offset);
 #if STATEFUL
                         check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
@@ -190,6 +188,10 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                         write_hawaii_layer_footprint(model->layer_idx, output_offset);
 #endif
                         output_offset++;
+#if JAPARI
+                        put_q15_param(output, output_offset, get_layer_sign(model));
+                        output_offset++;
+#endif
                     }
                     output_w = 0;
                 }
@@ -474,6 +476,11 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
         output->dims[auto_idx] = inferred_dim;
         new_len *= inferred_dim;
     }
+#if JAPARI
+    if (is_intermediate_data(data)) {
+        new_len *= 2;
+    }
+#endif
     MY_ASSERT(new_len * sizeof(int16_t) == output->params_len);
 }
 
