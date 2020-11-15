@@ -331,53 +331,78 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         my_printf_debug("initial c = %d" NEWLINE, c);
 
 #endif
-        int16_t real_input_tile_c = X->tile_c;
+        int16_t input_tile_c = X->tile_c;
 #if JAPARI
-        real_input_tile_c = extend_for_footprints(real_input_tile_c);
+        input_tile_c = extend_for_footprints(input_tile_c);
 #endif
         for (; output_h < H; output_h++) {
             for (; output_w < W; output_w++) {
-                for (; c < CHANNEL; c++) {
-                    int16_t input_tile_c_index = c / real_input_tile_c;
-                    int16_t input_tile_c_offset = c % real_input_tile_c;
-                    uint16_t cur_input_tile_c = MIN_VAL(real_input_tile_c, CHANNEL - input_tile_c_index * real_input_tile_c);
-                    int16_t val_offset = input_tile_c_index * W * H * real_input_tile_c + output_w * H * cur_input_tile_c + output_h * cur_input_tile_c + input_tile_c_offset;
+                for (; c < CHANNEL; ) {
+                    int16_t input_tile_c_index = c / input_tile_c;
+                    uint16_t cur_input_tile_c = MIN_VAL(input_tile_c, CHANNEL - input_tile_c_index * input_tile_c);
+                    int16_t val_offset = input_tile_c_index * W * H * input_tile_c + output_w * H * cur_input_tile_c + output_h * cur_input_tile_c + c % input_tile_c;
                     output_offset = output_h * W * CHANNEL + output_w * CHANNEL + c;
-                    int16_t input_val = 0, output_val;
-#if JAPARI
-                    if (is_footprint_channel(c)) {
-                        output_val = get_layer_sign(model);
-                    } else if (is_footprint_padding_channel(c)) {
-                        output_val = 0;
-                    } else
-#endif
-                    {
-                        input_val = get_q15_param(model, X, val_offset);
 #if STATEFUL
-                        // assuming input state bits are correct...
-                        if (get_value_state_bit(input_val)) {
-                            input_val -= 0x4000;
-                        }
-                        check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
+                    check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
 #endif
-                        output_val = MAX_VAL(input_val, 0);
-#if STATEFUL
-                        output_val += offset;
-#endif
+                    int16_t next_start_channel = MIN_VAL((input_tile_c_index + 1) * input_tile_c, CHANNEL);
+                    uint8_t len = next_start_channel - c;
+                    my_memcpy_from_param(model, lea_buffer, X, val_offset, len * sizeof(int16_t));
+
+                    my_printf_debug("output_h=% 3d, output_w=% 3d, c=[% 3d, % 3d), val_offset=[% 6d, % 6d), input val=",
+                                    output_h, output_w, c, c + len, val_offset, val_offset + len);
+                    for (uint8_t idx = 0; idx < len; idx++) {
+                        my_printf_debug("% 6d ", lea_buffer[idx]);
                     }
-                    put_q15_param(output, output_offset, output_val);
-#if STATEFUL
-                    my_printf_debug(
-                        "output_h=% 3d, output_w=% 3d, c=% 3d, val_offset=% 6d, offset=% 6d, input val=% 6d, output_offset=% 6d, output val=% 6d" NEWLINE,
-                        output_h, output_w, c, val_offset, offset, input_val, output_offset, output_val);
-#else
-                    my_printf_debug(
-                        "output_h=% 3d, output_w=% 3d, c=% 3d, val_offset=% 6d, input val=% 6d, output_offset=% 6d, output val=% 6d" NEWLINE,
-                        output_h, output_w, c, val_offset, input_val, output_offset, output_val);
+
+                    for (uint8_t idx = 0; idx < len; idx++) {
+                        int16_t input_val = 0, output_val;
+#if JAPARI
+                        int16_t cur_channel = c + idx;
+                        if (is_footprint_channel(cur_channel)) {
+                            output_val = get_layer_sign(model);
+                        } else if (is_footprint_padding_channel(cur_channel)) {
+                            output_val = 0;
+                        } else
 #endif
+                        {
+                            input_val = lea_buffer[idx];
+#if STATEFUL
+                            // assuming input state bits are correct...
+                            if (get_value_state_bit(input_val)) {
+                                input_val -= 0x4000;
+                            }
+#endif
+                            output_val = MAX_VAL(input_val, 0);
+                        }
+                        lea_buffer[idx] = output_val;
+                    }
 #if HAWAII
                     write_hawaii_layer_footprint(model->layer_idx, output_offset);
 #endif
+#if STATEFUL
+                    if (offset) {
+                        uint8_t block_size;
+                        if (next_output_turning_point < 0) {
+                            block_size = len;
+                        } else {
+                            block_size = MIN_VAL(len, next_output_turning_point - output_offset);
+                        }
+                        my_offset_q15(lea_buffer, offset, lea_buffer, block_size);
+                    } else if (next_output_turning_point < output_offset + len) {
+                        int16_t* to_offset = lea_buffer + next_output_turning_point - output_offset;
+                        my_offset_q15(to_offset, 0x4000, to_offset, output_offset + len - next_output_turning_point);
+                    }
+#endif
+                    my_memcpy_to_param(output, output_offset, lea_buffer, len * sizeof(int16_t));
+
+                    my_printf_debug("output_offset=[% 6d, % 6d), output val=", output_offset, output_offset + len);
+                    for (uint8_t idx = 0; idx < len; idx++) {
+                        my_printf_debug("% 6d ", lea_buffer[idx]);
+                    }
+                    my_printf_debug(NEWLINE);
+
+                    c = next_start_channel;
                 }
                 c = 0;
             }
