@@ -27,6 +27,10 @@ uint8_t is_footprint_padding_channel(int16_t c) {
     }
     return 0;
 }
+
+uint8_t has_footprints(const ParameterInfo *cur_param) {
+    return (cur_param->slot < NUM_SLOTS) && !(cur_param->flags & NO_FOOTPRINTS);
+}
 #endif
 
 int16_t upper_gauss(int16_t a, int16_t b) {

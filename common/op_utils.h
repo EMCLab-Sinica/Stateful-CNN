@@ -31,6 +31,7 @@ extern int16_t input_buffer_with_footprints[INPUT_BUFFER_WITH_FOOTPRINTS_LEN];
 int16_t extend_for_footprints(int16_t val);
 uint8_t is_footprint_channel(int16_t c);
 uint8_t is_footprint_padding_channel(int16_t c);
+uint8_t has_footprints(const ParameterInfo* cur_param);
 #endif
 
 #if STATEFUL

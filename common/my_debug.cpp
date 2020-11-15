@@ -94,7 +94,9 @@ void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, size_t offse
     dump_params_common(cur_param);
     int16_t output_tile_c = cur_param->tile_c;
 #if JAPARI
-    output_tile_c = extend_for_footprints(output_tile_c);
+    if (has_footprints(cur_param)) {
+        output_tile_c = extend_for_footprints(output_tile_c);
+    }
 #endif
     for (uint16_t n = 0; n < NUM; n++) {
         my_printf("Matrix %d" NEWLINE, n);

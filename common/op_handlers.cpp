@@ -11,9 +11,13 @@ void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *ou
 
     const ParameterInfo *data = input[0];
 
-    const uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
+    const uint16_t H = data->dims[2], W = data->dims[3];
+    uint16_t CHANNEL = data->dims[1];
     uint16_t new_H = H / stride;
     uint16_t new_W = W / stride;
+#if JAPARI
+    CHANNEL = CHANNEL / EXTENDED_BATCH_SIZE * BATCH_SIZE;
+#endif
 
     output->params_len = new_H * new_W * CHANNEL * sizeof(int16_t);
     output->slot = get_next_slot(model, data);
@@ -21,6 +25,7 @@ void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     output->dims[1] = CHANNEL;
     output->dims[2] = new_H;
     output->dims[3] = new_W;
+    output->flags |= NO_FOOTPRINTS;
 }
 
 static int16_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t c, const NodeFlags* flags, const ParameterInfo *data, Model *model) {
@@ -141,17 +146,12 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
             for (; output_h < new_H; output_h++) {
                 for (; output_w < new_W; output_w++) {
                     for (; c < cur_tile_c; c++) {
-                        int16_t max_val;
 #if JAPARI
-                        if (is_footprint_channel(c)) {
-                            max_val = get_layer_sign(model);
-                        } else if (is_footprint_padding_channel(c)) {
-                            max_val = 0;
-                        } else
-#endif
-                        {
-                            max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
+                        if (is_footprint_channel(c) || is_footprint_padding_channel(c)) {
+                            continue;
                         }
+#endif
+                        int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
                         my_printf_debug("output_offset=%d" NEWLINE, output_offset);
 #if STATEFUL
                         check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
@@ -171,12 +171,12 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
         } else {
             // NCHW
             uint8_t channel_stride = 1;
-#if JAPARI
-            if (is_intermediate_data(data)) {
-                channel_stride = 2;
-            }
-#endif
             for (; c < cur_tile_c; c += channel_stride) {
+#if JAPARI
+                if (is_footprint_channel(c) || is_footprint_padding_channel(c)) {
+                    continue;
+                }
+#endif
                 for (; output_h < new_H; output_h++) {
                     for (; output_w < new_W; output_w++) {
                         int16_t max_val = maxpool_patch(output_h, output_w, c + tile_c_offset, flags, data, model);
@@ -190,10 +190,6 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                         write_hawaii_layer_footprint(model->layer_idx, output_offset);
 #endif
                         output_offset++;
-#if JAPARI
-                        put_q15_param(output, output_offset, get_layer_sign(model));
-                        output_offset++;
-#endif
                     }
                     output_w = 0;
                 }
@@ -437,10 +433,6 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
     my_printf_debug("Reshape!" NEWLINE);
 
     const ParameterInfo *data = input[0], *shape = input[1];
-    output->params_offset = data->params_offset;
-    output->params_len = data->params_len;
-    output->bitwidth = data->bitwidth;
-    output->slot = data->slot;
     SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
     if (cur_slot_info) {
         cur_slot_info->user = model->layer_idx;
@@ -480,11 +472,6 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
         output->dims[auto_idx] = inferred_dim;
         new_len *= inferred_dim;
     }
-#if JAPARI
-    if (is_intermediate_data(data)) {
-        new_len *= 2;
-    }
-#endif
     MY_ASSERT(new_len * sizeof(int16_t) == output->params_len);
 }
 

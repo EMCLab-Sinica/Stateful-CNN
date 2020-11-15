@@ -65,9 +65,6 @@ typedef struct ConvTaskParams {
     int16_t next_turning_point;
     SlotInfo* cur_slot_info;
 #endif
-#if JAPARI
-    uint8_t conv_input_is_intermediate_data;
-#endif
 
     uint16_t conv_idx;
     uint16_t conv_idx_base;
@@ -155,15 +152,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             my_printf_debug("Copying filter %d" NEWLINE, conv_params->conv_idx + idx);
             for (uint16_t h = 0; h < conv_params->kH; h++) {
                 int16_t *filter_dest_ptr = filter_tmp + h * conv_params->dest_offset;
-                uint16_t cur_filter_src_offset = filter_src_offset + h * conv_params->kW * conv_params->CHANNEL;
-#if JAPARI
-                if (conv_params->conv_input_is_intermediate_data) {
-                    cur_filter_src_offset += conv_params->input_tile_c_offset / EXTENDED_BATCH_SIZE * BATCH_SIZE;
-                } else
-#endif
-                {
-                    cur_filter_src_offset += conv_params->input_tile_c_offset;
-                }
+                uint16_t cur_filter_src_offset = filter_src_offset + h * conv_params->kW * conv_params->CHANNEL + conv_params->input_tile_c_offset;
                 for (uint16_t w = 0; w < conv_params->kW; w++) {
                     my_memcpy_from_param(conv_params->model, filter_dest_ptr, conv_params->conv_filter, cur_filter_src_offset, buffer_size);
                     filter_dest_ptr += conv_params->cur_filter_tile_c;
@@ -341,36 +330,13 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     find_initial_state_bit(&offset, &turning_point_idx, &next_turning_point, &input_slot_info, input_src_offset, model, conv_params->real_conv_input);
 #endif
     for (int32_t h = h_start; h <= h_end; h++) {
-        int16_t *orig_dest_addr;
-        orig_dest_addr = dest + (w_start + field_size) * conv_params->cur_filter_tile_c;
-        int16_t *dest_addr;
-#if JAPARI
-        if (conv_params->conv_input_is_intermediate_data) {
-            dest_addr = input_buffer_with_footprints;
-        } else
-#endif
-        {
-            dest_addr = orig_dest_addr;
-        }
+        int16_t *dest_addr = dest + (w_start + field_size) * conv_params->cur_filter_tile_c;
         my_printf_debug("Load %ld IFM values from range [%d, %d)" NEWLINE, input_row_len, input_src_offset, static_cast<int>(input_src_offset + input_row_len));
         my_memcpy_from_param(
             model, dest_addr,
             conv_params->real_conv_input, input_src_offset,
             input_row_len * sizeof(int16_t));
         dump_matrix_debug(dest_addr, input_row_len, ValueInfo(conv_params->real_conv_input));
-
-#if JAPARI
-        if (conv_params->conv_input_is_intermediate_data) {
-            int16_t* pDst = orig_dest_addr;
-            for (uint16_t idx = 0; idx < input_row_len; idx++) {
-                while (is_footprint_channel(idx) || is_footprint_padding_channel(idx)) {
-                    idx++;
-                }
-                *pDst = *(dest_addr + idx);
-                pDst++;
-            }
-        }
-#endif
 
 #if STATEFUL
         int16_t input_src_offset_end = input_src_offset + input_row_len;
@@ -467,7 +433,10 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     output->dims[2] = conv_params->OUTPUT_H = (H - conv_params->offset_h * 2) / conv_params->stride;
     output->dims[3] = conv_params->OUTPUT_W = (W - conv_params->offset_w * 2) / conv_params->stride;
     output->params_len = conv_params->n_tiles_c * OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W * sizeof(int16_t);
-    output->flags = TRANSPOSED;
+    output->flags |= TRANSPOSED;
+#if JAPARI
+    output->flags &= ~NO_FOOTPRINTS;
+#endif
     output->scale = conv_input->scale * conv_filter->scale;
 }
 
@@ -496,7 +465,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     conv_params->H = H;
     conv_params->W = W;
 #if JAPARI
-    conv_params->conv_input_is_intermediate_data = is_intermediate_data(conv_input);
+    MY_ASSERT(!has_footprints(conv_input));
 #endif
 
     conv_params->CHANNEL = CHANNEL;
@@ -504,12 +473,6 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     conv_params->N_FILTERS = conv_filter->dims[0];
 
     uint16_t input_tile_c = conv_input->tile_c;
-#if JAPARI
-    if (conv_params->conv_input_is_intermediate_data) {
-        input_tile_c = extend_for_footprints(input_tile_c);
-        MY_ASSERT(input_tile_c == EXTENDED_BATCH_SIZE);
-    }
-#endif
     uint16_t output_tile_c = output->tile_c;
     my_printf_debug("output_tile_c = %d" NEWLINE, output_tile_c);
 
@@ -567,18 +530,8 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     for (; conv_params->input_tile_c_offset < input_channels; conv_params->input_tile_c_offset += input_tile_c, conv_params->input_tile_c_index++) {
         conv_params->cur_input_tile_c = MIN_VAL(input_tile_c, input_channels - conv_params->input_tile_c_offset);
         conv_params->cur_filter_tile_c = conv_params->cur_input_tile_c;
-#if JAPARI
-        if (conv_params->conv_input_is_intermediate_data) {
-            conv_params->cur_filter_tile_c = conv_params->cur_filter_tile_c / EXTENDED_BATCH_SIZE * BATCH_SIZE;
-        }
-#endif
         my_printf_debug("cur_input_tile_c = %d" NEWLINE, conv_params->cur_input_tile_c);
         conv_params->dest_offset = conv_params->kH * conv_params->cur_input_tile_c;
-#if JAPARI
-        if (conv_params->conv_input_is_intermediate_data) {
-            conv_params->dest_offset = conv_params->dest_offset / EXTENDED_BATCH_SIZE * BATCH_SIZE;
-        }
-#endif
         // +1 for bias
         conv_params->dest_offset++;
         /* MSP430 LEA requires length to be even */

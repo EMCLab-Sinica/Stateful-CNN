@@ -125,7 +125,3 @@ void bump_model_version(Model *model) {
         model->version++;
     }
 }
-
-uint8_t is_intermediate_data(const ParameterInfo *cur_param) {
-    return cur_param->slot < NUM_SLOTS;
-}

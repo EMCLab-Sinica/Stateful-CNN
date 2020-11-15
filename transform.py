@@ -83,6 +83,7 @@ other_flags = [
     'TRANSPOSED',
     # Tiles in different channels are actually in different slots
     'SEPARATE_TILING',
+    'NO_FOOTPRINTS',
 ]
 
 def op_flag(flag):
