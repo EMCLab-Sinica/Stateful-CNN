@@ -422,7 +422,7 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     output->dims[1] = output->tile_c = OUTPUT_CHANNEL;
     determine_tile_c(output, conv_filter);
 #if JAPARI
-    OUTPUT_CHANNEL = upper_gauss(OUTPUT_CHANNEL, output->tile_c) * EXTENDED_BATCH_SIZE;
+    OUTPUT_CHANNEL = upper_gauss(OUTPUT_CHANNEL, BATCH_SIZE) * EXTENDED_BATCH_SIZE;
     output->dims[1] = OUTPUT_CHANNEL;
 #endif
 
