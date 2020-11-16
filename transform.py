@@ -449,7 +449,7 @@ for node in graph:
     output_nodes.write(to_bytes(list(ops.keys()).index(node.op_type)))
     output_nodes.write(to_bytes(node.flags.as_bytes))
     if Constants.HAWAII:
-        output_nodes.write(to_bytes(0))  # footprint
+        output_nodes.write(to_bytes(0, size=32))  # footprint
     if Constants.JAPARI:
         output_nodes.write(to_bytes(layer_sign))
         layer_sign = -layer_sign

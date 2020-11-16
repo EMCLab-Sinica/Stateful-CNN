@@ -244,7 +244,12 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     my_memcpy_to_param(conv_params->output, cur_output_data_offset, matrix_mpy_results, n_filters * sizeof(int16_t));
 
 #if HAWAII
-    write_hawaii_layer_footprint(conv_params->model->layer_idx, cur_output_data_offset);
+    for (uint16_t row = 0; row < A_rows; row++) {
+        for (uint16_t col = 0; col < B_cols; col += BATCH_SIZE) {
+            uint16_t n_jobs = MIN_VAL(B_cols - col, BATCH_SIZE);
+            write_hawaii_layer_footprint(conv_params->model->layer_idx, n_jobs);
+        }
+    }
 #endif
 
 #if STATEFUL

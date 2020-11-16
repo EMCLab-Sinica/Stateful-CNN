@@ -94,7 +94,7 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
         }
 #if HAWAII
         for (uint16_t node_idx = 0; node_idx < MODEL_NODES_LEN; node_idx++) {
-            write_hawaii_layer_footprint(node_idx, 0);
+            reset_hawaii_layer_footprint(node_idx);
         }
 #endif
         model->running = 1;

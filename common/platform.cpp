@@ -111,15 +111,23 @@ static uint32_t hawaii_layer_footprint_offset(uint16_t layer_idx) {
     return NODES_OFFSET + layer_idx * sizeof(Node) + offsetof(Node, footprint);
 }
 
-void write_hawaii_layer_footprint(uint16_t layer_idx, int16_t footprint) {
-    write_to_nvm(&footprint, hawaii_layer_footprint_offset(layer_idx), sizeof(int16_t));
+void write_hawaii_layer_footprint(uint16_t layer_idx, uint16_t n_jobs) {
+    uint32_t footprint = read_hawaii_layer_footprint(layer_idx);
+    footprint += n_jobs;
+    write_to_nvm(&footprint, hawaii_layer_footprint_offset(layer_idx), sizeof(uint32_t));
     my_printf_debug("Write HAWAII layer footprint %d for layer %d" NEWLINE, footprint, layer_idx);
 }
 
-int16_t read_hawaii_layer_footprint(uint16_t layer_idx) {
-    int16_t footprint = 0;
-    read_from_nvm(&footprint, hawaii_layer_footprint_offset(layer_idx), sizeof(int16_t));
+uint32_t read_hawaii_layer_footprint(uint16_t layer_idx) {
+    uint32_t footprint = 0;
+    read_from_nvm(&footprint, hawaii_layer_footprint_offset(layer_idx), sizeof(uint32_t));
     my_printf_debug("HAWAII layer footprint=%d for layer %d" NEWLINE, footprint, layer_idx);
     return footprint;
+}
+
+void reset_hawaii_layer_footprint(uint16_t layer_idx) {
+    uint32_t footprint = 0;
+    write_to_nvm(&footprint, hawaii_layer_footprint_offset(layer_idx), sizeof(uint32_t));
+    my_printf_debug("Reset HAWAII layer footprint for layer %d" NEWLINE, layer_idx);
 }
 #endif

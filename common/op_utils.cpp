@@ -22,10 +22,11 @@ uint8_t is_footprint_channel(int16_t c) {
 }
 
 uint8_t is_footprint_padding_channel(int16_t c) {
-    if (EXTENDED_BATCH_SIZE != BATCH_SIZE + 1) {
-        return c % EXTENDED_BATCH_SIZE == EXTENDED_BATCH_SIZE - 2;
-    }
+#if EXTENDED_BATCH_SIZE != BATCH_SIZE + 1
+    return c % EXTENDED_BATCH_SIZE == EXTENDED_BATCH_SIZE - 2;
+#else
     return 0;
+#endif
 }
 
 uint8_t has_footprints(const ParameterInfo *cur_param) {

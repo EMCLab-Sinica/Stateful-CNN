@@ -159,7 +159,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 #endif
                         put_q15_param(output, output_offset, max_val);
 #if HAWAII
-                        write_hawaii_layer_footprint(model->layer_idx, output_offset);
+                        write_hawaii_layer_footprint(model->layer_idx, 1);
 #endif
                         output_offset++;
                     }
@@ -187,7 +187,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 #endif
                         put_q15_param(output, output_offset, max_val);
 #if HAWAII
-                        write_hawaii_layer_footprint(model->layer_idx, output_offset);
+                        write_hawaii_layer_footprint(model->layer_idx, 1);
 #endif
                         output_offset++;
                     }
@@ -378,7 +378,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         lea_buffer[idx] = output_val;
                     }
 #if HAWAII
-                    write_hawaii_layer_footprint(model->layer_idx, output_offset);
+                    write_hawaii_layer_footprint(model->layer_idx, len);
 #endif
 #if STATEFUL
                     if (offset) {
@@ -433,7 +433,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
             put_q15_param(output, output_offset, output_val);
 #if HAWAII
-            write_hawaii_layer_footprint(model->layer_idx, output_offset);
+            write_hawaii_layer_footprint(model->layer_idx, 1);
 #endif
             data_offset++;
             output_offset++;

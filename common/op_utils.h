@@ -10,6 +10,7 @@ struct SlotInfo;
 
 #define DEFAULT_TILE_H 4
 #define DEFAULT_TILE_C 4
+#define BATCH_SIZE 4
 
 typedef void (*ChunkHandler)(uint32_t output_offset, uint16_t output_chunk_len, uint8_t old_output_state_bit, void* params);
 void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params);
@@ -22,7 +23,6 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 void determine_tile_c(ParameterInfo *param, const ParameterInfo *filter = nullptr);
 
 #if JAPARI
-#define BATCH_SIZE 4
 // = extend_for_footprints(BATCH_SIZE)
 #define EXTENDED_BATCH_SIZE ((BATCH_SIZE + 2) / 2 * 2)
 #define INPUT_BUFFER_WITH_FOOTPRINTS_LEN 600
