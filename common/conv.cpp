@@ -679,7 +679,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 #endif
 #if JAPARI
         int8_t layer_sign = get_layer_sign(model);
-        int16_t* layer_sign_buffer = lea_buffer + LEA_BUFFER_SIZE - n_chunks;
+        int16_t* layer_sign_buffer = lea_buffer + (LEA_BUFFER_SIZE - n_chunks) / 2 * 2;
         my_fill_q15(layer_sign, layer_sign_buffer, n_chunks);
         for (uint8_t batch_offset = BATCH_SIZE; batch_offset < TILE_C_WITH_FOOTPRINTS; batch_offset += BATCH_SIZE + 1) {
             my_interleave_q15(layer_sign_buffer, batch_offset, TILE_C_WITH_FOOTPRINTS, lea_buffer, n_chunks);
