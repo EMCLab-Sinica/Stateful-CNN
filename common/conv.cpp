@@ -248,6 +248,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         for (uint16_t col = 0; col < B_cols; col += BATCH_SIZE) {
             uint16_t n_jobs = MIN_VAL(B_cols - col, BATCH_SIZE);
             my_memcpy_to_param(conv_params->output, cur_output_data_offset + batch_offset, matrix_mpy_results + batch_offset, n_jobs * sizeof(int16_t));
+            batch_offset += n_jobs;
             write_hawaii_layer_footprint(conv_params->model->layer_idx, n_jobs);
         }
     }
