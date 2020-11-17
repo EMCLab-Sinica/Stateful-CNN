@@ -4,7 +4,7 @@ on: push
 
 jobs:
   mnist_baseline:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
       CONFIG: '--all-samples --baseline mnist'
@@ -21,7 +21,7 @@ jobs:
       run: ./utils/test.sh
 
   mnist_stateful:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
       CONFIG: '--all-samples --stateful mnist'
@@ -38,7 +38,7 @@ jobs:
       run: ./utils/test.sh
 
   mnist_japari_b1:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
       CONFIG: '--japari --batch-size 1 mnist'
@@ -55,7 +55,7 @@ jobs:
       run: ./utils/test.sh
 
   mnist_japari_b2:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
       CONFIG: '--japari --batch-size 2 mnist'
@@ -72,7 +72,7 @@ jobs:
       run: ./utils/test.sh
 
   mnist_japari_b4:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
       CONFIG: '--japari --batch-size 4 mnist'
@@ -89,7 +89,7 @@ jobs:
       run: ./utils/test.sh
 
   cifar10_baseline:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
       CONFIG: '--all-samples --baseline cifar10'
@@ -106,7 +106,7 @@ jobs:
       run: ./utils/test.sh
 
   cifar10_stateful:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
       CONFIG: '--all-samples --stateful cifar10'
@@ -123,7 +123,7 @@ jobs:
       run: ./utils/test.sh
 
   mnist_baseline_cmsis:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
       CONFIG: '--all-samples --baseline mnist'
@@ -141,7 +141,7 @@ jobs:
       run: ./utils/test.sh
 
   mnist_stateful_cmsis:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
       CONFIG: '--all-samples --stateful mnist'
@@ -159,7 +159,7 @@ jobs:
       run: ./utils/test.sh
 
   cifar10_baseline_cmsis:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
       CONFIG: '--all-samples --baseline cifar10'
@@ -177,7 +177,7 @@ jobs:
       run: ./utils/test.sh
 
   cifar10_stateful_cmsis:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
       CONFIG: '--all-samples --stateful cifar10'
@@ -195,7 +195,7 @@ jobs:
       run: ./utils/test.sh
 
   debug_build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
       CONFIG: '--stateful mnist'
@@ -213,7 +213,7 @@ jobs:
       run: ./utils/test.sh
 
   old_system:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container: centos:7
     steps:
     - name: Checkout main repo
