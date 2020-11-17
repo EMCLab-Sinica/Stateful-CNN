@@ -105,7 +105,7 @@ void first_run(void) {
     get_model(); // refresh model_vm
     commit_model();
 
-    my_printf("Done first run initialization for " METHOD NEWLINE);
+    my_printf("Done first run initialization for " METHOD " with batch size=%d" NEWLINE, BATCH_SIZE);
 }
 
 #if HAWAII

@@ -1,6 +1,5 @@
-# dependencies
-
 set -e
+set -x
 
 pushd ARM-CMSIS
 ./create_symlinks.sh "$PWD/../ARM-CMSIS_5/CMSIS"
