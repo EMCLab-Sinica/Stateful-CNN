@@ -7,8 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     env:
-      CONFIG: mnist
-      STATEFUL_CNN: 0
+      CONFIG: '--all-samples --baseline mnist'
     steps:
     - name: Checkout main repo
       uses: actions/checkout@v2
@@ -25,8 +24,58 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     env:
-      CONFIG: mnist
-      STATEFUL_CNN: 1
+      CONFIG: '--all-samples --stateful mnist'
+    steps:
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout TI-DSPLib
+      uses: actions/checkout@v2
+      with:
+        repository: EMCLab-Sinica/DSPLib
+        path: TI-DSPLib
+        token: ${{ secrets.access_token }}
+    - name: Test
+      run: ./utils/test.sh
+
+  mnist_japari_b1:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    env:
+      CONFIG: '--japari --batch-size 1 mnist'
+    steps:
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout TI-DSPLib
+      uses: actions/checkout@v2
+      with:
+        repository: EMCLab-Sinica/DSPLib
+        path: TI-DSPLib
+        token: ${{ secrets.access_token }}
+    - name: Test
+      run: ./utils/test.sh
+
+  mnist_japari_b2:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    env:
+      CONFIG: '--japari --batch-size 2 mnist'
+    steps:
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout TI-DSPLib
+      uses: actions/checkout@v2
+      with:
+        repository: EMCLab-Sinica/DSPLib
+        path: TI-DSPLib
+        token: ${{ secrets.access_token }}
+    - name: Test
+      run: ./utils/test.sh
+
+  mnist_japari_b4:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    env:
+      CONFIG: '--japari --batch-size 4 mnist'
     steps:
     - name: Checkout main repo
       uses: actions/checkout@v2
@@ -43,8 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     env:
-      CONFIG: cifar10
-      STATEFUL_CNN: 0
+      CONFIG: '--all-samples --baseline cifar10'
     steps:
     - name: Checkout main repo
       uses: actions/checkout@v2
@@ -61,8 +109,7 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     env:
-      CONFIG: cifar10
-      STATEFUL_CNN: 1
+      CONFIG: '--all-samples --stateful cifar10'
     steps:
     - name: Checkout main repo
       uses: actions/checkout@v2
@@ -79,8 +126,7 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     env:
-      CONFIG: mnist
-      STATEFUL_CNN: 0
+      CONFIG: '--all-samples --baseline mnist'
       USE_ARM_CMSIS: 1
     steps:
     - name: Checkout main repo
@@ -98,8 +144,7 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     env:
-      CONFIG: mnist
-      STATEFUL_CNN: 1
+      CONFIG: '--all-samples --stateful mnist'
       USE_ARM_CMSIS: 1
     steps:
     - name: Checkout main repo
@@ -117,8 +162,7 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     env:
-      CONFIG: cifar10
-      STATEFUL_CNN: 0
+      CONFIG: '--all-samples --baseline cifar10'
       USE_ARM_CMSIS: 1
     steps:
     - name: Checkout main repo
@@ -136,8 +180,7 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     env:
-      CONFIG: cifar10
-      STATEFUL_CNN: 1
+      CONFIG: '--all-samples --stateful cifar10'
       USE_ARM_CMSIS: 1
     steps:
     - name: Checkout main repo
@@ -155,7 +198,7 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     env:
-      CONFIG: mnist
+      CONFIG: '--stateful mnist'
       DEBUG_BUILD: 1
     steps:
     - name: Checkout main repo

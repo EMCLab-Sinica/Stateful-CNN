@@ -10,13 +10,9 @@ pacman -S --noconfirm --needed base-devel cmake python-pip wget
 pip install --user numpy onnx
 
 # preparation
-transform_args="--all-samples"
 cmake_args=""
 MY_DEBUG="1"
 run_args=""
-if [[ $STATEFUL_CNN = 0 ]]; then
-    transform_args="$transform_args --without-stateful-cnn"
-fi
 
 if [[ $USE_ARM_CMSIS = 1 ]]; then
     cmake_args="$cmake_args -D USE_ARM_CMSIS=ON"
@@ -28,14 +24,14 @@ if [[ $DEBUG_BUILD = 1 ]]; then
 fi
 cmake_args="$cmake_args -D MY_DEBUG=$MY_DEBUG"
 
-if [[ $CONFIG = mnist ]]; then
+if [[ $CONFIG = *mnist* ]]; then
     ./data/download-mnist.sh
 fi
-if [[ $CONFIG = cifar10 ]]; then
+if [[ $CONFIG = *cifar10* ]]; then
     ./data/download-cifar10.sh
 fi
 
-python transform.py $transform_args "$CONFIG"
+python transform.py $CONFIG
 cmake -B build $cmake_args
 make -C build
 ./build/intermittent-cnn $run_args

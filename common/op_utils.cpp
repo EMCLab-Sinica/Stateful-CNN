@@ -18,12 +18,12 @@ int16_t extend_for_footprints(int16_t val) {
 }
 
 uint8_t is_footprint_channel(int16_t c) {
-    return c % EXTENDED_BATCH_SIZE == EXTENDED_BATCH_SIZE - 1;
+    return (c % TILE_C_WITH_FOOTPRINTS) % (BATCH_SIZE + 1) == BATCH_SIZE;
 }
 
 uint8_t is_footprint_padding_channel(int16_t c) {
-#if EXTENDED_BATCH_SIZE != BATCH_SIZE + 1
-    return c % EXTENDED_BATCH_SIZE == EXTENDED_BATCH_SIZE - 2;
+#if HAS_FOOTPRINT_PADDING_CHANNEL
+    return c % TILE_C_WITH_FOOTPRINTS == TILE_C_WITH_FOOTPRINTS - 1;
 #else
     return 0;
 #endif

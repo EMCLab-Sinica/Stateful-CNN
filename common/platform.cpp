@@ -104,6 +104,8 @@ void first_run(void) {
 
     get_model(); // refresh model_vm
     commit_model();
+
+    my_printf("Done first run initialization for " METHOD NEWLINE);
 }
 
 #if HAWAII

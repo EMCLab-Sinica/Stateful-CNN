@@ -48,10 +48,17 @@ class Constants:
     NVM_SIZE = 512 * 1024
     N_SAMPLES = 20
 
+    DEFAULT_TILE_C = 4
+    DEFAULT_TILE_H = 4
+    BATCH_SIZE = 1
     STATEFUL = 0
     HAWAII = 0
     JAPARI = 0
+    # below two are used by JAPARI only
+    HAS_FOOTPRINT_PADDING_CHANNEL = 0
+    TILE_C_WITH_FOOTPRINTS = 0
     INTERMITTENT = 0
+    METHOD = "Baseline"
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
@@ -182,6 +189,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('config', choices=configs.keys())
 parser.add_argument('--all-samples', action='store_true')
 parser.add_argument('--write-images', action='store_true')
+parser.add_argument('--batch-size', type=int, required=True)
 intermittent_methodology = parser.add_mutually_exclusive_group(required=True)
 intermittent_methodology.add_argument('--baseline', action='store_true')
 intermittent_methodology.add_argument('--hawaii', action='store_true')
@@ -194,13 +202,21 @@ if args.all_samples:
     Constants.NVM_SIZE += config['n_all_samples'] * config['sample_size']
 model_data = config['data_loader'](start=0, limit=Constants.N_SAMPLES)
 
+Constants.BATCH_SIZE = args.batch_size
 if args.stateful:
     Constants.STATEFUL = 1
+    Constants.METHOD = "STATEFUL"
 if args.hawaii:
     Constants.HAWAII = 1
+    Constants.METHOD = "HAWAII"
 if args.japari:
     Constants.JAPARI = 1
+    Constants.METHOD = "JAPARI"
     config['intermediate_values_size'] *= 2
+    Constants.TILE_C_WITH_FOOTPRINTS = int(Constants.DEFAULT_TILE_C / Constants.BATCH_SIZE * (Constants.BATCH_SIZE + 1))
+    if Constants.TILE_C_WITH_FOOTPRINTS % 2:
+        Constants.TILE_C_WITH_FOOTPRINTS += 1
+        Constants.HAS_FOOTPRINT_PADDING_CHANNEL = 1
 Constants.INTERMITTENT = Constants.STATEFUL | Constants.HAWAII | Constants.JAPARI
 
 onnx_model = onnx.load(config['onnx_model'])
@@ -597,7 +613,12 @@ struct NodeFlags;
         # Making it long to avoid overflow for expressions like
         # INTERMEDIATE_VALUES_SIZE * NUM_SLOTS on 16-bit systems
         suffix = 'l' if item == 'intermediate_values_size' else ''
-        output_h.write(f'#define {item.upper()} {val}{suffix}\n')
+        output_h.write(f'#define {item.upper()} ')
+        if isinstance(val, str):
+            output_h.write(f'"{val}"')
+        else:
+            output_h.write(f'{val}')
+        output_h.write(f'{suffix}\n')
 
     output_c.write('''
 #include "data.h"

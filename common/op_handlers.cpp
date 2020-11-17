@@ -16,7 +16,7 @@ void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     uint16_t new_H = H / stride;
     uint16_t new_W = W / stride;
 #if JAPARI
-    CHANNEL = CHANNEL / EXTENDED_BATCH_SIZE * BATCH_SIZE;
+    CHANNEL = CHANNEL / TILE_C_WITH_FOOTPRINTS * DEFAULT_TILE_C;
 #endif
 
     output->params_len = new_H * new_W * CHANNEL * sizeof(int16_t);
