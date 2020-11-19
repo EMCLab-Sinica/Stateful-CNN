@@ -290,6 +290,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     const ParameterInfo *X = input[0];
 
     uint16_t CHANNEL = X->dims[1];
+    uint16_t OUTPUT_CHANNEL = output->dims[1];
 
     /* XXX: use LEA? */
     uint16_t bitwidth = X->bitwidth;
@@ -334,14 +335,20 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         int16_t input_tile_c = X->tile_c;
 #if JAPARI
         input_tile_c = extend_for_footprints(input_tile_c);
+        int8_t layer_sign = get_layer_sign(model);
 #endif
         for (; output_h < H; output_h++) {
             for (; output_w < W; output_w++) {
+#if JAPARI
+                uint8_t prev_tiles_len = c % TILE_C_WITH_FOOTPRINTS * TILE_C_WITH_FOOTPRINTS;
+                uint8_t next_footprint_channel = prev_tiles_len + (c - prev_tiles_len) / (BATCH_SIZE + 1) * (BATCH_SIZE + 1) + BATCH_SIZE;
+                uint8_t next_tile = prev_tiles_len + TILE_C_WITH_FOOTPRINTS;
+#endif
                 for (; c < CHANNEL; ) {
                     int16_t input_tile_c_index = c / input_tile_c;
                     uint16_t cur_input_tile_c = MIN_VAL(input_tile_c, CHANNEL - input_tile_c_index * input_tile_c);
                     int16_t val_offset = input_tile_c_index * W * H * input_tile_c + output_w * H * cur_input_tile_c + output_h * cur_input_tile_c + c % input_tile_c;
-                    output_offset = output_h * W * CHANNEL + output_w * CHANNEL + c;
+                    output_offset = output_h * W * OUTPUT_CHANNEL + output_w * OUTPUT_CHANNEL + c;
 #if STATEFUL
                     check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
 #endif
@@ -358,11 +365,13 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     for (uint8_t idx = 0; idx < len; idx++) {
                         int16_t input_val = 0, output_val;
 #if JAPARI
-                        int16_t cur_channel = c + idx;
-                        if (is_footprint_channel(cur_channel)) {
-                            output_val = get_layer_sign(model);
-                        } else if (is_footprint_padding_channel(cur_channel)) {
-                            output_val = 0;
+                        if (c + idx == next_footprint_channel) {
+                            output_val = layer_sign;
+                            next_footprint_channel += BATCH_SIZE + 1;
+                            if (next_footprint_channel >= next_tile) {
+                                next_footprint_channel = next_tile + BATCH_SIZE;
+                                next_tile += TILE_C_WITH_FOOTPRINTS;
+                            }
                         } else
 #endif
                         {
