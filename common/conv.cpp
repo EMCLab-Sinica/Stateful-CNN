@@ -674,6 +674,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
         ConvMergeOutputChunkHandlerParams params({tiling_results_offset});
         iterate_chunks(model, output, tiling_results_offset, real_chunk_len, ConvMergeOutputChunkHandler, &params);
 #endif
+
 #if JAPARI
         int8_t layer_sign = get_layer_sign(model);
         int16_t* layer_sign_buffer = lea_buffer + (LEA_BUFFER_SIZE - n_chunks) / 2 * 2;
@@ -682,7 +683,11 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
             my_interleave_q15(layer_sign_buffer, batch_offset, TILE_C_WITH_FOOTPRINTS, lea_buffer, n_chunks);
         }
 #endif
+#if !HAWAII
         my_memcpy_to_param(output, tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));
+#else
+        hawaii_preserve_vector(model, output, tiling_results_offset, lea_buffer, real_chunk_len);
+#endif
     }
 
     my_printf_debug("After scaling up back and merging tiling results" NEWLINE);
