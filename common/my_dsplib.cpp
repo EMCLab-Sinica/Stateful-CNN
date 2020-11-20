@@ -21,11 +21,17 @@ void my_add_q15(const int16_t *pSrcA, const int16_t *pSrcB, int16_t *pDst, uint3
 
 void my_fill_q15(int16_t value, int16_t *pDst, uint32_t blockSize) {
 #ifndef USE_ARM_CMSIS
-    msp_fill_q15_params fill_params;
-    fill_params.length = blockSize;
-    fill_params.value = value;
-    msp_status status = msp_fill_q15(&fill_params, pDst);
-    msp_checkStatus(status);
+    uint32_t blockSizeForLEA = blockSize / 2 * 2;
+    if (blockSizeForLEA) {
+        msp_fill_q15_params fill_params;
+        fill_params.length = blockSizeForLEA;
+        fill_params.value = value;
+        msp_status status = msp_fill_q15(&fill_params, pDst);
+        msp_checkStatus(status);
+    }
+    if (blockSize % 2) {
+        pDst[blockSize - 1] = value;
+    }
 #else
     arm_fill_q15(value, pDst, blockSize);
 #endif
