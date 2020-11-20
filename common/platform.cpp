@@ -106,6 +106,12 @@ void first_run(void) {
     commit_model();
 
     my_printf("Done first run initialization for " METHOD " with batch size=%d" NEWLINE, BATCH_SIZE);
+
+    // XXX: need to wait some time for data to be flushed, why?
+    uint32_t counter = 100000;
+    while (counter) {
+        counter--;
+    }
 }
 
 #if HAWAII
