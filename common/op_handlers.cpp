@@ -176,9 +176,6 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         }
                         lea_buffer[idx] = output_val;
                     }
-#if HAWAII
-                    write_hawaii_layer_footprint(model->layer_idx, len);
-#endif
 #if STATEFUL
                     if (offset) {
                         uint8_t block_size;
@@ -193,7 +190,11 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         my_offset_q15(to_offset, 0x4000, to_offset, output_offset + len - next_output_turning_point);
                     }
 #endif
+#if HAWAII
+                    hawaii_preserve_vector(model, output, output_offset, lea_buffer, len);
+#else
                     my_memcpy_to_param(output, output_offset, lea_buffer, len * sizeof(int16_t));
+#endif
 
                     my_printf_debug("output_offset=[% 6d, % 6d), output val=", output_offset, output_offset + len);
                     for (uint8_t idx = 0; idx < len; idx++) {

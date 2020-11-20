@@ -18,6 +18,10 @@ void float_to_scale_params(int16_t *scaleFract, uint8_t *shift, float scale);
 void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_offset, uint16_t len, const ChunkHandler& callback, void* params);
 void determine_tile_c(ParameterInfo *param, const ParameterInfo *filter = nullptr);
 
+#if HAWAII
+uint16_t hawaii_preserve_vector(Model* model, ParameterInfo* output, uint32_t output_offset, const int16_t* buffer, uint16_t vector_len);
+#endif
+
 #if JAPARI
 #define INPUT_BUFFER_WITH_FOOTPRINTS_LEN 600
 
