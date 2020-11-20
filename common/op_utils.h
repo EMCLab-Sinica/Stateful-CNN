@@ -4,6 +4,9 @@
 #include "data.h"
 #include "platform.h"
 
+// to make the code clearer; used in Conv
+#define TEMP_FILTER_WIDTH 1
+
 struct Model;
 struct ParameterInfo;
 struct SlotInfo;
@@ -16,7 +19,7 @@ int16_t upper_gauss(int16_t a, int16_t b);
 uint16_t find_max_multiplier(struct Model *model, const ParameterInfo *param, const int16_t* buffer = nullptr, uint16_t len = 0);
 void float_to_scale_params(int16_t *scaleFract, uint8_t *shift, float scale);
 void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_offset, uint16_t len, const ChunkHandler& callback, void* params);
-void determine_tile_c(ParameterInfo *param, const ParameterInfo *filter = nullptr);
+void determine_tile_c(ParameterInfo *param, const ParameterInfo* input, const ParameterInfo *filter = nullptr);
 
 #if HAWAII
 uint16_t hawaii_preserve_vector(Model* model, ParameterInfo* output, uint32_t output_offset, const int16_t* buffer, uint16_t vector_len);
@@ -27,8 +30,6 @@ uint16_t hawaii_preserve_vector(Model* model, ParameterInfo* output, uint32_t ou
 
 extern int16_t input_buffer_with_footprints[INPUT_BUFFER_WITH_FOOTPRINTS_LEN];
 int16_t extend_for_footprints(int16_t val);
-uint8_t is_footprint_channel(int16_t c);
-uint8_t is_footprint_padding_channel(int16_t c);
 uint8_t has_footprints(const ParameterInfo* cur_param);
 #endif
 

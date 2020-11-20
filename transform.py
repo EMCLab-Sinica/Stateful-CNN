@@ -54,9 +54,6 @@ class Constants:
     STATEFUL = 0
     HAWAII = 0
     JAPARI = 0
-    # below two are used by JAPARI only
-    HAS_FOOTPRINT_PADDING_CHANNEL = 0
-    TILE_C_WITH_FOOTPRINTS = 0
     INTERMITTENT = 0
     METHOD = "Baseline"
 
@@ -213,10 +210,6 @@ if args.japari:
     Constants.JAPARI = 1
     Constants.METHOD = "JAPARI"
     config['intermediate_values_size'] *= 2
-    Constants.TILE_C_WITH_FOOTPRINTS = int(Constants.DEFAULT_TILE_C / Constants.BATCH_SIZE * (Constants.BATCH_SIZE + 1))
-    if Constants.TILE_C_WITH_FOOTPRINTS % 2:
-        Constants.TILE_C_WITH_FOOTPRINTS += 1
-        Constants.HAS_FOOTPRINT_PADDING_CHANNEL = 1
 Constants.INTERMITTENT = Constants.STATEFUL | Constants.HAWAII | Constants.JAPARI
 
 onnx_model = onnx.load(config['onnx_model'])
@@ -489,6 +482,9 @@ for params in parameters:
         model_parameters_info.write(to_bytes(16, size=8))                # bitwidth
         model_parameters_info.write(to_bytes(Constants.SLOT_TEST_SET, size=8))     # slot
         model_parameters_info.write(to_bytes(input_channel, size=16))    # tile_c
+        if Constants.JAPARI:
+            model_parameters_info.write(to_bytes(input_channel))         # orig_channels
+            model_parameters_info.write(to_bytes(0))                     # dummy
         # extend_dims
         model_parameters_info.write(to_bytes(1))
         model_parameters_info.write(to_bytes(input_channel))
@@ -536,6 +532,9 @@ for params in parameters:
         else:
             tile_c = 0
         model_parameters_info.write(to_bytes(tile_c, size=16))       # tile_c
+        if Constants.JAPARI:
+            model_parameters_info.write(to_bytes(tile_c))            # orig_channels
+            model_parameters_info.write(to_bytes(0))                 # dummy
         print('dims = {}, length = {}'.format(params.dims, data_len))
         for dim in params.dims:
             model_parameters_info.write(to_bytes(dim))
@@ -559,6 +558,9 @@ for idx, n in enumerate(nodes):
     intermediate_parameters_info.write(to_bytes(0, size=8))  # bitwidth
     intermediate_parameters_info.write(to_bytes(0, size=8))  # slot
     intermediate_parameters_info.write(to_bytes(0, size=16))  # tile_c
+    if Constants.JAPARI:
+        intermediate_parameters_info.write(to_bytes(0))              # orig_channels
+        intermediate_parameters_info.write(to_bytes(0))              # dummy
     for _ in range(4):  # dims[4]
         intermediate_parameters_info.write(to_bytes(0))
     intermediate_parameters_info.write(to_bytes(0, size=8))     # flags

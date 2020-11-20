@@ -73,6 +73,9 @@ static void dump_params_common(const ParameterInfo* cur_param) {
     my_printf("Slot: %d" NEWLINE, cur_param->slot);
     my_printf("Scale: %d" NEWLINE, cur_param->scale);
     my_printf("Params len: %" PRId32 NEWLINE, cur_param->params_len);
+#if JAPARI
+    my_printf("Original channels: %d" NEWLINE, cur_param->orig_channels);
+#endif
 }
 
 static int16_t find_real_num(int16_t NUM, int16_t CHANNEL, int16_t H, int16_t W, const ParameterInfo* cur_param) {

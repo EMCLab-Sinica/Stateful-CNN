@@ -30,18 +30,6 @@ int16_t extend_for_footprints(int16_t val) {
     return (val + val / BATCH_SIZE + 1) / 2 * 2;
 }
 
-uint8_t is_footprint_channel(int16_t c) {
-    return (c % TILE_C_WITH_FOOTPRINTS) % (BATCH_SIZE + 1) == BATCH_SIZE;
-}
-
-uint8_t is_footprint_padding_channel(int16_t c) {
-#if HAS_FOOTPRINT_PADDING_CHANNEL
-    return c % TILE_C_WITH_FOOTPRINTS == TILE_C_WITH_FOOTPRINTS - 1;
-#else
-    return 0;
-#endif
-}
-
 uint8_t has_footprints(const ParameterInfo *cur_param) {
     return (cur_param->slot < NUM_SLOTS) && !(cur_param->flags & NO_FOOTPRINTS);
 }
@@ -203,9 +191,23 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
     }
 }
 
-void determine_tile_c(ParameterInfo *param, const ParameterInfo *filter) {
-    uint16_t OUTPUT_CHANNEL = param->dims[1];
-    param->tile_c = MIN_VAL(DEFAULT_TILE_C, OUTPUT_CHANNEL);
+void determine_tile_c(ParameterInfo* output, const ParameterInfo* input, const ParameterInfo *filter) {
+    uint16_t OUTPUT_CHANNEL = output->dims[1];
+    const Node* node = get_node(output->parameter_info_idx - N_INPUT);
+    if (node->op_type == Conv) {
+        int16_t kH = filter->dims[2], kW = filter->dims[3];
+        MY_ASSERT(filter != nullptr);
+        // inner +1 for biases
+        int16_t filter_len = ((input->tile_c * kW + 1) + 1) / 2 * 2 * kH;
+        // * 2 as in JAPARI, the number of footprint weights is up to the number of
+        // filters (e.g., batch size=1)
+        while (((output->tile_c * 2 + 1) + TEMP_FILTER_WIDTH) * filter_len > LEA_BUFFER_SIZE) {
+            output->tile_c /= 2;
+            MY_ASSERT(output->tile_c % 2 != 1);
+        }
+    } else {
+        output->tile_c = MIN_VAL(DEFAULT_TILE_C, OUTPUT_CHANNEL);
+    }
 }
 
 #if STATEFUL

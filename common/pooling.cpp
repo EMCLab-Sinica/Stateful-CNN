@@ -6,6 +6,21 @@
 #include "op_utils.h"
 #include "my_dsplib.h"
 
+struct MaxPoolParams {
+    uint16_t output_h;
+    uint16_t output_w;
+    uint16_t start_channel;
+    uint8_t n_channels;
+#if JAPARI
+    uint8_t footprint_tile_c;
+    uint8_t has_footprint_padding_channel;
+#endif
+    const NodeFlags* flags;
+    const ParameterInfo *data;
+    Model *model;
+};
+static MaxPoolParams maxpool_params_obj;
+
 void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
     uint16_t stride = flags->stride;
 
@@ -16,7 +31,32 @@ void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     uint16_t new_H = H / stride;
     uint16_t new_W = W / stride;
 #if JAPARI
-    CHANNEL = CHANNEL / TILE_C_WITH_FOOTPRINTS * DEFAULT_TILE_C;
+    MaxPoolParams* maxpool_params = &maxpool_params_obj;
+    maxpool_params->footprint_tile_c = 0;
+
+    uint16_t input_tile_c = data->tile_c;
+    // XXX: are all cases covered?
+    uint8_t batches_in_a_tile = 1;
+    for (; batches_in_a_tile * (BATCH_SIZE + 1) <= input_tile_c; batches_in_a_tile++) {
+        uint16_t candidate = batches_in_a_tile * (BATCH_SIZE + 1);
+        if (candidate == input_tile_c) {
+            maxpool_params->footprint_tile_c = candidate;
+            maxpool_params->has_footprint_padding_channel = 0;
+        } else if (candidate + 1 == input_tile_c) {
+            maxpool_params->footprint_tile_c = input_tile_c;
+            maxpool_params->has_footprint_padding_channel = 1;
+        } else if (batches_in_a_tile * (BATCH_SIZE + 2) == input_tile_c) {
+            maxpool_params->footprint_tile_c = BATCH_SIZE + 2;
+            maxpool_params->has_footprint_padding_channel = 1;
+        }
+        if (batches_in_a_tile * BATCH_SIZE == data->orig_channels) {
+            break;
+        }
+    }
+    my_printf_debug("input_tile_c = %d, footprint_tile_c = %d, has_footprint_padding_channel = %d" NEWLINE,
+                    input_tile_c, maxpool_params->footprint_tile_c, maxpool_params->has_footprint_padding_channel);
+    MY_ASSERT(maxpool_params->footprint_tile_c);
+    CHANNEL = batches_in_a_tile * BATCH_SIZE;
 #endif
 
     output->params_len = new_H * new_W * CHANNEL * sizeof(int16_t);
@@ -28,22 +68,35 @@ void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     output->flags |= NO_FOOTPRINTS;
 }
 
-static uint8_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t start_channel, uint8_t n_channels, const NodeFlags* flags, const ParameterInfo *data, Model *model) {
-    const uint16_t CHANNEL = data->dims[1], W = data->dims[3];
-    uint16_t stride = flags->stride;
-    uint16_t kernel_size = flags->kernel_size;
+#if JAPARI
+static bool skip_channel(MaxPoolParams* maxpool_params, uint16_t cur_channel) {
+    uint8_t footprint_tile_offset = cur_channel % maxpool_params->footprint_tile_c;
+    if (footprint_tile_offset % (BATCH_SIZE + 1) == BATCH_SIZE) {
+        return true;
+    }
+    if (maxpool_params->has_footprint_padding_channel && footprint_tile_offset == maxpool_params->footprint_tile_c - 1) {
+        return true;
+    }
+    return false;
+}
+#endif
+
+static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
+    const uint16_t CHANNEL = maxpool_params->data->dims[1], W = maxpool_params->data->dims[3];
+    uint16_t stride = maxpool_params->flags->stride;
+    uint16_t kernel_size = maxpool_params->flags->kernel_size;
 
     int16_t offset_h, offset_w;
     offset_h = W * CHANNEL;
     offset_w = CHANNEL;
 
-    my_printf_debug("output_h=% 3d ", output_h);
-    my_printf_debug("output_w=% 3d ", output_w);
-    my_printf_debug("c=[% 3d, % 3d) ", start_channel, start_channel + n_channels);
+    my_printf_debug("output_h=% 3d ", maxpool_params->output_h);
+    my_printf_debug("output_w=% 3d ", maxpool_params->output_w);
+    my_printf_debug("c=[% 3d, % 3d) ", maxpool_params->start_channel, maxpool_params->start_channel + maxpool_params->n_channels);
 
-    int16_t* const input_buffer = lea_buffer + n_channels;
+    int16_t* const input_buffer = lea_buffer + maxpool_params->n_channels;
     int16_t* const output_buffer = lea_buffer;
-    my_fill_q15(INT16_MIN, output_buffer, n_channels);
+    my_fill_q15(INT16_MIN, output_buffer, maxpool_params->n_channels);
 
     // explicitly initialize this as -Wmaybe-uninitialized may be triggered with -O3
     // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=60165
@@ -51,12 +104,13 @@ static uint8_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t star
 
     for (uint16_t sH = 0; sH < kernel_size; sH++) {
         for (uint16_t sW = 0; sW < kernel_size; sW++) {
-            uint16_t val_offset = (output_h*stride+sH) * offset_h + (output_w*stride+sW) * offset_w + start_channel;
-            my_memcpy_from_param(model, input_buffer, data, val_offset, n_channels * sizeof(int16_t));
+            uint16_t val_offset = (maxpool_params->output_h*stride+sH) * offset_h + (maxpool_params->output_w*stride+sW) * offset_w + maxpool_params->start_channel;
+            my_memcpy_from_param(maxpool_params->model, input_buffer, maxpool_params->data, val_offset, maxpool_params->n_channels * sizeof(int16_t));
             output_channel_offset = 0;
-            for (uint8_t input_channel_offset = 0; input_channel_offset < n_channels; input_channel_offset++) {
+            for (uint8_t input_channel_offset = 0; input_channel_offset < maxpool_params->n_channels; input_channel_offset++) {
 #if JAPARI
-                if (is_footprint_channel(start_channel + input_channel_offset)) {
+                uint8_t cur_channel = maxpool_params->start_channel + input_channel_offset;
+                if (skip_channel(maxpool_params, cur_channel)) {
                     continue;
                 }
 #endif
@@ -67,7 +121,7 @@ static uint8_t maxpool_patch(uint16_t output_h, uint16_t output_w, uint16_t star
                     val -= 0x4000;
                 }
 #endif
-                // dump_value_debug(model, data, val_offset);
+                // dump_value_debug(model, maxpool_params->data, val_offset);
                 my_printf_debug("% 6d ", val);
                 // XXX: use LEA?
                 if (val > output_buffer[output_channel_offset]) {
@@ -102,6 +156,11 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     /* XXX: add flags; assume no padding for now */
     const ParameterInfo *data = input[0];
 
+    MaxPoolParams* maxpool_params = &maxpool_params_obj;
+    maxpool_params->data = data;
+    maxpool_params->flags = flags;
+    maxpool_params->model = model;
+
     my_printf_debug("handle_maxpool input" NEWLINE);
     dump_params_nhwc_debug(model, data, 0);
 
@@ -109,11 +168,8 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     uint16_t new_H = H / stride;
     uint16_t new_W = W / stride;
 
-    determine_tile_c(output);
+    determine_tile_c(output, data);
     uint16_t tile_c = output->tile_c;
-#if JAPARI
-    tile_c = extend_for_footprints(tile_c);
-#endif
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
 
     uint16_t tile_c_offset = 0;
@@ -167,21 +223,22 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     my_printf_debug("initial_c = %d" NEWLINE, initial_c);
 #endif
 
-    for (; tile_c_offset < CHANNEL; tile_c_offset += tile_c) {
-        uint16_t cur_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
+    for (; tile_c_offset < CHANNEL;) {
+        uint8_t extended_tile_c = tile_c;
+#if JAPARI
+        extended_tile_c += extended_tile_c / BATCH_SIZE;
+#endif
+        uint16_t cur_tile_c = MIN_VAL(extended_tile_c, CHANNEL - tile_c_offset);
         if (!need_nhwc2nchw) {
             // NHWC
             for (; output_h < new_H; output_h++) {
+                maxpool_params->output_h = output_h;
                 for (; output_w < new_W; output_w++) {
                     uint8_t len = cur_tile_c - c;
-#if JAPARI
-# if HAS_FOOTPRINT_PADDING_CHANNEL
-                    len -= 2;
-# else
-                    len--;
-# endif
-#endif
-                    len = maxpool_patch(output_h, output_w, c + tile_c_offset, len, flags, data, model);
+                    maxpool_params->output_w = output_w;
+                    maxpool_params->n_channels = len;
+                    maxpool_params->start_channel = c + tile_c_offset;
+                    len = maxpool_patch(maxpool_params);
                     my_printf_debug("output_offset=[% 5d, % 5d) ", output_offset, output_offset + len);
 #if STATEFUL
                     check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
@@ -210,20 +267,23 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
             // NCHW
             uint8_t channel_stride = 1;
             for (; c < cur_tile_c; c += channel_stride) {
-#if JAPARI
-                if (is_footprint_channel(c) || is_footprint_padding_channel(c)) {
-                    continue;
-                }
-#endif
                 for (; output_h < new_H; output_h++) {
+                    maxpool_params->output_h = output_h;
                     for (; output_w < new_W; output_w++) {
-                        maxpool_patch(output_h, output_w, c + tile_c_offset, 1, flags, data, model);
-                        my_printf_debug("output_offset=%d" NEWLINE, output_offset);
+                        maxpool_params->output_w = output_w;
+                        maxpool_params->start_channel = c + tile_c_offset;
+                        maxpool_params->n_channels = 1;
+                        uint8_t len = maxpool_patch(maxpool_params);
+                        if (!len) {
+                            my_printf_debug(NEWLINE);
+                            continue;
+                        }
+                        my_printf_debug("output_offset=% 5d ", output_offset);
 #if STATEFUL
                         check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
                         lea_buffer[0] += offset;
 #endif
-                        my_printf_debug(" max=% 6d ", lea_buffer[0]);
+                        my_printf_debug("max=% 6d " NEWLINE, lea_buffer[0]);
                         put_q15_param(output, output_offset, lea_buffer[0]);
 #if HAWAII
                         write_hawaii_layer_footprint(model->layer_idx, 1);
@@ -236,6 +296,9 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
             }
             c = 0;
         }
+        tile_c_offset += extended_tile_c;
+#if JAPARI
+#endif
     }
 
     MY_ASSERT(output_offset == output->params_len / sizeof(int16_t));

@@ -8,9 +8,6 @@
 // TODO: make these adjustable on runtime
 #define OUTPUT_LEN 100
 
-// to make the code clearer
-#define TEMP_FILTER_WIDTH 1
-
 #if MY_DEBUG >= 1
 static int16_t last_output_data_offset;
 #endif
@@ -423,9 +420,10 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     conv_params->n_tiles_c = upper_gauss(CHANNEL, input_tile_c);
     // set dims[1] here so that determine_tile_c works
     output->dims[1] = output->tile_c = OUTPUT_CHANNEL;
-    determine_tile_c(output, conv_filter);
+    determine_tile_c(output, conv_input, conv_filter);
 #if JAPARI
-    OUTPUT_CHANNEL = upper_gauss(OUTPUT_CHANNEL, output->tile_c) * TILE_C_WITH_FOOTPRINTS;
+    output->orig_channels = OUTPUT_CHANNEL;
+    OUTPUT_CHANNEL = upper_gauss(OUTPUT_CHANNEL, output->tile_c) * extend_for_footprints(output->tile_c);
     output->dims[1] = OUTPUT_CHANNEL;
 #endif
 
@@ -637,8 +635,9 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 
     uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
 #if JAPARI
-    uint16_t n_chunks = chunk_len / TILE_C_WITH_FOOTPRINTS;
-    chunk_len = n_chunks * TILE_C_WITH_FOOTPRINTS;
+    uint8_t tile_c_with_footprints = extend_for_footprints(data->tile_c);
+    uint16_t n_chunks = chunk_len / tile_c_with_footprints;
+    chunk_len = n_chunks * tile_c_with_footprints;
 #endif
 
     float scale_f = 1.0 * find_max_multiplier(model, data) / n_tiles_c;
@@ -679,8 +678,8 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
         int8_t layer_sign = get_layer_sign(model);
         int16_t* layer_sign_buffer = lea_buffer + (LEA_BUFFER_SIZE - n_chunks) / 2 * 2;
         my_fill_q15(layer_sign, layer_sign_buffer, n_chunks);
-        for (uint8_t batch_offset = BATCH_SIZE; batch_offset < TILE_C_WITH_FOOTPRINTS; batch_offset += BATCH_SIZE + 1) {
-            my_interleave_q15(layer_sign_buffer, batch_offset, TILE_C_WITH_FOOTPRINTS, lea_buffer, n_chunks);
+        for (uint8_t batch_offset = BATCH_SIZE; batch_offset < tile_c_with_footprints; batch_offset += BATCH_SIZE + 1) {
+            my_interleave_q15(layer_sign_buffer, batch_offset, tile_c_with_footprints, lea_buffer, n_chunks);
         }
 #endif
 #if !HAWAII

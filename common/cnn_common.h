@@ -50,6 +50,10 @@ typedef struct ParameterInfo {
     uint8_t slot;
     /* Values are grouped each tile_c channels */
     uint16_t tile_c;
+#if JAPARI
+    uint16_t orig_channels;
+    uint16_t dummy;
+#endif
     // uint8_t is not enough. For example, fully connected layer in MNIST has dims 256x1
     uint16_t dims[4];
     // use signed type for scale as TI's compiler does not handle
@@ -60,7 +64,7 @@ typedef struct ParameterInfo {
     const uint16_t parameter_info_idx; // must be the last member of this struct
 } ParameterInfo;
 
-static_assert(sizeof(ParameterInfo) == 28, "Unexpected size for ParameterInfo");
+static_assert(sizeof(ParameterInfo) == 28 + JAPARI * 4, "Unexpected size for ParameterInfo");
 
 typedef struct SlotInfo {
     SlotInfo() {}

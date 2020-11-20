@@ -130,9 +130,9 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         for (; output_h < H; output_h++) {
             for (; output_w < W; output_w++) {
 #if JAPARI
-                uint8_t prev_tiles_len = c % TILE_C_WITH_FOOTPRINTS * TILE_C_WITH_FOOTPRINTS;
+                uint8_t prev_tiles_len = c % input_tile_c * input_tile_c;
                 uint8_t next_footprint_channel = prev_tiles_len + (c - prev_tiles_len) / (BATCH_SIZE + 1) * (BATCH_SIZE + 1) + BATCH_SIZE;
-                uint8_t next_tile = prev_tiles_len + TILE_C_WITH_FOOTPRINTS;
+                uint8_t next_tile = prev_tiles_len + input_tile_c;
 #endif
                 for (; c < CHANNEL; ) {
                     int16_t input_tile_c_index = c / input_tile_c;
@@ -160,7 +160,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                             next_footprint_channel += BATCH_SIZE + 1;
                             if (next_footprint_channel >= next_tile) {
                                 next_footprint_channel = next_tile + BATCH_SIZE;
-                                next_tile += TILE_C_WITH_FOOTPRINTS;
+                                next_tile += input_tile_c;
                             }
                         } else
 #endif
