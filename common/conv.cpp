@@ -323,11 +323,6 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     input_src_offset = input_offset + (conv_params->input_h + h_start) * conv_params->W * conv_params->cur_input_tile_c + (conv_params->input_w + w_start) * conv_params->cur_input_tile_c;
 #if STATEFUL
     dump_turning_points_debug(model, conv_params->real_conv_input);
-
-    int16_t offset, next_turning_point;
-    uint8_t turning_point_idx;
-    SlotInfo *input_slot_info;
-    find_initial_state_bit(&offset, &turning_point_idx, &next_turning_point, &input_slot_info, input_src_offset, model, conv_params->real_conv_input);
 #endif
     for (int32_t h = h_start; h <= h_end; h++) {
         int16_t *dest_addr = dest + (w_start + field_size) * conv_params->cur_filter_tile_c;
@@ -339,21 +334,17 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         dump_matrix_debug(dest_addr, input_row_len, ValueInfo(conv_params->real_conv_input));
 
 #if STATEFUL
-        int16_t input_src_offset_end = input_src_offset + input_row_len;
-        if (offset) {
-            MY_ASSERT(static_cast<uint16_t>(next_turning_point) > input_src_offset);
-            my_offset_q15(dest_addr, -offset, dest_addr, MIN_VAL(static_cast<int16_t>(input_row_len), static_cast<uint16_t>(next_turning_point) - input_src_offset));
-        } else if (static_cast<uint16_t>(next_turning_point) < input_src_offset_end) {
-            MY_ASSERT(next_turning_point >= input_src_offset);
-            int16_t *to_offset  = dest_addr + next_turning_point - input_src_offset;
-            my_offset_q15(to_offset, -0x4000, to_offset, input_src_offset_end - next_turning_point);
+        // XXX: stipping states inside the h loop is faster
+        int16_t *input_row_end = dest_addr + input_row_len;
+        for (int16_t *dest_ptr = dest_addr; dest_ptr < input_row_end; dest_ptr++) {
+            int16_t val = *dest_ptr;
+            if (get_value_state_bit(val)) {
+                *dest_ptr = val - 0x4000;
+            }
         }
 #endif
         dest += conv_params->dest_offset;
         input_src_offset += conv_params->W * conv_params->cur_input_tile_c;
-#if STATEFUL
-        check_next_turning_point(offset, turning_point_idx, next_turning_point, input_slot_info, input_src_offset);
-#endif
     }
     if (conv_params->real_conv_input->scale != conv_params->conv_input->scale) {
         int16_t scaleFract;
