@@ -115,10 +115,8 @@ void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n) {
     SPI_WRITE(&addr, reinterpret_cast<const uint8_t*>(vm_buffer), n);
 }
 
-void my_erase(uint32_t nvm_offset, size_t n) {
-    SPI_ADDR addr;
-    addr.L = nvm_offset;
-    SPI_FILL_Q15(&addr, 0, n);
+void my_erase() {
+    eraseFRAM();
 }
 
 void copy_samples_data(void) {

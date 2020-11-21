@@ -93,9 +93,7 @@ void commit_model(void) {
 
 void first_run(void) {
     my_printf_debug("First run, resetting everything..." NEWLINE);
-#if STATEFUL
-    my_erase(intermediate_values_offset(0), INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
-#endif
+    my_erase();
     copy_samples_data();
 
     write_to_nvm(intermediate_parameters_info_data, intermediate_parameters_info_addr(0), INTERMEDIATE_PARAMETERS_INFO_DATA_LEN);
@@ -106,12 +104,6 @@ void first_run(void) {
     commit_model();
 
     my_printf("Done first run initialization for " METHOD " with batch size=%d" NEWLINE, BATCH_SIZE);
-
-    // XXX: need to wait some time for data to be flushed, why?
-    uint32_t counter = 100000;
-    while (counter) {
-        counter--;
-    }
 }
 
 #if HAWAII
