@@ -122,7 +122,6 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         my_printf_debug("initial c = %d" NEWLINE, c);
 
 #endif
-        int16_t input_tile_c = X->tile_c;
 #if JAPARI
         input_tile_c = extend_for_footprints(input_tile_c);
         int8_t layer_sign = get_layer_sign(model);
@@ -134,16 +133,12 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                 uint8_t next_footprint_channel = prev_tiles_len + (c - prev_tiles_len) / (BATCH_SIZE + 1) * (BATCH_SIZE + 1) + BATCH_SIZE;
                 uint8_t next_tile = prev_tiles_len + input_tile_c;
 #endif
-                for (; c < CHANNEL; ) {
-                    int16_t input_tile_c_index = c / input_tile_c;
-                    uint16_t cur_input_tile_c = MIN_VAL(input_tile_c, CHANNEL - input_tile_c_index * input_tile_c);
-                    int16_t val_offset = input_tile_c_index * W * H * input_tile_c + output_w * H * cur_input_tile_c + output_h * cur_input_tile_c + c % input_tile_c;
+                    int16_t val_offset = output_w * H * CHANNEL + output_h * CHANNEL + c;
                     output_offset = output_h * W * OUTPUT_CHANNEL + output_w * OUTPUT_CHANNEL + c;
 #if STATEFUL
                     check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
 #endif
-                    int16_t next_start_channel = MIN_VAL((input_tile_c_index + 1) * input_tile_c, CHANNEL);
-                    uint8_t len = next_start_channel - c;
+                    uint8_t len = CHANNEL - c;
                     my_memcpy_from_param(model, lea_buffer, X, val_offset, len * sizeof(int16_t));
 
                     my_printf_debug("output_h=% 3d, output_w=% 3d, c=[% 3d, % 3d), val_offset=[% 6d, % 6d), input val=",
@@ -201,9 +196,6 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         my_printf_debug("% 6d ", lea_buffer[idx]);
                     }
                     my_printf_debug(NEWLINE);
-
-                    c = next_start_channel;
-                }
                 c = 0;
             }
             output_w = 0;
@@ -239,8 +231,6 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             output_offset++;
         }
     }
-
-    output->tile_c = CHANNEL;
 
 #if STATEFUL
     flip_state_bit(model, output);
@@ -331,7 +321,6 @@ void handle_concat(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     // XXX: assume concatenating 2 tensors at the CHANNEL dimension and they
     // have the same number of channels.
     MY_ASSERT(A->dims[1] == B->dims[1]);
-    output->tile_c = A->dims[1];
     output->dims[1] *= 2;
     output->flags |= SEPARATE_TILING;
 

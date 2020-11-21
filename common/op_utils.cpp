@@ -191,25 +191,6 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
     }
 }
 
-void determine_tile_c(ParameterInfo* output, const ParameterInfo* input, const ParameterInfo *filter) {
-    uint16_t OUTPUT_CHANNEL = output->dims[1];
-    const Node* node = get_node(output->parameter_info_idx - N_INPUT);
-    if (node->op_type == Conv) {
-        int16_t kH = filter->dims[2], kW = filter->dims[3];
-        MY_ASSERT(filter != nullptr);
-        // inner +1 for biases
-        int16_t filter_len = ((input->tile_c * kW + 1) + 1) / 2 * 2 * kH;
-        // * 2 as in JAPARI, the number of footprint weights is up to the number of
-        // filters (e.g., batch size=1)
-        while (((output->tile_c * 2 + 1) + TEMP_FILTER_WIDTH) * filter_len > LEA_BUFFER_SIZE) {
-            output->tile_c /= 2;
-            MY_ASSERT(output->tile_c % 2 != 1);
-        }
-    } else {
-        output->tile_c = MIN_VAL(DEFAULT_TILE_C, OUTPUT_CHANNEL);
-    }
-}
-
 #if STATEFUL
 void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param) {
     *p_offset = get_state_bit(model, param->slot) ? 0x4000 : 0;

@@ -95,7 +95,7 @@ void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, size_t offse
     W = cur_param->dims[3];
     NUM = find_real_num(NUM, CHANNEL, H, W, cur_param);
     dump_params_common(cur_param);
-    int16_t output_tile_c = cur_param->tile_c;
+    int16_t output_tile_c = cur_param->dims[1];
 #if JAPARI
     if (has_footprints(cur_param)) {
         output_tile_c = extend_for_footprints(output_tile_c);

@@ -168,8 +168,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     uint16_t new_H = H / stride;
     uint16_t new_W = W / stride;
 
-    determine_tile_c(output, data);
-    uint16_t tile_c = output->tile_c;
+    uint16_t tile_c = output->dims[1];
     my_printf_debug("tile_c = %d" NEWLINE, tile_c);
 
     uint16_t tile_c_offset = 0;

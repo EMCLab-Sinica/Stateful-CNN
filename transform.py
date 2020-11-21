@@ -481,10 +481,10 @@ for params in parameters:
         model_parameters_info.write(to_bytes(input_channel* dimX * dimY * 2, size=32))  # A _q15 is 16-bit
         model_parameters_info.write(to_bytes(16, size=8))                # bitwidth
         model_parameters_info.write(to_bytes(Constants.SLOT_TEST_SET, size=8))     # slot
-        model_parameters_info.write(to_bytes(input_channel, size=16))    # tile_c
-        if Constants.JAPARI:
-            model_parameters_info.write(to_bytes(input_channel))         # orig_channels
+        if not Constants.JAPARI:
             model_parameters_info.write(to_bytes(0))                     # dummy
+        else:
+            model_parameters_info.write(to_bytes(input_channel))         # orig_channels
         # extend_dims
         model_parameters_info.write(to_bytes(1))
         model_parameters_info.write(to_bytes(input_channel))
@@ -528,13 +528,13 @@ for params in parameters:
             assert False
         model_parameters_info.write(to_bytes(slot.slot_id, size=8))  # slot
         if len(params.dims) == 4:
-            tile_c = params.dims[1]
+            channels = params.dims[1]
         else:
-            tile_c = 0
-        model_parameters_info.write(to_bytes(tile_c, size=16))       # tile_c
-        if Constants.JAPARI:
-            model_parameters_info.write(to_bytes(tile_c))            # orig_channels
-            model_parameters_info.write(to_bytes(0))                 # dummy
+            channels = 0
+        if not Constants.JAPARI:
+            model_parameters_info.write(to_bytes(0, size=16))        # dummy
+        else:
+            model_parameters_info.write(to_bytes(channels))          # orig_channels
         print('dims = {}, length = {}'.format(params.dims, data_len))
         for dim in params.dims:
             model_parameters_info.write(to_bytes(dim))
@@ -557,10 +557,10 @@ for idx, n in enumerate(nodes):
     intermediate_parameters_info.write(to_bytes(0, size=32))  # params_len
     intermediate_parameters_info.write(to_bytes(0, size=8))  # bitwidth
     intermediate_parameters_info.write(to_bytes(0, size=8))  # slot
-    intermediate_parameters_info.write(to_bytes(0, size=16))  # tile_c
-    if Constants.JAPARI:
-        intermediate_parameters_info.write(to_bytes(0))              # orig_channels
-        intermediate_parameters_info.write(to_bytes(0))              # dummy
+    if not Constants.JAPARI:
+        intermediate_parameters_info.write(to_bytes(0))         # dummy
+    else:
+        intermediate_parameters_info.write(to_bytes(0))         # orig_channels
     for _ in range(4):  # dims[4]
         intermediate_parameters_info.write(to_bytes(0))
     intermediate_parameters_info.write(to_bytes(0, size=8))     # flags
