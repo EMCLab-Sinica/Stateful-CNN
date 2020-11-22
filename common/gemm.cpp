@@ -46,7 +46,7 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
         gemm_params.tile_width /= 2;
     }
 
-    while (gemm_params.tile_width * gemm_params.tile_channel >= ARM_PSTATE_LEN) {
+    while (gemm_params.tile_width * gemm_params.tile_channel > ARM_PSTATE_LEN) {
         MY_ASSERT(gemm_params.tile_width % 2 == 0);
         gemm_params.tile_width /= 2;
     }
