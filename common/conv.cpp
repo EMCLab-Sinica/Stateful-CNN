@@ -47,7 +47,7 @@ typedef struct ConvTaskParams {
     // offset_h and offset_w to handle auto_pad=VALID
     uint8_t offset_h;
     uint8_t offset_w;
-    uint8_t input_tile_c;
+    uint16_t input_tile_c;
     uint8_t output_tile_c;
     uint16_t input_tile_c_offset;
     uint16_t input_tile_c_index;
@@ -256,13 +256,30 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #endif
 }
 
+static inline void load_input_vector(uint32_t src_addr, int16_t* dest_addr, uint8_t len, const ConvTaskParams* conv_params) {
+    my_printf_debug("Load %d IFM values from range [%d, %d) ",
+                    len, src_addr, static_cast<int>(src_addr + len));
+    my_memcpy_from_param(
+        conv_params->model, dest_addr,
+        conv_params->real_conv_input, src_addr,
+        len * sizeof(int16_t));
+#if MY_DEBUG >= 1
+    for (uint8_t idx = 0; idx < len; idx++) {
+        my_printf_debug("%d ", dest_addr[idx]);
+    }
+    my_printf_debug(NEWLINE);
+#endif
+}
+
 static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     int8_t field_size = (conv_params->kH - 1) / 2;
 
     /* copy input data, row by row */
 
+    int8_t real_input_index = -1;
     if (conv_params->conv_input->flags & SEPARATE_TILING) {
-        conv_params->real_conv_input = get_parameter_info(conv_params->conv_input->extra_info[conv_params->input_tile_c_index]);
+        real_input_index = (2 * conv_params->input_tile_c_index >= conv_params->n_tiles_c) ? 1 : 0;
+        conv_params->real_conv_input = get_parameter_info(conv_params->conv_input->extra_info[real_input_index]);
     } else {
         conv_params->real_conv_input = conv_params->conv_input;
     }
@@ -287,14 +304,14 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     // TEMP_FILTER_WIDTH additional filters for values before transpose
     uint16_t inputs_len = MIN_VAL(
         LEA_BUFFER_SIZE - OUTPUT_LEN - (max_n_filters + TEMP_FILTER_WIDTH) * conv_params->filter_offset,
-        (conv_params->H + conv_params->kH - 1) * conv_params->dest_offset
+        (conv_params->tile_h + conv_params->kH - conv_params->stride) * conv_params->dest_offset
     );
     MY_ASSERT(inputs_len < LEA_BUFFER_SIZE); // make sure no overflow occurs in the previous line
 
     dest = lea_buffer;
 
-    int32_t h_start = int16_max(                     -field_size,                 -conv_params->input_h),
-            h_end =   int16_min(conv_params->tile_h-1+field_size, conv_params->H-1-conv_params->input_h);
+    int32_t h_start = int16_max(                                       -field_size,                                   -conv_params->input_h),
+            h_end =   int16_min(conv_params->tile_h-conv_params->stride+field_size, conv_params->H-conv_params->stride-conv_params->input_h);
 
     my_printf_debug("Reinitialize input buffer" NEWLINE "inputs_len = %d" NEWLINE, inputs_len);
 
@@ -311,26 +328,28 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
 #endif
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                     static_cast<int>(dest - lea_buffer));
-    int16_t input_src_offset = (conv_params->input_h + h_start) * conv_params->W * conv_params->CHANNEL + (conv_params->input_w + w_start) * conv_params->CHANNEL + conv_params->input_tile_c_offset;
+    uint16_t cur_input_channel = conv_params->CHANNEL;
+    if (conv_params->conv_input->flags & SEPARATE_TILING) {
+        cur_input_channel /= 2;
+    }
+    int16_t input_src_offset = (conv_params->input_h + h_start) * conv_params->W * cur_input_channel + (conv_params->input_w + w_start) * cur_input_channel + conv_params->input_tile_c_offset;
+    if (real_input_index == 1) {
+        input_src_offset -= cur_input_channel;
+    }
 #if STATEFUL
     dump_turning_points_debug(model, conv_params->real_conv_input);
 #endif
     for (int32_t h = h_start; h <= h_end; h++) {
         int16_t *dest_addr = dest + (w_start + field_size) * cur_input_tile_c;
         uint32_t src_addr = input_src_offset;
-        for (int32_t w = w_start; w <= w_end; w++) {
-            my_printf_debug("Load %d IFM values from range [%d, %d) ",
-                            cur_input_tile_c, src_addr, static_cast<int>(src_addr + cur_input_tile_c));
-            my_memcpy_from_param(
-                model, dest_addr,
-                conv_params->real_conv_input, src_addr,
-                cur_input_tile_c * sizeof(int16_t));
-            for (uint8_t idx = 0; idx < cur_input_tile_c; idx++) {
-                my_printf_debug("%d ", dest_addr[idx]);
+        if (cur_input_tile_c == cur_input_channel) {
+            load_input_vector(src_addr, dest_addr, (w_end - w_start + 1) * cur_input_tile_c, conv_params);
+        } else {
+            for (int32_t w = w_start; w <= w_end; w++) {
+                load_input_vector(src_addr, dest_addr, cur_input_tile_c, conv_params);
+                dest_addr += cur_input_tile_c;
+                src_addr += cur_input_channel;
             }
-            my_printf_debug(NEWLINE);
-            dest_addr += cur_input_tile_c;
-            src_addr += conv_params->CHANNEL;
         }
 
 #if STATEFUL
@@ -344,7 +363,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         }
 #endif
         dest += conv_params->dest_offset;
-        input_src_offset += conv_params->W * conv_params->CHANNEL;
+        input_src_offset += conv_params->W * cur_input_channel;
     }
     if (conv_params->real_conv_input->scale != conv_params->conv_input->scale) {
         int16_t scaleFract;
@@ -378,6 +397,10 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     }
 }
 
+static inline uint8_t is_factor(int16_t a, int16_t b) {
+    return a / b * b == a;
+}
+
 void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
     const ParameterInfo *conv_input = input[0], *conv_filter = input[1];
 
@@ -406,23 +429,48 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     } else {
         conv_params->offset_h = conv_params->offset_w = 0;
     }
+    conv_params->OUTPUT_H = (H - conv_params->offset_h * 2) / conv_params->stride;
+    conv_params->OUTPUT_W = (W - conv_params->offset_w * 2) / conv_params->stride;
 
     int16_t kH = conv_filter->dims[2], kW = conv_filter->dims[3];
-    // inner +1 for biases
-    conv_params->input_tile_c = MIN_VAL(CHANNEL, 4);
-    int16_t filter_len = ((conv_params->input_tile_c * kW + 1) + 1) / 2 * 2 * kH;
-    // * 2 as in JAPARI, the number of footprint weights is up to the number of
-    // filters (e.g., batch size=1)
-    conv_params->output_tile_c = OUTPUT_CHANNEL;
-    while (((conv_params->output_tile_c * 2 + 1) + TEMP_FILTER_WIDTH) * filter_len > LEA_BUFFER_SIZE) {
-        conv_params->output_tile_c /= 2;
-        MY_ASSERT(conv_params->output_tile_c % 2 != 1);
+    uint16_t max_continuous_channels = CHANNEL;
+    if (conv_input->flags & SEPARATE_TILING) {
+        max_continuous_channels /= 2;
     }
-    MY_ASSERT(OUTPUT_CHANNEL / conv_params->output_tile_c * conv_params->output_tile_c == OUTPUT_CHANNEL);
-    my_printf_debug("output_tile_c=%d" NEWLINE, conv_params->output_tile_c);
+    if (max_continuous_channels % 2) {
+        conv_params->input_tile_c = max_continuous_channels;
+    } else {
+        conv_params->input_tile_c = 1;
+        while (is_factor(max_continuous_channels, conv_params->input_tile_c * 2)) {
+            conv_params->input_tile_c *= 2;
+        }
+    }
+    while (1) {
+        // inner +1 for biases
+        int16_t filter_len = ((conv_params->input_tile_c * kW + 1) + 1) / 2 * 2 * kH;
+        // * 2 as in JAPARI, the number of footprint weights is up to the number of
+        // filters (e.g., batch size=1)
+        conv_params->output_tile_c = OUTPUT_CHANNEL;
+        while (((conv_params->output_tile_c * 2 + 1) + TEMP_FILTER_WIDTH) * filter_len > LEA_BUFFER_SIZE) {
+            conv_params->output_tile_c /= 2;
+            if (conv_params->output_tile_c % 2) {
+                // current input_tile_c is too large such that no even output_tile_c fits
+                MY_ASSERT(conv_params->input_tile_c % 2 == 0);
+                goto next_input_tile_c;
+            }
+        }
+        MY_ASSERT(is_factor(OUTPUT_CHANNEL, conv_params->output_tile_c));
 
-    conv_params->n_tiles_c = CHANNEL / conv_params->input_tile_c;
-    MY_ASSERT(conv_params->n_tiles_c * conv_params->input_tile_c == CHANNEL);
+        MY_ASSERT(is_factor(max_continuous_channels, conv_params->input_tile_c));
+        conv_params->n_tiles_c = CHANNEL / conv_params->input_tile_c;
+        output->params_len = conv_params->n_tiles_c * OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W * sizeof(int16_t);
+        if (output->params_len < INTERMEDIATE_VALUES_SIZE) {
+            break;
+        }
+next_input_tile_c:
+        conv_params->input_tile_c /= 2;
+    }
+    my_printf_debug("input_tile_c=%d, output_tile_c=%d" NEWLINE, conv_params->input_tile_c, conv_params->output_tile_c);
 #if JAPARI
     output->orig_channels = OUTPUT_CHANNEL;
     OUTPUT_CHANNEL = upper_gauss(OUTPUT_CHANNEL, output->tile_c) * extend_for_footprints(output->tile_c);
@@ -433,10 +481,10 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     output->slot = get_next_slot(model, conv_input);
     output->dims[0] = 1;
     output->dims[1] = OUTPUT_CHANNEL;
-    output->dims[2] = conv_params->OUTPUT_H = (H - conv_params->offset_h * 2) / conv_params->stride;
-    output->dims[3] = conv_params->OUTPUT_W = (W - conv_params->offset_w * 2) / conv_params->stride;
-    output->params_len = conv_params->n_tiles_c * OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W * sizeof(int16_t);
+    output->dims[2] = conv_params->OUTPUT_H;
+    output->dims[3] = conv_params->OUTPUT_W;
     output->flags |= TRANSPOSED;
+    output->flags &= ~SEPARATE_TILING;
 #if JAPARI
     output->flags &= ~NO_FOOTPRINTS;
 #endif
@@ -453,7 +501,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     ConvTaskParams *conv_params = &conv_params_obj;
 
-    conv_params->tile_h = MIN_VAL(H, DEFAULT_TILE_H);
+    conv_params->tile_h = MIN_VAL(H, DEFAULT_TILE_H * conv_params->stride);
 
     MY_ASSERT(conv_params->tile_h / conv_params->stride * conv_params->stride == conv_params->tile_h);
 
@@ -656,6 +704,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
             iterate_chunks(model, data, data_offset, real_chunk_len, ConvMergeInputChunkHandler, &params);
 #endif
             // scale up results as in convolution values are scaled down twice (input & weights)
+            my_printf_debug("Chunk offset %d, input tile %d" NEWLINE, tiling_results_offset, input_tile_c_index);
             my_printf_debug("Before my_scale_q15" NEWLINE);
             ValueInfo val_info_data(data);
             dump_matrix_debug(to_add, real_chunk_len, val_info_data);
