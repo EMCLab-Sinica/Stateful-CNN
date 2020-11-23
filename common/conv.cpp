@@ -445,21 +445,23 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
             conv_params->input_tile_c *= 2;
         }
     }
+    // Use 32-bit integers or overflow may occur on MSP430 during finding a suitable tiling size
+    uint32_t output_tile_c;
     while (1) {
         // inner +1 for biases
         int16_t filter_len = ((conv_params->input_tile_c * kW + 1) + 1) / 2 * 2 * kH;
         // * 2 as in JAPARI, the number of footprint weights is up to the number of
         // filters (e.g., batch size=1)
-        conv_params->output_tile_c = OUTPUT_CHANNEL;
-        while (((conv_params->output_tile_c * 2 + 1) + TEMP_FILTER_WIDTH) * filter_len > LEA_BUFFER_SIZE) {
-            conv_params->output_tile_c /= 2;
-            if (conv_params->output_tile_c % 2) {
+        output_tile_c = OUTPUT_CHANNEL;
+        while (((output_tile_c * 2 + 1) + TEMP_FILTER_WIDTH) * filter_len > LEA_BUFFER_SIZE) {
+            output_tile_c /= 2;
+            if (output_tile_c % 2) {
                 // current input_tile_c is too large such that no even output_tile_c fits
                 MY_ASSERT(conv_params->input_tile_c % 2 == 0);
                 goto next_input_tile_c;
             }
         }
-        MY_ASSERT(is_factor(OUTPUT_CHANNEL, conv_params->output_tile_c));
+        MY_ASSERT(is_factor(OUTPUT_CHANNEL, output_tile_c));
 
         MY_ASSERT(is_factor(max_continuous_channels, conv_params->input_tile_c));
         conv_params->n_tiles_c = CHANNEL / conv_params->input_tile_c;
@@ -470,6 +472,7 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 next_input_tile_c:
         conv_params->input_tile_c /= 2;
     }
+    conv_params->output_tile_c = output_tile_c;
     my_printf_debug("input_tile_c=%d, output_tile_c=%d" NEWLINE, conv_params->input_tile_c, conv_params->output_tile_c);
 #if JAPARI
     output->orig_channels = OUTPUT_CHANNEL;
