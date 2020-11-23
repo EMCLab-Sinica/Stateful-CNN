@@ -219,10 +219,11 @@ try:
         'fuse_add_bias_into_conv',
         'fuse_matmul_add_bias_into_gemm',
     ])
-    onnx.save_model(onnx_model, config['onnx_model'].replace('.onnx', '-opt.onnx'))
 except IndexError:
     # Somehow the optimizer cannot handle models transformed from keras2onnx
     pass
+onnx_model = onnx.shape_inference.infer_shapes(onnx_model)
+onnx.save_model(onnx_model, config['onnx_model'].replace('.onnx', '-opt.onnx'))
 g = onnx_model.graph
 names = {}
 
