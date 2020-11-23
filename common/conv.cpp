@@ -31,6 +31,7 @@ typedef struct ConvTaskParams {
     const ParameterInfo *conv_filter;
     const ParameterInfo *conv_bias;
     ParameterInfo *output;
+    const NodeFlags* flags;
 
     /* aux vars remaining constant for a conv layer */
     uint16_t H;
@@ -47,8 +48,6 @@ typedef struct ConvTaskParams {
     // offset_h and offset_w to handle auto_pad=VALID
     uint8_t offset_h;
     uint8_t offset_w;
-    uint16_t input_tile_c;
-    uint8_t output_tile_c;
     uint16_t input_tile_c_offset;
     uint16_t input_tile_c_index;
     uint16_t tile_h;
@@ -96,7 +95,7 @@ static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filte
 
 static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     // cur_output_tile_c should be signed, or MAX_VAL below is broken with TI's compiler
-    int16_t cur_output_tile_c = MIN_VAL(conv_params->output_tile_c, conv_params->N_FILTERS - conv_params->filter_idx);
+    int16_t cur_output_tile_c = MIN_VAL(conv_params->flags->conv_output_tile_c, conv_params->N_FILTERS - conv_params->filter_idx);
     my_printf_debug("cur_output_tile_c = %d" NEWLINE, cur_output_tile_c);
     MY_ASSERT(cur_output_tile_c > 0);
 
@@ -297,7 +296,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     int32_t w_start = int16_max(-field_size,                 -conv_params->input_w),
             w_end   = int16_min( field_size, conv_params->W-1-conv_params->input_w);
     int16_t *dest;
-    int16_t max_n_filters = conv_params->output_tile_c;
+    int16_t max_n_filters = conv_params->flags->conv_output_tile_c;
 #if JAPARI
     max_n_filters *= 2;
 #endif
@@ -393,12 +392,8 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         // filter_idx is set to initial_c in handle_conv
         convTask(j, conv_params);
         // reset here for further processing
-        conv_params->filter_idx = conv_params->filter_tile_index * conv_params->output_tile_c;
+        conv_params->filter_idx = conv_params->filter_tile_index * conv_params->flags->conv_output_tile_c;
     }
-}
-
-static inline uint8_t is_factor(int16_t a, int16_t b) {
-    return a / b * b == a;
 }
 
 void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
@@ -418,6 +413,7 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     ConvTaskParams *conv_params = &conv_params_obj;
 
     conv_params->model = model;
+    conv_params->flags = flags;
 
     conv_params->kH = conv_filter->dims[2];
     conv_params->kW = conv_filter->dims[3];
@@ -432,48 +428,8 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     conv_params->OUTPUT_H = (H - conv_params->offset_h * 2) / conv_params->stride;
     conv_params->OUTPUT_W = (W - conv_params->offset_w * 2) / conv_params->stride;
 
-    int16_t kH = conv_filter->dims[2], kW = conv_filter->dims[3];
-    uint16_t max_continuous_channels = CHANNEL;
-    if (conv_input->flags & SEPARATE_TILING) {
-        max_continuous_channels /= 2;
-    }
-    if (max_continuous_channels % 2) {
-        conv_params->input_tile_c = max_continuous_channels;
-    } else {
-        conv_params->input_tile_c = 1;
-        while (is_factor(max_continuous_channels, conv_params->input_tile_c * 2)) {
-            conv_params->input_tile_c *= 2;
-        }
-    }
-    // Use 32-bit integers or overflow may occur on MSP430 during finding a suitable tiling size
-    uint32_t output_tile_c;
-    while (1) {
-        // inner +1 for biases
-        int16_t filter_len = ((conv_params->input_tile_c * kW + 1) + 1) / 2 * 2 * kH;
-        // * 2 as in JAPARI, the number of footprint weights is up to the number of
-        // filters (e.g., batch size=1)
-        output_tile_c = OUTPUT_CHANNEL;
-        while (((output_tile_c * 2 + 1) + TEMP_FILTER_WIDTH) * filter_len > LEA_BUFFER_SIZE) {
-            output_tile_c /= 2;
-            if (output_tile_c % 2) {
-                // current input_tile_c is too large such that no even output_tile_c fits
-                MY_ASSERT(conv_params->input_tile_c % 2 == 0);
-                goto next_input_tile_c;
-            }
-        }
-        MY_ASSERT(is_factor(OUTPUT_CHANNEL, output_tile_c));
-
-        MY_ASSERT(is_factor(max_continuous_channels, conv_params->input_tile_c));
-        conv_params->n_tiles_c = CHANNEL / conv_params->input_tile_c;
-        output->params_len = conv_params->n_tiles_c * OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W * sizeof(int16_t);
-        if (output->params_len < INTERMEDIATE_VALUES_SIZE) {
-            break;
-        }
-next_input_tile_c:
-        conv_params->input_tile_c /= 2;
-    }
-    conv_params->output_tile_c = output_tile_c;
-    my_printf_debug("input_tile_c=%d, output_tile_c=%d" NEWLINE, conv_params->input_tile_c, conv_params->output_tile_c);
+    conv_params->n_tiles_c = CHANNEL / flags->conv_input_tile_c;
+    my_printf_debug("input_tile_c=%d, output_tile_c=%d" NEWLINE, flags->conv_input_tile_c, flags->conv_output_tile_c);
 #if JAPARI
     output->orig_channels = OUTPUT_CHANNEL;
     OUTPUT_CHANNEL = upper_gauss(OUTPUT_CHANNEL, output->tile_c) * extend_for_footprints(output->tile_c);
@@ -482,6 +438,7 @@ next_input_tile_c:
     /* XXX: extend flags; assume dilation=(1, 1) for now */
     output->bitwidth = 16;
     output->slot = get_next_slot(model, conv_input);
+    output->params_len = conv_params->n_tiles_c * conv_params->OUTPUT_H * conv_params->OUTPUT_W * OUTPUT_CHANNEL * sizeof(int16_t);
     output->dims[0] = 1;
     output->dims[1] = OUTPUT_CHANNEL;
     output->dims[2] = conv_params->OUTPUT_H;
@@ -494,7 +451,7 @@ next_input_tile_c:
     output->scale = conv_input->scale * conv_filter->scale;
 }
 
-void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
+void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
     const ParameterInfo *conv_input = input[0], *conv_filter = input[1], *conv_bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 
@@ -552,7 +509,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     // Dimensions: channel-tiled NWHC
     uint16_t slice_size_input_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL;
     conv_params->input_tile_c_index = first_unfinished_value_offset / slice_size_input_channel_tiling;
-    conv_params->input_tile_c_offset = conv_params->input_tile_c_index * input_tile_c;
+    conv_params->input_tile_c_offset = conv_params->input_tile_c_index * flags->conv_input_tile_c;
     first_unfinished_value_offset %= slice_size_input_channel_tiling;
 
     uint16_t slice_size_output_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL;
@@ -577,8 +534,8 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
     int16_t input_channels = conv_input->dims[1];
-    for (; conv_params->input_tile_c_offset < input_channels; conv_params->input_tile_c_offset += conv_params->input_tile_c, conv_params->input_tile_c_index++) {
-        conv_params->cur_input_tile_c = MIN_VAL(conv_params->input_tile_c, input_channels - conv_params->input_tile_c_offset);
+    for (; conv_params->input_tile_c_offset < input_channels; conv_params->input_tile_c_offset += flags->conv_input_tile_c, conv_params->input_tile_c_index++) {
+        conv_params->cur_input_tile_c = MIN_VAL(flags->conv_input_tile_c, input_channels - conv_params->input_tile_c_offset);
         conv_params->cur_filter_tile_c = conv_params->cur_input_tile_c;
         my_printf_debug("cur_input_tile_c = %d" NEWLINE, conv_params->cur_input_tile_c);
         conv_params->dest_offset = conv_params->kH * conv_params->cur_input_tile_c;
@@ -595,7 +552,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         }
         conv_params->filter_offset = conv_params->kH * conv_params->dest_offset;
 
-        while (conv_params->filter_tile_index * conv_params->output_tile_c < conv_params->N_FILTERS) {
+        while (conv_params->filter_tile_index * flags->conv_output_tile_c < conv_params->N_FILTERS) {
             for (; conv_params->input_w < W - conv_params->offset_w; conv_params->input_w += conv_params->stride) {
                 for (; conv_params->input_h < H - conv_params->offset_h; conv_params->input_h += conv_params->tile_h) {
                     handle_conv_inner_loop(model, conv_params);
@@ -604,7 +561,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             }
             conv_params->input_w = conv_params->offset_w;
             conv_params->filter_tile_index++;
-            conv_params->filter_idx = conv_params->filter_tile_index * conv_params->output_tile_c;
+            conv_params->filter_idx = conv_params->filter_tile_index * flags->conv_output_tile_c;
         }
         conv_params->filter_idx = conv_params->filter_tile_index = 0;
     }
@@ -617,7 +574,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     uint32_t tiling_results_len = conv_params->OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W;
 
     my_printf_debug("handle_conv output" NEWLINE);
-    for (uint16_t input_tile_c_index = 0; input_tile_c_index * conv_params->input_tile_c < input_channels; input_tile_c_index++) {
+    for (uint16_t input_tile_c_index = 0; input_tile_c_index * flags->conv_input_tile_c < input_channels; input_tile_c_index++) {
         dump_params_nhwc_debug(model, output, input_tile_c_index * tiling_results_len);
     }
 #endif

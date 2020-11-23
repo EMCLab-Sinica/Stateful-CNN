@@ -4,9 +4,6 @@
 #include "data.h"
 #include "platform.h"
 
-// to make the code clearer; used in Conv
-#define TEMP_FILTER_WIDTH 1
-
 struct Model;
 struct ParameterInfo;
 struct SlotInfo;

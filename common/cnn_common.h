@@ -12,7 +12,11 @@ struct NodeFlags {
     uint8_t generic : 8;
     uint8_t kernel_size : 4;    // used in MaxPool
     uint8_t stride : 4;         // used in Conv and MaxPool
+    uint8_t conv_input_tile_c : 8;
+    uint8_t conv_output_tile_c : 8;
 };
+
+static_assert(sizeof(NodeFlags) == 4, "Unexpected size for NodeFlags");
 
 typedef struct Node {
     char name[NODE_NAME_LEN];
@@ -29,8 +33,7 @@ typedef struct Node {
 #endif
 } Node;
 
-// _Static_assert in C11 or static_assert in C++11 requires the message
-static_assert(sizeof(Node) == 32 + HAWAII * 4 + JAPARI * 2, "Unexpected size for Node");
+static_assert(sizeof(Node) == 40 + HAWAII * 4 + JAPARI * 2, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct ParameterInfo {

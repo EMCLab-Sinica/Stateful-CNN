@@ -36,8 +36,7 @@ class Constants:
     SLOT_TEST_SET = 0xff
     SLOT_CONSTANTS_MIN = SLOT_PARAMETERS
     SLOT_INTERMEDIATE_VALUES = 0b01
-    # To make the Node struct exactly 32 bytes
-    NODE_NAME_LEN = 18
+    NODE_NAME_LEN = 24
     EXTRA_INFO_LEN = 3  # for memory alignment
     TURNING_POINTS_LEN = 8
     MODEL_NODES_LEN = 0
@@ -47,6 +46,10 @@ class Constants:
     # Match the size of external FRAM
     NVM_SIZE = 512 * 1024
     N_SAMPLES = 20
+    # to make the code clearer; used in Conv
+    TEMP_FILTER_WIDTH = 1
+    # (4096 - 0x138 (LEASTACK) - 2 * 8 (MSP_LEA_MAC_PARAMS)) / sizeof(int16_t)
+    LEA_BUFFER_SIZE = 1884
 
     DEFAULT_TILE_C = 4
     DEFAULT_TILE_H = 4
@@ -116,16 +119,22 @@ class NodeFlags_bits(ctypes.LittleEndianStructure):
         ("generic", ctypes.c_uint8, 8),
         ("kernel_size", ctypes.c_uint8, 4),
         ("stride", ctypes.c_uint8, 4),
+        ("conv_input_tile_c", ctypes.c_uint8, 8),
+        ("conv_output_tile_c", ctypes.c_uint8, 8),
     ]
 
 class NodeFlags(ctypes.Union):
     _fields_ = [
         ("b", NodeFlags_bits),
-        ("as_bytes", ctypes.c_uint16),
+        ("as_bytes", ctypes.c_uint32),
     ]
 
     def __repr__(self):
-        return f'<NodeFlags generic={self.b.generic} kernel_size={self.b.kernel_size} stride={self.b.stride}>'
+        ret = '<NodeFlags'
+        for (key, _, _) in NodeFlags_bits._fields_:
+            ret += f' {key}={getattr(self.b, key)}'
+        ret += '>'
+        return ret
 
 class ONNXNodeWrapper:
     def __init__(self, orig_node: onnx.NodeProto):
@@ -351,8 +360,72 @@ class Node:
     flags: NodeFlags
     max_output_id: int
 
+def find_tensor_value_info(name: str):
+    if name.endswith('_before_merge'):
+        name = name[:-len('_before_merge')]
+    for value_info in g.value_info:
+        if value_info.name == name:
+            return value_info
+    raise ValueError(f'No value_info found for {name}')
+
+def find_node_by_output(output_name):
+    for node in g.node:
+        if node.output[0] == output_name:
+            return node
+
+def determine_conv_tile_c(n):
+    output_value_info = find_tensor_value_info(n.output[0])
+    filter_info = find_initializer(n.input[1])
+    node_flags = n.flags
+
+    is_separate_tiling = False
+    if not find_initializer(n.input[0]):
+        input_node = find_node_by_output(n.input[0])
+        if input_node and input_node.op_type == 'Concat':
+            is_separate_tiling = True
+
+    shape = output_value_info.type.tensor_type.shape
+    OUTPUT_CHANNEL = shape.dim[1].dim_value
+    OUTPUT_H = shape.dim[2].dim_value
+    OUTPUT_W = shape.dim[3].dim_value
+    CHANNEL = filter_info.dims[1]
+    kH = filter_info.dims[2]
+    kW = filter_info.dims[3]
+
+    max_continuous_channels = CHANNEL
+    if is_separate_tiling:
+        max_continuous_channels /= 2
+    if max_continuous_channels % 2:
+        node_flags.b.conv_input_tile_c = max_continuous_channels
+    else:
+        node_flags.b.conv_input_tile_c = 1
+        while max_continuous_channels % (node_flags.b.conv_input_tile_c * 2) == 0 and node_flags.b.conv_input_tile_c < 128:
+            node_flags.b.conv_input_tile_c *= 2
+
+    while True:
+        input_tile_too_large = False
+        # inner +1 for biases
+        filter_len = ((node_flags.b.conv_input_tile_c * kW + 1) + 1) // 2 * 2 * kH
+        # * 2 as in JAPARI, the number of footprint weights is up to the number of
+        # filters (e.g., batch size=1)
+        output_tile_c = OUTPUT_CHANNEL
+        while ((output_tile_c * 2 + 1) + Constants.TEMP_FILTER_WIDTH) * filter_len > Constants.LEA_BUFFER_SIZE:
+            output_tile_c //= 2
+            if output_tile_c % 2:
+                # current input_tile_c is too large such that no even output_tile_c fits
+                input_tile_too_large = True
+
+        if not input_tile_too_large:
+            params_len = CHANNEL / node_flags.b.conv_input_tile_c * OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W * 2
+            if params_len < config['intermediate_values_size']:
+                break
+        node_flags.b.conv_input_tile_c //= 2
+    node_flags.b.conv_output_tile_c = output_tile_c
+
 graph = []
 for n in nodes:
+    if n.op_type == 'Conv':
+        determine_conv_tile_c(n)
     graph.append(Node(name=n.name or n.op_type,
                       inputs=[names[i] for i in n.input],
                       op_type=n.op_type,
@@ -457,7 +530,7 @@ for node in graph:
         output_nodes.write(to_bytes(0))
     output_nodes.write(to_bytes(node.max_output_id))
     output_nodes.write(to_bytes(list(ops.keys()).index(node.op_type)))
-    output_nodes.write(to_bytes(node.flags.as_bytes))
+    output_nodes.write(to_bytes(node.flags.as_bytes, size=32))
     if Constants.HAWAII:
         output_nodes.write(to_bytes(0, size=32))  # footprint
     if Constants.JAPARI:
