@@ -119,7 +119,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     uint8_t need_cleanup_state_bits = 0;
     if (conv_params->turning_point_idx <= cur_slot_info->n_turning_points && conv_params->next_turning_point > 0) {
         my_printf_debug("next_turning_point = %d" NEWLINE, conv_params->next_turning_point);
-        n_keep_state_bits -= MAX_VAL(0, cur_output_data_offset + n_filters - conv_params->next_turning_point);
+        n_keep_state_bits -= MAX_VAL(0, cur_output_data_offset + n_filters - MAX_VAL(conv_params->next_turning_point, cur_output_data_offset));
     }
     my_printf_debug("n_keep_state_bits = %d" NEWLINE, n_keep_state_bits);
     MY_ASSERT(n_keep_state_bits >= 0);
@@ -245,7 +245,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #if STATEFUL
     if (n_keep_state_bits != n_filters) {
         check_next_turning_point(conv_params->old_output_offset, conv_params->turning_point_idx,
-                                 conv_params->next_turning_point, conv_params->cur_slot_info, cur_output_data_offset + n_filters);
+                                 conv_params->next_turning_point, conv_params->cur_slot_info, cur_output_data_offset + conv_params->OUTPUT_CHANNEL);
         my_printf_debug("old_output_offset flipped to %d" NEWLINE, conv_params->old_output_offset);
 
         if (need_cleanup_state_bits) {
@@ -337,6 +337,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
 #endif
     for (int32_t h = h_start; h <= h_end; h++) {
         int16_t *dest_addr = dest + (w_start + field_size) * cur_input_tile_c;
+        int16_t *orig_dest_addr = dest_addr;
         uint16_t input_row_len = (w_end - w_start + 1) * cur_input_tile_c;
         uint32_t src_addr = input_src_offset;
         if (cur_input_tile_c == cur_input_channel) {
@@ -351,8 +352,8 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
 
 #if STATEFUL
         // XXX: stipping states inside the h loop is faster
-        int16_t *input_row_end = dest_addr + input_row_len;
-        for (int16_t *dest_ptr = dest_addr; dest_ptr < input_row_end; dest_ptr++) {
+        int16_t *input_row_end = orig_dest_addr + input_row_len;
+        for (int16_t *dest_ptr = orig_dest_addr; dest_ptr < input_row_end; dest_ptr++) {
             int16_t val = *dest_ptr;
             if (get_value_state_bit(val)) {
                 *dest_ptr = val - 0x4000;
@@ -531,7 +532,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
     int16_t input_channels = conv_input->dims[1];
-    for (; conv_params->input_tile_c_offset < input_channels; conv_params->input_tile_c_offset += flags->conv_input_tile_c, conv_params->input_tile_c_index++) {
+    for (; conv_params->input_tile_c_offset < input_channels; conv_params->input_tile_c_offset += flags->conv_input_tile_c) {
         conv_params->cur_input_tile_c = MIN_VAL(flags->conv_input_tile_c, input_channels - conv_params->input_tile_c_offset);
         conv_params->cur_filter_tile_c = conv_params->cur_input_tile_c;
         my_printf_debug("cur_input_tile_c = %d" NEWLINE, conv_params->cur_input_tile_c);
@@ -559,8 +560,18 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             conv_params->input_w = conv_params->offset_w;
             conv_params->filter_tile_index++;
             conv_params->filter_idx = conv_params->filter_tile_index * flags->conv_output_tile_c;
+#if STATEFUL
+            find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point, &conv_params->cur_slot_info,
+                                   conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W + conv_params->filter_idx, model, output);
+#endif
         }
         conv_params->filter_idx = conv_params->filter_tile_index = 0;
+
+        conv_params->input_tile_c_index++;
+#if STATEFUL
+        find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point, &conv_params->cur_slot_info,
+                               conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W, model, output);
+#endif
     }
 
 #if STATEFUL

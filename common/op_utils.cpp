@@ -193,6 +193,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 
 #if STATEFUL
 void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param) {
+    my_printf_debug("Initialize next_turning_point from output offset %d" NEWLINE, initial_value_idx);
     *p_offset = get_state_bit(model, param->slot) ? 0x4000 : 0;
     *p_turning_point_idx = 0;
     *p_next_turning_point = -1;
