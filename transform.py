@@ -405,9 +405,9 @@ def determine_conv_tile_c(n):
     while True:
         input_tile_too_large = False
         # inner +1 for biases
-        filter_len = ((node_flags.b.conv_input_tile_c * kW + 1) + 1) // 2 * 2 * kH
         # * 2 as in JAPARI, the number of footprint weights is up to the number of
         # filters (e.g., batch size=1)
+        filter_len = ((node_flags.b.conv_input_tile_c * kW + 1) + 1) // 2 * 2 * 2 * kH
         output_tile_c = OUTPUT_CHANNEL
         while ((output_tile_c * 2 + 1) + Constants.TEMP_FILTER_WIDTH) * filter_len > Constants.LEA_BUFFER_SIZE:
             output_tile_c //= 2

@@ -103,8 +103,8 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     int16_t channel_offset_c = conv_params->filter_idx;
 #if JAPARI
     n_filters = extend_for_footprints(n_filters);
-    cur_output_tile_c_full = extend_for_footprints(cur_output_tile_c_full);
-    channel_offset_c = extend_for_footprints(channel_offset_c);
+    int16_t extended_output_tile_c = extend_for_footprints(cur_output_tile_c);
+    channel_offset_c = channel_offset_c / cur_output_tile_c * extended_output_tile_c + channel_offset_c % cur_output_tile_c;
 #endif
     // use NWHC so that output is written continuously on the address space
     int16_t cur_output_data_offset =
@@ -322,9 +322,6 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     my_printf_debug("h_end=%" PRId32 NEWLINE, h_end);
 
     uint8_t cur_input_tile_c = conv_params->cur_input_tile_c;
-#if JAPARI
-    MY_ASSERT(input_row_len <= INPUT_BUFFER_WITH_FOOTPRINTS_LEN);
-#endif
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                     static_cast<int>(dest - lea_buffer));
     uint16_t cur_input_channel = conv_params->CHANNEL;
@@ -340,9 +337,10 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
 #endif
     for (int32_t h = h_start; h <= h_end; h++) {
         int16_t *dest_addr = dest + (w_start + field_size) * cur_input_tile_c;
+        uint16_t input_row_len = (w_end - w_start + 1) * cur_input_tile_c;
         uint32_t src_addr = input_src_offset;
         if (cur_input_tile_c == cur_input_channel) {
-            load_input_vector(src_addr, dest_addr, (w_end - w_start + 1) * cur_input_tile_c, conv_params);
+            load_input_vector(src_addr, dest_addr, input_row_len, conv_params);
         } else {
             for (int32_t w = w_start; w <= w_end; w++) {
                 load_input_vector(src_addr, dest_addr, cur_input_tile_c, conv_params);
@@ -432,7 +430,7 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     my_printf_debug("input_tile_c=%d, output_tile_c=%d" NEWLINE, flags->conv_input_tile_c, flags->conv_output_tile_c);
 #if JAPARI
     output->orig_channels = OUTPUT_CHANNEL;
-    OUTPUT_CHANNEL = upper_gauss(OUTPUT_CHANNEL, output->tile_c) * extend_for_footprints(output->tile_c);
+    OUTPUT_CHANNEL = upper_gauss(OUTPUT_CHANNEL, flags->conv_output_tile_c) * extend_for_footprints(flags->conv_output_tile_c);
 #endif
 
     /* XXX: extend flags; assume dilation=(1, 1) for now */
@@ -495,37 +493,36 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     conv_params->filter_idx = 0;
 #if INTERMITTENT
 
-    uint32_t first_unfinished_value_offset = run_recovery(model, output);
+    uint32_t first_unfinished_job_index = run_recovery(model, output);
     // Force recovery from an even OFM index as most DSPLib function does not like odd dimensions
-    first_unfinished_value_offset = first_unfinished_value_offset / 2 * 2;
+    first_unfinished_job_index = first_unfinished_job_index / 2 * 2;
 
 #if STATEFUL
     find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point,
-                           &conv_params->cur_slot_info, first_unfinished_value_offset, model, output);
+                           &conv_params->cur_slot_info, first_unfinished_job_index, model, output);
 
     my_printf_debug("old_output_offset = %d" NEWLINE, conv_params->old_output_offset);
 #endif
 
     // Dimensions: channel-tiled NWHC
     uint16_t slice_size_input_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL;
-    conv_params->input_tile_c_index = first_unfinished_value_offset / slice_size_input_channel_tiling;
+    conv_params->input_tile_c_index = first_unfinished_job_index / slice_size_input_channel_tiling;
     conv_params->input_tile_c_offset = conv_params->input_tile_c_index * flags->conv_input_tile_c;
-    first_unfinished_value_offset %= slice_size_input_channel_tiling;
+    first_unfinished_job_index %= slice_size_input_channel_tiling;
 
-    uint16_t slice_size_output_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL;
-    conv_params->filter_tile_index = first_unfinished_value_offset / slice_size_output_channel_tiling;
-    conv_params->filter_idx = conv_params->filter_tile_index * conv_params->OUTPUT_CHANNEL;
-    first_unfinished_value_offset %= slice_size_output_channel_tiling;
+    uint16_t slice_size_output_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * flags->conv_output_tile_c;
+    conv_params->filter_tile_index = first_unfinished_job_index / slice_size_output_channel_tiling;
+    conv_params->filter_idx = conv_params->filter_tile_index * flags->conv_output_tile_c;
+    first_unfinished_job_index %= slice_size_output_channel_tiling;
 
-    uint16_t cur_output_tile_c = MIN_VAL(conv_params->OUTPUT_CHANNEL, conv_params->N_FILTERS - conv_params->filter_tile_index * conv_params->OUTPUT_CHANNEL);
-    uint16_t slice_size_column = cur_output_tile_c * conv_params->OUTPUT_H;
-    conv_params->input_w += first_unfinished_value_offset / slice_size_column * conv_params->stride;
-    first_unfinished_value_offset %= slice_size_column;
+    uint16_t cur_output_tile_c = flags->conv_output_tile_c;
+    conv_params->filter_idx += first_unfinished_job_index % cur_output_tile_c;
+    first_unfinished_job_index /= cur_output_tile_c;
 
-    conv_params->input_h += first_unfinished_value_offset / cur_output_tile_c * conv_params->stride;
-    first_unfinished_value_offset %= cur_output_tile_c;
+    conv_params->input_w += first_unfinished_job_index / conv_params->OUTPUT_H * conv_params->stride;
+    first_unfinished_job_index %= conv_params->OUTPUT_W;
 
-    conv_params->filter_idx += first_unfinished_value_offset;
+    conv_params->input_h += first_unfinished_job_index * conv_params->stride;
 
     my_printf_debug("initial output N = %d" NEWLINE, conv_params->input_tile_c_index);
     my_printf_debug("initial output H = %d" NEWLINE, conv_params->input_h / conv_params->stride);
@@ -641,7 +638,8 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 
     uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
 #if JAPARI
-    uint8_t tile_c_with_footprints = extend_for_footprints(data->tile_c);
+    const Node* data_node = get_node(data->parameter_info_idx - N_INPUT);
+    uint8_t tile_c_with_footprints = extend_for_footprints(data_node->flags.conv_output_tile_c);
     uint16_t n_chunks = chunk_len / tile_c_with_footprints;
     chunk_len = n_chunks * tile_c_with_footprints;
 #endif

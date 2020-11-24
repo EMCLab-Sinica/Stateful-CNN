@@ -11,10 +11,6 @@ struct MaxPoolParams {
     uint16_t output_w;
     uint16_t start_channel;
     uint8_t n_channels;
-#if JAPARI
-    uint8_t footprint_tile_c;
-    uint8_t has_footprint_padding_channel;
-#endif
     const NodeFlags* flags;
     const ParameterInfo *data;
     Model *model;
@@ -30,34 +26,6 @@ void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     uint16_t CHANNEL = data->dims[1];
     uint16_t new_H = H / stride;
     uint16_t new_W = W / stride;
-#if JAPARI
-    MaxPoolParams* maxpool_params = &maxpool_params_obj;
-    maxpool_params->footprint_tile_c = 0;
-
-    uint16_t input_tile_c = data->tile_c;
-    // XXX: are all cases covered?
-    uint8_t batches_in_a_tile = 1;
-    for (; batches_in_a_tile * (BATCH_SIZE + 1) <= input_tile_c; batches_in_a_tile++) {
-        uint16_t candidate = batches_in_a_tile * (BATCH_SIZE + 1);
-        if (candidate == input_tile_c) {
-            maxpool_params->footprint_tile_c = candidate;
-            maxpool_params->has_footprint_padding_channel = 0;
-        } else if (candidate + 1 == input_tile_c) {
-            maxpool_params->footprint_tile_c = input_tile_c;
-            maxpool_params->has_footprint_padding_channel = 1;
-        } else if (batches_in_a_tile * (BATCH_SIZE + 2) == input_tile_c) {
-            maxpool_params->footprint_tile_c = BATCH_SIZE + 2;
-            maxpool_params->has_footprint_padding_channel = 1;
-        }
-        if (batches_in_a_tile * BATCH_SIZE == data->orig_channels) {
-            break;
-        }
-    }
-    my_printf_debug("input_tile_c = %d, footprint_tile_c = %d, has_footprint_padding_channel = %d" NEWLINE,
-                    input_tile_c, maxpool_params->footprint_tile_c, maxpool_params->has_footprint_padding_channel);
-    MY_ASSERT(maxpool_params->footprint_tile_c);
-    CHANNEL = batches_in_a_tile * BATCH_SIZE;
-#endif
 
     output->params_len = new_H * new_W * CHANNEL * sizeof(int16_t);
     output->slot = get_next_slot(model, data);
@@ -67,19 +35,6 @@ void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     output->dims[3] = new_W;
     output->flags |= NO_FOOTPRINTS;
 }
-
-#if JAPARI
-static bool skip_channel(MaxPoolParams* maxpool_params, uint16_t cur_channel) {
-    uint8_t footprint_tile_offset = cur_channel % maxpool_params->footprint_tile_c;
-    if (footprint_tile_offset % (BATCH_SIZE + 1) == BATCH_SIZE) {
-        return true;
-    }
-    if (maxpool_params->has_footprint_padding_channel && footprint_tile_offset == maxpool_params->footprint_tile_c - 1) {
-        return true;
-    }
-    return false;
-}
-#endif
 
 static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
     const uint16_t CHANNEL = maxpool_params->data->dims[1], W = maxpool_params->data->dims[3];
@@ -108,12 +63,6 @@ static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
             my_memcpy_from_param(maxpool_params->model, input_buffer, maxpool_params->data, val_offset, maxpool_params->n_channels * sizeof(int16_t));
             output_channel_offset = 0;
             for (uint8_t input_channel_offset = 0; input_channel_offset < maxpool_params->n_channels; input_channel_offset++) {
-#if JAPARI
-                uint8_t cur_channel = maxpool_params->start_channel + input_channel_offset;
-                if (skip_channel(maxpool_params, cur_channel)) {
-                    continue;
-                }
-#endif
                 int16_t val = input_buffer[input_channel_offset];
 #if STATEFUL
                 if (get_value_state_bit(val)) {
@@ -224,9 +173,6 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 
     for (; tile_c_offset < CHANNEL;) {
         uint8_t extended_tile_c = tile_c;
-#if JAPARI
-        extended_tile_c += extended_tile_c / BATCH_SIZE;
-#endif
         uint16_t cur_tile_c = MIN_VAL(extended_tile_c, CHANNEL - tile_c_offset);
         if (!need_nhwc2nchw) {
             // NHWC
@@ -296,8 +242,6 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
             c = 0;
         }
         tile_c_offset += extended_tile_c;
-#if JAPARI
-#endif
     }
 
     MY_ASSERT(output_offset == output->params_len / sizeof(int16_t));

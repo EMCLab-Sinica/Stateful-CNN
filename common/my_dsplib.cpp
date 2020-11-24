@@ -102,7 +102,7 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
     // srcBCols should really be even, though
     // http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/716353?MSP430FR5992-MSP-DSPLib-msp-matrix-mpy-q15
     MY_ASSERT((A_cols & 1) || (B_cols & 1) == 0);
-    MY_ASSERT(B_rows * B_cols < ARM_PSTATE_LEN);
+    MY_ASSERT(B_rows * B_cols <= ARM_PSTATE_LEN);
 #ifndef USE_ARM_CMSIS
     msp_matrix_mpy_q15_params matrix_mpy_params;
     matrix_mpy_params.srcARows = A_rows;

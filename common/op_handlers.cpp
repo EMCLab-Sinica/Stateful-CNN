@@ -68,10 +68,61 @@ void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *outpu
     dump_params_debug(model, output);
 }
 
+#if JAPARI
+struct ReluParams {
+    uint8_t footprint_tile_c;
+    uint8_t has_footprint_padding_channel;
+};
+static ReluParams relu_params_obj;
+#endif
+
+#if JAPARI
+static bool skip_channel(ReluParams* relu_params, uint16_t cur_channel) {
+    uint8_t footprint_tile_offset = cur_channel % relu_params->footprint_tile_c;
+    if (footprint_tile_offset % (BATCH_SIZE + 1) == BATCH_SIZE) {
+        return true;
+    }
+    if (relu_params->has_footprint_padding_channel && footprint_tile_offset == relu_params->footprint_tile_c - 1) {
+        return true;
+    }
+    return false;
+}
+#endif
+
 void alloc_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *data = input[0];
     output->slot = get_next_slot(model, data);
     output->flags &= ~TRANSPOSED;
+    output->flags |= NO_FOOTPRINTS;
+
+#if JAPARI
+    ReluParams* relu_params = &relu_params_obj;
+    relu_params->footprint_tile_c = 0;
+
+    uint16_t input_tile_c = data->dims[1];
+    // XXX: are all cases covered?
+    uint8_t batches_in_a_tile = 1;
+    for (; batches_in_a_tile * (BATCH_SIZE + 1) <= input_tile_c; batches_in_a_tile++) {
+        uint16_t candidate = batches_in_a_tile * (BATCH_SIZE + 1);
+        if (candidate == input_tile_c) {
+            relu_params->footprint_tile_c = candidate;
+            relu_params->has_footprint_padding_channel = 0;
+        } else if (candidate + 1 == input_tile_c) {
+            relu_params->footprint_tile_c = input_tile_c;
+            relu_params->has_footprint_padding_channel = 1;
+        } else if (batches_in_a_tile * (BATCH_SIZE + 2) == input_tile_c) {
+            relu_params->footprint_tile_c = BATCH_SIZE + 2;
+            relu_params->has_footprint_padding_channel = 1;
+        }
+        if (batches_in_a_tile * BATCH_SIZE == data->orig_channels) {
+            break;
+        }
+    }
+    my_printf_debug("input_tile_c = %d, footprint_tile_c = %d, has_footprint_padding_channel = %d" NEWLINE,
+                    input_tile_c, relu_params->footprint_tile_c, relu_params->has_footprint_padding_channel);
+    MY_ASSERT(relu_params->footprint_tile_c);
+    output->dims[1] = batches_in_a_tile * BATCH_SIZE;
+#endif
 }
 
 void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
@@ -103,6 +154,10 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     offset ^= 0x4000;
 #endif
 
+#if JAPARI
+    ReluParams* relu_params = &relu_params_obj;
+#endif
+
 #endif
 
     my_printf_debug("handle_relu input" NEWLINE);
@@ -123,40 +178,32 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
 #endif
 #if JAPARI
+        uint16_t input_tile_c = X->dims[1];
         input_tile_c = extend_for_footprints(input_tile_c);
-        int8_t layer_sign = get_layer_sign(model);
+        MY_ASSERT(input_tile_c);
 #endif
         for (; output_h < H; output_h++) {
             for (; output_w < W; output_w++) {
-#if JAPARI
-                uint8_t prev_tiles_len = c % input_tile_c * input_tile_c;
-                uint8_t next_footprint_channel = prev_tiles_len + (c - prev_tiles_len) / (BATCH_SIZE + 1) * (BATCH_SIZE + 1) + BATCH_SIZE;
-                uint8_t next_tile = prev_tiles_len + input_tile_c;
-#endif
                     int16_t val_offset = output_w * H * CHANNEL + output_h * CHANNEL + c;
                     output_offset = output_h * W * OUTPUT_CHANNEL + output_w * OUTPUT_CHANNEL + c;
 #if STATEFUL
                     check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
 #endif
-                    uint8_t len = CHANNEL - c;
+                    uint16_t len = CHANNEL - c;
                     my_memcpy_from_param(model, lea_buffer, X, val_offset, len * sizeof(int16_t));
 
                     my_printf_debug("output_h=% 3d, output_w=% 3d, c=[% 3d, % 3d), val_offset=[% 6d, % 6d), input val=",
                                     output_h, output_w, c, c + len, val_offset, val_offset + len);
-                    for (uint8_t idx = 0; idx < len; idx++) {
+                    for (uint16_t idx = 0; idx < len; idx++) {
                         my_printf_debug("% 6d ", lea_buffer[idx]);
                     }
 
-                    for (uint8_t idx = 0; idx < len; idx++) {
+                    uint16_t output_idx = 0;
+                    for (uint16_t idx = 0; idx < len; idx++) {
                         int16_t input_val = 0, output_val;
 #if JAPARI
-                        if (c + idx == next_footprint_channel) {
-                            output_val = layer_sign;
-                            next_footprint_channel += BATCH_SIZE + 1;
-                            if (next_footprint_channel >= next_tile) {
-                                next_footprint_channel = next_tile + BATCH_SIZE;
-                                next_tile += input_tile_c;
-                            }
+                        if (skip_channel(relu_params, c + idx)) {
+                            continue;
                         } else
 #endif
                         {
@@ -169,7 +216,8 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
                             output_val = MAX_VAL(input_val, 0);
                         }
-                        lea_buffer[idx] = output_val;
+                        lea_buffer[output_idx] = output_val;
+                        output_idx++;
                     }
 #if STATEFUL
                     if (offset) {
@@ -188,14 +236,17 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if HAWAII
                     hawaii_preserve_vector(model, output, output_offset, lea_buffer, len);
 #else
-                    my_memcpy_to_param(output, output_offset, lea_buffer, len * sizeof(int16_t));
+                    my_memcpy_to_param(output, output_offset, lea_buffer, output_idx * sizeof(int16_t));
 #endif
 
-                    my_printf_debug("output_offset=[% 6d, % 6d), output val=", output_offset, output_offset + len);
-                    for (uint8_t idx = 0; idx < len; idx++) {
+                    my_printf_debug("output_offset=[% 6d, % 6d), output val=", output_offset, output_offset + output_idx);
+#if MY_DEBUG >= 1
+                    for (uint16_t idx = 0; idx < output_idx; idx++) {
                         my_printf_debug("% 6d ", lea_buffer[idx]);
                     }
+#endif
                     my_printf_debug(NEWLINE);
+                    MY_ASSERT(output_idx == OUTPUT_CHANNEL);
                 c = 0;
             }
             output_w = 0;
