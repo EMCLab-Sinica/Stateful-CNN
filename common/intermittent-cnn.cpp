@@ -207,29 +207,54 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
 
 #if STATEFUL
 
-static void check_feature_map_states(Model *model, const ParameterInfo* output, uint32_t first_unfinished_value_offset, uint32_t len, const char* func) {
-#if MY_DEBUG >= 1
-    uint8_t turning_point_idx = 0;
-    int16_t next_turning_point = -1;
-    const SlotInfo* cur_slot_info = get_slot_info(model, output->slot);
-    if (turning_point_idx < cur_slot_info->n_turning_points) {
-        next_turning_point = cur_slot_info->turning_points[turning_point_idx];
+uint32_t remap_offset(const ParameterInfo* output, uint32_t offset) {
+    const Node* node = get_node(output->parameter_info_idx - N_INPUT);
+    if (node->op_type != Conv) {
+        return offset;
     }
-    uint8_t cur_state_bit = get_state_bit(model, output->slot) ^ 1;
+    if (offset >= output->params_len / sizeof(int16_t)) {
+        return offset;
+    }
+    uint32_t orig_offset = offset;
+
+    uint16_t OUTPUT_CHANNEL = output->dims[1], OUTPUT_H = output->dims[2], OUTPUT_W = output->dims[3];
+    uint16_t input_tile_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
+    uint8_t input_tile_c_index = offset / input_tile_len;
+    offset = offset % input_tile_len;
+    uint16_t output_tile_c = node->flags.conv_output_tile_c;
+    uint16_t tile_len = OUTPUT_H * OUTPUT_W * output_tile_c;
+    uint16_t channel_offset = offset / tile_len * output_tile_c;
+    uint16_t cur_tile_offset = offset % tile_len;
+    uint32_t remapped_offset = input_tile_c_index * input_tile_len +
+                               OUTPUT_CHANNEL * (cur_tile_offset / output_tile_c) +
+                               channel_offset + (cur_tile_offset % output_tile_c);
+    if (output_tile_c == OUTPUT_CHANNEL) {
+        MY_ASSERT(orig_offset == remapped_offset);
+    }
+    // my_printf_debug("Offset mapping %d => %d" NEWLINE, orig_offset, remapped_offset);
+    return remapped_offset;
+}
+
+static void check_feature_map_states(Model *model, const ParameterInfo* output, uint32_t first_unfinished_job_index, uint32_t len, const char* func) {
+#if MY_DEBUG >= 1
+    my_printf_debug("Running check_feature_map_states..." NEWLINE);
+#if 0
     for (uint32_t idx = 0; idx < len; idx++) {
-        if (idx == static_cast<uint16_t>(next_turning_point)) {
-            cur_state_bit ^= 1;
-            turning_point_idx++;
-            if (turning_point_idx < cur_slot_info->n_turning_points) {
-                next_turning_point = cur_slot_info->turning_points[turning_point_idx];
-            }
+        my_printf_debug("% 6d ", get_q15_param(model, output, idx));
+        if (idx % 16 == 15) {
+            my_printf_debug(NEWLINE);
         }
-        if (idx == first_unfinished_value_offset) {
+    }
+#endif
+    for (uint32_t idx = 0; idx < len; idx++) {
+        uint32_t remapped_index = remap_offset(output, idx);
+        int16_t val = get_q15_param(model, output, remapped_index);
+        uint8_t cur_state_bit = param_state_bit(model, output, remapped_index);
+        if (idx < first_unfinished_job_index) {
             cur_state_bit ^= 1;
         }
-        int16_t val = get_q15_param(model, output, idx);
         MY_ASSERT(get_value_state_bit(val) == cur_state_bit,
-            "Value %d at index %d does not have expected state bit %d" NEWLINE, val, idx, cur_state_bit);
+            "Value %d at index %d (remapped to %d) does not have expected state bit %d" NEWLINE, val, idx, remapped_index, cur_state_bit);
     }
 #endif
 }
@@ -269,7 +294,7 @@ void flip_state_bit(Model *model, const ParameterInfo *output) {
 
     cur_slot_info->state_bit ^= 1;
 
-    // Use first_unfinished_value_offset = 0 here as all values finished and the initial state bit is flipped above
+    // Use first_unfinished_job_index = 0 here as all values finished and the initial state bit is flipped above
     check_feature_map_states(model, output, 0, INTERMEDIATE_VALUES_SIZE / sizeof(int16_t), __func__);
 }
 
@@ -301,6 +326,11 @@ uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offse
 
 static uint8_t after_recovery = 1;
 
+static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_t offset) {
+    uint32_t remapped_offset = remap_offset(output, offset);
+    return get_value_state_bit(get_q15_param(model, output, remapped_offset)) != param_state_bit(model, output, remapped_offset);
+}
+
 uint32_t run_recovery(Model *model, ParameterInfo *output) {
 #if MY_DEBUG < 1
     if (!after_recovery) {
@@ -312,31 +342,31 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
     uint32_t end_offset = output->params_len / 2;
     uint32_t cur_begin_offset = 0;
     uint32_t cur_end_offset = end_offset;
-    uint32_t first_unfinished_value_offset;
+    uint32_t first_unfinished_job_index;
     my_printf_debug("new_output_state_bit for first value = %d" NEWLINE, param_state_bit(model, output, 0) ^ 1);
 
     dump_turning_points_debug(model, output);
 
     while (1) {
-#if 1
+#if 0
         dump_matrix_debug(model, output, cur_begin_offset, cur_end_offset - cur_begin_offset, ValueInfo(output));
 #endif
         if (cur_end_offset - cur_begin_offset <= 1) {
-            if (get_value_state_bit(get_q15_param(model, output, cur_begin_offset)) == param_state_bit(model, output, cur_begin_offset)) {
-                first_unfinished_value_offset = 0;
-            } else if (get_value_state_bit(get_q15_param(model, output, cur_end_offset)) == param_state_bit(model, output, cur_end_offset)) {
-                first_unfinished_value_offset = cur_end_offset;
+            if (!value_finished(model, output, cur_begin_offset)) {
+                first_unfinished_job_index = 0;
+            } else if (!value_finished(model, output, cur_end_offset)) {
+                first_unfinished_job_index = cur_end_offset;
             } else if (cur_end_offset == end_offset) {
                 // all values finished - power failure just before the state
                 // bit for the output is flipped
-                first_unfinished_value_offset = end_offset;
+                first_unfinished_job_index = end_offset;
             } else {
                 ERROR_OCCURRED();
             }
             break;
         }
         uint32_t middle_offset = cur_begin_offset + (cur_end_offset - cur_begin_offset) / 2;
-        if (get_value_state_bit(get_q15_param(model, output, middle_offset)) != param_state_bit(model, output, middle_offset)) {
+        if (value_finished(model, output, middle_offset)) {
             cur_begin_offset = middle_offset;
         } else {
             cur_end_offset = middle_offset;
@@ -347,17 +377,17 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
         );
     }
 
-    my_printf_debug("first_unfinished_value_offset = %d" NEWLINE, first_unfinished_value_offset);
+    my_printf_debug("first_unfinished_job_index = %d" NEWLINE, first_unfinished_job_index);
 
     if (!after_recovery) {
-        MY_ASSERT(first_unfinished_value_offset == 0);
+        MY_ASSERT(first_unfinished_job_index == 0);
     } else {
         after_recovery = 0;
     }
 
-    check_feature_map_states(model, output, first_unfinished_value_offset, output->params_len / 2, __func__);
+    check_feature_map_states(model, output, first_unfinished_job_index, output->params_len / 2, __func__);
 
-    return first_unfinished_value_offset;
+    return first_unfinished_job_index;
 }
 
 #endif

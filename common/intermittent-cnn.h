@@ -18,6 +18,7 @@ static inline uint8_t get_value_state_bit(int16_t val) {
 }
 void flip_state_bit(struct Model *model, const ParameterInfo *output);
 uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offset);
+uint32_t remap_offset(const ParameterInfo* output, uint32_t offset);
 #endif
 
 #if JAPARI

@@ -500,7 +500,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
 #if STATEFUL
     find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point,
-                           &conv_params->cur_slot_info, first_unfinished_job_index, model, output);
+                           &conv_params->cur_slot_info, remap_offset(output, first_unfinished_job_index), model, output);
 
     my_printf_debug("old_output_offset = %d" NEWLINE, conv_params->old_output_offset);
 #endif

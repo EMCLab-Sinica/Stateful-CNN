@@ -246,7 +246,6 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     }
 #endif
                     my_printf_debug(NEWLINE);
-                    MY_ASSERT(output_idx == OUTPUT_CHANNEL);
                 c = 0;
             }
             output_w = 0;
