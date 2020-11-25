@@ -337,7 +337,9 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
 #endif
     for (int32_t h = h_start; h <= h_end; h++) {
         int16_t *dest_addr = dest + (w_start + field_size) * cur_input_tile_c;
+#if STATEFUL
         int16_t *orig_dest_addr = dest_addr;
+#endif
         uint16_t input_row_len = (w_end - w_start + 1) * cur_input_tile_c;
         uint32_t src_addr = input_src_offset;
         if (cur_input_tile_c == cur_input_channel) {

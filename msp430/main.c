@@ -6,6 +6,7 @@
 
 #include <Tools/myuart.h>
 #include <Tools/dvfs.h>
+#include <Tools/ext_fram/extfram.h> // for EXTFRAM_USE_DMA
 
 #include "plat-msp430.h"
 
@@ -19,7 +20,9 @@ functionality in an interrupt. */
  * Configure the hardware as necessary.
  */
 static void prvSetupHardware( void );
+#ifndef EXTFRAM_USE_DMA
 static void vApplicationSetupTimerInterrupt( void );
+#endif
 
 /*-----------------------------------------------------------*/
 
@@ -29,7 +32,9 @@ int main( void )
     prvSetupHardware();
 
     // XXX: disabled - timer intterupts appear to interfere DMA read for external FRAM
-    // vApplicationSetupTimerInterrupt();
+#ifndef EXTFRAM_USE_DMA
+    vApplicationSetupTimerInterrupt();
+#endif
     IntermittentCNNTest();
 
 	return 0;
@@ -132,6 +137,7 @@ __interrupt void Port_5(void)
     GPIO_clearInterrupt(GPIO_PORT_P5, GPIO_PIN5);
 }
 
+#ifndef EXTFRAM_USE_DMA
 /* The MSP430X port uses this callback function to configure its tick interrupt.
 This allows the application to choose the tick interrupt source.
 configTICK_VECTOR must also be set in FreeRTOSConfig.h to the correct
@@ -163,4 +169,5 @@ const unsigned short usACLK_Frequency_Hz = 32768;
     /* Up mode. */
     TA0CTL |= MC_1;
 }
+#endif
 /*-----------------------------------------------------------*/
