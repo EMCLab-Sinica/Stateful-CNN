@@ -83,7 +83,8 @@ typedef struct Model {
     uint16_t run_counter;
     uint16_t layer_idx;
     SlotInfo slots_info[NUM_SLOTS];
-    uint16_t version; // must be the last field in this struct
+    uint8_t dummy;
+    uint8_t version; // must be the last field in this struct
 } Model;
 
 static_assert(sizeof(Model) == 8 + NUM_SLOTS * (2 + STATEFUL * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");

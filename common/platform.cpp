@@ -51,9 +51,9 @@ void commit_intermediate_parameter_info(uint8_t i) {
 }
 
 static uint8_t get_newer_model_copy_id(void) {
-    uint16_t version1, version2;
-    read_from_nvm(&version1, model_addr(0) + offsetof(Model, version), sizeof(uint16_t));
-    read_from_nvm(&version2, model_addr(1) + offsetof(Model, version), sizeof(uint16_t));
+    uint8_t version1, version2;
+    read_from_nvm(&version1, model_addr(0) + offsetof(Model, version), sizeof(uint8_t));
+    read_from_nvm(&version2, model_addr(1) + offsetof(Model, version), sizeof(uint8_t));
     my_printf_debug("Versions of shadow Model copies: %d, %d" NEWLINE, version1, version2);
 
     if (abs(static_cast<int>(version1 - version2)) == 1) {

@@ -507,7 +507,8 @@ for _ in range(config['num_slots']): # Model.slots_info
         for __ in range(Constants.TURNING_POINTS_LEN):
             model.write(to_bytes(-1))   # SlotInfo.turning_points
     model.write(to_bytes(-1))       # SlotInfo.user
-model.write(to_bytes(0))  # Model.version
+model.write(to_bytes(0, size=8))  # Model.dummy
+model.write(to_bytes(0, size=8))  # Model.version
 
 @dataclasses.dataclass
 class ParametersSlot:
