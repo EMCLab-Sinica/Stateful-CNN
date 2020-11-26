@@ -162,7 +162,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     my_printf_debug("handle_relu input" NEWLINE);
     if (X->flags & TRANSPOSED) {
-        dump_params_nhwc_debug(model, X, 0);
+        dump_params_nhwc_debug(model, X);
         // input is in NWHC
         // TODO: state-aware recovery
         uint16_t H = X->dims[2], W = X->dims[3];
@@ -288,7 +288,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     my_printf_debug("handle_relu output" NEWLINE);
     if (X->flags & TRANSPOSED) {
-        dump_params_nhwc_debug(model, output, 0);
+        dump_params_nhwc_debug(model, output);
     } else {
         dump_params_debug(model, output);
     }
@@ -382,8 +382,8 @@ void handle_concat(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     output->extra_info[1] = B->parameter_info_idx;
     output->slot = A->slot;
 
-    dump_params_nhwc_debug(model, A, 0);
-    dump_params_nhwc_debug(model, B, 0);
+    dump_params_nhwc_debug(model, A);
+    dump_params_nhwc_debug(model, B);
 }
 
 void handle_dropout(Model*, const ParameterInfo*[], ParameterInfo*, const NodeFlags*) {

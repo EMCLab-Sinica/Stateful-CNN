@@ -86,7 +86,7 @@ static int16_t find_real_num(int16_t NUM, int16_t CHANNEL, int16_t H, int16_t W,
     return NUM;
 }
 
-void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, size_t offset) {
+void dump_params_nhwc(Model *model, const ParameterInfo *cur_param) {
     uint16_t NUM, H, W, CHANNEL;
     // tensor
     NUM = cur_param->dims[0];
@@ -116,7 +116,7 @@ void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, size_t offse
                         } else {
                             offset2 += h * W * cur_tile_c + w * cur_tile_c + c;
                         }
-                        dump_value(model, cur_param, offset + offset2);
+                        dump_value(model, cur_param, offset2);
                     }
                     my_printf(NEWLINE);
                 }

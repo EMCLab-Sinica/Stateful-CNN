@@ -580,14 +580,8 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     flip_state_bit(model, output);
 #endif
 
-#if MY_DEBUG >= 2
-    uint32_t tiling_results_len = conv_params->OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W;
-
     my_printf_debug("handle_conv output" NEWLINE);
-    for (uint16_t input_tile_c_index = 0; input_tile_c_index * flags->conv_input_tile_c < input_channels; input_tile_c_index++) {
-        dump_params_nhwc_debug(model, output, input_tile_c_index * tiling_results_len);
-    }
-#endif
+    dump_params_nhwc_debug(model, output);
 }
 
 void alloc_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
@@ -715,5 +709,5 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
     flip_state_bit(model, output);
 #endif
 
-    dump_params_nhwc_debug(model, output, 0);
+    dump_params_nhwc_debug(model, output);
 }

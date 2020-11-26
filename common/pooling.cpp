@@ -111,7 +111,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     maxpool_params->model = model;
 
     my_printf_debug("handle_maxpool input" NEWLINE);
-    dump_params_nhwc_debug(model, data, 0);
+    dump_params_nhwc_debug(model, data);
 
     const uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
     uint16_t new_H = H / stride;
@@ -255,7 +255,7 @@ finished:
 
     my_printf_debug("handle_maxpool output" NEWLINE);
     if (!need_nhwc2nchw) {
-        dump_params_nhwc_debug(model, output, 0);
+        dump_params_nhwc_debug(model, output);
     } else if (tile_c == CHANNEL) {
         dump_params_debug(model, output);
     }
