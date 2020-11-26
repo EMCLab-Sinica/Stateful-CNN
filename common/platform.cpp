@@ -114,6 +114,7 @@ static uint32_t hawaii_layer_footprint_offset(uint16_t layer_idx) {
 void write_hawaii_layer_footprint(uint16_t layer_idx, uint16_t n_jobs) {
     uint32_t footprint = read_hawaii_layer_footprint(layer_idx);
     footprint += n_jobs;
+    MY_ASSERT(footprint < INTERMEDIATE_VALUES_SIZE);
     write_to_nvm(&footprint, hawaii_layer_footprint_offset(layer_idx), sizeof(uint32_t));
     my_printf_debug("Write HAWAII layer footprint %d for layer %d" NEWLINE, footprint, layer_idx);
 }
