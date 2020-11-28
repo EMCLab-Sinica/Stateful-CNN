@@ -4,7 +4,6 @@
 #include "intermittent-cnn.h"
 
 ParameterInfo intermediate_parameters_info_vm[MODEL_NODES_LEN];
-Model model_vm;
 
 const ParameterInfo* get_parameter_info(uint8_t i) {
     if (i < N_INPUT) {
@@ -115,13 +114,5 @@ void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, 
         my_memcpy(dest, baseptr + total_offset, n);
     } else {
         my_memcpy_from_intermediate_values(dest, param, offset_in_word, n);
-    }
-}
-
-void bump_model_version(Model *model) {
-    model->version++;
-    if (!model->version) {
-        // don't use version 0 as it indicates the first run
-        model->version++;
     }
 }

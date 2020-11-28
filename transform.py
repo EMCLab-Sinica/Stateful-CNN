@@ -50,6 +50,7 @@ class Constants:
     TEMP_FILTER_WIDTH = 1
     # (4096 - 0x138 (LEASTACK) - 2 * 8 (MSP_LEA_MAC_PARAMS)) / sizeof(int16_t)
     LEA_BUFFER_SIZE = 1884
+    CONFIG = None
 
     DEFAULT_TILE_C = 4
     DEFAULT_TILE_H = 4
@@ -203,6 +204,7 @@ intermittent_methodology.add_argument('--japari', action='store_true')
 intermittent_methodology.add_argument('--stateful', action='store_true')
 args = parser.parse_args()
 config = configs[args.config]
+Constants.CONFIG = args.config
 if args.all_samples:
     Constants.N_SAMPLES = config['n_all_samples']
     Constants.NVM_SIZE += config['n_all_samples'] * config['sample_size']
@@ -533,7 +535,8 @@ for node in graph:
     output_nodes.write(to_bytes(list(ops.keys()).index(node.op_type)))
     output_nodes.write(to_bytes(node.flags.as_bytes, size=32))
     if Constants.HAWAII:
-        output_nodes.write(to_bytes(0, size=32))  # footprint
+        for _ in range(2):
+            output_nodes.write(to_bytes(0, size=32))  # Node::Footprint
     if Constants.JAPARI:
         output_nodes.write(to_bytes(layer_sign))
         layer_sign = -layer_sign
@@ -638,10 +641,10 @@ for idx, n in enumerate(nodes):
         intermediate_parameters_info.write(to_bytes(0))         # orig_channels
     for _ in range(4):  # dims[4]
         intermediate_parameters_info.write(to_bytes(0))
+    intermediate_parameters_info.write(to_bytes(config['scale']))   # scale
     intermediate_parameters_info.write(to_bytes(0, size=8))     # flags
     for _ in range(Constants.EXTRA_INFO_LEN):
         intermediate_parameters_info.write(to_bytes(0, size=8)) # extra_info
-    intermediate_parameters_info.write(to_bytes(config['scale']))   # scale
     intermediate_parameters_info.write(to_bytes(parameter_info_idx))             # parameter_info_idx
     parameter_info_idx += 1
 

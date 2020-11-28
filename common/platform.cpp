@@ -7,6 +7,18 @@
 // put offset checks here as extra headers are used
 static_assert(NODES_OFFSET > SAMPLES_OFFSET + SAMPLES_DATA_LEN, "Incorrect NVM layout");
 
+Model model_vm;
+
+template<typename T>
+static uint32_t nvm_addr(uint8_t, uint16_t);
+
+template<typename T>
+T* vm_addr(uint16_t data_idx);
+
+// typeinfo does not always give names I want
+template<typename T>
+const char* datatype_name(void);
+
 static uint32_t intermediate_values_offset(uint8_t slot_id) {
     return INTERMEDIATE_VALUES_OFFSET + slot_id * INTERMEDIATE_VALUES_SIZE;
 }
@@ -15,8 +27,19 @@ static uint32_t intermediate_parameters_info_addr(uint8_t i) {
     return INTERMEDIATE_PARAMETERS_INFO_OFFSET + i * sizeof(ParameterInfo);
 }
 
-static uint32_t model_addr(uint8_t i) {
+template<>
+uint32_t nvm_addr<Model>(uint8_t i, uint16_t) {
     return MODEL_OFFSET + i * sizeof(Model);
+}
+
+template<>
+Model* vm_addr<Model>(uint16_t data_idx) {
+    return &model_vm;
+}
+
+template<>
+const char* datatype_name<Model>(void) {
+    return "model";
 }
 
 void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, const void *src, size_t n) {
@@ -50,11 +73,12 @@ void commit_intermediate_parameter_info(uint8_t i) {
     my_printf_debug("Committing intermediate parameter info %d to NVM" NEWLINE, i);
 }
 
-static uint8_t get_newer_model_copy_id(void) {
+template<typename T>
+static uint8_t get_newer_copy_id(uint16_t data_idx) {
     uint8_t version1, version2;
-    read_from_nvm(&version1, model_addr(0) + offsetof(Model, version), sizeof(uint8_t));
-    read_from_nvm(&version2, model_addr(1) + offsetof(Model, version), sizeof(uint8_t));
-    my_printf_debug("Versions of shadow Model copies: %d, %d" NEWLINE, version1, version2);
+    read_from_nvm(&version1, nvm_addr<T>(0, data_idx) + offsetof(T, version), sizeof(uint8_t));
+    read_from_nvm(&version2, nvm_addr<T>(1, data_idx) + offsetof(T, version), sizeof(uint8_t));
+    my_printf_debug("Versions of shadow %s copies for data item %d: %d, %d" NEWLINE, datatype_name<T>(), data_idx, version1, version2);
 
     if (abs(static_cast<int>(version1 - version2)) == 1) {
         if (version1 > version2) {
@@ -72,23 +96,43 @@ static uint8_t get_newer_model_copy_id(void) {
     }
 }
 
-Model* get_model(void) {
-    Model *dst = &model_vm;
+template<typename T>
+void bump_version(T *data) {
+    data->version++;
+    if (!data->version) {
+        // don't use version 0 as it indicates the first run
+        data->version++;
+    }
+}
 
-    uint8_t newer_model_copy_id = get_newer_model_copy_id();
-    read_from_nvm(dst, model_addr(newer_model_copy_id), sizeof(Model));
-    my_printf_debug("Using model copy %d, version %d" NEWLINE, newer_model_copy_id, dst->version);
+template<typename T>
+T* get_versioned_data(uint16_t data_idx) {
+    T *dst = vm_addr<T>(data_idx);
+
+    uint8_t newer_copy_id = get_newer_copy_id<T>(data_idx);
+    read_from_nvm(dst, nvm_addr<T>(newer_copy_id, data_idx), sizeof(T));
+    my_printf_debug("Using %s copy %d, version %d" NEWLINE, datatype_name<T>(), newer_copy_id, dst->version);
     return dst;
 }
 
+template<typename T>
+void commit_versioned_data(uint16_t data_idx) {
+    uint8_t newer_copy_id = get_newer_copy_id<T>(data_idx);
+    uint8_t older_copy_id = newer_copy_id ^ 1;
+
+    T* vm_ptr = vm_addr<T>(data_idx);
+    bump_version<T>(vm_ptr);
+
+    write_to_nvm(vm_ptr, nvm_addr<T>(older_copy_id, data_idx), sizeof(T));
+    my_printf_debug("Committing version %d to %s copy %d" NEWLINE, vm_ptr->version, datatype_name<T>(), older_copy_id);
+}
+
+Model* get_model(void) {
+    return get_versioned_data<Model>(0);
+}
+
 void commit_model(void) {
-    uint8_t newer_model_copy_id = get_newer_model_copy_id();
-    uint8_t older_model_copy_id = newer_model_copy_id ^ 1;
-
-    bump_model_version(&model_vm);
-
-    write_to_nvm(&model_vm, model_addr(older_model_copy_id), sizeof(Model));
-    my_printf_debug("Committing version %d to model copy %d" NEWLINE, model_vm.version, older_model_copy_id);
+    return commit_versioned_data<Model>(0);
 }
 
 void first_run(void) {
@@ -97,38 +141,52 @@ void first_run(void) {
     copy_samples_data();
 
     write_to_nvm(intermediate_parameters_info_data, intermediate_parameters_info_addr(0), INTERMEDIATE_PARAMETERS_INFO_DATA_LEN);
-    write_to_nvm(model_data, model_addr(0), MODEL_DATA_LEN);
-    write_to_nvm(model_data, model_addr(1), MODEL_DATA_LEN);
+    write_to_nvm(model_data, nvm_addr<Model>(0, 0), MODEL_DATA_LEN);
+    write_to_nvm(model_data, nvm_addr<Model>(1, 0), MODEL_DATA_LEN);
 
     get_model(); // refresh model_vm
     commit_model();
 
-    my_printf("Done first run initialization for " METHOD " with batch size=%d" NEWLINE, BATCH_SIZE);
+    my_printf("Init for " CONFIG "/" METHOD " with batch size=%d" NEWLINE, BATCH_SIZE);
 }
 
 #if HAWAII
-static uint32_t hawaii_layer_footprint_offset(uint16_t layer_idx) {
-    return NODES_OFFSET + layer_idx * sizeof(Node) + offsetof(Node, footprint);
+Node::Footprint footprints_vm[MODEL_NODES_LEN];
+
+template<>
+uint32_t nvm_addr<Node::Footprint>(uint8_t i, uint16_t layer_idx) {
+    return NODES_OFFSET + layer_idx * sizeof(Node) + offsetof(Node, footprint) + i * sizeof(Node::Footprint);
+}
+
+template<>
+Node::Footprint* vm_addr<Node::Footprint>(uint16_t layer_idx) {
+    return &footprints_vm[layer_idx];
+}
+
+template<>
+const char* datatype_name<Node::Footprint>(void) {
+    return "footprint";
 }
 
 void write_hawaii_layer_footprint(uint16_t layer_idx, uint16_t n_jobs) {
-    uint32_t footprint = read_hawaii_layer_footprint(layer_idx);
-    footprint += n_jobs;
-    MY_ASSERT(footprint < INTERMEDIATE_VALUES_SIZE);
-    write_to_nvm(&footprint, hawaii_layer_footprint_offset(layer_idx), sizeof(uint32_t));
-    my_printf_debug("Write HAWAII layer footprint %d for layer %d" NEWLINE, footprint, layer_idx);
+    Node::Footprint* footprint_vm = footprints_vm + layer_idx;
+    footprint_vm->value += n_jobs;
+    MY_ASSERT(footprint_vm->value < INTERMEDIATE_VALUES_SIZE);
+    commit_versioned_data<Node::Footprint>(layer_idx);
+    my_printf_debug("Write HAWAII layer footprint %d for layer %d" NEWLINE, footprint_vm->value, layer_idx);
 }
 
-uint32_t read_hawaii_layer_footprint(uint16_t layer_idx) {
-    uint32_t footprint = 0;
-    read_from_nvm(&footprint, hawaii_layer_footprint_offset(layer_idx), sizeof(uint32_t));
+uint16_t read_hawaii_layer_footprint(uint16_t layer_idx) {
+    uint16_t footprint = get_versioned_data<Node::Footprint>(layer_idx)->value;
     my_printf_debug("HAWAII layer footprint=%d for layer %d" NEWLINE, footprint, layer_idx);
     return footprint;
 }
 
 void reset_hawaii_layer_footprint(uint16_t layer_idx) {
-    uint32_t footprint = 0;
-    write_to_nvm(&footprint, hawaii_layer_footprint_offset(layer_idx), sizeof(uint32_t));
+    Node::Footprint footprint;
+    footprint.value = footprint.version = 0;
+    write_to_nvm(&footprint, nvm_addr<Node::Footprint>(0, layer_idx), sizeof(Node::Footprint));
+    write_to_nvm(&footprint, nvm_addr<Node::Footprint>(1, layer_idx), sizeof(Node::Footprint));
     my_printf_debug("Reset HAWAII layer footprint for layer %d" NEWLINE, layer_idx);
 }
 #endif

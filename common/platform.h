@@ -21,6 +21,6 @@ void commit_model(void);
 void first_run(void);
 #if HAWAII
 void write_hawaii_layer_footprint(uint16_t layer_idx, uint16_t n_jobs);
-uint32_t read_hawaii_layer_footprint(uint16_t layer_idx);
+uint16_t read_hawaii_layer_footprint(uint16_t layer_idx);
 void reset_hawaii_layer_footprint(uint16_t layer_idx);
 #endif

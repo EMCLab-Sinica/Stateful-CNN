@@ -26,14 +26,17 @@ typedef struct Node {
     uint16_t op_type;
     NodeFlags flags;
 #if HAWAII
-    uint32_t footprint;
+    struct Footprint {
+        uint16_t value;
+        uint8_t version;
+    } footprint[2];
 #endif
 #if JAPARI
     int16_t layer_sign;
 #endif
 } Node;
 
-static_assert(sizeof(Node) == 40 + HAWAII * 4 + JAPARI * 2, "Unexpected size for Node");
+static_assert(sizeof(Node) == 40 + HAWAII * 8 + JAPARI * 2, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct ParameterInfo {
@@ -106,7 +109,6 @@ static_assert(sizeof(Counters) == 12 * COUNTERS_LEN + 4, "Unexpected size of Cou
  **********************************/
 Counters *counters(void);
 extern ParameterInfo intermediate_parameters_info_vm[MODEL_NODES_LEN];
-extern Model model_vm;
 
 
 /**********************************
@@ -135,7 +137,6 @@ const ParameterInfo* get_parameter_info(uint8_t i);
 const Node* get_node(size_t i);
 SlotInfo * get_slot_info(Model* model, uint8_t i);
 void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n);
-void bump_model_version(Model *model);
 
 /**********************************
  *       Operation handlers       *
