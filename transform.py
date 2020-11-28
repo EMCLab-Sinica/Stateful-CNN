@@ -59,6 +59,7 @@ class Constants:
     HAWAII = 0
     JAPARI = 0
     INTERMITTENT = 0
+    INDIRECT_RECOVERY = 0
     METHOD = "Baseline"
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
@@ -222,6 +223,7 @@ if args.japari:
     Constants.METHOD = "JAPARI"
     config['intermediate_values_size'] *= 2
 Constants.INTERMITTENT = Constants.STATEFUL | Constants.HAWAII | Constants.JAPARI
+Constants.INDIRECT_RECOVERY = Constants.STATEFUL | Constants.JAPARI
 
 onnx_model = onnx.load(config['onnx_model'])
 try:

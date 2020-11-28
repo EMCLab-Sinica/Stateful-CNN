@@ -207,34 +207,6 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
 
 #if STATEFUL
 
-uint32_t remap_offset(const ParameterInfo* output, uint32_t offset) {
-    const Node* node = get_node(output->parameter_info_idx - N_INPUT);
-    if (node->op_type != Conv) {
-        return offset;
-    }
-    if (offset >= output->params_len / sizeof(int16_t)) {
-        return offset;
-    }
-    uint32_t orig_offset = offset;
-
-    uint16_t OUTPUT_CHANNEL = output->dims[1], OUTPUT_H = output->dims[2], OUTPUT_W = output->dims[3];
-    uint16_t input_tile_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
-    uint8_t input_tile_c_index = offset / input_tile_len;
-    offset = offset % input_tile_len;
-    uint16_t output_tile_c = node->flags.conv_output_tile_c;
-    uint16_t tile_len = OUTPUT_H * OUTPUT_W * output_tile_c;
-    uint16_t channel_offset = offset / tile_len * output_tile_c;
-    uint16_t cur_tile_offset = offset % tile_len;
-    uint32_t remapped_offset = input_tile_c_index * input_tile_len +
-                               OUTPUT_CHANNEL * (cur_tile_offset / output_tile_c) +
-                               channel_offset + (cur_tile_offset % output_tile_c);
-    if (output_tile_c == OUTPUT_CHANNEL) {
-        MY_ASSERT(orig_offset == remapped_offset);
-    }
-    // my_printf_debug("Offset mapping %d => %d" NEWLINE, orig_offset, remapped_offset);
-    return remapped_offset;
-}
-
 static void check_feature_map_states(Model *model, const ParameterInfo* output, uint32_t first_unfinished_job_index, uint32_t len, const char* func) {
 #if MY_DEBUG >= 1
     my_printf_debug("Running check_feature_map_states..." NEWLINE);
@@ -247,14 +219,14 @@ static void check_feature_map_states(Model *model, const ParameterInfo* output, 
     }
 #endif
     for (uint32_t idx = 0; idx < len; idx++) {
-        uint32_t remapped_index = remap_offset(output, idx);
-        int16_t val = get_q15_param(model, output, remapped_index);
-        uint8_t cur_state_bit = param_state_bit(model, output, remapped_index);
+        uint32_t offset = job_index_to_offset(output, idx);
+        int16_t val = get_q15_param(model, output, offset);
+        uint8_t cur_state_bit = param_state_bit(model, output, offset);
         if (idx < first_unfinished_job_index) {
             cur_state_bit ^= 1;
         }
         MY_ASSERT(get_value_state_bit(val) == cur_state_bit,
-            "Value %d at index %d (remapped to %d) does not have expected state bit %d" NEWLINE, val, idx, remapped_index, cur_state_bit);
+            "Value %d at job index %d (offset %d) does not have expected state bit %d" NEWLINE, val, idx, offset, cur_state_bit);
     }
 #endif
 }
@@ -324,70 +296,9 @@ uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offse
     return ret;
 }
 
-static uint8_t after_recovery = 1;
-
-static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_t offset) {
-    uint32_t remapped_offset = remap_offset(output, offset);
-    return get_value_state_bit(get_q15_param(model, output, remapped_offset)) != param_state_bit(model, output, remapped_offset);
-}
-
-uint32_t run_recovery(Model *model, ParameterInfo *output) {
-#if MY_DEBUG < 1
-    if (!after_recovery) {
-        return 0;
-    }
-#endif
-
-    // recovery from state bits
-    uint32_t end_offset = output->params_len / 2;
-    uint32_t cur_begin_offset = 0;
-    uint32_t cur_end_offset = end_offset;
-    uint32_t first_unfinished_job_index;
-    my_printf_debug("new_output_state_bit for first value = %d" NEWLINE, param_state_bit(model, output, 0) ^ 1);
-
-    dump_turning_points_debug(model, output);
-
-    while (1) {
-#if 0
-        dump_matrix_debug(model, output, cur_begin_offset, cur_end_offset - cur_begin_offset, ValueInfo(output));
-#endif
-        if (cur_end_offset - cur_begin_offset <= 1) {
-            if (!value_finished(model, output, cur_begin_offset)) {
-                first_unfinished_job_index = 0;
-            } else if (!value_finished(model, output, cur_end_offset)) {
-                first_unfinished_job_index = cur_end_offset;
-            } else if (cur_end_offset == end_offset) {
-                // all values finished - power failure just before the state
-                // bit for the output is flipped
-                first_unfinished_job_index = end_offset;
-            } else {
-                ERROR_OCCURRED();
-            }
-            break;
-        }
-        uint32_t middle_offset = cur_begin_offset + (cur_end_offset - cur_begin_offset) / 2;
-        if (value_finished(model, output, middle_offset)) {
-            cur_begin_offset = middle_offset;
-        } else {
-            cur_end_offset = middle_offset;
-        }
-        my_printf_debug(
-            "offset of begin = %" PRId32 ", offset of end = %" PRId32 NEWLINE,
-            cur_begin_offset, cur_end_offset
-        );
-    }
-
-    my_printf_debug("first_unfinished_job_index = %d" NEWLINE, first_unfinished_job_index);
-
-    if (!after_recovery) {
-        MY_ASSERT(first_unfinished_job_index == 0);
-    } else {
-        after_recovery = 0;
-    }
-
-    check_feature_map_states(model, output, first_unfinished_job_index, output->params_len / 2, __func__);
-
-    return first_unfinished_job_index;
+static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_t job_index) {
+    uint32_t offset = job_index_to_offset(output, job_index);
+    return get_value_state_bit(get_q15_param(model, output, offset)) == param_state_bit(model, output, offset);
 }
 
 #endif
@@ -402,8 +313,135 @@ uint32_t run_recovery(Model* model, ParameterInfo*) {
 int16_t get_layer_sign(Model *model) {
     return get_node(model->layer_idx)->layer_sign;
 }
+
+static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_t job_index) {
+    return get_q15_param(model, output, job_index_to_offset(output, job_index)) == get_layer_sign(model);
+}
+#endif
+
+#if INDIRECT_RECOVERY
+
+uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
+    if (job_index >= output->params_len / sizeof(int16_t)) {
+        return job_index;
+    }
+
+    const Node* node = get_node(output->parameter_info_idx - N_INPUT);
+#if !JAPARI
+    if (node->op_type != Conv) {
+        return job_index;
+    }
+#else
+    MY_ASSERT(node->op_type == Conv || node->op_type == ConvMerge || node->op_type == Relu);
+    if (node->op_type != Conv) {
+        uint32_t offset = (job_index + 1) * (BATCH_SIZE + 1) - 1;
+        my_printf_debug("Job index %d => offset %d" NEWLINE, job_index, offset);
+        return offset;
+    }
+#endif
+
+    uint32_t orig_job_index = job_index;
+
+    uint16_t OUTPUT_CHANNEL = output->dims[1], OUTPUT_H = output->dims[2], OUTPUT_W = output->dims[3];
+    uint16_t input_tile_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
+    uint8_t input_tile_c_index = job_index / input_tile_len;
+    job_index = job_index % input_tile_len;
+    uint16_t output_tile_c = node->flags.conv_output_tile_c;
+    uint16_t jobs_in_an_op = output_tile_c;
+#if JAPARI
+    jobs_in_an_op = output_tile_c / BATCH_SIZE;
+    output_tile_c = extend_for_footprints(output_tile_c);
+#endif
+    uint16_t jobs_in_a_filter_tile = OUTPUT_H * OUTPUT_W * jobs_in_an_op;
+    uint16_t channel_offset = job_index / jobs_in_a_filter_tile * output_tile_c;
+    job_index %= jobs_in_a_filter_tile;
+    uint32_t offset = input_tile_c_index * input_tile_len +
+                      OUTPUT_CHANNEL * (job_index / jobs_in_an_op) +
+                      channel_offset;
+#if !JAPARI
+    offset += job_index % jobs_in_an_op;
+#else
+    offset += (job_index % jobs_in_an_op + 1) * (BATCH_SIZE + 1) - 1;
+#endif
+#if !JAPARI
+    if (output_tile_c == OUTPUT_CHANNEL) {
+        MY_ASSERT(orig_job_index == offset);
+    }
+#endif
+    my_printf_debug("Job index %d => offset %d" NEWLINE, orig_job_index, offset);
+    return offset;
+}
+
+static uint8_t after_recovery = 1;
+
 uint32_t run_recovery(Model *model, ParameterInfo *output) {
-    // TODO
-    return 0;
+#if MY_DEBUG < 1
+    if (!after_recovery) {
+        return 0;
+    }
+#endif
+
+    // recovery from state bits
+    uint32_t end_job_index = output->params_len / 2;
+    uint32_t cur_begin_job_index = 0;
+    uint32_t cur_end_job_index = end_job_index;
+#if JAPARI
+    const Node* node = get_node(output->parameter_info_idx - N_INPUT);
+    if (node->op_type == Conv) {
+        cur_end_job_index /= node->flags.conv_output_tile_c;
+    } else {
+        cur_end_job_index /= (BATCH_SIZE + 1);
+    }
+#endif
+    uint32_t first_unfinished_job_index;
+
+#if STATEFUL
+    my_printf_debug("new_output_state_bit for first value = %d" NEWLINE, param_state_bit(model, output, 0) ^ 1);
+    dump_turning_points_debug(model, output);
+#endif
+
+    while (1) {
+#if 0
+        dump_matrix_debug(model, output, cur_begin_offset, cur_end_offset - cur_begin_offset, ValueInfo(output));
+#endif
+        if (cur_end_job_index - cur_begin_job_index <= 1) {
+            if (!value_finished(model, output, cur_begin_job_index)) {
+                first_unfinished_job_index = 0;
+            } else if (!value_finished(model, output, cur_end_job_index)) {
+                first_unfinished_job_index = cur_end_job_index;
+            } else if (cur_end_job_index == end_job_index) {
+                // all values finished - power failure just before the state
+                // bit for the output is flipped
+                first_unfinished_job_index = end_job_index;
+            } else {
+                ERROR_OCCURRED();
+            }
+            break;
+        }
+        uint32_t middle_job_index = cur_begin_job_index + (cur_end_job_index - cur_begin_job_index) / 2;
+        if (value_finished(model, output, middle_job_index)) {
+            cur_begin_job_index = middle_job_index;
+        } else {
+            cur_end_job_index = middle_job_index;
+        }
+        my_printf_debug(
+            "job_index of begin = %" PRId32 ", job_index of end = %" PRId32 NEWLINE,
+            cur_begin_job_index, cur_end_job_index
+        );
+    }
+
+    my_printf_debug("first_unfinished_job_index = %d" NEWLINE, first_unfinished_job_index);
+
+    if (!after_recovery) {
+        MY_ASSERT(first_unfinished_job_index == 0);
+    } else {
+        after_recovery = 0;
+    }
+
+#if STATEFUL
+    check_feature_map_states(model, output, first_unfinished_job_index, output->params_len / 2, __func__);
+#endif
+
+    return first_unfinished_job_index;
 }
 #endif

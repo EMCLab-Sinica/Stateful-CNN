@@ -95,16 +95,16 @@ static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filte
 
 static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     // cur_output_tile_c should be signed, or MAX_VAL below is broken with TI's compiler
-    int16_t cur_output_tile_c = MIN_VAL(conv_params->flags->conv_output_tile_c, conv_params->N_FILTERS - conv_params->filter_idx);
+    int16_t output_tile_c = conv_params->flags->conv_output_tile_c;
+    int16_t cur_output_tile_c = output_tile_c - conv_params->filter_idx % output_tile_c;
     my_printf_debug("cur_output_tile_c = %d" NEWLINE, cur_output_tile_c);
     MY_ASSERT(cur_output_tile_c > 0);
 
     int16_t n_filters = cur_output_tile_c;
     int16_t channel_offset_c = conv_params->filter_idx;
 #if JAPARI
-    n_filters = extend_for_footprints(n_filters);
-    int16_t extended_output_tile_c = extend_for_footprints(cur_output_tile_c);
-    channel_offset_c = channel_offset_c / cur_output_tile_c * extended_output_tile_c + channel_offset_c % cur_output_tile_c;
+    n_filters = (extend_for_footprints(n_filters) + 1) / 2 * 2; // LEA requires even number of columns
+    channel_offset_c = extend_for_footprints(channel_offset_c);
 #endif
     // use NWHC so that output is written continuously on the address space
     int16_t cur_output_data_offset =
@@ -239,6 +239,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     uint16_t batch_offset = 0;
     for (uint16_t row = 0; row < A_rows; row++) {
         batch_offset += hawaii_preserve_vector(conv_params->model, conv_params->output, cur_output_data_offset + batch_offset, matrix_mpy_results + batch_offset, B_cols);
+        MY_ASSERT(read_hawaii_layer_footprint(conv_params->model->layer_idx) % conv_params->flags->conv_output_tile_c == 0);
     }
 #endif
 
@@ -433,7 +434,7 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     my_printf_debug("input_tile_c=%d, output_tile_c=%d" NEWLINE, flags->conv_input_tile_c, flags->conv_output_tile_c);
 #if JAPARI
     output->orig_channels = OUTPUT_CHANNEL;
-    OUTPUT_CHANNEL = upper_gauss(OUTPUT_CHANNEL, flags->conv_output_tile_c) * extend_for_footprints(flags->conv_output_tile_c);
+    OUTPUT_CHANNEL = extend_for_footprints(OUTPUT_CHANNEL);
 #endif
 
     /* XXX: extend flags; assume dilation=(1, 1) for now */
@@ -502,7 +503,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
 #if STATEFUL
     find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point,
-                           &conv_params->cur_slot_info, remap_offset(output, first_unfinished_job_index), model, output);
+                           &conv_params->cur_slot_info, job_index_to_offset(output, first_unfinished_job_index), model, output);
 
     my_printf_debug("old_output_offset = %d" NEWLINE, conv_params->old_output_offset);
 #endif
@@ -644,11 +645,15 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
     uint32_t tiling_results_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
 
     uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
+    uint32_t tiling_results_offset = 0;
+#if INTERMITTENT
+    uint32_t first_unfinished_job_index = run_recovery(model, output);
+
 #if JAPARI
-    const Node* data_node = get_node(data->parameter_info_idx - N_INPUT);
-    uint8_t tile_c_with_footprints = extend_for_footprints(data_node->flags.conv_output_tile_c);
-    uint16_t n_chunks = chunk_len / tile_c_with_footprints;
-    chunk_len = n_chunks * tile_c_with_footprints;
+    uint16_t n_chunks = chunk_len / (BATCH_SIZE + 1) / 2 * 2;
+    chunk_len = n_chunks * (BATCH_SIZE + 1);
+#endif
+    tiling_results_offset = first_unfinished_job_index;
 #endif
 
     float scale_f = 1.0 * find_max_multiplier(model, data) / n_tiles_c;
@@ -657,7 +662,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
     float_to_scale_params(&scaleFract, &shift, scale_f);
 
     // XXX: use iterate_chunks() for the outer loop?
-    for (uint32_t tiling_results_offset = 0; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
+    for (; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
         uint32_t real_chunk_len = MIN_VAL(chunk_len, tiling_results_len - tiling_results_offset);
         my_printf_debug("real_chunk_len = %d" NEWLINE, real_chunk_len);
         for (uint16_t input_tile_c_index = 0; input_tile_c_index < n_tiles_c; input_tile_c_index++) {
@@ -690,9 +695,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
         int8_t layer_sign = get_layer_sign(model);
         int16_t* layer_sign_buffer = lea_buffer + (LEA_BUFFER_SIZE - n_chunks) / 2 * 2;
         my_fill_q15(layer_sign, layer_sign_buffer, n_chunks);
-        for (uint8_t batch_offset = BATCH_SIZE; batch_offset < tile_c_with_footprints; batch_offset += BATCH_SIZE + 1) {
-            my_interleave_q15(layer_sign_buffer, batch_offset, tile_c_with_footprints, lea_buffer, n_chunks);
-        }
+        my_interleave_q15(layer_sign_buffer, BATCH_SIZE, BATCH_SIZE + 1, lea_buffer, n_chunks);
 #endif
 #if !HAWAII
         my_memcpy_to_param(output, tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));

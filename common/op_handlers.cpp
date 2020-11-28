@@ -68,27 +68,6 @@ void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *outpu
     dump_params_debug(model, output);
 }
 
-#if JAPARI
-struct ReluParams {
-    uint8_t footprint_tile_c;
-    uint8_t has_footprint_padding_channel;
-};
-static ReluParams relu_params_obj;
-#endif
-
-#if JAPARI
-static bool skip_channel(ReluParams* relu_params, uint16_t cur_channel) {
-    uint8_t footprint_tile_offset = cur_channel % relu_params->footprint_tile_c;
-    if (footprint_tile_offset % (BATCH_SIZE + 1) == BATCH_SIZE) {
-        return true;
-    }
-    if (relu_params->has_footprint_padding_channel && footprint_tile_offset == relu_params->footprint_tile_c - 1) {
-        return true;
-    }
-    return false;
-}
-#endif
-
 void alloc_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *data = input[0];
     output->slot = get_next_slot(model, data);
@@ -96,32 +75,7 @@ void alloc_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     output->flags |= NO_FOOTPRINTS;
 
 #if JAPARI
-    ReluParams* relu_params = &relu_params_obj;
-    relu_params->footprint_tile_c = 0;
-
-    uint16_t input_tile_c = data->dims[1];
-    // XXX: are all cases covered?
-    uint8_t batches_in_a_tile = 1;
-    for (; batches_in_a_tile * (BATCH_SIZE + 1) <= input_tile_c; batches_in_a_tile++) {
-        uint16_t candidate = batches_in_a_tile * (BATCH_SIZE + 1);
-        if (candidate == input_tile_c) {
-            relu_params->footprint_tile_c = candidate;
-            relu_params->has_footprint_padding_channel = 0;
-        } else if (candidate + 1 == input_tile_c) {
-            relu_params->footprint_tile_c = input_tile_c;
-            relu_params->has_footprint_padding_channel = 1;
-        } else if (batches_in_a_tile * (BATCH_SIZE + 2) == input_tile_c) {
-            relu_params->footprint_tile_c = BATCH_SIZE + 2;
-            relu_params->has_footprint_padding_channel = 1;
-        }
-        if (batches_in_a_tile * BATCH_SIZE == data->orig_channels) {
-            break;
-        }
-    }
-    my_printf_debug("input_tile_c = %d, footprint_tile_c = %d, has_footprint_padding_channel = %d" NEWLINE,
-                    input_tile_c, relu_params->footprint_tile_c, relu_params->has_footprint_padding_channel);
-    MY_ASSERT(relu_params->footprint_tile_c);
-    output->dims[1] = batches_in_a_tile * BATCH_SIZE;
+    output->dims[1] = output->dims[1] / (BATCH_SIZE + 1) * BATCH_SIZE;
 #endif
 }
 
@@ -142,20 +96,16 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     uint16_t output_offset = 0;
 #if INTERMITTENT
 
-    uint32_t first_unfinished_value_offset = run_recovery(model, output);
-    data_offset += first_unfinished_value_offset;
-    output_offset += first_unfinished_value_offset;
+    uint32_t first_unfinished_job_index = run_recovery(model, output);
+    data_offset += first_unfinished_job_index;
+    output_offset += first_unfinished_job_index;
 
 #if STATEFUL
     int16_t offset, next_output_turning_point;
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
-    find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
+    find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_job_index, model, output);
     offset ^= 0x4000;
-#endif
-
-#if JAPARI
-    ReluParams* relu_params = &relu_params_obj;
 #endif
 
 #endif
@@ -167,16 +117,16 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         // TODO: state-aware recovery
         uint16_t H = X->dims[2], W = X->dims[3];
         uint16_t output_h = 0, output_w = 0, c = 0;
-#if STATEFUL
-        output_h = first_unfinished_value_offset / (W * CHANNEL);
-        first_unfinished_value_offset %= (W * CHANNEL);
-        output_w = first_unfinished_value_offset / CHANNEL;
-        c = first_unfinished_value_offset % CHANNEL;
+#if INTERMITTENT
+        output_h = first_unfinished_job_index / (W * CHANNEL);
+        first_unfinished_job_index %= (W * CHANNEL);
+        output_w = first_unfinished_job_index / CHANNEL;
+        c = first_unfinished_job_index % CHANNEL;
         my_printf_debug("initial output_h = %d, ", output_h);
         my_printf_debug("initial output_w = %d, ", output_w);
         my_printf_debug("initial c = %d" NEWLINE, c);
-
 #endif
+
 #if JAPARI
         uint16_t input_tile_c = X->dims[1];
         input_tile_c = extend_for_footprints(input_tile_c);
@@ -202,7 +152,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     for (uint16_t idx = 0; idx < len; idx++) {
                         int16_t input_val = 0, output_val;
 #if JAPARI
-                        if (skip_channel(relu_params, c + idx)) {
+                        if ((c + idx) % (BATCH_SIZE + 1) == BATCH_SIZE) {
                             continue;
                         } else
 #endif
