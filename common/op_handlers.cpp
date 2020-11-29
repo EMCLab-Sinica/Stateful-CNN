@@ -101,6 +101,10 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     offset ^= 0x4000;
 #endif
 
+#if JAPARI
+    uint32_t footprint = first_unfinished_job_index + 1;
+#endif
+
 #endif
 
     if (X->flags & TRANSPOSED) {
@@ -118,11 +122,6 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         my_printf_debug("initial c = %d" NEWLINE, c);
 #endif
 
-#if JAPARI
-        uint16_t input_tile_c = X->dims[1];
-        input_tile_c = extend_for_footprints(input_tile_c);
-        MY_ASSERT(input_tile_c);
-#endif
         for (; output_h < H; output_h++) {
             for (; output_w < W; output_w++) {
                     int16_t val_offset = output_w * H * CHANNEL + output_h * CHANNEL + c;
@@ -144,7 +143,8 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         int16_t input_val = 0, output_val;
 #if JAPARI
                         if ((c + idx) % (BATCH_SIZE + 1) == BATCH_SIZE) {
-                            output_val = get_layer_sign(model, output);
+                            output_val = get_layer_sign(model, output) * footprint;
+                            footprint++;
                         } else
 #endif
                         {

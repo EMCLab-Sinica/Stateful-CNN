@@ -351,12 +351,9 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
 #else
     if (node->op_type != Conv) {
         uint32_t offset = (job_index + 1) * (BATCH_SIZE + 1) - 1;
-        my_printf_debug("Job index %d => offset %d" NEWLINE, job_index, offset);
         return offset;
     }
 #endif
-
-    uint32_t orig_job_index = job_index;
 
     uint16_t OUTPUT_CHANNEL = output->dims[1], OUTPUT_H = output->dims[2], OUTPUT_W = output->dims[3];
     uint16_t input_tile_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
@@ -384,7 +381,6 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
         MY_ASSERT(orig_job_index == offset);
     }
 #endif
-    my_printf_debug("Job index %d => offset %d" NEWLINE, orig_job_index, offset);
     return offset;
 }
 

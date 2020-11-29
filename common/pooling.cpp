@@ -12,6 +12,9 @@ struct MaxPoolParams {
     uint16_t start_channel;
     uint8_t n_channels;
     uint8_t need_nhwc2nchw;
+#if JAPARI
+    uint32_t footprint;
+#endif
     const NodeFlags* flags;
     const ParameterInfo *data;
     const ParameterInfo *output;
@@ -77,8 +80,9 @@ static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
 #if JAPARI
                 if ((maxpool_params->start_channel + input_channel_offset) % (BATCH_SIZE + 1) == BATCH_SIZE) {
                     if (!maxpool_params->need_nhwc2nchw) {
-                        output_buffer[output_channel_offset] = get_layer_sign(maxpool_params->model, maxpool_params->output);
+                        output_buffer[output_channel_offset] = get_layer_sign(maxpool_params->model, maxpool_params->output) * maxpool_params->footprint;
                         output_channel_offset++;
+                        maxpool_params->footprint++;
                     }
                     continue;
                 }
@@ -150,6 +154,10 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
         // give up early, or initial_real_tile_c may be zero and results in SIGFPE
         goto finished;
     }
+
+#if JAPARI
+    maxpool_params->footprint = first_unfinished_value_offset;
+#endif
 
     uint16_t initial_n, initial_c, initial_h, initial_w;
     initial_n = first_unfinished_value_offset / (new_H * new_W * tile_c);
@@ -281,9 +289,14 @@ void alloc_globalaveragepool(Model *model, const ParameterInfo *input[], Paramet
 
     MY_ASSERT(data->dims[0] == 1);
     uint16_t output_len = data->dims[1];
+#if JAPARI
+    if (has_footprints(data)) {
+        output_len = output_len / (BATCH_SIZE + 1) * BATCH_SIZE;
+    }
+#endif
 
     output->dims[0] = output->dims[2] = output->dims[3] = 1;
-    output->dims[1] = data->dims[1];
+    output->dims[1] = output_len;
     output->params_len = output_len * sizeof(int16_t);
     output->bitwidth = 16;
     output->slot = get_next_slot(model, data);
@@ -304,12 +317,16 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
 
     uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
     uint16_t len = H * W;
-    for (uint16_t c = 0; c < CHANNEL; c++) {
+    uint16_t output_channel = 0;
+    for (uint16_t input_channel = 0; input_channel < CHANNEL; input_channel++) {
+        if (input_channel % (BATCH_SIZE + 1) == BATCH_SIZE) {
+            continue;
+        }
         uint32_t total = 0;
         for (uint16_t h = 0; h < H; h++) {
             for (uint16_t w = 0; w < W; w++) {
                 // Input is from Conv, which uses NHWC
-                int16_t val = get_q15_param(model, data, h * W * CHANNEL + w * CHANNEL + c);
+                int16_t val = get_q15_param(model, data, h * W * CHANNEL + w * CHANNEL + input_channel);
 #if STATEFUL
                 if (get_value_state_bit(val)) {
                     val -= 0x4000;
@@ -320,10 +337,11 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
         }
         int16_t avg = total / len;
 #if STATEFUL
-        check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, c);
+        check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_channel);
         avg += offset;
 #endif
-        put_q15_param(output, c, avg);
+        put_q15_param(output, output_channel, avg);
+        output_channel++;
     }
 
     flip_state_bit(model, output);
