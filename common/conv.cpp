@@ -63,6 +63,11 @@ typedef struct ConvTaskParams {
     int16_t next_turning_point;
     SlotInfo* cur_slot_info;
 #endif
+#if JAPARI
+    uint16_t footprint;
+    uint8_t conv_input_has_footprints;
+    uint16_t input_tile_c_offset_with_footprints;
+#endif
 
     uint16_t filter_idx;
     uint16_t filter_tile_index;
@@ -100,10 +105,11 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     my_printf_debug("cur_output_tile_c = %d" NEWLINE, cur_output_tile_c);
     MY_ASSERT(cur_output_tile_c > 0);
 
-    int16_t n_filters = cur_output_tile_c;
+    int16_t n_filters = cur_output_tile_c, values_to_preserve = n_filters;
     int16_t channel_offset_c = conv_params->filter_idx;
 #if JAPARI
-    n_filters = (extend_for_footprints(n_filters) + 1) / 2 * 2; // LEA requires even number of columns
+    values_to_preserve = extend_for_footprints(n_filters);
+    n_filters = (values_to_preserve + 1) / 2 * 2; // LEA requires even number of columns
     channel_offset_c = extend_for_footprints(channel_offset_c);
 #endif
     // use NWHC so that output is written continuously on the address space
@@ -170,10 +176,11 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         }
 #if JAPARI
         int16_t* footprint_channels_ptr = conv_params->filter_buffer_addr + n_filters * (conv_params->filter_offset - 1);
-        int8_t layer_sign = -get_layer_sign(conv_params->model);
+        int8_t layer_sign = -get_layer_sign(conv_params->model, conv_params->output);
         for (int16_t idx = BATCH_SIZE; idx < n_filters; idx += BATCH_SIZE + 1) {
-            *(footprint_channels_ptr + idx) = layer_sign;
+            *(footprint_channels_ptr + idx) = layer_sign * conv_params->footprint;
         }
+        conv_params->footprint++;
 #endif
 
         conv_params->cached_filter_idx = conv_params->filter_idx;
@@ -234,7 +241,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     MY_ASSERT(cur_output_data_offset + n_filters < INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
 
 #if !HAWAII
-    my_memcpy_to_param(conv_params->output, cur_output_data_offset, matrix_mpy_results, n_filters * sizeof(int16_t));
+    my_memcpy_to_param(conv_params->output, cur_output_data_offset, matrix_mpy_results, values_to_preserve * sizeof(int16_t));
 #else
     uint16_t batch_offset = 0;
     for (uint16_t row = 0; row < A_rows; row++) {
@@ -256,19 +263,42 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #endif
 }
 
-static inline void load_input_vector(uint32_t src_addr, int16_t* dest_addr, uint8_t len, const ConvTaskParams* conv_params) {
+static inline uint8_t load_input_vector(uint32_t src_addr, int16_t* dest_addr, uint8_t len, const ConvTaskParams* conv_params) {
     my_printf_debug("Load %d IFM values from range [%d, %d) ",
                     len, src_addr, static_cast<int>(src_addr + len));
+    int16_t* memcpy_dest_addr = nullptr;
+    uint8_t loaded_len = 0;
+#if JAPARI
+    if (conv_params->conv_input_has_footprints) {
+        memcpy_dest_addr = input_buffer_with_footprints;
+    } else
+#endif
+    {
+        memcpy_dest_addr = dest_addr;
+        loaded_len = len;
+    }
     my_memcpy_from_param(
-        conv_params->model, dest_addr,
+        conv_params->model, memcpy_dest_addr,
         conv_params->real_conv_input, src_addr,
         len * sizeof(int16_t));
+#if JAPARI
+    if (conv_params->conv_input_has_footprints) {
+        for (uint8_t src_idx = 0; src_idx < len; src_idx++) {
+            if ((src_idx + conv_params->input_tile_c_offset_with_footprints) % (BATCH_SIZE + 1) != BATCH_SIZE) {
+                dest_addr[loaded_len] = input_buffer_with_footprints[src_idx];
+                loaded_len++;
+            }
+        }
+    }
+#endif
+
 #if MY_DEBUG >= 1
-    for (uint8_t idx = 0; idx < len; idx++) {
+    for (uint8_t idx = 0; idx < loaded_len; idx++) {
         my_printf_debug("%d ", dest_addr[idx]);
     }
     my_printf_debug(NEWLINE);
 #endif
+    return loaded_len;
 }
 
 static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
@@ -322,14 +352,26 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     my_printf_debug("h_start=%" PRId32 " ", h_start);
     my_printf_debug("h_end=%" PRId32 NEWLINE, h_end);
 
-    uint8_t cur_input_tile_c = conv_params->cur_input_tile_c;
+    uint8_t cur_input_tile_c = conv_params->cur_input_tile_c,
+            im2col_channel_offset = cur_input_tile_c;
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                     static_cast<int>(dest - lea_buffer));
     uint16_t cur_input_channel = conv_params->CHANNEL;
     if (conv_params->conv_input->flags & SEPARATE_TILING) {
         cur_input_channel /= 2;
     }
-    int16_t input_src_offset = (conv_params->input_h + h_start) * conv_params->W * cur_input_channel + (conv_params->input_w + w_start) * cur_input_channel + conv_params->input_tile_c_offset;
+#if JAPARI
+    if (conv_params->conv_input_has_footprints) {
+        cur_input_tile_c = extend_for_footprints(cur_input_tile_c);
+        cur_input_channel = extend_for_footprints(cur_input_channel);
+    }
+#endif
+    int16_t input_src_offset = (conv_params->input_h + h_start) * conv_params->W * cur_input_channel + (conv_params->input_w + w_start) * cur_input_channel;
+#if JAPARI
+    input_src_offset += conv_params->input_tile_c_offset_with_footprints;
+#else
+    input_src_offset += conv_params->input_tile_c_offset;
+#endif
     if (real_input_index == 1) {
         input_src_offset -= cur_input_channel;
     }
@@ -337,7 +379,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     dump_turning_points_debug(model, conv_params->real_conv_input);
 #endif
     for (int32_t h = h_start; h <= h_end; h++) {
-        int16_t *dest_addr = dest + (w_start + field_size) * cur_input_tile_c;
+        int16_t *dest_addr = dest + (w_start + field_size) * im2col_channel_offset;
 #if STATEFUL
         int16_t *orig_dest_addr = dest_addr;
 #endif
@@ -348,7 +390,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         } else {
             for (int32_t w = w_start; w <= w_end; w++) {
                 load_input_vector(src_addr, dest_addr, cur_input_tile_c, conv_params);
-                dest_addr += cur_input_tile_c;
+                dest_addr += im2col_channel_offset;
                 src_addr += cur_input_channel;
             }
         }
@@ -430,12 +472,16 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     conv_params->OUTPUT_H = (H - conv_params->offset_h * 2) / conv_params->stride;
     conv_params->OUTPUT_W = (W - conv_params->offset_w * 2) / conv_params->stride;
 
-    conv_params->n_tiles_c = CHANNEL / flags->conv_input_tile_c;
-    my_printf_debug("input_tile_c=%d, output_tile_c=%d" NEWLINE, flags->conv_input_tile_c, flags->conv_output_tile_c);
 #if JAPARI
-    output->orig_channels = OUTPUT_CHANNEL;
     OUTPUT_CHANNEL = extend_for_footprints(OUTPUT_CHANNEL);
+    if (has_footprints(conv_input)) {
+        conv_params->n_tiles_c = CHANNEL / extend_for_footprints(flags->conv_input_tile_c);
+    } else
 #endif
+    {
+        conv_params->n_tiles_c = CHANNEL / flags->conv_input_tile_c;
+    }
+    my_printf_debug("input_tile_c=%d, output_tile_c=%d" NEWLINE, flags->conv_input_tile_c, flags->conv_output_tile_c);
 
     /* XXX: extend flags; assume dilation=(1, 1) for now */
     output->bitwidth = 16;
@@ -447,9 +493,6 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     output->dims[3] = conv_params->OUTPUT_W;
     output->flags |= TRANSPOSED;
     output->flags &= ~SEPARATE_TILING;
-#if JAPARI
-    output->flags &= ~NO_FOOTPRINTS;
-#endif
     output->scale = conv_input->scale * conv_filter->scale;
 }
 
@@ -478,7 +521,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     conv_params->H = H;
     conv_params->W = W;
 #if JAPARI
-    MY_ASSERT(!has_footprints(conv_input));
+    conv_params->conv_input_has_footprints = has_footprints(conv_input);
 #endif
 
     conv_params->CHANNEL = CHANNEL;
@@ -508,13 +551,17 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     my_printf_debug("old_output_offset = %d" NEWLINE, conv_params->old_output_offset);
 #endif
 
-    // Dimensions: channel-tiled NWHC
     uint16_t slice_size_input_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL;
+    uint16_t slice_size_output_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * flags->conv_output_tile_c;
+
+#if JAPARI
+    conv_params->footprint = first_unfinished_job_index / slice_size_output_channel_tiling + 1;
+#endif
+
     conv_params->input_tile_c_index = first_unfinished_job_index / slice_size_input_channel_tiling;
     conv_params->input_tile_c_offset = conv_params->input_tile_c_index * flags->conv_input_tile_c;
     first_unfinished_job_index %= slice_size_input_channel_tiling;
 
-    uint16_t slice_size_output_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * flags->conv_output_tile_c;
     conv_params->filter_tile_index = first_unfinished_job_index / slice_size_output_channel_tiling;
     conv_params->filter_idx = conv_params->filter_tile_index * flags->conv_output_tile_c;
     first_unfinished_job_index %= slice_size_output_channel_tiling;
@@ -538,6 +585,9 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     for (; conv_params->input_tile_c_offset < input_channels; conv_params->input_tile_c_offset += flags->conv_input_tile_c) {
         conv_params->cur_input_tile_c = MIN_VAL(flags->conv_input_tile_c, input_channels - conv_params->input_tile_c_offset);
         conv_params->cur_filter_tile_c = conv_params->cur_input_tile_c;
+#if JAPARI
+        conv_params->input_tile_c_offset_with_footprints = extend_for_footprints(conv_params->input_tile_c_offset);
+#endif
         my_printf_debug("cur_input_tile_c = %d" NEWLINE, conv_params->cur_input_tile_c);
         conv_params->dest_offset = conv_params->kH * conv_params->cur_input_tile_c;
         // +1 for bias
@@ -577,9 +627,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
     }
 
-#if STATEFUL
     flip_state_bit(model, output);
-#endif
 
     my_printf_debug("handle_conv output" NEWLINE);
     dump_params_nhwc_debug(model, output);
@@ -652,6 +700,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 #if JAPARI
     uint16_t n_chunks = chunk_len / (BATCH_SIZE + 1) / 2 * 2;
     chunk_len = n_chunks * (BATCH_SIZE + 1);
+    uint16_t footprint = first_unfinished_job_index / chunk_len + 1;
 #endif
     tiling_results_offset = first_unfinished_job_index;
 #endif
@@ -692,10 +741,11 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 #endif
 
 #if JAPARI
-        int8_t layer_sign = get_layer_sign(model);
+        int8_t layer_sign = get_layer_sign(model, output);
         int16_t* layer_sign_buffer = lea_buffer + (LEA_BUFFER_SIZE - n_chunks) / 2 * 2;
-        my_fill_q15(layer_sign, layer_sign_buffer, n_chunks);
+        my_fill_q15(layer_sign * footprint, layer_sign_buffer, n_chunks);
         my_interleave_q15(layer_sign_buffer, BATCH_SIZE, BATCH_SIZE + 1, lea_buffer, n_chunks);
+        footprint++;
 #endif
 #if !HAWAII
         my_memcpy_to_param(output, tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));
@@ -708,9 +758,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 
     output->scale /= scale_f;
 
-#if STATEFUL
     flip_state_bit(model, output);
-#endif
 
     dump_params_nhwc_debug(model, output);
 }

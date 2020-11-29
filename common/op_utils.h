@@ -23,7 +23,7 @@ uint16_t hawaii_preserve_vector(Model* model, ParameterInfo* output, uint32_t ou
 #endif
 
 #if JAPARI
-#define INPUT_BUFFER_WITH_FOOTPRINTS_LEN 600
+#define INPUT_BUFFER_WITH_FOOTPRINTS_LEN 256
 
 extern int16_t input_buffer_with_footprints[INPUT_BUFFER_WITH_FOOTPRINTS_LEN];
 int16_t extend_for_footprints(int16_t val);

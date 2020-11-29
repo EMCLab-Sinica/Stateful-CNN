@@ -505,9 +505,10 @@ model.write(to_bytes(0))  # Model.running
 model.write(to_bytes(0))  # Model.run_counter
 model.write(to_bytes(0))  # Model.layer_idx
 for _ in range(config['num_slots']): # Model.slots_info
-    if Constants.STATEFUL:
+    if Constants.INDIRECT_RECOVERY:
         model.write(to_bytes(0, size=8)) # SlotInfo.state_bit
-        model.write(to_bytes(0, size=8)) # SlotInfo.n_turning_points
+        model.write(to_bytes(0, size=8)) # SlotInfo.n_turning_points (STATEFUL) or padding byte (JAPARI)
+    if Constants.STATEFUL:
         for __ in range(Constants.TURNING_POINTS_LEN):
             model.write(to_bytes(-1))   # SlotInfo.turning_points
     model.write(to_bytes(-1))       # SlotInfo.user
@@ -561,10 +562,7 @@ for params in parameters:
         model_parameters_info.write(to_bytes(input_channel* dimX * dimY * 2, size=32))  # A _q15 is 16-bit
         model_parameters_info.write(to_bytes(16, size=8))                # bitwidth
         model_parameters_info.write(to_bytes(Constants.SLOT_TEST_SET, size=8))     # slot
-        if not Constants.JAPARI:
-            model_parameters_info.write(to_bytes(0))                     # dummy
-        else:
-            model_parameters_info.write(to_bytes(input_channel))         # orig_channels
+        model_parameters_info.write(to_bytes(0))                     # dummy
         # extend_dims
         model_parameters_info.write(to_bytes(1))
         model_parameters_info.write(to_bytes(input_channel))
@@ -611,10 +609,7 @@ for params in parameters:
             channels = params.dims[1]
         else:
             channels = 0
-        if not Constants.JAPARI:
-            model_parameters_info.write(to_bytes(0, size=16))        # dummy
-        else:
-            model_parameters_info.write(to_bytes(channels))          # orig_channels
+        model_parameters_info.write(to_bytes(0, size=16))        # dummy
         print('dims = {}, length = {}'.format(params.dims, data_len))
         for dim in params.dims:
             model_parameters_info.write(to_bytes(dim))
@@ -637,10 +632,7 @@ for idx, n in enumerate(nodes):
     intermediate_parameters_info.write(to_bytes(0, size=32))  # params_len
     intermediate_parameters_info.write(to_bytes(0, size=8))  # bitwidth
     intermediate_parameters_info.write(to_bytes(0, size=8))  # slot
-    if not Constants.JAPARI:
-        intermediate_parameters_info.write(to_bytes(0))         # dummy
-    else:
-        intermediate_parameters_info.write(to_bytes(0))         # orig_channels
+    intermediate_parameters_info.write(to_bytes(0))         # dummy
     for _ in range(4):  # dims[4]
         intermediate_parameters_info.write(to_bytes(0))
     intermediate_parameters_info.write(to_bytes(config['scale']))   # scale

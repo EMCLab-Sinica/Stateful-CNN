@@ -152,9 +152,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         }
     }
 
-#if STATEFUL
     flip_state_bit(model, output);
-#endif
 
     my_printf_debug("handle_gemm output" NEWLINE);
     dump_params_debug(model, output);
@@ -240,9 +238,7 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
 
     my_memcpy_to_param(output, 0, buffer_gemm, output->params_len);
 
-#if STATEFUL
     flip_state_bit(model, output);
-#endif
 
     my_printf_debug("handle_gemmmerge output" NEWLINE);
     dump_params_debug(model, output);

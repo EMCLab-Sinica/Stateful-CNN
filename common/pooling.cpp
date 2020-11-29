@@ -11,8 +11,10 @@ struct MaxPoolParams {
     uint16_t output_w;
     uint16_t start_channel;
     uint8_t n_channels;
+    uint8_t need_nhwc2nchw;
     const NodeFlags* flags;
     const ParameterInfo *data;
+    const ParameterInfo *output;
     Model *model;
 };
 static MaxPoolParams maxpool_params_obj;
@@ -27,13 +29,22 @@ void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     uint16_t new_H = H / stride;
     uint16_t new_W = W / stride;
 
+    MaxPoolParams* maxpool_params = &maxpool_params_obj;
+    maxpool_params->need_nhwc2nchw = (flags->generic == NHWC2NCHW);
+
+#if JAPARI
+    if (maxpool_params->need_nhwc2nchw) {
+        CHANNEL = CHANNEL / (BATCH_SIZE + 1) * BATCH_SIZE;
+        output->flags |= NO_FOOTPRINTS;
+    }
+#endif
+
     output->params_len = new_H * new_W * CHANNEL * sizeof(int16_t);
     output->slot = get_next_slot(model, data);
     output->dims[0] = 1;
     output->dims[1] = CHANNEL;
     output->dims[2] = new_H;
     output->dims[3] = new_W;
-    output->flags |= NO_FOOTPRINTS;
 }
 
 static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
@@ -63,6 +74,15 @@ static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
             my_memcpy_from_param(maxpool_params->model, input_buffer, maxpool_params->data, val_offset, maxpool_params->n_channels * sizeof(int16_t));
             output_channel_offset = 0;
             for (uint8_t input_channel_offset = 0; input_channel_offset < maxpool_params->n_channels; input_channel_offset++) {
+#if JAPARI
+                if ((maxpool_params->start_channel + input_channel_offset) % (BATCH_SIZE + 1) == BATCH_SIZE) {
+                    if (!maxpool_params->need_nhwc2nchw) {
+                        output_buffer[output_channel_offset] = get_layer_sign(maxpool_params->model, maxpool_params->output);
+                        output_channel_offset++;
+                    }
+                    continue;
+                }
+#endif
                 int16_t val = input_buffer[input_channel_offset];
 #if STATEFUL
                 if (get_value_state_bit(val)) {
@@ -100,18 +120,15 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     my_printf_debug("MaxPool!" NEWLINE);
 
     uint16_t stride = flags->stride;
-    uint8_t need_nhwc2nchw = (flags->generic == NHWC2NCHW);
 
     /* XXX: add flags; assume no padding for now */
     const ParameterInfo *data = input[0];
 
     MaxPoolParams* maxpool_params = &maxpool_params_obj;
     maxpool_params->data = data;
+    maxpool_params->output = output;
     maxpool_params->flags = flags;
     maxpool_params->model = model;
-
-    my_printf_debug("handle_maxpool input" NEWLINE);
-    dump_params_nhwc_debug(model, data);
 
     const uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
     uint16_t new_H = H / stride;
@@ -149,7 +166,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 
     initial_real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
     output_offset = first_unfinished_value_offset;
-    if (!need_nhwc2nchw) {
+    if (!maxpool_params->need_nhwc2nchw) {
         initial_c = first_unfinished_value_offset % initial_real_tile_c;
         first_unfinished_value_offset /= initial_real_tile_c;
         initial_w = first_unfinished_value_offset % new_W;
@@ -174,7 +191,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     for (; tile_c_offset < CHANNEL;) {
         uint8_t extended_tile_c = tile_c;
         uint16_t cur_tile_c = MIN_VAL(extended_tile_c, CHANNEL - tile_c_offset);
-        if (!need_nhwc2nchw) {
+        if (!maxpool_params->need_nhwc2nchw) {
             // NHWC
             for (; output_h < new_H; output_h++) {
                 maxpool_params->output_h = output_h;
@@ -248,13 +265,11 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 
 #if INTERMITTENT
 finished:
-#if STATEFUL
     flip_state_bit(model, output);
-#endif
 #endif
 
     my_printf_debug("handle_maxpool output" NEWLINE);
-    if (!need_nhwc2nchw) {
+    if (!maxpool_params->need_nhwc2nchw) {
         dump_params_nhwc_debug(model, output);
     } else if (tile_c == CHANNEL) {
         dump_params_debug(model, output);
@@ -311,9 +326,7 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
         put_q15_param(output, c, avg);
     }
 
-#if STATEFUL
     flip_state_bit(model, output);
-#endif
 
     dump_params_debug(model, output);
 }

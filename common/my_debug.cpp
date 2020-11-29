@@ -69,12 +69,14 @@ void dump_matrix(Model* model, ParameterInfo *param, uint16_t offset, uint16_t l
     my_printf(NEWLINE);
 }
 
-static void dump_params_common(const ParameterInfo* cur_param) {
+static void dump_params_common(Model* model, const ParameterInfo* cur_param) {
     my_printf("Slot: %d" NEWLINE, cur_param->slot);
     my_printf("Scale: %d" NEWLINE, cur_param->scale);
     my_printf("Params len: %" PRId32 NEWLINE, cur_param->params_len);
-#if JAPARI
-    my_printf("Original channels: %d" NEWLINE, cur_param->orig_channels);
+#if INDIRECT_RECOVERY
+    if (cur_param->slot < NUM_SLOTS) {
+        my_printf("State: %d" NEWLINE, get_slot_info(model, cur_param->slot)->state_bit);
+    }
 #endif
 }
 
@@ -94,7 +96,7 @@ void dump_params_nhwc(Model *model, const ParameterInfo *cur_param) {
     H = cur_param->dims[2];
     W = cur_param->dims[3];
     NUM = find_real_num(NUM, CHANNEL, H, W, cur_param);
-    dump_params_common(cur_param);
+    dump_params_common(model, cur_param);
     int16_t output_tile_c = cur_param->dims[1];
 #if JAPARI
     if (has_footprints(cur_param)) {
@@ -167,7 +169,7 @@ void dump_params(Model *model, const ParameterInfo *cur_param) {
         W = cur_param->dims[0];
     }
     NUM = find_real_num(NUM, CHANNEL, H, W, cur_param);
-    dump_params_common(cur_param);
+    dump_params_common(model, cur_param);
     for (uint16_t i = 0; i < NUM; i++) {
         my_printf("Matrix %d" NEWLINE, i);
         for (uint16_t j = 0; j < CHANNEL; j++) {

@@ -54,11 +54,7 @@ typedef struct ParameterInfo {
      * SLOT_PARAMETERS and SLOT_INTERMEDIATE_VALUES.
      */
     uint8_t slot;
-#if JAPARI
-    uint16_t orig_channels;
-#else
     uint16_t dummy;
-#endif
     // uint8_t is not enough. For example, fully connected layer in MNIST has dims 256x1
     uint16_t dims[4];
     // use signed type for scale as TI's compiler does not handle
@@ -73,8 +69,10 @@ static_assert(sizeof(ParameterInfo) == 28, "Unexpected size for ParameterInfo");
 
 typedef struct SlotInfo {
     SlotInfo() {}
-#if STATEFUL
+#if INDIRECT_RECOVERY
     uint8_t state_bit;
+#endif
+#if STATEFUL
     uint8_t n_turning_points;
     uint16_t turning_points[TURNING_POINTS_LEN];
 #endif
@@ -90,7 +88,7 @@ typedef struct Model {
     uint8_t version; // must be the last field in this struct
 } Model;
 
-static_assert(sizeof(Model) == 8 + NUM_SLOTS * (2 + STATEFUL * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
+static_assert(sizeof(Model) == 8 + NUM_SLOTS * (2 + INDIRECT_RECOVERY * 2 + STATEFUL * TURNING_POINTS_LEN * 2), "Unexpected size for Model");
 
 #define COUNTERS_LEN 64
 typedef struct {

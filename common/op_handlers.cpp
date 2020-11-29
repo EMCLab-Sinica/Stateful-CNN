@@ -60,9 +60,7 @@ void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *outpu
 
     my_memcpy_to_param(output, 0, buffer_a, output->params_len);
 
-#if STATEFUL
     flip_state_bit(model, output);
-#endif
 
     my_printf_debug("handle_add output" NEWLINE);
     dump_params_debug(model, output);
@@ -72,11 +70,6 @@ void alloc_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     const ParameterInfo *data = input[0];
     output->slot = get_next_slot(model, data);
     output->flags &= ~TRANSPOSED;
-    output->flags |= NO_FOOTPRINTS;
-
-#if JAPARI
-    output->dims[1] = output->dims[1] / (BATCH_SIZE + 1) * BATCH_SIZE;
-#endif
 }
 
 void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
@@ -110,9 +103,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
 #endif
 
-    my_printf_debug("handle_relu input" NEWLINE);
     if (X->flags & TRANSPOSED) {
-        dump_params_nhwc_debug(model, X);
         // input is in NWHC
         // TODO: state-aware recovery
         uint16_t H = X->dims[2], W = X->dims[3];
@@ -153,7 +144,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         int16_t input_val = 0, output_val;
 #if JAPARI
                         if ((c + idx) % (BATCH_SIZE + 1) == BATCH_SIZE) {
-                            continue;
+                            output_val = get_layer_sign(model, output);
                         } else
 #endif
                         {
@@ -201,13 +192,12 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             output_w = 0;
         }
     } else {
-        dump_params_debug(model, X);
         uint16_t i = 0;
         for (; i < data_len; i++) {
             int16_t output_val;
 #if JAPARI
             if (i % 2) {
-                output_val = get_layer_sign(model);
+                output_val = get_layer_sign(model, output);
             } else
 #endif
             {
@@ -232,9 +222,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         }
     }
 
-#if STATEFUL
     flip_state_bit(model, output);
-#endif
 
     my_printf_debug("handle_relu output" NEWLINE);
     if (X->flags & TRANSPOSED) {
