@@ -541,40 +541,69 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     conv_params->filter_idx = 0;
 #if INTERMITTENT
 
-    uint32_t first_unfinished_job_index = run_recovery(model, output);
+    uint32_t first_unfinished_value_offset = run_recovery(model, output);
+#if JAPARI
+    first_unfinished_value_offset *= (BATCH_SIZE + 1);
+#endif
+#if STATEFUL
+    first_unfinished_value_offset *= BATCH_SIZE;
+#endif
+
+#if STATEFUL
     // Force recovery from an even OFM index as most DSPLib function does not like odd dimensions
-    first_unfinished_job_index = first_unfinished_job_index / 2 * 2;
+    first_unfinished_value_offset = first_unfinished_value_offset / 2 * 2;
+#endif
 
 #if STATEFUL
     find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point,
-                           &conv_params->cur_slot_info, job_index_to_offset(output, first_unfinished_job_index), model, output);
+                           &conv_params->cur_slot_info, job_index_to_offset(output, first_unfinished_value_offset), model, output);
 
     my_printf_debug("old_output_offset = %d" NEWLINE, conv_params->old_output_offset);
 #endif
 
     uint16_t slice_size_input_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL;
     uint16_t slice_size_output_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * flags->conv_output_tile_c;
-
 #if JAPARI
-    conv_params->footprint = first_unfinished_job_index / slice_size_output_channel_tiling + 1;
+    slice_size_output_channel_tiling = extend_for_footprints(slice_size_output_channel_tiling);
 #endif
 
-    conv_params->input_tile_c_index = first_unfinished_job_index / slice_size_input_channel_tiling;
-    conv_params->input_tile_c_offset = conv_params->input_tile_c_index * flags->conv_input_tile_c;
-    first_unfinished_job_index %= slice_size_input_channel_tiling;
+#if JAPARI
+    conv_params->footprint = first_unfinished_value_offset / extend_for_footprints(flags->conv_output_tile_c) + 1;
+#endif
 
-    conv_params->filter_tile_index = first_unfinished_job_index / slice_size_output_channel_tiling;
+    conv_params->input_tile_c_index = first_unfinished_value_offset / slice_size_input_channel_tiling;
+#if JAPARI
+    if (has_footprints(conv_params->conv_input)) {
+        conv_params->input_tile_c_offset = conv_params->input_tile_c_index * extend_for_footprints(flags->conv_input_tile_c);
+    } else
+#endif
+    {
+        conv_params->input_tile_c_offset = conv_params->input_tile_c_index * flags->conv_input_tile_c;
+    }
+    first_unfinished_value_offset %= slice_size_input_channel_tiling;
+
+    conv_params->filter_tile_index = first_unfinished_value_offset / slice_size_output_channel_tiling;
     conv_params->filter_idx = conv_params->filter_tile_index * flags->conv_output_tile_c;
-    first_unfinished_job_index %= slice_size_output_channel_tiling;
+    first_unfinished_value_offset %= slice_size_output_channel_tiling;
 
     uint16_t cur_output_tile_c = flags->conv_output_tile_c;
-    conv_params->filter_idx += first_unfinished_job_index % cur_output_tile_c;
-    first_unfinished_job_index /= cur_output_tile_c;
+#if JAPARI
+    cur_output_tile_c = extend_for_footprints(cur_output_tile_c);
+#endif
+    uint8_t filter_offset_in_tile = first_unfinished_value_offset % cur_output_tile_c;
+#if JAPARI
+    if (filter_offset_in_tile == flags->conv_output_tile_c) {
+        conv_params->input_h += conv_params->stride;
+        filter_offset_in_tile = 0;
+    }
+#endif
+    conv_params->filter_idx += filter_offset_in_tile;
+    first_unfinished_value_offset /= cur_output_tile_c;
 
-    conv_params->input_w += first_unfinished_job_index / conv_params->OUTPUT_H * conv_params->stride;
-    first_unfinished_job_index %= conv_params->OUTPUT_W;
+    conv_params->input_w += first_unfinished_value_offset / conv_params->OUTPUT_H * conv_params->stride;
+    first_unfinished_value_offset %= conv_params->OUTPUT_W;
 
-    conv_params->input_h += first_unfinished_job_index * conv_params->stride;
+    conv_params->input_h += first_unfinished_value_offset * conv_params->stride;
 
     my_printf_debug("initial output N = %d" NEWLINE, conv_params->input_tile_c_index);
     my_printf_debug("initial output H = %d" NEWLINE, conv_params->input_h / conv_params->stride);

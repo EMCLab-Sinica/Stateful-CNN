@@ -17,6 +17,10 @@ const Node* get_node(size_t i) {
     return reinterpret_cast<const Node*>(nodes_data) + i;
 }
 
+const Node* get_node(const ParameterInfo* param) {
+    return get_node(param->parameter_info_idx - N_INPUT);
+}
+
 SlotInfo* get_slot_info(Model* model, uint8_t i) {
     if (i < NUM_SLOTS) {
         return model->slots_info + i;

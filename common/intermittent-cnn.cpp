@@ -330,7 +330,14 @@ int16_t get_layer_sign(Model *model, const ParameterInfo* output) {
 static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_t job_index) {
     uint32_t offset = job_index_to_offset(output, job_index);
     int16_t val = get_q15_param(model, output, offset);
-    uint8_t ret = (val == get_layer_sign(model, output));
+    const Node* node = get_node(output);
+    int16_t expected_footprint = get_layer_sign(model, output);
+    if (node->op_type == Conv) {
+        expected_footprint *= (job_index / (node->flags.conv_output_tile_c / BATCH_SIZE) + 1);
+    } else {
+        expected_footprint *= (job_index + 1);
+    }
+    uint8_t ret = (val == expected_footprint);
     my_printf_debug("Value %d at job index %d (offset %d) indicates %s" NEWLINE, val, job_index, offset, ret ? "finished" : "unfinished");
     return ret;
 }
@@ -343,7 +350,7 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
         return job_index;
     }
 
-    const Node* node = get_node(output->parameter_info_idx - N_INPUT);
+    const Node* node = get_node(output);
 #if !JAPARI
     if (node->op_type != Conv) {
         return job_index;
@@ -357,8 +364,14 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
 
     uint16_t OUTPUT_CHANNEL = output->dims[1], OUTPUT_H = output->dims[2], OUTPUT_W = output->dims[3];
     uint16_t input_tile_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
-    uint8_t input_tile_c_index = job_index / input_tile_len;
-    job_index = job_index % input_tile_len;
+#if JAPARI
+    uint16_t input_tile_jobs = input_tile_len / (BATCH_SIZE + 1);
+#endif
+#if STATEFUL
+    uint16_t input_tile_jobs = input_tile_len / BATCH_SIZE;
+#endif
+    uint8_t input_tile_c_index = job_index / input_tile_jobs;
+    job_index = job_index % input_tile_jobs;
     uint16_t output_tile_c = node->flags.conv_output_tile_c;
     uint16_t jobs_in_an_op = output_tile_c;
 #if JAPARI
@@ -395,17 +408,18 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
 
     // recovery from state bits
     uint32_t end_job_index = output->params_len / 2;
-    uint32_t cur_begin_job_index = 0;
-    uint32_t cur_end_job_index = end_job_index;
 #if JAPARI
-    const Node* node = get_node(output->parameter_info_idx - N_INPUT);
+    const Node* node = get_node(output);
     if (node->op_type == Conv) {
-        cur_end_job_index /= node->flags.conv_output_tile_c;
+        end_job_index = end_job_index / extend_for_footprints(node->flags.conv_output_tile_c) * (node->flags.conv_output_tile_c / BATCH_SIZE);
     } else {
-        cur_end_job_index /= (BATCH_SIZE + 1);
+        end_job_index /= (BATCH_SIZE + 1);
     }
 #endif
-    uint32_t first_unfinished_job_index;
+    my_printf_debug("end_job_index = %d" NEWLINE, end_job_index);
+    uint32_t cur_begin_job_index = 0;
+    uint32_t cur_end_job_index = end_job_index;
+    uint32_t first_unfinished_job_index = 0;
 
 #if STATEFUL
     my_printf_debug("new_output_state_bit for first value = %d" NEWLINE, param_state_bit(model, output, 0) ^ 1);
@@ -426,7 +440,7 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
                 // bit for the output is flipped
                 first_unfinished_job_index = end_job_index;
             } else {
-                ERROR_OCCURRED();
+                MY_ASSERT(false);
             }
             break;
         }
