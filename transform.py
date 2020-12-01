@@ -215,6 +215,7 @@ Constants.BATCH_SIZE = args.batch_size
 if args.stateful:
     Constants.STATEFUL = 1
     Constants.METHOD = "STATEFUL"
+    Constants.BATCH_SIZE = 1  # TODO: supports batch_size > 1 for Stateful
 if args.hawaii:
     Constants.HAWAII = 1
     Constants.METHOD = "HAWAII"

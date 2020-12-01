@@ -572,14 +572,8 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
     conv_params->input_tile_c_index = first_unfinished_value_offset / slice_size_input_channel_tiling;
-#if JAPARI
-    if (has_footprints(conv_params->conv_input)) {
-        conv_params->input_tile_c_offset = conv_params->input_tile_c_index * extend_for_footprints(flags->conv_input_tile_c);
-    } else
-#endif
-    {
-        conv_params->input_tile_c_offset = conv_params->input_tile_c_index * flags->conv_input_tile_c;
-    }
+    // Not extending for JAPARI footprints here as input_tile_c_offset will be extended later
+    conv_params->input_tile_c_offset = conv_params->input_tile_c_index * flags->conv_input_tile_c;
     first_unfinished_value_offset %= slice_size_input_channel_tiling;
 
     conv_params->filter_tile_index = first_unfinished_value_offset / slice_size_output_channel_tiling;
@@ -597,6 +591,9 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         filter_offset_in_tile = 0;
     }
 #endif
+#if JAPARI
+    filter_offset_in_tile = filter_offset_in_tile / (BATCH_SIZE + 1) * BATCH_SIZE;
+#endif
     conv_params->filter_idx += filter_offset_in_tile;
     first_unfinished_value_offset /= cur_output_tile_c;
 
@@ -612,6 +609,11 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
     int16_t input_channels = conv_input->dims[1];
+#if JAPARI
+    if (conv_params->conv_input_has_footprints) {
+        input_channels = input_channels / (BATCH_SIZE + 1) * BATCH_SIZE;
+    }
+#endif
     for (; conv_params->input_tile_c_offset < input_channels; conv_params->input_tile_c_offset += flags->conv_input_tile_c) {
         conv_params->cur_input_tile_c = MIN_VAL(flags->conv_input_tile_c, input_channels - conv_params->input_tile_c_offset);
         conv_params->cur_filter_tile_c = conv_params->cur_input_tile_c;
@@ -722,7 +724,10 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 
     uint32_t tiling_results_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
 
-    uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
+    // uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
+    uint16_t chunk_len = 4 * OUTPUT_CHANNEL;
+    MY_ASSERT(chunk_len % 2 == 0);
+    MY_ASSERT(chunk_len * n_tiles_c < LEA_BUFFER_SIZE);
     uint32_t tiling_results_offset = 0;
 #if INTERMITTENT
     uint32_t first_unfinished_job_index = run_recovery(model, output);
@@ -730,9 +735,12 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 #if JAPARI
     uint16_t n_chunks = chunk_len / (BATCH_SIZE + 1) / 2 * 2;
     chunk_len = n_chunks * (BATCH_SIZE + 1);
-    uint16_t footprint = first_unfinished_job_index / chunk_len + 1;
 #endif
     tiling_results_offset = first_unfinished_job_index;
+#if JAPARI
+    tiling_results_offset *= (BATCH_SIZE + 1);
+#endif
+    uint16_t footprint = tiling_results_offset / chunk_len + 1;
 #endif
 
     float scale_f = 1.0 * find_max_multiplier(model, data) / n_tiles_c;

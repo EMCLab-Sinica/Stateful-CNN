@@ -334,6 +334,8 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
     int16_t expected_footprint = get_layer_sign(model, output);
     if (node->op_type == Conv) {
         expected_footprint *= (job_index / (node->flags.conv_output_tile_c / BATCH_SIZE) + 1);
+    } else if (node->op_type == ConvMerge) {
+        expected_footprint *= (job_index / (4 * output->dims[1] / (BATCH_SIZE + 1)) + 1);
     } else {
         expected_footprint *= (job_index + 1);
     }
@@ -409,12 +411,7 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
     // recovery from state bits
     uint32_t end_job_index = output->params_len / 2;
 #if JAPARI
-    const Node* node = get_node(output);
-    if (node->op_type == Conv) {
-        end_job_index = end_job_index / extend_for_footprints(node->flags.conv_output_tile_c) * (node->flags.conv_output_tile_c / BATCH_SIZE);
-    } else {
-        end_job_index /= (BATCH_SIZE + 1);
-    }
+    end_job_index /= (BATCH_SIZE + 1);
 #endif
     my_printf_debug("end_job_index = %d" NEWLINE, end_job_index);
     uint32_t cur_begin_job_index = 0;
