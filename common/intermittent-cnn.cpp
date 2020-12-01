@@ -368,7 +368,9 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
     }
 #endif
 
+#if !JAPARI && MY_DEBUG >= 1
     uint32_t orig_job_index = job_index;
+#endif
 
     uint16_t OUTPUT_CHANNEL = output->dims[1], OUTPUT_H = output->dims[2], OUTPUT_W = output->dims[3];
     uint16_t input_tile_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;

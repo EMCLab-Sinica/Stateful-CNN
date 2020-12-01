@@ -105,7 +105,10 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     my_printf_debug("cur_output_tile_c = %d" NEWLINE, cur_output_tile_c);
     MY_ASSERT(cur_output_tile_c > 0);
 
-    int16_t n_filters = cur_output_tile_c, values_to_preserve = n_filters;
+    int16_t n_filters = cur_output_tile_c;
+#if !HAWAII
+    int16_t values_to_preserve = n_filters;
+#endif
     int16_t channel_offset_c = conv_params->filter_idx;
 #if JAPARI
     values_to_preserve = extend_for_footprints(n_filters);
