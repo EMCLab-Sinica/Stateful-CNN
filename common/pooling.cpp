@@ -80,9 +80,11 @@ static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
 #if JAPARI
                 if ((maxpool_params->start_channel + input_channel_offset) % (BATCH_SIZE + 1) == BATCH_SIZE) {
                     if (!maxpool_params->need_nhwc2nchw) {
-                        output_buffer[output_channel_offset] = get_layer_sign(maxpool_params->model, maxpool_params->output) * maxpool_params->footprint;
+                        if (!sH && !sW) {
+                            output_buffer[output_channel_offset] = get_layer_sign(maxpool_params->model, maxpool_params->output) * maxpool_params->footprint;
+                            maxpool_params->footprint++;
+                        }
                         output_channel_offset++;
-                        maxpool_params->footprint++;
                     }
                     continue;
                 }
@@ -156,7 +158,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     }
 
 #if JAPARI
-    maxpool_params->footprint = first_unfinished_value_offset;
+    maxpool_params->footprint = first_unfinished_value_offset + model->layer_idx + model->run_counter + 1;
 #endif
 
     uint16_t initial_n, initial_c, initial_h, initial_w;
@@ -319,9 +321,11 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
     uint16_t len = H * W;
     uint16_t output_channel = 0;
     for (uint16_t input_channel = 0; input_channel < CHANNEL; input_channel++) {
+#if JAPARI
         if (input_channel % (BATCH_SIZE + 1) == BATCH_SIZE) {
             continue;
         }
+#endif
         uint32_t total = 0;
         for (uint16_t h = 0; h < H; h++) {
             for (uint16_t w = 0; w < W; w++) {

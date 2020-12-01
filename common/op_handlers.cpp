@@ -102,7 +102,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
 #if JAPARI
-    uint32_t footprint = first_unfinished_job_index + 1;
+    uint32_t footprint = first_unfinished_job_index + model->layer_idx + model->run_counter + 1;
 #endif
 
 #endif

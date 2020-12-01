@@ -568,7 +568,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
 #if JAPARI
-    conv_params->footprint = first_unfinished_value_offset / extend_for_footprints(flags->conv_output_tile_c) + 1;
+    conv_params->footprint = first_unfinished_value_offset / extend_for_footprints(flags->conv_output_tile_c) + model->layer_idx + model->run_counter + 1;
 #endif
 
     conv_params->input_tile_c_index = first_unfinished_value_offset / slice_size_input_channel_tiling;
@@ -740,7 +740,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 #if JAPARI
     tiling_results_offset *= (BATCH_SIZE + 1);
 #endif
-    uint16_t footprint = tiling_results_offset / chunk_len + 1;
+    uint16_t footprint = tiling_results_offset / chunk_len + model->layer_idx + model->run_counter + 1;
 #endif
 
     float scale_f = 1.0 * find_max_multiplier(model, data) / n_tiles_c;
