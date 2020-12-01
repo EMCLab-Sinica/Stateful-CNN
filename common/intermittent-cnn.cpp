@@ -205,6 +205,42 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
     return 0;
 }
 
+#if STATEFUL
+
+static void check_feature_map_states(Model *model, const ParameterInfo* output, uint32_t first_unfinished_job_index, uint32_t len, const char* func) {
+#if MY_DEBUG >= 1
+    my_printf_debug("Running check_feature_map_states..." NEWLINE);
+#if 0
+    for (uint32_t idx = 0; idx < len; idx++) {
+        my_printf_debug("% 6d ", get_q15_param(model, output, idx));
+        if (idx % 16 == 15) {
+            my_printf_debug(NEWLINE);
+        }
+    }
+#endif
+    for (uint32_t idx = 0; idx < len; idx++) {
+        uint32_t offset = job_index_to_offset(output, idx);
+        int16_t val = get_q15_param(model, output, offset);
+        uint8_t cur_state_bit = param_state_bit(model, output, offset);
+        if (idx < first_unfinished_job_index) {
+            cur_state_bit ^= 1;
+        }
+        MY_ASSERT(get_value_state_bit(val) == cur_state_bit,
+            "Value %d at job index %d (offset %d) does not have expected state bit %d" NEWLINE, val, idx, offset, cur_state_bit);
+    }
+#endif
+}
+
+static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_t job_index) {
+    uint32_t offset = job_index_to_offset(output, job_index);
+    int16_t val = get_q15_param(model, output, offset);
+    uint8_t ret = (get_value_state_bit(val) != param_state_bit(model, output, offset));
+    my_printf_debug("Value %d at job index %d (offset %d) indicates %s" NEWLINE, val, job_index, offset, ret ? "finished" : "unfinished");
+    return ret;
+}
+
+#endif
+
 void flip_state_bit(Model *model, const ParameterInfo *output) {
 #if INDIRECT_RECOVERY
     SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
@@ -250,39 +286,6 @@ void flip_state_bit(Model *model, const ParameterInfo *output) {
 
 #endif // INDIRECT_RECOVERY
 }
-
-#if STATEFUL
-
-static void check_feature_map_states(Model *model, const ParameterInfo* output, uint32_t first_unfinished_job_index, uint32_t len, const char* func) {
-#if MY_DEBUG >= 1
-    my_printf_debug("Running check_feature_map_states..." NEWLINE);
-#if 0
-    for (uint32_t idx = 0; idx < len; idx++) {
-        my_printf_debug("% 6d ", get_q15_param(model, output, idx));
-        if (idx % 16 == 15) {
-            my_printf_debug(NEWLINE);
-        }
-    }
-#endif
-    for (uint32_t idx = 0; idx < len; idx++) {
-        uint32_t offset = job_index_to_offset(output, idx);
-        int16_t val = get_q15_param(model, output, offset);
-        uint8_t cur_state_bit = param_state_bit(model, output, offset);
-        if (idx < first_unfinished_job_index) {
-            cur_state_bit ^= 1;
-        }
-        MY_ASSERT(get_value_state_bit(val) == cur_state_bit,
-            "Value %d at job index %d (offset %d) does not have expected state bit %d" NEWLINE, val, idx, offset, cur_state_bit);
-    }
-#endif
-}
-
-static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_t job_index) {
-    uint32_t offset = job_index_to_offset(output, job_index);
-    return get_value_state_bit(get_q15_param(model, output, offset)) == param_state_bit(model, output, offset);
-}
-
-#endif
 
 #if INDIRECT_RECOVERY
 
@@ -364,6 +367,8 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
         return offset;
     }
 #endif
+
+    uint32_t orig_job_index = job_index;
 
     uint16_t OUTPUT_CHANNEL = output->dims[1], OUTPUT_H = output->dims[2], OUTPUT_W = output->dims[3];
     uint16_t input_tile_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;

@@ -739,8 +739,9 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
     tiling_results_offset = first_unfinished_job_index;
 #if JAPARI
     tiling_results_offset *= (BATCH_SIZE + 1);
-#endif
     uint16_t footprint = tiling_results_offset / chunk_len + model->layer_idx + model->run_counter + 1;
+#endif
+
 #endif
 
     float scale_f = 1.0 * find_max_multiplier(model, data) / n_tiles_c;
