@@ -27,6 +27,8 @@ struct ParameterInfo* get_intermediate_parameter_info(uint8_t i);
 void commit_intermediate_parameter_info(uint8_t i);
 struct Model* get_model(void);
 void commit_model(void);
+uint16_t read_max_multiplier(const struct ParameterInfo* param);
+void write_max_multiplier(const struct ParameterInfo* param, uint16_t max_multiplier);
 void first_run(void);
 #if HAWAII
 void write_hawaii_layer_footprint(uint16_t layer_idx, uint16_t n_jobs);

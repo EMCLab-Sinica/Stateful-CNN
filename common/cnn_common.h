@@ -24,6 +24,7 @@ typedef struct Node {
     int16_t inputs[NUM_INPUTS];
     uint16_t max_output_id;
     uint16_t op_type;
+    uint16_t max_multiplier;
     NodeFlags flags;
 #if HAWAII
     struct Footprint {
@@ -36,7 +37,7 @@ typedef struct Node {
 #endif
 } Node;
 
-static_assert(sizeof(Node) == 40 + HAWAII * 8 + JAPARI * 2, "Unexpected size for Node");
+static_assert(sizeof(Node) == 42 + HAWAII * 8 + JAPARI * 2, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct ParameterInfo {
