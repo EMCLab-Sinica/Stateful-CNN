@@ -286,12 +286,19 @@ static inline uint8_t load_input_vector(uint32_t src_addr, int16_t* dest_addr, u
         len * sizeof(int16_t));
 #if JAPARI
     if (conv_params->conv_input_has_footprints) {
-        for (uint8_t src_idx = 0; src_idx < len; src_idx++) {
-            if ((src_idx + conv_params->input_tile_c_offset_with_footprints) % (BATCH_SIZE + 1) != BATCH_SIZE) {
-                dest_addr[loaded_len] = input_buffer_with_footprints[src_idx];
-                loaded_len++;
+        // Use nested loops as skipping footprints by `% (BATCH_SIZE)` is quite slow on boards
+        MY_ASSERT(conv_params->input_tile_c_offset_with_footprints % (BATCH_SIZE + 1) == 0);
+        int16_t *dest_ptr = dest_addr,
+                *src_ptr = input_buffer_with_footprints;
+        for (uint8_t src_idx = 0; src_idx < len; src_idx += (BATCH_SIZE + 1)) {
+            for (uint8_t batch_offset = 0; batch_offset < BATCH_SIZE; batch_offset++) {
+                *dest_ptr = *src_ptr;
+                dest_ptr++;
+                src_ptr++;
             }
+            src_ptr++; // skipping footprints
         }
+        loaded_len = dest_ptr - dest_addr;
     }
 #endif
 
