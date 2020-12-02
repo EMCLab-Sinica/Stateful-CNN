@@ -334,9 +334,9 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
     uint32_t offset = job_index_to_offset(output, job_index);
     int16_t val = get_q15_param(model, output, offset);
     const Node* node = get_node(output);
-    int16_t expected_footprint = 1 + model->layer_idx + model->run_counter;
+    int16_t expected_footprint = 1 + model->layer_idx * 10 + model->run_counter;
     if (node->op_type == Conv) {
-        expected_footprint += job_index / (node->flags.conv_output_tile_c / BATCH_SIZE);
+        expected_footprint += job_index / (output->dims[2] * output->dims[3]) / (node->flags.conv_output_tile_c / BATCH_SIZE);
     } else if (node->op_type == ConvMerge) {
         expected_footprint += job_index / (4 * output->dims[1] / (BATCH_SIZE + 1));
     } else {
@@ -344,7 +344,7 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
     }
     expected_footprint *= get_layer_sign(model, output);
     uint8_t ret = (val == expected_footprint);
-    my_printf_debug("Value %d at job index %d (offset %d) indicates %s" NEWLINE, val, job_index, offset, ret ? "finished" : "unfinished");
+    my_printf_debug("Footprint %d (expected %d) at job index %d (offset %d) indicates %s" NEWLINE, val, expected_footprint, job_index, offset, ret ? "finished" : "unfinished");
     return ret;
 }
 #endif

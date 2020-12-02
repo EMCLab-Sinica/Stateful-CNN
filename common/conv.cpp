@@ -178,6 +178,15 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             my_interleave_q15(filter_tmp, channel, n_filters, conv_params->filter_buffer_addr, conv_params->filter_offset);
         }
 
+#if JAPARI
+        int16_t* footprint_channels_ptr = conv_params->filter_buffer_addr + n_filters * (conv_params->filter_offset - 1);
+        int8_t layer_sign = -get_layer_sign(conv_params->model, conv_params->output);
+        for (int16_t idx = BATCH_SIZE; idx < n_filters; idx += BATCH_SIZE + 1) {
+            *(footprint_channels_ptr + idx) = layer_sign * conv_params->footprint;
+        }
+        conv_params->footprint++;
+#endif
+
         conv_params->cached_filter_idx = conv_params->filter_idx;
         conv_params->cached_input_tile_c_offset = conv_params->input_tile_c_offset;
     } else {
@@ -189,15 +198,6 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         }
 #endif
     }
-
-#if JAPARI
-    int16_t* footprint_channels_ptr = conv_params->filter_buffer_addr + n_filters * (conv_params->filter_offset - 1);
-    int8_t layer_sign = -get_layer_sign(conv_params->model, conv_params->output);
-    for (int16_t idx = BATCH_SIZE; idx < n_filters; idx += BATCH_SIZE + 1) {
-        *(footprint_channels_ptr + idx) = layer_sign * conv_params->footprint;
-    }
-    conv_params->footprint++;
-#endif
 
     int16_t *filter_buffer_addr = conv_params->filter_buffer_addr;
 
@@ -571,7 +571,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
 #if JAPARI
-    conv_params->footprint = first_unfinished_value_offset / extend_for_footprints(flags->conv_output_tile_c) + model->layer_idx + model->run_counter + 1;
+    conv_params->footprint = first_unfinished_value_offset / (conv_params->OUTPUT_H * conv_params->OUTPUT_W * extend_for_footprints(flags->conv_output_tile_c)) + model->layer_idx * 10 + model->run_counter + 1;
 #endif
 
     conv_params->input_tile_c_index = first_unfinished_value_offset / slice_size_input_channel_tiling;
@@ -742,7 +742,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
     tiling_results_offset = first_unfinished_job_index;
 #if JAPARI
     tiling_results_offset *= (BATCH_SIZE + 1);
-    uint16_t footprint = tiling_results_offset / chunk_len + model->layer_idx + model->run_counter + 1;
+    uint16_t footprint = tiling_results_offset / chunk_len + model->layer_idx * 10 + model->run_counter + 1;
 #endif
 
 #endif

@@ -158,7 +158,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     }
 
 #if JAPARI
-    maxpool_params->footprint = first_unfinished_value_offset + model->layer_idx + model->run_counter + 1;
+    maxpool_params->footprint = first_unfinished_value_offset + model->layer_idx * 10 + model->run_counter + 1;
 #endif
 
     uint16_t initial_n, initial_c, initial_h, initial_w;
