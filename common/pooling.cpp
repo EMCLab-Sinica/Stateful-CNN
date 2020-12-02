@@ -81,7 +81,7 @@ static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
                 if ((maxpool_params->start_channel + input_channel_offset) % (BATCH_SIZE + 1) == BATCH_SIZE) {
                     if (!maxpool_params->need_nhwc2nchw) {
                         if (!sH && !sW) {
-                            output_buffer[output_channel_offset] = get_layer_sign(maxpool_params->model, maxpool_params->output) * maxpool_params->footprint;
+                            output_buffer[output_channel_offset] = maxpool_params->footprint;
                             maxpool_params->footprint++;
                         }
                         output_channel_offset++;

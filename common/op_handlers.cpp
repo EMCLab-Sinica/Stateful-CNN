@@ -143,7 +143,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         int16_t input_val = 0, output_val;
 #if JAPARI
                         if ((c + idx) % (BATCH_SIZE + 1) == BATCH_SIZE) {
-                            output_val = get_layer_sign(model, output) * footprint;
+                            output_val = footprint;
                             footprint++;
                         } else
 #endif
@@ -197,7 +197,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             int16_t output_val;
 #if JAPARI
             if (i % 2) {
-                output_val = get_layer_sign(model, output);
+                output_val = 1;
             } else
 #endif
             {

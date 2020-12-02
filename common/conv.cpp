@@ -180,9 +180,8 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
 #if JAPARI
         int16_t* footprint_channels_ptr = conv_params->filter_buffer_addr + n_filters * (conv_params->filter_offset - 1);
-        int8_t layer_sign = -get_layer_sign(conv_params->model, conv_params->output);
         for (int16_t idx = BATCH_SIZE; idx < n_filters; idx += BATCH_SIZE + 1) {
-            *(footprint_channels_ptr + idx) = layer_sign * conv_params->footprint;
+            *(footprint_channels_ptr + idx) = -conv_params->footprint;
         }
         conv_params->footprint++;
 #endif
@@ -783,10 +782,9 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 #endif
 
 #if JAPARI
-        int8_t layer_sign = get_layer_sign(model, output);
-        int16_t* layer_sign_buffer = lea_buffer + (LEA_BUFFER_SIZE - n_chunks) / 2 * 2;
-        my_fill_q15(layer_sign * footprint, layer_sign_buffer, n_chunks);
-        my_interleave_q15(layer_sign_buffer, BATCH_SIZE, BATCH_SIZE + 1, lea_buffer, n_chunks);
+        int16_t* footprint_buffer = lea_buffer + (LEA_BUFFER_SIZE - n_chunks) / 2 * 2;
+        my_fill_q15(footprint, footprint_buffer, n_chunks);
+        my_interleave_q15(footprint_buffer, BATCH_SIZE, BATCH_SIZE + 1, lea_buffer, n_chunks);
         footprint++;
 #endif
 #if !HAWAII

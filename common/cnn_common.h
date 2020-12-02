@@ -32,12 +32,9 @@ typedef struct Node {
         uint8_t version;
     } footprint[2];
 #endif
-#if JAPARI
-    int16_t layer_sign;
-#endif
 } Node;
 
-static_assert(sizeof(Node) == 42 + HAWAII * 8 + JAPARI * 2, "Unexpected size for Node");
+static_assert(sizeof(Node) == 42 + HAWAII * 8, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct ParameterInfo {

@@ -525,7 +525,6 @@ class ParametersSlot:
 parameters_slot = ParametersSlot(offset=0, target=outputs['parameters'], slot_id=Constants.SLOT_PARAMETERS)
 
 output_nodes = outputs['nodes']
-layer_sign = 1
 for node in graph:
     node_name = node.name[:Constants.NODE_NAME_LEN]
     output_nodes.write(node_name.encode('ascii') + b'\0' * (Constants.NODE_NAME_LEN - len(node_name)))
@@ -542,9 +541,6 @@ for node in graph:
     if Constants.HAWAII:
         for _ in range(2):
             output_nodes.write(to_bytes(0, size=32))  # Node::Footprint
-    if Constants.JAPARI:
-        output_nodes.write(to_bytes(layer_sign))
-        layer_sign = -layer_sign
 
 parameter_info_idx = 0
 
