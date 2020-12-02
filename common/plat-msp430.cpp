@@ -130,35 +130,39 @@ void copy_samples_data(void) {
 }
 
 void IntermittentCNNTest() {
+    P1DIR |= GPIO_PIN5;
+    P1OUT &= ~GPIO_PIN5;
+    P8DIR = 0xfd;
+    P8REN = GPIO_PIN1;
+
+    // sleep to wait for external FRAM
+    uint32_t counter = 100;
+    while (counter) {
+        counter--;
+    }
+
     initSPI();
     // testSPI();
 
-    uint8_t is_first_run = 0;
-    read_from_nvm(&is_first_run, FIRST_RUN_OFFSET, 1);
+    Model* model = get_model();
+    if (P8IN & GPIO_PIN1) {
+        my_printf(NEWLINE "run_counter = %d" NEWLINE, model->run_counter);
 
-    if (is_first_run) {
         first_run();
 
-        is_first_run = 0;
-        write_to_nvm(&is_first_run, FIRST_RUN_OFFSET, 1);
+        run_cnn_tests(1);
+
+        my_printf("Done testing run" NEWLINE);
+
+        while (1);
     }
 
     while (1) {
         run_cnn_tests(1);
+        P1OUT ^= GPIO_PIN5;
     }
 }
 
 void button_pushed(uint16_t button1_status, uint16_t button2_status) {
     my_printf_debug("button1_status=%d button2_status=%d" NEWLINE, button1_status, button2_status);
-
-    if (button1_status && button2_status) {
-        // XXX: somehow interrupts for both buttons are triggered immediately after recovery
-        return;
-    }
-
-    uint8_t is_first_run = 1;
-    write_to_nvm(&is_first_run, FIRST_RUN_OFFSET, 1);
-
-    Model *model = get_model();
-    my_printf("%d" NEWLINE, model->run_counter);
 }

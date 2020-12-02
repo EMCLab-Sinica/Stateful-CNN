@@ -31,6 +31,8 @@ int main( void )
     /* Configure the hardware ready to run the demo. */
     prvSetupHardware();
 
+    GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN0);
+
     // XXX: disabled - timer intterupts appear to interfere DMA read for external FRAM
 #ifndef EXTFRAM_USE_DMA
     vApplicationSetupTimerInterrupt();
