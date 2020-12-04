@@ -80,10 +80,6 @@ static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
 #if JAPARI
                 if ((maxpool_params->start_channel + input_channel_offset) % (BATCH_SIZE + 1) == BATCH_SIZE) {
                     if (!maxpool_params->need_nhwc2nchw) {
-                        if (!sH && !sW) {
-                            output_buffer[output_channel_offset] = maxpool_params->footprint;
-                            maxpool_params->footprint++;
-                        }
                         output_channel_offset++;
                     }
                     continue;
@@ -118,6 +114,17 @@ static inline void offset_vector(int16_t* const buffer, int16_t offset, uint8_t 
             cur_offset ^= 0x4000;
         }
         buffer[idx] += cur_offset;
+    }
+}
+#endif
+#if JAPARI
+static inline void offset_vector(int16_t* const buffer, int16_t offset, uint8_t len, const uint16_t output_offset, const int16_t next_output_turning_point) {
+    int16_t cur_footprint = (offset == 0x4000 ? 1 : -1);
+    for (uint8_t idx = BATCH_SIZE; idx < len; idx += BATCH_SIZE + 1) {
+        if (output_offset + idx >= next_output_turning_point) {
+            cur_footprint = -cur_footprint;
+        }
+        buffer[idx] = cur_footprint;
     }
 }
 #endif
@@ -166,7 +173,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 
     tile_c_offset = initial_n * tile_c;
 
-#if STATEFUL
+#if INDIRECT_RECOVERY
     int16_t offset, next_output_turning_point;
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
@@ -212,7 +219,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                     maxpool_params->start_channel = c + tile_c_offset;
                     len = maxpool_patch(maxpool_params);
                     my_printf_debug("output_offset=[% 5d, % 5d) ", output_offset, output_offset + len);
-#if STATEFUL
+#if INDIRECT_RECOVERY
                     check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
                     offset_vector(lea_buffer, offset, len, output_offset, next_output_turning_point);
 #endif

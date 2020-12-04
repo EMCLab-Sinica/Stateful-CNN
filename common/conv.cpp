@@ -57,14 +57,13 @@ typedef struct ConvTaskParams {
     uint16_t dest_offset;
     uint16_t filter_offset;
     uint8_t truncated;
-#if STATEFUL
+#if INDIRECT_RECOVERY
     int16_t old_output_offset ;
     uint8_t turning_point_idx;
     int16_t next_turning_point;
     SlotInfo* cur_slot_info;
 #endif
 #if JAPARI
-    uint16_t footprint;
     uint8_t conv_input_has_footprints;
     uint16_t input_tile_c_offset_with_footprints;
 #endif
@@ -82,7 +81,7 @@ static ConvTaskParams conv_params_obj;
 
 int16_t * const matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
 
-#if STATEFUL
+#if INDIRECT_RECOVERY
 static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filters, uint16_t len, uint8_t first_round) {
     MY_ASSERT(len < OUTPUT_LEN);
     my_printf_debug("Flipping %d state bits in filters" NEWLINE, len);
@@ -93,8 +92,15 @@ static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filte
     } else {
         to_flip_state_bits -= n_filters;
     }
+#if STATEFUL
     int16_t offset = get_value_state_bit(-*to_flip_state_bits) ? 0x4000 : -0x4000;
     my_offset_q15(to_flip_state_bits, offset, to_flip_state_bits, len);
+#endif
+#if JAPARI
+    for (uint16_t idx = BATCH_SIZE; idx < len; idx += BATCH_SIZE + 1) {
+        to_flip_state_bits[idx] = -to_flip_state_bits[idx];
+    }
+#endif
 }
 #endif
 
@@ -122,7 +128,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             (conv_params->input_h + offset_h) / conv_params->stride * conv_params->OUTPUT_CHANNEL +                  // h
             channel_offset_c;                                                                                   // c
 
-#if STATEFUL
+#if INDIRECT_RECOVERY
     SlotInfo *cur_slot_info = conv_params->cur_slot_info;
     int16_t n_keep_state_bits = n_filters;
     uint8_t need_cleanup_state_bits = 0;
@@ -168,7 +174,12 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 filter_tmp[conv_params->filter_offset - 1] = 0;
             }
             if (conv_params->input_tile_c_index == 0) {
-                filter_tmp[conv_params->filter_offset - 1] += -get_q15_param(conv_params->model, conv_params->conv_bias, conv_params->filter_idx + idx) / conv_params->conv_input->scale;
+                int16_t bias_val = -get_q15_param(conv_params->model, conv_params->conv_bias, conv_params->filter_idx + idx) / conv_params->conv_input->scale;
+#if !STATEFUL
+                filter_tmp[conv_params->filter_offset - 1] = bias_val;
+#else
+                filter_tmp[conv_params->filter_offset - 1] += bias_val;
+#endif
             }
 
             uint16_t channel = idx;
@@ -181,15 +192,13 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #if JAPARI
         int16_t* footprint_channels_ptr = conv_params->filter_buffer_addr + n_filters * (conv_params->filter_offset - 1);
         for (int16_t idx = BATCH_SIZE; idx < n_filters; idx += BATCH_SIZE + 1) {
-            *(footprint_channels_ptr + idx) = -conv_params->footprint;
+            *(footprint_channels_ptr + idx) = (conv_params->old_output_offset ? 1 : -1);
         }
-        conv_params->footprint++;
 #endif
-
         conv_params->cached_filter_idx = conv_params->filter_idx;
         conv_params->cached_input_tile_c_offset = conv_params->input_tile_c_offset;
     } else {
-#if STATEFUL
+#if INDIRECT_RECOVERY
         if (n_keep_state_bits != n_filters) {
             need_cleanup_state_bits = 1;
             int16_t n_flip_state_bits = n_filters - n_keep_state_bits;
@@ -253,7 +262,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     }
 #endif
 
-#if STATEFUL
+#if INDIRECT_RECOVERY
     if (n_keep_state_bits != n_filters) {
         check_next_turning_point(conv_params->old_output_offset, conv_params->turning_point_idx,
                                  conv_params->next_turning_point, conv_params->cur_slot_info, cur_output_data_offset + conv_params->OUTPUT_CHANNEL);
@@ -385,7 +394,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     if (real_input_index == 1) {
         input_src_offset -= cur_input_channel;
     }
-#if STATEFUL
+#if INDIRECT_RECOVERY
     dump_turning_points_debug(model, conv_params->real_conv_input);
 #endif
     for (int32_t h = h_start; h <= h_end; h++) {
@@ -563,7 +572,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     first_unfinished_value_offset = first_unfinished_value_offset / 2 * 2;
 #endif
 
-#if STATEFUL
+#if INDIRECT_RECOVERY
     find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point,
                            &conv_params->cur_slot_info, job_index_to_offset(output, first_unfinished_value_offset), model, output);
 
@@ -574,10 +583,6 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     uint16_t slice_size_output_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * flags->conv_output_tile_c;
 #if JAPARI
     slice_size_output_channel_tiling = extend_for_footprints(slice_size_output_channel_tiling);
-#endif
-
-#if JAPARI
-    conv_params->footprint = first_unfinished_value_offset / (conv_params->OUTPUT_H * conv_params->OUTPUT_W * extend_for_footprints(flags->conv_output_tile_c)) + model->layer_idx * 10 + model->run_counter + 1;
 #endif
 
     conv_params->input_tile_c_index = first_unfinished_value_offset / slice_size_input_channel_tiling;
@@ -654,7 +659,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             conv_params->input_w = conv_params->offset_w;
             conv_params->filter_tile_index++;
             conv_params->filter_idx = conv_params->filter_tile_index * flags->conv_output_tile_c;
-#if STATEFUL
+#if INDIRECT_RECOVERY
             find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point, &conv_params->cur_slot_info,
                                    conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W + conv_params->filter_idx, model, output);
 #endif
@@ -662,7 +667,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         conv_params->filter_idx = conv_params->filter_tile_index = 0;
 
         conv_params->input_tile_c_index++;
-#if STATEFUL
+#if INDIRECT_RECOVERY
         find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point, &conv_params->cur_slot_info,
                                conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W, model, output);
 #endif
@@ -699,7 +704,9 @@ void ConvMergeInputChunkHandler(uint32_t range_offset, uint16_t range_len, uint8
         my_offset_q15(to_offset, -0x4000, to_offset, range_len);
     }
 }
+#endif
 
+#if INDIRECT_RECOVERY
 struct ConvMergeOutputChunkHandlerParams {
     uint32_t tiling_results_offset;
 };
@@ -708,10 +715,17 @@ void ConvMergeOutputChunkHandler(uint32_t range_offset, uint16_t range_len, uint
     ConvMergeOutputChunkHandlerParams* params = reinterpret_cast<ConvMergeOutputChunkHandlerParams*>(_params);
     my_printf_debug("output range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
     int16_t *to_offset = lea_buffer + range_offset - params->tiling_results_offset;
+#if STATEFUL
     // output state bit has not been flipped yet
     if (!state_bit) {
         my_offset_q15(to_offset, 0x4000, to_offset, range_len);
     }
+#endif
+#if JAPARI
+    int16_t* footprint_buffer = lea_buffer + (LEA_BUFFER_SIZE - range_len) / 2 * 2;
+    my_fill_q15((state_bit ? -1 : 1), footprint_buffer, range_len);
+    my_interleave_q15(footprint_buffer, BATCH_SIZE, BATCH_SIZE + 1, to_offset, range_len);
+#endif
 }
 #endif
 
@@ -748,7 +762,6 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
     tiling_results_offset = first_unfinished_job_index;
 #if JAPARI
     tiling_results_offset *= (BATCH_SIZE + 1);
-    uint16_t footprint = tiling_results_offset / chunk_len + model->layer_idx * 10 + model->run_counter + 1;
 #endif
 
 #endif
@@ -783,16 +796,12 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
                 my_add_q15(lea_buffer, to_add, lea_buffer, real_chunk_len);
             }
         }
-#if STATEFUL
+#if INDIRECT_RECOVERY
         ConvMergeOutputChunkHandlerParams params({tiling_results_offset});
         iterate_chunks(model, output, tiling_results_offset, real_chunk_len, ConvMergeOutputChunkHandler, &params);
 #endif
 
 #if JAPARI
-        int16_t* footprint_buffer = lea_buffer + (LEA_BUFFER_SIZE - n_chunks) / 2 * 2;
-        my_fill_q15(footprint, footprint_buffer, n_chunks);
-        my_interleave_q15(footprint_buffer, BATCH_SIZE, BATCH_SIZE + 1, lea_buffer, n_chunks);
-        footprint++;
 #endif
 #if !HAWAII
         my_memcpy_to_param(output, tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));

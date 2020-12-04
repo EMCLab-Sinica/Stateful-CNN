@@ -508,8 +508,7 @@ model.write(to_bytes(0))  # Model.layer_idx
 for _ in range(config['num_slots']): # Model.slots_info
     if Constants.INDIRECT_RECOVERY:
         model.write(to_bytes(0, size=8)) # SlotInfo.state_bit
-        model.write(to_bytes(0, size=8)) # SlotInfo.n_turning_points (STATEFUL) or padding byte (JAPARI)
-    if Constants.STATEFUL:
+        model.write(to_bytes(0, size=8)) # SlotInfo.n_turning_points
         for __ in range(Constants.TURNING_POINTS_LEN):
             model.write(to_bytes(-1))   # SlotInfo.turning_points
     model.write(to_bytes(-1))       # SlotInfo.user

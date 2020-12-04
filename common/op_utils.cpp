@@ -153,7 +153,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
     uint8_t state_bit = 0;
 
     uint16_t cur_chunk_len;
-#if STATEFUL
+#if INDIRECT_RECOVERY
     dump_turning_points_debug(model, param);
 
     state_bit = get_state_bit(model, param->slot);
@@ -178,7 +178,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 #endif
     for (uint32_t offset = start_offset; offset < params_len; offset += cur_chunk_len) {
         cur_chunk_len = MIN_VAL(chunk_len, params_len - offset);
-#if STATEFUL
+#if INDIRECT_RECOVERY
         uint8_t next_state_flipped = 0;
         // Use <= here as turning_point_idx is actually index for the _next_ turning point
         if (next_turning_point > 0 && turning_point_idx <= cur_slot_info->n_turning_points) {
@@ -193,7 +193,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 #endif
         MY_ASSERT(cur_chunk_len != 0);
         chunk_handler(offset, cur_chunk_len, state_bit, params);
-#if STATEFUL
+#if INDIRECT_RECOVERY
         if (next_state_flipped) {
             state_bit ^= 1;
         }
@@ -201,7 +201,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
     }
 }
 
-#if STATEFUL
+#if INDIRECT_RECOVERY
 void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param) {
     my_printf_debug("Initialize next_turning_point from output offset %d" NEWLINE, initial_value_idx);
     *p_offset = get_state_bit(model, param->slot) ? 0x4000 : 0;
@@ -224,6 +224,7 @@ void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int
     if (!next_turning_point_found) {
         *p_next_turning_point = -1;
     }
+    my_printf_debug("next_turning_point = %d" NEWLINE, *p_next_turning_point);
 }
 
 void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo* slot_info, uint16_t value_idx) {

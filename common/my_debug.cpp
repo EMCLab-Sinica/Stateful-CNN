@@ -183,8 +183,8 @@ void dump_params(Model *model, const ParameterInfo *cur_param) {
     }
 }
 
-#if STATEFUL
 void dump_turning_points(Model *model, const ParameterInfo *output) {
+#if INDIRECT_RECOVERY
     SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
     if (!cur_slot_info) {
         my_printf("%d is not a normal slot" NEWLINE, output->slot);
@@ -196,8 +196,8 @@ void dump_turning_points(Model *model, const ParameterInfo *output) {
         my_printf("%d ", cur_slot_info->turning_points[idx]);
     }
     my_printf(NEWLINE);
-}
 #endif
+}
 
 void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_info) {
     my_printf("Scale: %d" NEWLINE, val_info.scale);

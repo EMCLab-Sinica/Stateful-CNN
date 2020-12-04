@@ -205,7 +205,6 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
     return 0;
 }
 
-#if STATEFUL
 
 static void check_feature_map_states(Model *model, const ParameterInfo* output, uint32_t first_unfinished_job_index, uint32_t len, const char* func) {
 #if MY_DEBUG >= 1
@@ -231,6 +230,7 @@ static void check_feature_map_states(Model *model, const ParameterInfo* output, 
 #endif
 }
 
+#if STATEFUL
 static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_t job_index) {
     uint32_t offset = job_index_to_offset(output, job_index);
     int16_t val = get_q15_param(model, output, offset);
@@ -243,8 +243,14 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
 
 void flip_state_bit(Model *model, const ParameterInfo *output) {
 #if INDIRECT_RECOVERY
+
+#if JAPARI
+    if (!has_footprints(output)) {
+        return;
+    }
+#endif
+
     SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
-#if STATEFUL
     // XXX: better way than copying the array?
     int16_t new_turning_point = output->params_len / 2;
     my_printf_debug("New turning point=%d" NEWLINE, new_turning_point);
@@ -275,14 +281,11 @@ void flip_state_bit(Model *model, const ParameterInfo *output) {
     }
 
     dump_turning_points_debug(model, output);
-#endif
 
     cur_slot_info->state_bit ^= 1;
 
-#if STATEFUL
     // Use first_unfinished_job_index = 0 here as all values finished and the initial state bit is flipped above
     check_feature_map_states(model, output, 0, INTERMEDIATE_VALUES_SIZE / sizeof(int16_t), __func__);
-#endif
 
 #endif // INDIRECT_RECOVERY
 }
@@ -305,7 +308,6 @@ uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offse
     if (!cur_slot_info) {
         return 0;
     }
-#if STATEFUL
     for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
         if (offset >= cur_slot_info->turning_points[idx]) {
             ret = ret ^ 1;
@@ -313,7 +315,6 @@ uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offse
             break;
         }
     }
-#endif
     return ret;
 }
 
@@ -329,15 +330,7 @@ uint32_t run_recovery(Model* model, ParameterInfo*) {
 static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_t job_index) {
     uint32_t offset = job_index_to_offset(output, job_index);
     int16_t val = get_q15_param(model, output, offset);
-    const Node* node = get_node(output);
-    int16_t expected_footprint = 1 + model->layer_idx * 10 + model->run_counter;
-    if (node->op_type == Conv) {
-        expected_footprint += job_index / (output->dims[2] * output->dims[3]) / (node->flags.conv_output_tile_c / BATCH_SIZE);
-    } else if (node->op_type == ConvMerge) {
-        expected_footprint += job_index / (4 * output->dims[1] / (BATCH_SIZE + 1));
-    } else {
-        expected_footprint += job_index;
-    }
+    int16_t expected_footprint = (param_state_bit(model, output, offset) ? -1 : 1);
     uint8_t ret = (val == expected_footprint);
     my_printf_debug("Footprint %d (expected %d) at job index %d (offset %d) indicates %s" NEWLINE, val, expected_footprint, job_index, offset, ret ? "finished" : "unfinished");
     return ret;
@@ -347,9 +340,16 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
 #if INDIRECT_RECOVERY
 
 uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
+#if STATEFUL
     if (job_index >= output->params_len / sizeof(int16_t)) {
         return job_index;
     }
+#endif
+#if JAPARI
+    if (job_index >= output->params_len / sizeof(int16_t) / (BATCH_SIZE + 1)) {
+        return job_index * (BATCH_SIZE + 1) + BATCH_SIZE;
+    }
+#endif
 
     const Node* node = get_node(output);
 #if !JAPARI
@@ -421,10 +421,8 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
     uint32_t cur_end_job_index = end_job_index;
     uint32_t first_unfinished_job_index = 0;
 
-#if STATEFUL
     my_printf_debug("new_output_state_bit for first value = %d" NEWLINE, param_state_bit(model, output, 0) ^ 1);
     dump_turning_points_debug(model, output);
-#endif
 
     while (1) {
 #if 0
@@ -464,9 +462,7 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
         after_recovery = 0;
     }
 
-#if STATEFUL
     check_feature_map_states(model, output, first_unfinished_job_index, output->params_len / 2, __func__);
-#endif
 
     return first_unfinished_job_index;
 }
