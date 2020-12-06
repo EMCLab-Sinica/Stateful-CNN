@@ -94,6 +94,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     for (uint16_t i = 0, tile = 0; i < B->dims[0]; i += gemm_params.tile_channel, tile++) {
         uint16_t tile_channels = MIN_VAL(gemm_params.tile_channel, B->dims[0] - i);
+        uint16_t extended_tile_channels = tile_channels;
 
 #if !JAPARI
         my_memcpy_from_param(model, buffer_a, A, i, tile_channels * sizeof(uint16_t));
@@ -101,9 +102,9 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         for (uint16_t idx = 0, output_idx = 0; output_idx < tile_channels; idx += BATCH_SIZE + 1, output_idx += BATCH_SIZE) {
             my_memcpy_from_param(model, buffer_a + output_idx, A, i + idx, BATCH_SIZE * sizeof(uint16_t));
         }
-        tile_channels += 2;
-        buffer_a[tile_channels - 2] = -0x8000;
-        buffer_a[tile_channels - 1] = 0;
+        extended_tile_channels += 2;
+        buffer_a[tile_channels] = -0x8000;
+        buffer_a[tile_channels + 1] = 0;
 #endif
 
 #if STATEFUL
@@ -111,7 +112,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
         my_printf_debug("Tile for A" NEWLINE);
-        dump_matrix2_debug(buffer_a, 1, tile_channels, ValueInfo(A, model));
+        dump_matrix2_debug(buffer_a, 1, extended_tile_channels, ValueInfo(A, model));
 
         int16_t output_offset = tile * output_len;
 
@@ -124,8 +125,8 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             full_tile_width = (values_to_preserve + 1) / 2 * 2;
 #endif
             int16_t *filter_ptr = buffer_b;
-            my_fill_q15(0, filter_ptr, tile_channels * full_tile_width);
-            for (uint16_t row = 0; row < tile_channels - 2; row++) {
+            my_fill_q15(0, filter_ptr, extended_tile_channels * full_tile_width);
+            for (uint16_t row = 0; row < tile_channels; row++) {
 #if JAPARI
                 int16_t* cur_filter_start = filter_ptr;
                 for (uint16_t col = 0; filter_ptr < cur_filter_start + values_to_preserve; col += BATCH_SIZE) {
@@ -151,9 +152,9 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             }
 #endif
             my_printf_debug("Tile for B" NEWLINE);
-            dump_matrix2_debug(buffer_b, tile_channels, full_tile_width, ValueInfo(B, model));
+            dump_matrix2_debug(buffer_b, extended_tile_channels, full_tile_width, ValueInfo(B, model));
 
-            my_matrix_mpy_q15(1, tile_channels, tile_channels, full_tile_width, buffer_a, buffer_b, buffer_temp);
+            my_matrix_mpy_q15(1, extended_tile_channels, extended_tile_channels, full_tile_width, buffer_a, buffer_b, buffer_temp);
 
 #if STATEFUL
             check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);

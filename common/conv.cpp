@@ -753,7 +753,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
     uint32_t tiling_results_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
 
     // uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
-    uint16_t chunk_len = 4 * OUTPUT_CHANNEL;
+    uint16_t chunk_len = 2 * OUTPUT_CHANNEL;
     MY_ASSERT(chunk_len % 2 == 0);
     MY_ASSERT(chunk_len * n_tiles_c < LEA_BUFFER_SIZE);
     uint32_t tiling_results_offset = 0;
