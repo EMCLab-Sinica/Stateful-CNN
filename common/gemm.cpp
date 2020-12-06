@@ -126,14 +126,29 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             int16_t *filter_ptr = buffer_b;
             my_fill_q15(0, filter_ptr, tile_channels * full_tile_width);
             for (uint16_t row = 0; row < tile_channels - 2; row++) {
+#if JAPARI
+                int16_t* cur_filter_start = filter_ptr;
+                for (uint16_t col = 0; filter_ptr < cur_filter_start + values_to_preserve; col += BATCH_SIZE) {
+                    my_memcpy_from_param(model, filter_ptr,
+                              B, (i + row) * B->dims[1] + j + col,
+                              BATCH_SIZE * sizeof(uint16_t));
+                    filter_ptr += BATCH_SIZE + 1;
+                }
+                if (values_to_preserve != full_tile_width) {
+                    filter_ptr++;
+                }
+#else
                 my_memcpy_from_param(model, filter_ptr,
                           B, (i + row) * B->dims[1] + j,
                           tile_width * sizeof(uint16_t));
                 filter_ptr += full_tile_width;
+#endif
             }
 #if JAPARI
             my_fill_q15(0, filter_ptr, 2 * full_tile_width);
-            filter_ptr[full_tile_width - 2] = (param_state_bit(model, output, output_offset) ? 1 : -1);
+            for (uint16_t idx = BATCH_SIZE; idx < values_to_preserve; idx += BATCH_SIZE + 1) {
+                filter_ptr[idx] = (param_state_bit(model, output, output_offset) ? 1 : -1);
+            }
 #endif
             my_printf_debug("Tile for B" NEWLINE);
             dump_matrix2_debug(buffer_b, tile_channels, full_tile_width, ValueInfo(B, model));
