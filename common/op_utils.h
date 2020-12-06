@@ -34,8 +34,8 @@ uint8_t has_footprints(const ParameterInfo* cur_param);
 void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param);
 
 #define check_next_turning_point(offset, turning_point_idx, next_turning_point, slot_info, value_idx) \
-    my_printf_debug("Checking next turning point after %d" NEWLINE, value_idx); \
     if (next_turning_point > 0 && value_idx >= next_turning_point) { \
+        my_printf_debug("Checking next turning point after %d" NEWLINE, value_idx); \
         check_next_turning_point_inner(&offset, &turning_point_idx, &next_turning_point, slot_info, value_idx); \
     }
 

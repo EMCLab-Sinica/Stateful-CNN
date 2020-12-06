@@ -131,7 +131,6 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #if INDIRECT_RECOVERY
     SlotInfo *cur_slot_info = conv_params->cur_slot_info;
     int16_t n_keep_state_bits = n_filters;
-    uint8_t need_cleanup_state_bits = 0;
     if (conv_params->turning_point_idx <= cur_slot_info->n_turning_points && conv_params->next_turning_point > 0) {
         my_printf_debug("next_turning_point = %d" NEWLINE, conv_params->next_turning_point);
         n_keep_state_bits -= MAX_VAL(0, cur_output_data_offset + n_filters - MAX_VAL(conv_params->next_turning_point, cur_output_data_offset));
@@ -166,7 +165,6 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             if ((!conv_params->old_output_offset && idx < n_keep_state_bits) || (conv_params->old_output_offset && idx >= n_keep_state_bits)) {
                 my_printf_debug("Adding state bit for newly loaded filter idx=%d" NEWLINE, idx);
                 filter_tmp[conv_params->filter_offset - 1] = -0x4000;
-                need_cleanup_state_bits = 1;
             } else
 #endif
             {
@@ -200,7 +198,6 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     } else {
 #if INDIRECT_RECOVERY
         if (n_keep_state_bits != n_filters) {
-            need_cleanup_state_bits = 1;
             int16_t n_flip_state_bits = n_filters - n_keep_state_bits;
             flip_filter_state_bits(conv_params, n_filters, n_flip_state_bits, 1);
         }
@@ -268,9 +265,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                                  conv_params->next_turning_point, conv_params->cur_slot_info, cur_output_data_offset + conv_params->OUTPUT_CHANNEL);
         my_printf_debug("old_output_offset flipped to %d" NEWLINE, conv_params->old_output_offset);
 
-        if (need_cleanup_state_bits) {
-            flip_filter_state_bits(conv_params, n_filters, n_keep_state_bits, 0);
-        }
+        flip_filter_state_bits(conv_params, n_filters, n_keep_state_bits, 0);
     }
 #endif
 }
@@ -660,8 +655,14 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             conv_params->filter_tile_index++;
             conv_params->filter_idx = conv_params->filter_tile_index * flags->conv_output_tile_c;
 #if INDIRECT_RECOVERY
+            uint32_t new_output_offset = conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W;
+#if JAPARI
+            new_output_offset += extend_for_footprints(conv_params->filter_idx);
+#else
+            new_output_offset += conv_params->filter_idx;
+#endif
             find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point, &conv_params->cur_slot_info,
-                                   conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W + conv_params->filter_idx, model, output);
+                                   new_output_offset, model, output);
 #endif
         }
         conv_params->filter_idx = conv_params->filter_tile_index = 0;

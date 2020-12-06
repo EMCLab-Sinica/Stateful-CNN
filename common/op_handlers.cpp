@@ -54,9 +54,7 @@ void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *outpu
     }
     my_add_q15(buffer_a, buffer_b, buffer_a, vector_size);
 
-#if STATEFUL
     iterate_chunks(model, output, 0, vector_size, OutputChunkHandler, buffer_a);
-#endif
 
     my_memcpy_to_param(output, 0, buffer_a, output->params_len);
 
@@ -93,16 +91,12 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     data_offset += first_unfinished_job_index;
     output_offset += first_unfinished_job_index;
 
-#if STATEFUL
+#if INDIRECT_RECOVERY
     int16_t offset, next_output_turning_point;
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_job_index, model, output);
     offset ^= 0x4000;
-#endif
-
-#if JAPARI
-    uint32_t footprint = first_unfinished_job_index + model->layer_idx * 10 + model->run_counter + 1;
 #endif
 
 #endif
@@ -126,7 +120,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             for (; output_w < W; output_w++) {
                     int16_t val_offset = output_w * H * CHANNEL + output_h * CHANNEL + c;
                     output_offset = output_h * W * OUTPUT_CHANNEL + output_w * OUTPUT_CHANNEL + c;
-#if STATEFUL
+#if INDIRECT_RECOVERY
                     check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
 #endif
                     uint16_t len = CHANNEL - c;
@@ -143,8 +137,10 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         int16_t input_val = 0, output_val;
 #if JAPARI
                         if ((c + idx) % (BATCH_SIZE + 1) == BATCH_SIZE) {
-                            output_val = footprint;
-                            footprint++;
+                            output_val = (offset ? 1 : -1);
+                            if (next_output_turning_point > 0 && (output_offset + (c + idx) >= next_output_turning_point)) {
+                                output_val = -output_val;
+                            }
                         } else
 #endif
                         {
@@ -275,6 +271,9 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
         output->dims[auto_idx] = inferred_dim;
         new_len *= inferred_dim;
     }
+#if JAPARI
+    new_len = extend_for_footprints(new_len);
+#endif
     MY_ASSERT(new_len * sizeof(int16_t) == output->params_len);
 }
 

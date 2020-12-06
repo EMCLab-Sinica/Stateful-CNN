@@ -122,8 +122,14 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     int16_t max = INT16_MIN;
     uint16_t u_ans;
     uint8_t buffer_len = MIN_VAL(output_node->dims[1], MAX_CLASSES);
+#if JAPARI
+    buffer_len = extend_for_footprints(buffer_len);
+#endif
     my_memcpy_from_param(model, lea_buffer, output_node, 0, buffer_len * sizeof(int16_t));
     my_max_q15(lea_buffer, buffer_len, &max, &u_ans);
+#if JAPARI
+    u_ans = u_ans / (BATCH_SIZE + 1) * BATCH_SIZE + u_ans % (BATCH_SIZE + 1);
+#endif
     *ansptr = u_ans;
 }
 

@@ -158,6 +158,9 @@ void dump_params(Model *model, const ParameterInfo *cur_param) {
         NUM = CHANNEL = 1;
         H = cur_param->dims[0];
         W = cur_param->dims[1];
+#if JAPARI
+        W = extend_for_footprints(W);
+#endif
     } else {
         // vector
         NUM = CHANNEL = H = 1;
@@ -200,11 +203,22 @@ void dump_turning_points(Model *model, const ParameterInfo *output) {
 }
 
 void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_info) {
-    my_printf("Scale: %d" NEWLINE, val_info.scale);
-    for (size_t j = 0; j < rows * cols; j++) {
-        print_q15(mat[j], val_info);
-        if ((j+1) % cols == 0) {
+    my_printf("Scale: %d", val_info.scale);
+    if (rows > cols) {
+        my_printf(" (transposed)" NEWLINE);
+        for (size_t j = 0; j < cols; j++) {
+            for (size_t i = 0; i < rows; i++) {
+                print_q15(mat[i * cols + j], val_info);
+            }
             my_printf(NEWLINE);
+        }
+    } else {
+        my_printf(NEWLINE);
+        for (size_t j = 0; j < rows * cols; j++) {
+            print_q15(mat[j], val_info);
+            if ((j+1) % cols == 0) {
+                my_printf(NEWLINE);
+            }
         }
     }
     my_printf(NEWLINE);

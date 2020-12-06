@@ -10,10 +10,16 @@
 
 void my_add_q15(const int16_t *pSrcA, const int16_t *pSrcB, int16_t *pDst, uint32_t blockSize) {
 #ifndef USE_ARM_CMSIS
-    msp_add_q15_params add_params;
-    add_params.length = blockSize;
-    msp_status status = msp_add_q15(&add_params, pSrcA, pSrcB, pDst);
-    msp_checkStatus(status);
+    uint32_t blockSizeForLEA = blockSize / 2 * 2;
+    if (blockSizeForLEA) {
+        msp_add_q15_params add_params;
+        add_params.length = blockSizeForLEA;
+        msp_status status = msp_add_q15(&add_params, pSrcA, pSrcB, pDst);
+        msp_checkStatus(status);
+    }
+    if (blockSize % 2) {
+        pDst[blockSize - 1] = pSrcA[blockSize - 1] + pSrcB[blockSize - 1];
+    }
 #else
     arm_add_q15(pSrcA, pSrcB, pDst, blockSize);
 #endif
@@ -68,10 +74,19 @@ void my_offset_q15(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t 
 
 void my_max_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint16_t *pIndex) {
 #ifndef USE_ARM_CMSIS
-    msp_max_q15_params max_params;
-    max_params.length = blockSize;
-    msp_status status = msp_max_q15(&max_params, pSrc, pResult, pIndex);
-    msp_checkStatus(status);
+    uint32_t blockSizeForLEA = blockSize / 2 * 2;
+    if (blockSizeForLEA) {
+        msp_max_q15_params max_params;
+        max_params.length = blockSizeForLEA;
+        msp_status status = msp_max_q15(&max_params, pSrc, pResult, pIndex);
+        msp_checkStatus(status);
+    }
+    if (blockSize % 2) {
+        if (*pResult < pSrc[blockSize - 1]) {
+            *pResult = pSrc[blockSize - 1];
+            *pIndex = blockSize - 1;
+        };
+    }
 #else
     uint32_t pIndex_u32;
     arm_max_q15(pSrc, blockSize, pResult, &pIndex_u32);
@@ -81,10 +96,19 @@ void my_max_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint1
 
 void my_min_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint16_t *pIndex) {
 #ifndef USE_ARM_CMSIS
-    msp_min_q15_params min_params;
-    min_params.length = blockSize;
-    msp_status status = msp_min_q15(&min_params, pSrc, pResult, pIndex);
-    msp_checkStatus(status);
+    uint32_t blockSizeForLEA = blockSize / 2 * 2;
+    if (blockSizeForLEA) {
+        msp_min_q15_params min_params;
+        min_params.length = blockSizeForLEA;
+        msp_status status = msp_min_q15(&min_params, pSrc, pResult, pIndex);
+        msp_checkStatus(status);
+    }
+    if (blockSize % 2) {
+        if (*pResult > pSrc[blockSize - 1]) {
+            *pResult = pSrc[blockSize - 1];
+            *pIndex = blockSize - 1;
+        };
+    }
 #else
     uint32_t pIndex_u32;
     arm_min_q15(pSrc, blockSize, pResult, &pIndex_u32);
@@ -124,12 +148,18 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
 
 void my_scale_q15(const int16_t *pSrc, int16_t scaleFract, uint8_t shift, int16_t *pDst, uint32_t blockSize) {
 #ifndef USE_ARM_CMSIS
-    msp_scale_q15_params scale_params;
-    scale_params.length = blockSize;
-    scale_params.scale = scaleFract;
-    scale_params.shift = shift;
-    msp_status status = msp_scale_q15(&scale_params, pSrc, pDst);
-    msp_checkStatus(status);
+    uint32_t blockSizeForLEA = blockSize / 2 * 2;
+    if (blockSizeForLEA) {
+        msp_scale_q15_params scale_params;
+        scale_params.length = blockSizeForLEA;
+        scale_params.scale = scaleFract;
+        scale_params.shift = shift;
+        msp_status status = msp_scale_q15(&scale_params, pSrc, pDst);
+        msp_checkStatus(status);
+    }
+    if (blockSize % 2) {
+        pDst[blockSize - 1] = (pSrc[blockSize - 1] * scaleFract) >> (15 - shift);
+    }
 #else
     arm_scale_q15(pSrc, scaleFract, shift, pDst, blockSize);
 #endif

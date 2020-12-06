@@ -42,10 +42,17 @@ int16_t upper_gauss(int16_t a, int16_t b) {
 
 void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params) {
     int16_t* buffer = reinterpret_cast<int16_t*>(_params);
+    int16_t* to_offset = buffer + offset;
+#if STATEFUL
     if (!state_bit) {
-        int16_t* to_offset = buffer + offset;
         my_offset_q15(to_offset, 0x4000, to_offset, real_chunk_len);
     }
+#endif
+#if JAPARI
+    for (uint16_t idx = BATCH_SIZE; idx < real_chunk_len; idx += BATCH_SIZE + 1) {
+        to_offset[idx] = (state_bit ? -1 : 1);
+    }
+#endif
 }
 
 struct MaxMultiplierChunkHandlerParams {
@@ -242,6 +249,7 @@ void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_
     if (!next_turning_point_found) {
         *p_next_turning_point = -1;
     }
+    my_printf_debug("new offset=%d" NEWLINE, *p_offset);
 }
 #endif
 
