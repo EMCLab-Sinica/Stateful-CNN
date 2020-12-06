@@ -4,9 +4,15 @@ set -x
 pushd ARM-CMSIS
 ./create_symlinks.sh "$PWD/../ARM-CMSIS_5/CMSIS"
 popd
+
+cat >> /etc/pacman.conf <<EOF
+[archlinuxcn]
+Server = https://repo.archlinuxcn.org/$arch
+SigLevel = Optional
+EOF
+
 pacman -Syu --noconfirm
-pacman -S --noconfirm --needed base-devel cmake python-pip wget
-pip install --user numpy onnx
+pacman -S --noconfirm --needed base-devel cmake python-numpy python-onnx wget
 
 # preparation
 cmake_args=""
