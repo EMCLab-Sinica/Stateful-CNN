@@ -170,13 +170,12 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 }
 
 void alloc_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const struct NodeFlags *flags) {
-    const ParameterInfo *X = input[0];
-
     output->slot = get_next_slot(model, input[0]);
-    int16_t output_len = X->dims[0] * X->dims[1];
 #if JAPARI
-    output_len = extend_for_footprints(output_len);
+    const ParameterInfo *X = input[0];
+    output->dims[1] = extend_for_footprints(X->dims[1]);
 #endif
+    int16_t output_len = output->dims[0] * output->dims[1];
     output->params_len = output_len * sizeof(int16_t);
 }
 

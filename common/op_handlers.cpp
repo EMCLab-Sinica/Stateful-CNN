@@ -274,7 +274,9 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
         new_len *= inferred_dim;
     }
 #if JAPARI
-    new_len = extend_for_footprints(new_len);
+    else {
+        new_len = extend_for_footprints(new_len);
+    }
 #endif
     MY_ASSERT(new_len * sizeof(int16_t) == output->params_len);
 }

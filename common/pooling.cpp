@@ -313,11 +313,6 @@ void alloc_globalaveragepool(Model *model, const ParameterInfo *input[], Paramet
 
     MY_ASSERT(data->dims[0] == 1);
     uint16_t output_len = data->dims[1];
-#if JAPARI
-    if (has_footprints(data)) {
-        output_len = output_len / (BATCH_SIZE + 1) * BATCH_SIZE;
-    }
-#endif
 
     output->dims[0] = output->dims[2] = output->dims[3] = 1;
     output->dims[1] = output_len;
@@ -343,30 +338,33 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
     uint16_t len = H * W;
     uint16_t output_channel = 0;
     for (uint16_t input_channel = 0; input_channel < CHANNEL; input_channel++) {
+        int16_t output_val;
 #if JAPARI
         if (input_channel % (BATCH_SIZE + 1) == BATCH_SIZE) {
-            continue;
-        }
+            output_val = (param_state_bit(model, output, output_channel) ? -1 : 1);
+        } else
 #endif
-        uint32_t total = 0;
-        for (uint16_t h = 0; h < H; h++) {
-            for (uint16_t w = 0; w < W; w++) {
-                // Input is from Conv, which uses NHWC
-                int16_t val = get_q15_param(model, data, h * W * CHANNEL + w * CHANNEL + input_channel);
+        {
+            uint32_t total = 0;
+            for (uint16_t h = 0; h < H; h++) {
+                for (uint16_t w = 0; w < W; w++) {
+                    // Input is from Conv, which uses NHWC
+                    int16_t val = get_q15_param(model, data, h * W * CHANNEL + w * CHANNEL + input_channel);
 #if STATEFUL
-                if (get_value_state_bit(val)) {
-                    val -= 0x4000;
+                    if (get_value_state_bit(val)) {
+                        val -= 0x4000;
+                    }
+#endif
+                    total += val;
                 }
-#endif
-                total += val;
             }
-        }
-        int16_t avg = total / len;
+            output_val = total / len;
 #if STATEFUL
-        check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_channel);
-        avg += offset;
+            check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_channel);
+            output_val += offset;
 #endif
-        put_q15_param(output, output_channel, avg);
+        }
+        put_q15_param(output, output_channel, output_val);
         output_channel++;
     }
 

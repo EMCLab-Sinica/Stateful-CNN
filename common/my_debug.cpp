@@ -158,9 +158,6 @@ void dump_params(Model *model, const ParameterInfo *cur_param) {
         NUM = CHANNEL = 1;
         H = cur_param->dims[0];
         W = cur_param->dims[1];
-#if JAPARI
-        W = extend_for_footprints(W);
-#endif
     } else {
         // vector
         NUM = CHANNEL = H = 1;

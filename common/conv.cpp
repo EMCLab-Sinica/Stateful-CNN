@@ -190,7 +190,11 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #if JAPARI
         int16_t* footprint_channels_ptr = conv_params->filter_buffer_addr + n_filters * (conv_params->filter_offset - 1);
         for (int16_t idx = BATCH_SIZE; idx < n_filters; idx += BATCH_SIZE + 1) {
-            *(footprint_channels_ptr + idx) = (conv_params->old_output_offset ? 1 : -1);
+            if (idx < n_keep_state_bits) {
+                *(footprint_channels_ptr + idx) = (conv_params->old_output_offset ? 1 : -1);
+            } else {
+                *(footprint_channels_ptr + idx) = (conv_params->old_output_offset ? -1 : 1);
+            }
         }
 #endif
         conv_params->cached_filter_idx = conv_params->filter_idx;

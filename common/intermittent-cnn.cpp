@@ -122,9 +122,6 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     int16_t max = INT16_MIN;
     uint16_t u_ans;
     uint8_t buffer_len = MIN_VAL(output_node->dims[1], MAX_CLASSES);
-#if JAPARI
-    buffer_len = extend_for_footprints(buffer_len);
-#endif
     my_memcpy_from_param(model, lea_buffer, output_node, 0, buffer_len * sizeof(int16_t));
     my_max_q15(lea_buffer, buffer_len, &max, &u_ans);
 #if JAPARI
@@ -224,8 +221,11 @@ static void check_feature_map_states(Model *model, const ParameterInfo* output, 
         }
     }
 #endif
-    for (uint32_t idx = 0; idx < len; idx++) {
+    for (uint32_t idx = 0; ; idx++) {
         uint32_t offset = job_index_to_offset(output, idx);
+        if (offset >= len) {
+            break;
+        }
         int16_t val = get_q15_param(model, output, offset);
         uint8_t cur_state_bit = param_state_bit(model, output, offset);
         if (idx < first_unfinished_job_index) {
