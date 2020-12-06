@@ -257,7 +257,9 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
 
     output->scale /= max_multiplier;
 
+#if INDIRECT_RECOVERY
     iterate_chunks(model, output, 0, 0, OutputChunkHandler, buffer_gemm);
+#endif
 
     my_memcpy_to_param(output, 0, buffer_gemm, output->params_len);
 

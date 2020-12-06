@@ -9,7 +9,6 @@ struct ParameterInfo;
 struct SlotInfo;
 
 typedef void (*ChunkHandler)(uint32_t output_offset, uint16_t output_chunk_len, uint8_t old_output_state_bit, void* params);
-void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params);
 
 extern int16_t lea_buffer[LEA_BUFFER_SIZE];
 int16_t upper_gauss(int16_t a, int16_t b);
@@ -31,6 +30,7 @@ uint8_t has_footprints(const ParameterInfo* cur_param);
 #endif
 
 #if INDIRECT_RECOVERY
+void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params);
 void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param);
 
 #define check_next_turning_point(offset, turning_point_idx, next_turning_point, slot_info, value_idx) \

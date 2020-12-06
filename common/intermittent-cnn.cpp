@@ -212,6 +212,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
 }
 
 
+#if INDIRECT_RECOVERY
 static void check_feature_map_states(Model *model, const ParameterInfo* output, uint32_t first_unfinished_job_index, uint32_t len, const char* func) {
 #if MY_DEBUG >= 1
     my_printf_debug("Running check_feature_map_states..." NEWLINE);
@@ -235,6 +236,7 @@ static void check_feature_map_states(Model *model, const ParameterInfo* output, 
     }
 #endif
 }
+#endif
 
 #if STATEFUL
 static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_t job_index) {

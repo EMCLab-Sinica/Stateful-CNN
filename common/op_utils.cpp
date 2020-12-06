@@ -40,6 +40,7 @@ int16_t upper_gauss(int16_t a, int16_t b) {
     return (a + b - 1) / b;
 }
 
+#if INDIRECT_RECOVERY
 void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params) {
     int16_t* buffer = reinterpret_cast<int16_t*>(_params);
     int16_t* to_offset = buffer + offset;
@@ -54,6 +55,7 @@ void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_
     }
 #endif
 }
+#endif
 
 struct MaxMultiplierChunkHandlerParams {
     Model *model;
