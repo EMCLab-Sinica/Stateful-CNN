@@ -7,7 +7,7 @@ popd
 
 cat >> /etc/pacman.conf <<EOF
 [archlinuxcn]
-Server = https://repo.archlinuxcn.org/$arch
+Server = https://repo.archlinuxcn.org/\$arch
 SigLevel = Optional
 EOF
 
