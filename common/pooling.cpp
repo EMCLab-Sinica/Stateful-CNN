@@ -13,9 +13,6 @@ struct MaxPoolParams {
     uint8_t n_channels;
     uint8_t need_nhwc2nchw;
     uint16_t new_W;
-#if JAPARI
-    uint32_t footprint;
-#endif
     const NodeFlags* flags;
     const ParameterInfo *data;
     const ParameterInfo *output;
@@ -80,9 +77,9 @@ static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
             for (uint8_t input_channel_offset = 0; input_channel_offset < maxpool_params->n_channels; input_channel_offset++) {
 #if JAPARI
                 if ((maxpool_params->start_channel + input_channel_offset) % (BATCH_SIZE + 1) == BATCH_SIZE) {
-                    if (!maxpool_params->need_nhwc2nchw) {
-                        output_channel_offset++;
-                    }
+                    // not checking need_nhwc2nchw here - if that is true, input footprint channels should already be skipped
+                    // before maxpool_patch is called
+                    output_channel_offset++;
                     continue;
                 }
 #endif
@@ -146,34 +143,23 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     maxpool_params->flags = flags;
     maxpool_params->model = model;
 
-    const uint16_t CHANNEL = data->dims[1], H = data->dims[2];
+    const uint16_t CHANNEL = data->dims[1], H = data->dims[2], OUTPUT_CHANNEL = output->dims[1];
     uint16_t new_H = H / stride;
-
-    uint16_t tile_c = output->dims[1];
-    my_printf_debug("tile_c = %d" NEWLINE, tile_c);
-
-    uint16_t tile_c_offset = 0;
 
     uint16_t output_h = 0, output_w = 0, c = 0;
     uint16_t output_offset = 0;
 
 #if INTERMITTENT
-    uint16_t initial_real_tile_c;
-
-    uint32_t first_unfinished_value_offset = run_recovery(model, output);
+    uint32_t first_unfinished_value_offset = job_index_to_offset(output, run_recovery(model, output));
+#if JAPARI
+    first_unfinished_value_offset -= BATCH_SIZE;
+#endif
     if (first_unfinished_value_offset * sizeof(int16_t) == output->params_len) {
         // give up early, or initial_real_tile_c may be zero and results in SIGFPE
         goto finished;
     }
 
-#if JAPARI
-    maxpool_params->footprint = first_unfinished_value_offset + model->layer_idx * 10 + model->run_counter + 1;
-#endif
-
-    uint16_t initial_n, initial_c, initial_h, initial_w;
-    initial_n = first_unfinished_value_offset / (new_H * maxpool_params->new_W * tile_c);
-
-    tile_c_offset = initial_n * tile_c;
+    uint16_t initial_c, initial_h, initial_w;
 
 #if INDIRECT_RECOVERY
     int16_t offset, next_output_turning_point;
@@ -183,11 +169,10 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     offset ^= 0x4000;
 #endif
 
-    initial_real_tile_c = MIN_VAL(tile_c, CHANNEL - tile_c_offset);
     output_offset = first_unfinished_value_offset;
     if (!maxpool_params->need_nhwc2nchw) {
-        initial_c = first_unfinished_value_offset % initial_real_tile_c;
-        first_unfinished_value_offset /= initial_real_tile_c;
+        initial_c = first_unfinished_value_offset % OUTPUT_CHANNEL;
+        first_unfinished_value_offset /= OUTPUT_CHANNEL;
         initial_w = first_unfinished_value_offset % maxpool_params->new_W;
         first_unfinished_value_offset /= maxpool_params->new_W;
         initial_h = first_unfinished_value_offset % new_H;
@@ -196,29 +181,26 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
         first_unfinished_value_offset /= maxpool_params->new_W;
         initial_h = first_unfinished_value_offset % new_H;
         first_unfinished_value_offset /= new_H;
-        initial_c = first_unfinished_value_offset % initial_real_tile_c;
+        initial_c = first_unfinished_value_offset % OUTPUT_CHANNEL;
     }
     output_h = initial_h;
     output_w = initial_w;
     c = initial_c;
-    my_printf_debug("initial_n = %d" NEWLINE, initial_n);
     my_printf_debug("initial_h = %d" NEWLINE, initial_h);
     my_printf_debug("initial_w = %d" NEWLINE, initial_w);
     my_printf_debug("initial_c = %d" NEWLINE, initial_c);
 #endif
 
-    for (; tile_c_offset < CHANNEL;) {
-        uint8_t extended_tile_c = tile_c;
-        uint16_t cur_tile_c = MIN_VAL(extended_tile_c, CHANNEL - tile_c_offset);
+    {
         if (!maxpool_params->need_nhwc2nchw) {
             // NHWC
             for (; output_h < new_H; output_h++) {
                 maxpool_params->output_h = output_h;
                 for (; output_w < maxpool_params->new_W; output_w++) {
-                    uint8_t len = cur_tile_c - c;
+                    uint8_t len = OUTPUT_CHANNEL - c;
                     maxpool_params->output_w = output_w;
                     maxpool_params->n_channels = len;
-                    maxpool_params->start_channel = c + tile_c_offset;
+                    maxpool_params->start_channel = c;
                     len = maxpool_patch(maxpool_params);
                     my_printf_debug("output_offset=[% 5d, % 5d) ", output_offset, output_offset + len);
 #if INDIRECT_RECOVERY
@@ -246,8 +228,15 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
             output_h = 0;
         } else {
             // NCHW
+#if JAPARI
+            // extend c as input footprint channels are skipped
+            c = extend_for_footprints(c);
+#endif
             uint8_t channel_stride = 1;
-            for (; c < cur_tile_c; c += channel_stride) {
+            for (; c < CHANNEL; c += channel_stride) {
+                if (c % (BATCH_SIZE + 1) == BATCH_SIZE) {
+                    continue;
+                }
                 for (; output_h < new_H; output_h++) {
                     maxpool_params->output_h = output_h;
 #if !JAPARI
@@ -264,7 +253,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                             continue;
                         }
 #endif
-                        maxpool_params->start_channel = c + tile_c_offset;
+                        maxpool_params->start_channel = c;
                         maxpool_params->n_channels = 1;
                         uint8_t len = maxpool_patch(maxpool_params);
                         if (!len) {
@@ -290,10 +279,10 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
             }
             c = 0;
         }
-        tile_c_offset += extended_tile_c;
     }
 
-    MY_ASSERT(output_offset == output->params_len / sizeof(int16_t));
+    MY_ASSERT(output_offset == output->params_len / sizeof(int16_t),
+              "Expect output offset %d, got %d" NEWLINE, output->params_len / sizeof(int16_t), output_offset);
 
 #if INTERMITTENT
 finished:

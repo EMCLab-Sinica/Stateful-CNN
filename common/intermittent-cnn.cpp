@@ -339,6 +339,7 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
     uint32_t offset = job_index_to_offset(output, job_index);
     int16_t val = get_q15_param(model, output, offset);
     int16_t expected_footprint = (param_state_bit(model, output, offset) ? -1 : 1);
+    check_footprint(val);
     uint8_t ret = (val == expected_footprint);
     my_printf_debug("Footprint %d (expected %d) at job index %d (offset %d) indicates %s" NEWLINE, val, expected_footprint, job_index, offset, ret ? "finished" : "unfinished");
     return ret;

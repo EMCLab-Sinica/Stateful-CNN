@@ -89,15 +89,19 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     uint16_t output_offset = 0;
 #if INTERMITTENT
 
-    uint32_t first_unfinished_job_index = run_recovery(model, output);
-    data_offset += first_unfinished_job_index;
-    output_offset += first_unfinished_job_index;
+    uint32_t first_unfinished_value_offset = job_index_to_offset(output, run_recovery(model, output));
+#if JAPARI
+    first_unfinished_value_offset -= BATCH_SIZE;
+#endif
+    data_offset += first_unfinished_value_offset;
+    output_offset += first_unfinished_value_offset;
 
 #if INDIRECT_RECOVERY
     int16_t offset, next_output_turning_point;
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
-    find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_job_index, model, output);
+    find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info,
+                           first_unfinished_value_offset, model, output);
     offset ^= 0x4000;
 #endif
 
@@ -109,10 +113,10 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         uint16_t H = X->dims[2], W = X->dims[3];
         uint16_t output_h = 0, output_w = 0, c = 0;
 #if INTERMITTENT
-        output_h = first_unfinished_job_index / (W * CHANNEL);
-        first_unfinished_job_index %= (W * CHANNEL);
-        output_w = first_unfinished_job_index / CHANNEL;
-        c = first_unfinished_job_index % CHANNEL;
+        output_h = first_unfinished_value_offset / (W * CHANNEL);
+        first_unfinished_value_offset %= (W * CHANNEL);
+        output_w = first_unfinished_value_offset / CHANNEL;
+        c = first_unfinished_value_offset % CHANNEL;
         my_printf_debug("initial output_h = %d, ", output_h);
         my_printf_debug("initial output_w = %d, ", output_w);
         my_printf_debug("initial c = %d" NEWLINE, c);
@@ -140,7 +144,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if JAPARI
                         if ((c + idx) % (BATCH_SIZE + 1) == BATCH_SIZE) {
                             output_val = (offset ? 1 : -1);
-                            if (next_output_turning_point > 0 && (output_offset + (c + idx) >= next_output_turning_point)) {
+                            if (next_output_turning_point > 0 && (output_offset + idx >= next_output_turning_point)) {
                                 output_val = -output_val;
                             }
                         } else
