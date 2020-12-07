@@ -1,8 +1,13 @@
 import argparse
+import logging
 import os.path
 import signal
 import tempfile
+import sys
 from subprocess import Popen, TimeoutExpired
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger('run-intermittently')
 
 def run_one_inference(program, interval, logfile):
     while True:
@@ -13,7 +18,8 @@ def run_one_inference(program, interval, logfile):
                 proc.send_signal(signal.SIGINT)
             proc.wait()
             if proc.returncode in (1, -signal.SIGFPE):
-                raise Exception('Crashed')
+                logger.error('Program crashed!')
+                sys.exit(1)
             if proc.returncode == 0:
                 logfile.seek(0, 2)
                 file_size = logfile.tell()
