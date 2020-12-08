@@ -568,7 +568,9 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     // Force recovery from an even OFM index as most DSPLib function does not like odd dimensions
     if (first_unfinished_value_idx % 2) {
         first_unfinished_value_idx--;
+#if HAWAII
         write_hawaii_layer_footprint(model->layer_idx, -1); // abandon last job
+#endif
     }
 #endif
 
