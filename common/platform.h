@@ -31,7 +31,7 @@ uint16_t read_max_multiplier(const struct ParameterInfo* param);
 void write_max_multiplier(const struct ParameterInfo* param, uint16_t max_multiplier);
 void first_run(void);
 #if HAWAII
-void write_hawaii_layer_footprint(uint16_t layer_idx, uint16_t n_jobs);
+void write_hawaii_layer_footprint(uint16_t layer_idx, int16_t n_jobs);
 uint16_t read_hawaii_layer_footprint(uint16_t layer_idx);
 void reset_hawaii_layer_footprint(uint16_t layer_idx);
 #endif

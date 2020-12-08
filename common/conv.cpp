@@ -559,16 +559,17 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if INTERMITTENT
 
     uint32_t first_unfinished_job_idx = run_recovery(model, output);
+    uint32_t first_unfinished_value_idx = job_index_to_offset(output, first_unfinished_job_idx);
 #if JAPARI
-    uint32_t first_unfinished_value_idx = first_unfinished_job_idx * (BATCH_SIZE + 1);
-#endif
-#if STATEFUL
-    uint32_t first_unfinished_value_idx = first_unfinished_job_idx * BATCH_SIZE;
+    first_unfinished_value_idx -= BATCH_SIZE;
 #endif
 
-#if STATEFUL
+#if !JAPARI && BATCH_SIZE < 2
     // Force recovery from an even OFM index as most DSPLib function does not like odd dimensions
-    first_unfinished_value_idx = first_unfinished_value_idx / 2 * 2;
+    if (first_unfinished_value_idx % 2) {
+        first_unfinished_value_idx--;
+        write_hawaii_layer_footprint(model->layer_idx, -1); // abandon last job
+    }
 #endif
 
 #if INDIRECT_RECOVERY

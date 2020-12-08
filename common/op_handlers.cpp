@@ -89,7 +89,12 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     uint16_t output_offset = 0;
 #if INTERMITTENT
 
+#if HAWAII
+    uint32_t first_unfinished_value_offset = run_recovery(model, output);
+#else
     uint32_t first_unfinished_value_offset = job_index_to_offset(output, run_recovery(model, output));
+#endif
+
 #if JAPARI
     first_unfinished_value_offset -= BATCH_SIZE;
 #endif

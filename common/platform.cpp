@@ -62,7 +62,8 @@ ParameterInfo* get_intermediate_parameter_info(uint8_t i) {
     ParameterInfo* dst = intermediate_parameters_info_vm + i;
     read_from_nvm(dst, intermediate_parameters_info_addr(i), sizeof(ParameterInfo));
     my_printf_debug("Load intermediate parameter info %d from NVM" NEWLINE, i);
-    MY_ASSERT(dst->parameter_info_idx == i + N_INPUT);
+    MY_ASSERT(dst->parameter_info_idx == i + N_INPUT,
+              "Expect parameter index %d but got %d" NEWLINE, i + N_INPUT, dst->parameter_info_idx);
     return dst;
 }
 
@@ -188,7 +189,7 @@ const char* datatype_name<Node::Footprint>(void) {
     return "footprint";
 }
 
-void write_hawaii_layer_footprint(uint16_t layer_idx, uint16_t n_jobs) {
+void write_hawaii_layer_footprint(uint16_t layer_idx, int16_t n_jobs) {
     Node::Footprint* footprint_vm = footprints_vm + layer_idx;
     footprint_vm->value += n_jobs;
     MY_ASSERT(footprint_vm->value < INTERMEDIATE_VALUES_SIZE);

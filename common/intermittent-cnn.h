@@ -10,9 +10,7 @@ struct ParameterInfo;
 struct Model;
 uint8_t run_cnn_tests(uint16_t n_samples);
 
-#if INDIRECT_RECOVERY
 uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index);
-#endif
 
 uint8_t get_state_bit(struct Model *model, uint8_t slot_id);
 #if STATEFUL

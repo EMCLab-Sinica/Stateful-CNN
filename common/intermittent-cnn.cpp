@@ -138,7 +138,7 @@ static void print_results(const ParameterInfo *output_node) {
 
     my_printf("op types:" NEWLINE);
     for (uint8_t i = 0; i < counters()->counter_idx; i++) {
-        my_printf("% 5d ", get_node(i)->op_type);
+        my_printf("% 5d ", get_node(MODEL_NODES_LEN - counters()->counter_idx + i)->op_type);
         if (i % 16 == 15) {
             my_printf(NEWLINE);
         }
@@ -331,6 +331,11 @@ uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offse
 #if HAWAII
 uint32_t run_recovery(Model* model, ParameterInfo*) {
     return read_hawaii_layer_footprint(model->layer_idx);
+}
+
+uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
+    // HAWAII footprints are exactly the number of values
+    return job_index;
 }
 #endif
 

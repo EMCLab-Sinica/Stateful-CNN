@@ -234,9 +234,11 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 #endif
             uint8_t channel_stride = 1;
             for (; c < CHANNEL; c += channel_stride) {
+#if JAPARI
                 if (c % (BATCH_SIZE + 1) == BATCH_SIZE) {
                     continue;
                 }
+#endif
                 for (; output_h < new_H; output_h++) {
                     maxpool_params->output_h = output_h;
 #if !JAPARI
