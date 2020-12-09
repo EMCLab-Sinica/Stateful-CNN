@@ -112,6 +112,7 @@ void read_from_nvm(void* vm_buffer, uint32_t nvm_offset, size_t n) {
 void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n) {
     SPI_ADDR addr;
     addr.L = nvm_offset;
+    check_nvm_write_address(nvm_offset, n);
     SPI_WRITE(&addr, reinterpret_cast<const uint8_t*>(vm_buffer), n);
 }
 
@@ -136,13 +137,11 @@ void IntermittentCNNTest() {
     P8REN = GPIO_PIN1;
 
     // sleep to wait for external FRAM
-    uint32_t counter = 100;
-    while (counter) {
-        counter--;
-    }
+    uint32_t counter = 100000;
+    while (counter--);
 
     initSPI();
-    // testSPI();
+    testSPI();
 
     Model* model = get_model();
     if (P8IN & GPIO_PIN1) {

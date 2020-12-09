@@ -5,8 +5,8 @@
 
 /* offsets for data on NVM */
 
-// growing up (like heap)
-#define INTERMEDIATE_VALUES_OFFSET 0
+// growing up (like heap). Not starting from zero as first few 16 bytes are for testing (see testSPI() function)
+#define INTERMEDIATE_VALUES_OFFSET 256
 #define SAMPLES_OFFSET (INTERMEDIATE_VALUES_OFFSET + NUM_SLOTS * INTERMEDIATE_VALUES_SIZE)
 
 // growing down (like stack)

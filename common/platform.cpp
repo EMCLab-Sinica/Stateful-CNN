@@ -171,6 +171,14 @@ void write_max_multiplier(const ParameterInfo* param, uint16_t max_multiplier) {
     }
 }
 
+void check_nvm_write_address(uint32_t nvm_offset, size_t n) {
+    if (nvm_offset >= INTERMEDIATE_PARAMETERS_INFO_OFFSET && nvm_offset < MODEL_OFFSET) {
+        MY_ASSERT((nvm_offset - INTERMEDIATE_PARAMETERS_INFO_OFFSET) % sizeof(ParameterInfo) == 0);
+    } else if (nvm_offset < INTERMEDIATE_PARAMETERS_INFO_OFFSET) {
+        MY_ASSERT(n <= INTERMEDIATE_PARAMETERS_INFO_OFFSET - nvm_offset, "Size %d too large!!! nvm_offset=%d" NEWLINE, n, nvm_offset);
+    }
+}
+
 #if HAWAII
 Node::Footprint footprints_vm[MODEL_NODES_LEN];
 

@@ -23,6 +23,7 @@ void my_memcpy(void* dest, const void* src, size_t n);
 void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, const void *src, size_t n);
 void my_memcpy_from_intermediate_values(void *dest, const struct ParameterInfo *param, uint16_t offset_in_word, size_t n);
 void read_from_samples(void *dest, uint16_t offset_in_word, size_t n);
+void check_nvm_write_address(uint32_t nvm_offset, size_t n);
 struct ParameterInfo* get_intermediate_parameter_info(uint8_t i);
 void commit_intermediate_parameter_info(uint8_t i);
 struct Model* get_model(void);

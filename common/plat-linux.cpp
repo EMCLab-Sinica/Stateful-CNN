@@ -104,7 +104,7 @@ exit:
     return ret;
 }
 
-void my_memcpy(void* dest, const void* src, size_t n) {
+void my_memcpy_ex(void* dest, const void* src, size_t n, uint8_t write_to_nvm) {
     uint16_t counter_idx = counters()->counter_idx;
     counters()->dma_invocations[counter_idx]++;
     counters()->dma_bytes[counter_idx] += n;
@@ -115,15 +115,23 @@ void my_memcpy(void* dest, const void* src, size_t n) {
     const uint8_t *src_u = reinterpret_cast<const uint8_t*>(src);
     for (size_t idx = 0; idx < n; idx++) {
         dest_u[idx] = src_u[idx];
+        if (write_to_nvm) {
+            my_printf_debug("Writing to NVM offset %ld" NEWLINE, dest_u + idx - nvm);
+        }
     }
 }
 
+void my_memcpy(void* dest, const void* src, size_t n) {
+    my_memcpy_ex(dest, src, n, 0);
+}
+
 void read_from_nvm(void *vm_buffer, uint32_t nvm_offset, size_t n) {
-    my_memcpy(vm_buffer, nvm + nvm_offset, n);
+    my_memcpy_ex(vm_buffer, nvm + nvm_offset, n, 0);
 }
 
 void write_to_nvm(const void *vm_buffer, uint32_t nvm_offset, size_t n) {
-    my_memcpy(nvm + nvm_offset, vm_buffer, n);
+    check_nvm_write_address(nvm_offset, n);
+    my_memcpy_ex(nvm + nvm_offset, vm_buffer, n, 1);
 }
 
 void my_erase() {
