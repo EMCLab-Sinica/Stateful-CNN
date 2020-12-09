@@ -9,6 +9,9 @@ from subprocess import Popen, TimeoutExpired
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger('run-intermittently')
 
+CHUNK_SIZE = 2000
+CHUNK_LINES = 20
+
 def run_one_inference(program, interval, logfile):
     while True:
         with Popen([program, '1'], stdout=logfile, stderr=logfile) as proc:
@@ -23,9 +26,9 @@ def run_one_inference(program, interval, logfile):
             if proc.returncode == 0:
                 logfile.seek(0, 2)
                 file_size = logfile.tell()
-                logfile.seek(-(2000 if file_size > 2000 else file_size), 2)
-                last_1000 = logfile.read()
-                print('\n'.join(last_1000.decode('ascii').split('\n')[-20:]))
+                logfile.seek(-(CHUNK_SIZE if file_size > CHUNK_SIZE else file_size), 2)
+                last_chunk = logfile.read()
+                print('\n'.join(last_chunk.decode('ascii').split('\n')[-CHUNK_LINES:]))
                 return
 
 def main():
