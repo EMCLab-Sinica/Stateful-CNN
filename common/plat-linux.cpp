@@ -123,9 +123,9 @@ void my_memcpy_ex(void* dest, const void* src, size_t n, uint8_t write_to_nvm) {
         return;
     }
 
-    uint16_t counter_idx = counters()->counter_idx;
-    counters()->dma_invocations[counter_idx]++;
-    counters()->dma_bytes[counter_idx] += n;
+    Model* model = &model_vm;
+    counters()->dma_invocations[model->layer_idx]++;
+    counters()->dma_bytes[model->layer_idx] += n;
     // my_printf_debug("%s copied %zu bytes" NEWLINE, __func__, n);
     // Not using memcpy here so that it is more likely that power fails during
     // memcpy, which is the case for external FRAM

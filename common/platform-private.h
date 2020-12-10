@@ -16,6 +16,10 @@
 #define INTERMEDIATE_PARAMETERS_INFO_OFFSET (MODEL_OFFSET - INTERMEDIATE_PARAMETERS_INFO_DATA_LEN)
 #define NODES_OFFSET (INTERMEDIATE_PARAMETERS_INFO_OFFSET - NODES_DATA_LEN)
 
+class Model;
+
+extern Model model_vm;
+
 void read_from_nvm(void* vm_buffer, uint32_t nvm_offset, size_t n);
 void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n);
 void my_erase(void);

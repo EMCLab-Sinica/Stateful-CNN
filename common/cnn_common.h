@@ -92,11 +92,10 @@ typedef struct {
     uint16_t power_counters[COUNTERS_LEN];
     uint32_t dma_invocations[COUNTERS_LEN];
     uint32_t dma_bytes[COUNTERS_LEN];
-    uint32_t counter_idx;
 } Counters;
 
 // Keep the following coefficients synced with transform.py
-static_assert(sizeof(Counters) == 12 * COUNTERS_LEN + 4, "Unexpected size of Counters");
+static_assert(sizeof(Counters) == 12 * COUNTERS_LEN, "Unexpected size of Counters");
 
 /**********************************
  *          Global data           *

@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #define PLAT_LABELS_DATA_LEN 1
+#define NON_VOLATILE_COUNTERS 0
 
 #ifdef __cplusplus
 extern "C" {

@@ -55,9 +55,6 @@ static void handle_node(Model *model, uint16_t node_idx) {
     my_printf_debug("New output state bit=%d" NEWLINE, get_state_bit(model, output->slot));
 #endif
 
-    counters()->counter_idx++;
-    MY_ASSERT(counters()->counter_idx < COUNTERS_LEN);
-
 #if MY_DEBUG >= 1
     my_printf_debug("output dims: ");
     uint8_t has_dims = 0;
@@ -87,7 +84,6 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
 
     Model *model = get_model();
     if (!model->running) {
-        counters()->counter_idx = 0;
         // reset model
         model->layer_idx = 0;
         for (uint8_t idx = 0; idx < NUM_SLOTS; idx++) {
@@ -103,7 +99,7 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
         commit_model();
     }
 
-    counters()->power_counters[counters()->counter_idx]++;
+    counters()->power_counters[model->layer_idx]++;
 
     dump_model_debug(model);
 
@@ -159,37 +155,38 @@ static void print_results(const ParameterInfo *output_node) {
 
     dump_params(model, output_node);
 
-    my_printf("op types:" NEWLINE);
-    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
-        my_printf("% 5d ", get_node(MODEL_NODES_LEN - counters()->counter_idx + i)->op_type);
+    my_printf("op types:       ");
+    for (uint8_t i = 0; i < MODEL_NODES_LEN; i++) {
+        my_printf("% 8d", get_node(i)->op_type);
         if (i % 16 == 15) {
             my_printf(NEWLINE);
         }
     }
-    my_printf(NEWLINE "ticks:" NEWLINE);
-    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
-        my_printf("% 5d ", counters()->time_counters[i]);
+    my_printf(NEWLINE "ticks:          ");
+    for (uint8_t i = 0; i < MODEL_NODES_LEN; i++) {
+        my_printf("% 8d", counters()->time_counters[i]);
         if (i % 16 == 15) {
             my_printf(NEWLINE);
         }
     }
+#if NON_VOLATILE_COUNTERS
     my_printf(NEWLINE "power counters: ");
-    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
-        my_printf("%d ", counters()->power_counters[i]);
+    for (uint8_t i = 0; i < MODEL_NODES_LEN; i++) {
+        my_printf("% 8d", counters()->power_counters[i]);
     }
-    my_printf(NEWLINE "DMA invocations:" NEWLINE);
-    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
+    my_printf(NEWLINE "DMA invocations:");
+    for (uint8_t i = 0; i < MODEL_NODES_LEN; i++) {
         my_printf("% 8d", counters()->dma_invocations[i]);
     }
-    my_printf(NEWLINE "DMA bytes:" NEWLINE);
+    my_printf(NEWLINE "DMA bytes:      ");
     uint32_t total_dma_bytes = 0;
-    for (uint8_t i = 0; i < counters()->counter_idx; i++) {
+    for (uint8_t i = 0; i < MODEL_NODES_LEN; i++) {
         total_dma_bytes += counters()->dma_bytes[i];
         my_printf("% 8d", counters()->dma_bytes[i]);
     }
-    my_printf(NEWLINE "Total DMA bytes: %d" NEWLINE, total_dma_bytes);
-    my_printf("run_counter: %d", model->run_counter);
-    my_printf(NEWLINE);
+    my_printf(NEWLINE "Total DMA bytes: %d", total_dma_bytes);
+#endif
+    my_printf(NEWLINE "run_counter: %d" NEWLINE, model->run_counter);
 }
 #endif
 
