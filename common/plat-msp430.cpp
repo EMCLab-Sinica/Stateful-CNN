@@ -130,11 +130,22 @@ void copy_samples_data(void) {
     }
 }
 
+#ifdef __MSP430__
+#define GPIO_COUNTER_PORT GPIO_PORT_P1
+#define GPIO_COUNTER_PIN GPIO_PIN5
+#define GPIO_RESET_PORT GPIO_PORT_P8
+#define GPIO_RESET_PIN GPIO_PIN1
+#else
+#define GPIO_COUNTER_PORT GPIO_PORT_P3
+#define GPIO_COUNTER_PIN GPIO_PIN6
+#define GPIO_RESET_PORT GPIO_PORT_P1
+#define GPIO_RESET_PIN GPIO_PIN6
+#endif
+
 void IntermittentCNNTest() {
-    P1DIR |= GPIO_PIN5;
-    P1OUT &= ~GPIO_PIN5;
-    P8DIR = 0xfd;
-    P8REN = GPIO_PIN1;
+    GPIO_setAsOutputPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
+    GPIO_setOutputLowOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
+    GPIO_setAsInputPinWithPullUpResistor(GPIO_RESET_PORT, GPIO_RESET_PIN);
 
     // sleep to wait for external FRAM
     uint32_t counter = 100000;
@@ -144,7 +155,7 @@ void IntermittentCNNTest() {
     testSPI();
 
     Model* model = get_model();
-    if (P8IN & GPIO_PIN1) {
+    if (GPIO_getInputPinValue(GPIO_RESET_PORT, GPIO_RESET_PIN)) {
         my_printf(NEWLINE "run_counter = %d" NEWLINE, model->run_counter);
 
         first_run();
@@ -158,7 +169,7 @@ void IntermittentCNNTest() {
 
     while (1) {
         run_cnn_tests(1);
-        P1OUT ^= GPIO_PIN5;
+        GPIO_toggleOutputOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
     }
 }
 
