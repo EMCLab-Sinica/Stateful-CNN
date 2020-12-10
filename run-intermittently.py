@@ -31,7 +31,7 @@ def run_one_inference(program, interval, logfile, shutdown_after_writes):
             if proc.returncode == 2:
                 # simulated power failure
                 continue
-            if proc.returncode in (1, -signal.SIGFPE):
+            if proc.returncode in (1, -signal.SIGFPE, -signal.SIGSEGV):
                 logger.error('Program crashed!')
                 sys.exit(1)
             if proc.returncode == 0:
