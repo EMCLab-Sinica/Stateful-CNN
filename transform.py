@@ -61,6 +61,7 @@ class Constants:
     INTERMITTENT = 0
     INDIRECT_RECOVERY = 0
     METHOD = "Baseline"
+    FIRST_SAMPLE_OUTPUTS = []
 
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
@@ -164,6 +165,7 @@ configs = {
         'n_all_samples': 10000,
         # multiply by 2 for Q15
         'sample_size': 2 * 28 * 28,
+        'first_sample_outputs': [ -1282, 639, 8789, 9602, -13982, -6165, -23913, 28841, -6914, 4028 ],
         'fp32_accuracy': 0.9889,
     },
     'cifar10': {
@@ -175,6 +177,7 @@ configs = {
         'data_loader': load_data_cifar10,
         'n_all_samples': 10000,
         'sample_size': 2 * 32 * 32 * 3,
+        'first_sample_outputs': [ 1245, 1075, 1154, 2910, 1112, 2718, 1336, 1612, 1451, 1318 ],
         'fp32_accuracy': 0.7704,
     },
     'kws': {
@@ -186,6 +189,7 @@ configs = {
         'data_loader': load_data_google_speech,
         'n_all_samples': 4890,
         'sample_size': 2 * 25 * 10,  # MFCC gives 25x10 tensors
+        'first_sample_outputs': [ -23805, 4426, 18055, 2551, -8535, -7761, 12902, -3815, -11881, -1270, -4799, -5399 ],
         # Much lower than reported on the paper due to mismatched window_size_ms/window_stride_ms (?)
         # See: https://github.com/ARM-software/ML-KWS-for-MCU/issues/44
         'fp32_accuracy': 0.6323,
@@ -206,6 +210,7 @@ intermittent_methodology.add_argument('--stateful', action='store_true')
 args = parser.parse_args()
 config = configs[args.config]
 Constants.CONFIG = args.config
+Constants.FIRST_SAMPLE_OUTPUTS = config['first_sample_outputs']
 if args.all_samples:
     Constants.N_SAMPLES = config['n_all_samples']
     Constants.NVM_SIZE += config['n_all_samples'] * config['sample_size']
@@ -687,6 +692,8 @@ struct NodeFlags;
         output_h.write(f'#define {item.upper()} ')
         if isinstance(val, str):
             output_h.write(f'"{val}"')
+        elif isinstance(val, list):
+            output_h.write('{' + ', '.join(map(str, val)) + '}')
         else:
             output_h.write(f'{val}')
         output_h.write(f'{suffix}\n')

@@ -12,14 +12,25 @@ logger = logging.getLogger('run-intermittently')
 CHUNK_SIZE = 2000
 CHUNK_LINES = 20
 
-def run_one_inference(program, interval, logfile):
+def run_one_inference(program, interval, logfile, shutdown_after_writes):
+    first_run = True
     while True:
-        with Popen([program, '1'], stdout=logfile, stderr=logfile) as proc:
+        cmd = [program, '1']
+        if first_run and shutdown_after_writes:
+            cmd.extend(['-c', str(shutdown_after_writes)])
+        with Popen(cmd, stdout=logfile, stderr=logfile) as proc:
             try:
-                outs, errs = proc.communicate(timeout=interval)
+                kwargs = {}
+                if not shutdown_after_writes:
+                    kwargs['timeout'] = interval
+                outs, errs = proc.communicate(**kwargs)
             except TimeoutExpired:
                 proc.send_signal(signal.SIGINT)
             proc.wait()
+            first_run = False
+            if proc.returncode == 2:
+                # simulated power failure
+                continue
             if proc.returncode in (1, -signal.SIGFPE):
                 logger.error('Program crashed!')
                 sys.exit(1)
@@ -35,6 +46,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--rounds', type=int, default=0)
     parser.add_argument('--interval', type=float, default=0.01)
+    parser.add_argument('--shutdown-after-writes', type=int, default=0)
     parser.add_argument('program')
     args = parser.parse_args()
 
@@ -42,7 +54,7 @@ def main():
     rounds = 0
     while True:
         with open(logfile_path, mode='w+b') as logfile:
-            run_one_inference(args.program, args.interval, logfile)
+            run_one_inference(args.program, args.interval, logfile, args.shutdown_after_writes)
             rounds += 1
             if args.rounds and rounds >= args.rounds:
                 break

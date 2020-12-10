@@ -25,6 +25,7 @@
 
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
+uint32_t shutdown_counter = UINT32_MAX;
 
 Counters *counters() {
     return reinterpret_cast<Counters*>(nvm + COUNTERS_OFFSET);
@@ -35,7 +36,7 @@ int main(int argc, char* argv[]) {
     Model *model;
     int nvm_fd = -1;
 
-    while((opt_ch = getopt(argc, argv, "bfr")) != -1) {
+    while((opt_ch = getopt(argc, argv, "bfrc:")) != -1) {
         switch (opt_ch) {
             case 'b':
                 button_pushed = 1;
@@ -45,6 +46,9 @@ int main(int argc, char* argv[]) {
                 break;
             case 'f':
                 dump_integer = 0;
+                break;
+            case 'c':
+                shutdown_counter = atol(optarg);
                 break;
             default:
                 printf("Usage: %s [-r] [n_samples]\n", argv[0]);
@@ -104,7 +108,21 @@ exit:
     return ret;
 }
 
+[[ noreturn ]] static void exit_with_status(uint8_t exit_code) {
+    if (ptrace(PTRACE_TRACEME, 0, NULL, 0) == -1) {
+        // Let the debugger break
+        kill(getpid(), SIGINT);
+    }
+    // give up otherwise
+    exit(exit_code);
+}
+
 void my_memcpy_ex(void* dest, const void* src, size_t n, uint8_t write_to_nvm) {
+    if (!dma_counter_enabled) {
+        memcpy(dest, src, n);
+        return;
+    }
+
     uint16_t counter_idx = counters()->counter_idx;
     counters()->dma_invocations[counter_idx]++;
     counters()->dma_bytes[counter_idx] += n;
@@ -117,6 +135,10 @@ void my_memcpy_ex(void* dest, const void* src, size_t n, uint8_t write_to_nvm) {
         dest_u[idx] = src_u[idx];
         if (write_to_nvm) {
             my_printf_debug("Writing to NVM offset %ld" NEWLINE, dest_u + idx - nvm);
+            shutdown_counter--;
+            if (!shutdown_counter) {
+                exit_with_status(2);
+            }
         }
     }
 }
@@ -156,12 +178,7 @@ void copy_samples_data(void) {
 }
 
 [[ noreturn ]] void ERROR_OCCURRED(void) {
-    if (ptrace(PTRACE_TRACEME, 0, NULL, 0) == -1) {
-        // Let the debugger break
-        kill(getpid(), SIGINT);
-    }
-    // give up otherwise
-    exit(1);
+    exit_with_status(1);
 }
 
 #endif // POSIX_BUILD

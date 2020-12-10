@@ -11,6 +11,7 @@
 
 struct ParameterInfo;
 struct Model;
+extern uint8_t dma_counter_enabled;
 
 #ifdef __cplusplus
 extern "C" {

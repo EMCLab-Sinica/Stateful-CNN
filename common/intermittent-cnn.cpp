@@ -80,6 +80,8 @@ static void handle_node(Model *model, uint16_t node_idx) {
     }
 }
 
+int16_t first_sample_outputs[] = FIRST_SAMPLE_OUTPUTS;
+
 static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     my_printf_debug("N_INPUT = %d" NEWLINE, N_INPUT);
 
@@ -123,6 +125,27 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     uint16_t u_ans;
     uint8_t buffer_len = MIN_VAL(output_node->dims[1], MAX_CLASSES);
     my_memcpy_from_param(model, lea_buffer, output_node, 0, buffer_len * sizeof(int16_t));
+
+// XXX: need a way to handle different scales and state bits of OFM in Stateful
+#if MY_DEBUG >= 1 && !STATEFUL
+    if (sample_idx == 0) {
+        for (uint8_t buffer_idx = 0, ofm_idx = 0; buffer_idx < buffer_len; buffer_idx++) {
+            int16_t got = lea_buffer[buffer_idx];
+#if JAPARI
+            if (buffer_idx % (BATCH_SIZE + 1) == BATCH_SIZE) {
+                check_footprint(got);
+            } else
+#endif
+            {
+                int16_t expected = first_sample_outputs[ofm_idx];
+                MY_ASSERT(expected == got,
+                          "Value mismatch at index %d: %d != %d" NEWLINE, buffer_idx, got, expected);
+                ofm_idx++;
+            }
+        }
+    }
+#endif
+
     my_max_q15(lea_buffer, buffer_len, &max, &u_ans);
 #if JAPARI
     u_ans = u_ans / (BATCH_SIZE + 1) * BATCH_SIZE + u_ans % (BATCH_SIZE + 1);
@@ -159,10 +182,13 @@ static void print_results(const ParameterInfo *output_node) {
         my_printf("% 8d", counters()->dma_invocations[i]);
     }
     my_printf(NEWLINE "DMA bytes:" NEWLINE);
+    uint32_t total_dma_bytes = 0;
     for (uint8_t i = 0; i < counters()->counter_idx; i++) {
+        total_dma_bytes += counters()->dma_bytes[i];
         my_printf("% 8d", counters()->dma_bytes[i]);
     }
-    my_printf(NEWLINE "run_counter: %d", model->run_counter);
+    my_printf(NEWLINE "Total DMA bytes: %d" NEWLINE, total_dma_bytes);
+    my_printf("run_counter: %d", model->run_counter);
     my_printf(NEWLINE);
 }
 #endif
@@ -232,7 +258,7 @@ static void check_feature_map_states(Model *model, const ParameterInfo* output, 
             cur_state_bit ^= 1;
         }
         MY_ASSERT(get_value_state_bit(val) == cur_state_bit,
-            "Value %d at job index %d (offset %d) does not have expected state bit %d" NEWLINE, val, idx, offset, cur_state_bit);
+            "Value %d at job index %d (offset %" PRIu32 ") does not have expected state bit %d" NEWLINE, val, idx, offset, cur_state_bit);
     }
 #endif
 }
@@ -243,7 +269,7 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
     uint32_t offset = job_index_to_offset(output, job_index);
     int16_t val = get_q15_param(model, output, offset);
     uint8_t ret = (get_value_state_bit(val) != param_state_bit(model, output, offset));
-    my_printf_debug("Value %d at job index %d (offset %d) indicates %s" NEWLINE, val, job_index, offset, ret ? "finished" : "unfinished");
+    my_printf_debug("Value %d at job index %d (offset %" PRIu32 ") indicates %s" NEWLINE, val, job_index, offset, ret ? "finished" : "unfinished");
     return ret;
 }
 
@@ -346,7 +372,7 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
     int16_t expected_footprint = (param_state_bit(model, output, offset) ? -1 : 1);
     check_footprint(val);
     uint8_t ret = (val == expected_footprint);
-    my_printf_debug("Footprint %d (expected %d) at job index %d (offset %d) indicates %s" NEWLINE, val, expected_footprint, job_index, offset, ret ? "finished" : "unfinished");
+    my_printf_debug("Footprint %d (expected %d) at job index %d (offset %" PRIu32 ") indicates %s" NEWLINE, val, expected_footprint, job_index, offset, ret ? "finished" : "unfinished");
     return ret;
 }
 #endif

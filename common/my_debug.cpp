@@ -89,6 +89,7 @@ static int16_t find_real_num(int16_t NUM, int16_t CHANNEL, int16_t H, int16_t W,
 }
 
 void dump_params_nhwc(Model *model, const ParameterInfo *cur_param) {
+    dma_counter_enabled = 0;
     uint16_t NUM, H, W, CHANNEL;
     // tensor
     NUM = cur_param->dims[0];
@@ -122,6 +123,7 @@ void dump_params_nhwc(Model *model, const ParameterInfo *cur_param) {
         }
         my_printf(NEWLINE);
     }
+    dma_counter_enabled = 1;
 }
 
 void dump_model(Model *model) {
@@ -146,6 +148,7 @@ void dump_model(Model *model) {
 
 // dump in NCHW format
 void dump_params(Model *model, const ParameterInfo *cur_param) {
+    dma_counter_enabled = 0;
     uint16_t NUM, H, W, CHANNEL;
     if (cur_param->dims[2] && cur_param->dims[3]) {
         // tensor
@@ -181,6 +184,7 @@ void dump_params(Model *model, const ParameterInfo *cur_param) {
         }
         my_printf(NEWLINE);
     }
+    dma_counter_enabled = 1;
 }
 
 void dump_turning_points(Model *model, const ParameterInfo *output) {
