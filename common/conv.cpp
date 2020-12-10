@@ -559,15 +559,15 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if INTERMITTENT
 
     uint32_t first_unfinished_job_idx = run_recovery(model, output);
-    uint32_t first_unfinished_value_idx = job_index_to_offset(output, first_unfinished_job_idx);
+    uint32_t first_unfinished_value_offset = job_index_to_offset(output, first_unfinished_job_idx);
 #if JAPARI
-    first_unfinished_value_idx -= BATCH_SIZE;
+    first_unfinished_value_offset -= BATCH_SIZE;
 #endif
 
 #if !JAPARI && BATCH_SIZE < 2
     // Force recovery from an even OFM index as most DSPLib function does not like odd dimensions
-    if (first_unfinished_value_idx % 2) {
-        first_unfinished_value_idx--;
+    if (first_unfinished_value_offset % 2) {
+        first_unfinished_value_offset--;
 #if HAWAII
         write_hawaii_layer_footprint(model->layer_idx, -1); // abandon last job
 #endif
@@ -581,36 +581,31 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     my_printf_debug("old_output_offset = %d" NEWLINE, conv_params->old_output_offset);
 #endif
 
-    uint16_t slice_size_input_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL;
-    uint16_t slice_size_output_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * flags->conv_output_tile_c;
-#if JAPARI
-    slice_size_output_channel_tiling = extend_for_footprints(slice_size_output_channel_tiling);
-#endif
-
-    conv_params->input_tile_c_index = first_unfinished_value_idx / slice_size_input_channel_tiling;
-    // Not extending for JAPARI footprints here as input_tile_c_offset will be extended later
-    conv_params->input_tile_c_offset = conv_params->input_tile_c_index * flags->conv_input_tile_c;
-    first_unfinished_value_idx %= slice_size_input_channel_tiling;
-
-    conv_params->filter_tile_index = first_unfinished_value_idx / slice_size_output_channel_tiling;
-    conv_params->filter_idx = conv_params->filter_tile_index * flags->conv_output_tile_c;
-    first_unfinished_value_idx %= slice_size_output_channel_tiling;
-
     uint16_t cur_output_tile_c = flags->conv_output_tile_c;
 #if JAPARI
     cur_output_tile_c = extend_for_footprints(cur_output_tile_c);
 #endif
-    uint8_t filter_offset_in_tile = first_unfinished_value_idx % cur_output_tile_c;
+    uint16_t slice_size_input_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL;
+
+    conv_params->input_tile_c_index = first_unfinished_value_offset / slice_size_input_channel_tiling;
+    // Not extending for JAPARI footprints here as input_tile_c_offset will be extended later
+    conv_params->input_tile_c_offset = conv_params->input_tile_c_index * flags->conv_input_tile_c;
+    first_unfinished_value_offset %= slice_size_input_channel_tiling;
+
+    conv_params->filter_tile_index = (first_unfinished_value_offset % conv_params->OUTPUT_CHANNEL) / cur_output_tile_c;
+    conv_params->filter_idx = conv_params->filter_tile_index * flags->conv_output_tile_c;
+
+    uint8_t filter_offset_in_tile = first_unfinished_value_offset % cur_output_tile_c;
 #if JAPARI
     filter_offset_in_tile = filter_offset_in_tile / (BATCH_SIZE + 1) * BATCH_SIZE;
 #endif
     conv_params->filter_idx += filter_offset_in_tile;
-    first_unfinished_value_idx /= cur_output_tile_c;
+    first_unfinished_value_offset /= conv_params->OUTPUT_CHANNEL;
 
-    conv_params->input_w += first_unfinished_value_idx / conv_params->OUTPUT_H * conv_params->stride;
-    first_unfinished_value_idx %= conv_params->OUTPUT_W;
+    conv_params->input_w += first_unfinished_value_offset / conv_params->OUTPUT_H * conv_params->stride;
+    first_unfinished_value_offset %= conv_params->OUTPUT_H;
 
-    conv_params->input_h += first_unfinished_value_idx * conv_params->stride;
+    conv_params->input_h += first_unfinished_value_offset * conv_params->stride;
 
     my_printf_debug("initial output N = %d" NEWLINE, conv_params->input_tile_c_index);
     my_printf_debug("initial output H = %d" NEWLINE, conv_params->input_h / conv_params->stride);
