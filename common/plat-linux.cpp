@@ -157,7 +157,8 @@ void write_to_nvm(const void *vm_buffer, uint32_t nvm_offset, size_t n) {
 }
 
 void my_erase() {
-    memset(nvm, 0, NVM_SIZE);
+    // initializing as 0xff to match the ext_fram library
+    memset(nvm, 0xff, NVM_SIZE);
 }
 
 void copy_samples_data(void) {

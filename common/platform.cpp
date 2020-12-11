@@ -1,3 +1,4 @@
+#include <string.h>
 #include "platform.h"
 #include "platform-private.h"
 #include "cnn_common.h"
@@ -142,6 +143,9 @@ void first_run(void) {
     my_printf_debug("First run, resetting everything..." NEWLINE);
     my_erase();
     copy_samples_data();
+#if NON_VOLATILE_COUNTERS
+    memset(counters(), 0, sizeof(Counters));
+#endif
 
     write_to_nvm(intermediate_parameters_info_data, intermediate_parameters_info_addr(0), INTERMEDIATE_PARAMETERS_INFO_DATA_LEN);
     write_to_nvm(model_data, nvm_addr<Model>(0, 0), MODEL_DATA_LEN);

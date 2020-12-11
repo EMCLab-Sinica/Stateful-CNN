@@ -124,7 +124,8 @@ uint16_t find_max_multiplier(Model *model, const ParameterInfo *param, const int
     uint16_t max_multiplier = 0;
     if (!buffer && sample_idx == 0) {
         max_multiplier = read_max_multiplier(param);
-        if (max_multiplier) {
+        // all bytes are initialized as 0xff on NVM
+        if (max_multiplier && max_multiplier != 0xffff) {
             return max_multiplier;
         }
     }
