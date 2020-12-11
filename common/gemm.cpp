@@ -18,15 +18,17 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     MY_ASSERT(A->dims[0] == 1);
 
     uint16_t output_len = A->dims[0] * B->dims[1];
-#if JAPARI
-    output_len = extend_for_footprints(output_len);
-#endif
 
     output->dims[0] = A->dims[0];
     output->dims[1] = B->dims[1];
     output->bitwidth = 16;
     output->slot = get_next_slot(model, A);
     output->scale = A->scale * B->scale;
+
+#if JAPARI
+    output_len = extend_for_footprints(output_len);
+    output->dims[1] = extend_for_footprints(output->dims[1]);
+#endif
 
     int16_t total_buffer_size = LEA_BUFFER_SIZE - A->dims[0] * A->dims[1];
     gemm_params.tile_width = 2;
@@ -84,15 +86,34 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
     int16_t *buffer_b = buffer_temp + output_len * upper_gauss(B->dims[0], gemm_params.tile_channel);
 
-#if STATEFUL
+    uint16_t i = 0, tile = 0, j = 0, j_with_footprints = 0;
+
+#if INTERMITTENT
+    uint32_t first_unfinished_value_offset = job_index_to_offset(output, run_recovery(model, output));
+
+#if INDIRECT_RECOVERY
     int16_t offset, next_output_turning_point;
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
-    find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, 0 /*TODO: first_unfinished_value_offset*/, model, output);
+    find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
     offset ^= 0x4000;
 #endif
 
-    for (uint16_t i = 0, tile = 0; i < B->dims[0]; i += gemm_params.tile_channel, tile++) {
+#if JAPARI
+    first_unfinished_value_offset -= BATCH_SIZE;
+#endif
+
+    tile = first_unfinished_value_offset / output_len;
+    i = tile * gemm_params.tile_channel;
+    j_with_footprints = first_unfinished_value_offset % output_len;
+
+#if JAPARI
+    j = j_with_footprints / (BATCH_SIZE + 1) * BATCH_SIZE;
+#endif
+
+#endif
+
+    for (; i < B->dims[0]; i += gemm_params.tile_channel, tile++) {
         uint16_t tile_channels = MIN_VAL(gemm_params.tile_channel, B->dims[0] - i);
         uint16_t extended_tile_channels = tile_channels;
 
@@ -114,10 +135,10 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         my_printf_debug("Tile for A" NEWLINE);
         dump_matrix2_debug(buffer_a, 1, extended_tile_channels, ValueInfo(A, model));
 
-        int16_t output_offset = tile * output_len;
+        int16_t output_offset = tile * output_len + j_with_footprints;
 
-        for (uint16_t j = 0; j < B->dims[1]; j += gemm_params.tile_width) {
-            int16_t tile_width = MIN_VAL(gemm_params.tile_width, B->dims[0] - j);
+        for (; j < B->dims[1]; j += gemm_params.tile_width) {
+            int16_t tile_width = MIN_VAL(gemm_params.tile_width, B->dims[1] - j);
             int16_t values_to_preserve = tile_width,
                     full_tile_width = tile_width;
 #if JAPARI
@@ -174,6 +195,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             dump_matrix_debug(buffer_temp, full_tile_width, ValueInfo(output, model));
             my_printf_debug(NEWLINE);
 
+            my_printf_debug("output_offset=%d" NEWLINE, output_offset);
             my_memcpy_to_param(output, output_offset, buffer_temp, values_to_preserve * sizeof(int16_t));
             output_offset += values_to_preserve;
         }
@@ -187,10 +209,6 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
 void alloc_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const struct NodeFlags *flags) {
     output->slot = get_next_slot(model, input[0]);
-#if JAPARI
-    const ParameterInfo *X = input[0];
-    output->dims[1] = extend_for_footprints(X->dims[1]);
-#endif
     int16_t output_len = output->dims[0] * output->dims[1];
     output->params_len = output_len * sizeof(int16_t);
 }
@@ -201,9 +219,6 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
     my_printf_debug("GemmMerge!" NEWLINE);
 
     int16_t output_len = X->dims[0] * X->dims[1];
-#if JAPARI
-    output_len = extend_for_footprints(output_len);
-#endif
 
     int16_t *buffer_temp = lea_buffer,
             *buffer_gemm = buffer_temp + output_len,
@@ -213,6 +228,7 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
 
     int16_t n_tiles = X->params_len / output_len / sizeof(int16_t);
     my_printf_debug("n_tiles=%d" NEWLINE, n_tiles);
+    MY_ASSERT(n_tiles);
 
     for (uint16_t tile = 0; tile < n_tiles; tile++) {
         my_memcpy_from_param(model, buffer_temp, input[0], tile * output_len, output_len * sizeof(int16_t));
