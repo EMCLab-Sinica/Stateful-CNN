@@ -74,6 +74,7 @@ static void handle_node(Model *model, uint16_t node_idx) {
     if (node_idx == MODEL_NODES_LEN - 1) {
         model->running = 0;
         model->run_counter++;
+        notify_model_finished();
     }
 }
 

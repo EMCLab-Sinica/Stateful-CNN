@@ -169,10 +169,13 @@ void IntermittentCNNTest() {
 
     while (1) {
         run_cnn_tests(1);
-        GPIO_toggleOutputOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
     }
 }
 
 void button_pushed(uint16_t button1_status, uint16_t button2_status) {
     my_printf_debug("button1_status=%d button2_status=%d" NEWLINE, button1_status, button2_status);
+}
+
+void notify_model_finished(void) {
+    GPIO_toggleOutputOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
 }
