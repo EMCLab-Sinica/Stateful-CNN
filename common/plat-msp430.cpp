@@ -124,7 +124,7 @@ void copy_samples_data(void) {
     write_to_nvm(samples_data, SAMPLES_OFFSET, SAMPLES_DATA_LEN);
 }
 
-[[ noreturn ]] void ERROR_OCCURRED(void) {
+void ERROR_OCCURRED(void) {
     for (;;) {
         __no_operation();
     }

@@ -16,7 +16,8 @@ extern uint8_t dma_counter_enabled;
 #ifdef __cplusplus
 extern "C" {
 #endif
-[[ noreturn ]] void ERROR_OCCURRED(void);
+// not using [[ noreturn ]] here as this header is also included in C source files
+void ERROR_OCCURRED(void) __attribute__((noreturn));
 #ifdef __cplusplus
 }
 #endif
