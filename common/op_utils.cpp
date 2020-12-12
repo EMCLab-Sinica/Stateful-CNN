@@ -69,9 +69,8 @@ void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t
 #if !STATEFUL
     uint16_t bound = 32768;
 #else
-    // Use a value slightly smaller than 8191 to make sure the bound is not reached due to quantization errors
-    // XXX: is this bound really safe?
-    uint16_t bound = 8140;
+    // For stateful CNN, values should not reach 8192, or get_value_state_bit() is confused
+    uint16_t bound = 8191;
     int16_t val_offset = 0;
     if (!params->buffer) {
         // if the buffer is pre-filled (e.g., in GemmMerge), its state bits

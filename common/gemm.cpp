@@ -261,7 +261,10 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
     uint16_t max_multiplier_gemm = find_max_multiplier(model, output, buffer_gemm, output_len);
     my_printf_debug("Find max_multiplier for C" NEWLINE);
     uint16_t max_multiplier_c = find_max_multiplier(model, C, buffer_c);
-    uint16_t max_multiplier = MIN_VAL(max_multiplier_gemm, max_multiplier_c);
+    // divide by 2 to avoid overflow after addition
+    uint16_t max_multiplier = MIN_VAL(max_multiplier_gemm, max_multiplier_c) / 2;
+
+    MY_ASSERT(max_multiplier != 0);
 
     int16_t scaleFract;
     uint8_t shift;
@@ -282,11 +285,10 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
     max_multiplier = find_max_multiplier(model, output, buffer_gemm, output_len);
     float_to_scale_params(&scaleFract, &shift, 1.0f * max_multiplier);
     my_scale_q15(buffer_gemm, scaleFract, shift, buffer_gemm, output_len);
+    output->scale /= max_multiplier;
 
     my_printf_debug("buffer_gemm after scaling up" NEWLINE);
     dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
-
-    output->scale /= max_multiplier;
 
 #if INDIRECT_RECOVERY
     iterate_chunks(model, output, 0, 0, OutputChunkHandler, buffer_gemm);
