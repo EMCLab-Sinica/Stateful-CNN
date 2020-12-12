@@ -277,11 +277,8 @@ void flip_state_bit(Model *model, const ParameterInfo *output) {
 #if INDIRECT_RECOVERY
 
 #if JAPARI
-    if (!has_footprints(output)) {
-        return;
-    }
+    MY_ASSERT(has_footprints(output));
 #endif
-
     SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
     // XXX: better way than copying the array?
     int16_t new_turning_point = output->params_len / 2;

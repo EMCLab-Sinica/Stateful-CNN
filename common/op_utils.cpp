@@ -32,7 +32,7 @@ int16_t extend_for_footprints(int16_t val) {
 }
 
 uint8_t has_footprints(const ParameterInfo *cur_param) {
-    return (cur_param->slot < NUM_SLOTS) && !(cur_param->flags & NO_FOOTPRINTS);
+    return (cur_param->slot < NUM_SLOTS);
 }
 #endif
 
