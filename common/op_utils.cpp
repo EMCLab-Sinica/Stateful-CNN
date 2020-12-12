@@ -138,7 +138,9 @@ uint16_t find_max_multiplier(Model *model, const ParameterInfo *param, const int
 
     MY_ASSERT(max_multiplier != 0);
 
-    write_max_multiplier(param, max_multiplier);
+    if (!buffer && sample_idx == 0) {
+        write_max_multiplier(param, max_multiplier);
+    }
 
     return max_multiplier;
 }
