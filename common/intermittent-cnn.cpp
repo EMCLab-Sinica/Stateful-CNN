@@ -353,12 +353,8 @@ uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offse
 
 #if HAWAII
 uint32_t run_recovery(Model* model, ParameterInfo*) {
-    return read_hawaii_layer_footprint(model->layer_idx);
-}
-
-uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
-    // HAWAII footprints are exactly the number of values
-    return job_index;
+    uint32_t footprint = read_hawaii_layer_footprint(model->layer_idx);
+    return footprint;
 }
 #endif
 
@@ -373,8 +369,6 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
     return ret;
 }
 #endif
-
-#if INDIRECT_RECOVERY
 
 uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
 #if STATEFUL
@@ -408,8 +402,7 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
     uint16_t input_tile_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
 #if JAPARI
     uint16_t input_tile_jobs = input_tile_len / (BATCH_SIZE + 1);
-#endif
-#if STATEFUL
+#else
     uint16_t input_tile_jobs = input_tile_len / BATCH_SIZE;
 #endif
     uint8_t input_tile_c_index = job_index / input_tile_jobs;
@@ -438,6 +431,8 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
 #endif
     return offset;
 }
+
+#if INDIRECT_RECOVERY
 
 static uint8_t after_recovery = 1;
 
