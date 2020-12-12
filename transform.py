@@ -164,7 +164,7 @@ configs = {
         'n_all_samples': 10000,
         # multiply by 2 for Q15
         'sample_size': 2 * 28 * 28,
-        'first_sample_outputs': [ -1282, 639, 8789, 9602, -13982, -6165, -23913, 28841, -6914, 4028 ],
+        'first_sample_outputs': [ -1282, 638, 8788, 9602, -13982, -6166, -23914, 28840, -6914, 4028 ],
         'fp32_accuracy': 0.9889,
     },
     'cifar10': {
