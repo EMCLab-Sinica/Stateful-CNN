@@ -5,6 +5,7 @@ import dataclasses
 import io
 import itertools
 import logging
+import math
 import pprint
 import struct
 import textwrap
@@ -50,6 +51,8 @@ class Constants:
     TEMP_FILTER_WIDTH = 1
     # (4096 - 0x138 (LEASTACK) - 2 * 8 (MSP_LEA_MAC_PARAMS)) / sizeof(int16_t)
     LEA_BUFFER_SIZE = 1884
+    # somehow MSP432 does not work with pState with length 2048
+    ARM_PSTATE_LEN = 1400
     CONFIG = None
 
     DEFAULT_TILE_C = 4
@@ -116,24 +119,42 @@ def _Q15(num):
     return int(num * 2 ** 15)
 
 # https://stackoverflow.com/a/11481471/3786245
+class ConvNodeFlags(ctypes.Structure):
+    _fields_ = [
+        ("input_tile_c", ctypes.c_uint8, 8),
+        ("output_tile_c", ctypes.c_uint8, 8),
+    ]
+
+class GemmNodeFlags(ctypes.Structure):
+    _fields_ = [
+        ("tile_channel", ctypes.c_uint16, 16),
+        ("tile_width", ctypes.c_uint16, 16),
+    ]
+
+class ExtraNodeFlags(ctypes.Union):
+    _fields_ = [
+        ("conv", ConvNodeFlags),
+        ("gemm", GemmNodeFlags),
+    ]
+
 class NodeFlags_bits(ctypes.LittleEndianStructure):
     _fields_ = [
         ("generic", ctypes.c_uint8, 8),
         ("kernel_size", ctypes.c_uint8, 4),
         ("stride", ctypes.c_uint8, 4),
-        ("conv_input_tile_c", ctypes.c_uint8, 8),
-        ("conv_output_tile_c", ctypes.c_uint8, 8),
+        ("extra", ExtraNodeFlags),
     ]
 
 class NodeFlags(ctypes.Union):
     _fields_ = [
         ("b", NodeFlags_bits),
-        ("as_bytes", ctypes.c_uint32),
+        ("as_bytes", ctypes.c_uint64),
     ]
 
     def __repr__(self):
         ret = '<NodeFlags'
-        for (key, _, _) in NodeFlags_bits._fields_:
+        for field in NodeFlags_bits._fields_:
+            key = field[0]
             ret += f' {key}={getattr(self.b, key)}'
         ret += '>'
         return ret
@@ -385,7 +406,7 @@ def find_node_by_output(output_name):
 def determine_conv_tile_c(n):
     output_value_info = find_tensor_value_info(n.output[0])
     filter_info = find_initializer(n.input[1])
-    node_flags = n.flags
+    node_flags = n.flags.b.extra.conv
 
     is_separate_tiling = False
     if not find_initializer(n.input[0]):
@@ -405,18 +426,18 @@ def determine_conv_tile_c(n):
     if is_separate_tiling:
         max_continuous_channels /= 2
     if max_continuous_channels % 2:
-        node_flags.b.conv_input_tile_c = max_continuous_channels
+        node_flags.input_tile_c = max_continuous_channels
     else:
-        node_flags.b.conv_input_tile_c = 1
-        while max_continuous_channels % (node_flags.b.conv_input_tile_c * 2) == 0 and node_flags.b.conv_input_tile_c < 128:
-            node_flags.b.conv_input_tile_c *= 2
+        node_flags.input_tile_c = 1
+        while max_continuous_channels % (node_flags.input_tile_c * 2) == 0 and node_flags.input_tile_c < 128:
+            node_flags.input_tile_c *= 2
 
     while True:
         input_tile_too_large = False
         # inner +1 for biases
         # * 2 as in JAPARI, the number of footprint weights is up to the number of
         # filters (e.g., batch size=1)
-        filter_len = ((node_flags.b.conv_input_tile_c * kW + 1) + 1) // 2 * 2 * 2 * kH
+        filter_len = ((node_flags.input_tile_c * kW + 1) + 1) // 2 * 2 * 2 * kH
         output_tile_c = OUTPUT_CHANNEL
         while ((output_tile_c * 2 + 1) + Constants.TEMP_FILTER_WIDTH) * filter_len > Constants.LEA_BUFFER_SIZE:
             output_tile_c //= 2
@@ -425,16 +446,56 @@ def determine_conv_tile_c(n):
                 input_tile_too_large = True
 
         if not input_tile_too_large:
-            params_len = CHANNEL / node_flags.b.conv_input_tile_c * OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W * 2
+            params_len = CHANNEL / node_flags.input_tile_c * OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W * 2
             if params_len < config['intermediate_values_size']:
                 break
-        node_flags.b.conv_input_tile_c //= 2
-    node_flags.b.conv_output_tile_c = output_tile_c
+        node_flags.input_tile_c //= 2
+    node_flags.output_tile_c = output_tile_c
+
+def determine_gemm_tile_sizes(n):
+    A = find_tensor_value_info(n.input[0])
+    B = find_initializer(n.input[1])
+    A_shape = A.type.tensor_type.shape
+    A_rows = A_shape.dim[0].dim_value
+    A_cols = A_shape.dim[1].dim_value
+    B_rows = B.dims[0]
+    B_cols = B.dims[1]
+    node_flags = n.flags.b.extra.gemm
+
+    node_flags.tile_width = 2
+    total_buffer_size = Constants.LEA_BUFFER_SIZE - A_rows * A_cols;
+    output_len = A_rows * B_cols
+
+    if Constants.JAPARI:
+        assert output_len % Constants.BATCH_SIZE == 0
+        output_len += output_len // Constants.BATCH_SIZE
+
+    while True:
+        logger.debug("tile_width=%d", node_flags.tile_width)
+        # LEA wants addresses to be 4 byte-aligned, or 2 Q15-aligned
+        node_flags.tile_channel = min([(Constants.ARM_PSTATE_LEN / node_flags.tile_width) / 2 * 2 - 2, B_rows])
+        while node_flags.tile_channel > 0:
+            tmp = int(math.ceil(B_rows / node_flags.tile_channel))
+            logger.debug("tile_channel=%d, tmp=%d", node_flags.tile_channel, tmp)
+            if total_buffer_size - node_flags.tile_channel * node_flags.tile_width >= output_len * tmp:
+                break
+            node_flags.tile_channel -= 2
+        logger.debug("tile_channel = %d", node_flags.tile_channel)
+        if node_flags.tile_channel > 0:
+            break
+        assert node_flags.tile_width % 2 == 0
+        node_flags.tile_width += 2
+
+    while node_flags.tile_width * (node_flags.tile_channel + 2) > Constants.ARM_PSTATE_LEN:
+        assert node_flags.tile_width > 2
+        node_flags.tile_width -= 2
 
 graph = []
 for n in nodes:
     if n.op_type == 'Conv':
         determine_conv_tile_c(n)
+    if n.op_type == 'Gemm':
+        determine_gemm_tile_sizes(n)
     graph.append(Node(name=n.name or n.op_type,
                       inputs=[names[i] for i in n.input],
                       op_type=n.op_type,
@@ -540,7 +601,7 @@ for node in graph:
     output_nodes.write(to_bytes(node.max_output_id))
     output_nodes.write(to_bytes(list(ops.keys()).index(node.op_type)))
     output_nodes.write(to_bytes(0))                     # max_multiplier
-    output_nodes.write(to_bytes(node.flags.as_bytes, size=32))
+    output_nodes.write(to_bytes(node.flags.as_bytes, size=64))
     if Constants.HAWAII:
         for _ in range(2):
             output_nodes.write(to_bytes(0, size=32))  # Node::Footprint

@@ -405,7 +405,7 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
 #endif
     uint8_t input_tile_c_index = job_index / input_tile_jobs;
     job_index = job_index % input_tile_jobs;
-    uint16_t output_tile_c = node->flags.conv_output_tile_c;
+    uint16_t output_tile_c = node->flags.extra.conv.output_tile_c;
     uint16_t jobs_in_an_op = output_tile_c;
 #if JAPARI
     jobs_in_an_op = output_tile_c / BATCH_SIZE;
@@ -435,11 +435,9 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
 static uint8_t after_recovery = 1;
 
 uint32_t run_recovery(Model *model, ParameterInfo *output) {
-#if MY_DEBUG < 1
     if (!after_recovery) {
         return 0;
     }
-#endif
 
     // recovery from state bits
     uint32_t end_job_index = output->params_len / 2;

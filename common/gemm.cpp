@@ -7,12 +7,7 @@
 #include "my_dsplib.h"
 #include "intermittent-cnn.h"
 
-static struct {
-    int16_t tile_channel;
-    int16_t tile_width;
-} gemm_params;
-
-void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
+void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
     const ParameterInfo *A = input[0], *B = input[1];
 
     MY_ASSERT(A->dims[0] == 1);
@@ -30,33 +25,7 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     output->dims[1] = extend_for_footprints(output->dims[1]);
 #endif
 
-    int16_t total_buffer_size = LEA_BUFFER_SIZE - A->dims[0] * A->dims[1];
-    gemm_params.tile_width = 2;
-    while (1) {
-        my_printf_debug("tile_width=%d" NEWLINE, gemm_params.tile_width);
-        /* LEA wants addresses to be 4 byte-aligned, or 2 Q15-aligned */
-        gemm_params.tile_channel = MIN_VAL((ARM_PSTATE_LEN / gemm_params.tile_width) / 2 * 2 - 2, B->dims[0]);
-        for (; gemm_params.tile_channel > 0; gemm_params.tile_channel -= 2) {
-            int16_t tmp = upper_gauss(B->dims[0], gemm_params.tile_channel);
-            my_printf_debug("tile_channel=%d, tmp=%d" NEWLINE, gemm_params.tile_channel, tmp);
-            if (total_buffer_size - gemm_params.tile_channel * gemm_params.tile_width >= output_len * tmp) {
-                break;
-            }
-        }
-        my_printf_debug("tile_channel = %d" NEWLINE, gemm_params.tile_channel);
-        if (gemm_params.tile_channel > 0) {
-            break;
-        }
-        MY_ASSERT(gemm_params.tile_width % 2 == 0);
-        gemm_params.tile_width += 2;
-    }
-
-    while (gemm_params.tile_width * (gemm_params.tile_channel + 2) > ARM_PSTATE_LEN) {
-        MY_ASSERT(gemm_params.tile_width > 2);
-        gemm_params.tile_width -= 2;
-    }
-
-    output->params_len = output_len * upper_gauss(B->dims[0], gemm_params.tile_channel) * sizeof(int16_t);
+    output->params_len = output_len * upper_gauss(B->dims[0], flags->extra.gemm.tile_channel) * sizeof(int16_t);
 }
 
 void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params) {
@@ -67,7 +36,7 @@ void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t sta
     }
 }
 
-void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
+void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
     const ParameterInfo *A = input[0], *B = input[1];
 
     my_printf_debug("Gemm! A: (%dx%d), B: (%dx%d)" NEWLINE,
@@ -84,7 +53,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if JAPARI
             buffer_temp += 2;
 #endif
-    int16_t *buffer_b = buffer_temp + output_len * upper_gauss(B->dims[0], gemm_params.tile_channel);
+    int16_t *buffer_b = buffer_temp + output_len * upper_gauss(B->dims[0], flags->extra.gemm.tile_channel);
 
     uint16_t i = 0, tile = 0, j = 0, j_with_footprints = 0;
 
@@ -104,7 +73,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
     tile = first_unfinished_value_offset / output_len;
-    i = tile * gemm_params.tile_channel;
+    i = tile * flags->extra.gemm.tile_channel;
     j_with_footprints = first_unfinished_value_offset % output_len;
 
 #if JAPARI
@@ -113,8 +82,8 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
 #endif
 
-    for (; i < B->dims[0]; i += gemm_params.tile_channel, tile++) {
-        uint16_t tile_channels = MIN_VAL(gemm_params.tile_channel, B->dims[0] - i);
+    for (; i < B->dims[0]; i += flags->extra.gemm.tile_channel, tile++) {
+        uint16_t tile_channels = MIN_VAL(flags->extra.gemm.tile_channel, B->dims[0] - i);
         uint16_t extended_tile_channels = tile_channels;
 
 #if !JAPARI
@@ -129,7 +98,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
 #if STATEFUL
-    iterate_chunks(model, A, 0, 0, GemmInputChunkHandler, buffer_a);
+        iterate_chunks(model, A, 0, 0, GemmInputChunkHandler, buffer_a);
 #endif
 
         my_printf_debug("Tile for A" NEWLINE);
@@ -137,8 +106,8 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
         int16_t output_offset = tile * output_len + j_with_footprints;
 
-        for (; j < B->dims[1]; j += gemm_params.tile_width) {
-            int16_t tile_width = MIN_VAL(gemm_params.tile_width, B->dims[1] - j);
+        for (; j < B->dims[1]; j += flags->extra.gemm.tile_width) {
+            int16_t tile_width = MIN_VAL(flags->extra.gemm.tile_width, B->dims[1] - j);
             int16_t values_to_preserve = tile_width,
                     full_tile_width = tile_width;
 #if JAPARI

@@ -106,7 +106,7 @@ static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filte
 
 static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     // cur_output_tile_c should be signed, or MAX_VAL below is broken with TI's compiler
-    int16_t output_tile_c = conv_params->flags->conv_output_tile_c;
+    int16_t output_tile_c = conv_params->flags->extra.conv.output_tile_c;
     int16_t cur_output_tile_c = output_tile_c - conv_params->filter_idx % output_tile_c;
     my_printf_debug("cur_output_tile_c = %d" NEWLINE, cur_output_tile_c);
     MY_ASSERT(cur_output_tile_c > 0);
@@ -259,7 +259,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     uint16_t batch_offset = 0;
     for (uint16_t row = 0; row < A_rows; row++) {
         batch_offset += hawaii_preserve_vector(conv_params->model, conv_params->output, cur_output_data_offset + batch_offset, matrix_mpy_results + batch_offset, B_cols);
-        MY_ASSERT(read_hawaii_layer_footprint(conv_params->model->layer_idx) % conv_params->flags->conv_output_tile_c == 0);
+        MY_ASSERT(read_hawaii_layer_footprint(conv_params->model->layer_idx) % conv_params->flags->extra.conv.output_tile_c == 0);
     }
 #endif
 
@@ -345,7 +345,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     int32_t w_start = int16_max(-field_size,                 -conv_params->input_w),
             w_end   = int16_min( field_size, conv_params->W-1-conv_params->input_w);
     int16_t *dest;
-    int16_t max_n_filters = conv_params->flags->conv_output_tile_c;
+    int16_t max_n_filters = conv_params->flags->extra.conv.output_tile_c;
 #if JAPARI
     max_n_filters *= 2;
 #endif
@@ -454,7 +454,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         // filter_idx is set to initial_c in handle_conv
         convTask(j, conv_params);
         // reset here for further processing
-        conv_params->filter_idx = conv_params->filter_tile_index * conv_params->flags->conv_output_tile_c;
+        conv_params->filter_idx = conv_params->filter_tile_index * conv_params->flags->extra.conv.output_tile_c;
     }
 }
 
@@ -493,13 +493,13 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 #if JAPARI
     OUTPUT_CHANNEL = extend_for_footprints(OUTPUT_CHANNEL);
     if (has_footprints(conv_input)) {
-        conv_params->n_tiles_c = CHANNEL / extend_for_footprints(flags->conv_input_tile_c);
+        conv_params->n_tiles_c = CHANNEL / extend_for_footprints(flags->extra.conv.input_tile_c);
     } else
 #endif
     {
-        conv_params->n_tiles_c = CHANNEL / flags->conv_input_tile_c;
+        conv_params->n_tiles_c = CHANNEL / flags->extra.conv.input_tile_c;
     }
-    my_printf_debug("input_tile_c=%d, output_tile_c=%d" NEWLINE, flags->conv_input_tile_c, flags->conv_output_tile_c);
+    my_printf_debug("input_tile_c=%d, output_tile_c=%d" NEWLINE, flags->extra.conv.input_tile_c, flags->extra.conv.output_tile_c);
 
     /* XXX: extend flags; assume dilation=(1, 1) for now */
     output->bitwidth = 16;
@@ -581,7 +581,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     my_printf_debug("old_output_offset = %d" NEWLINE, conv_params->old_output_offset);
 #endif
 
-    uint16_t cur_output_tile_c = flags->conv_output_tile_c;
+    uint16_t cur_output_tile_c = flags->extra.conv.output_tile_c;
 #if JAPARI
     cur_output_tile_c = extend_for_footprints(cur_output_tile_c);
 #endif
@@ -589,11 +589,11 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     conv_params->input_tile_c_index = first_unfinished_value_offset / slice_size_input_channel_tiling;
     // Not extending for JAPARI footprints here as input_tile_c_offset will be extended later
-    conv_params->input_tile_c_offset = conv_params->input_tile_c_index * flags->conv_input_tile_c;
+    conv_params->input_tile_c_offset = conv_params->input_tile_c_index * flags->extra.conv.input_tile_c;
     first_unfinished_value_offset %= slice_size_input_channel_tiling;
 
     conv_params->filter_tile_index = (first_unfinished_value_offset % conv_params->OUTPUT_CHANNEL) / cur_output_tile_c;
-    conv_params->filter_idx = conv_params->filter_tile_index * flags->conv_output_tile_c;
+    conv_params->filter_idx = conv_params->filter_tile_index * flags->extra.conv.output_tile_c;
 
     uint8_t filter_offset_in_tile = first_unfinished_value_offset % cur_output_tile_c;
 #if JAPARI
@@ -619,8 +619,8 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         input_channels = input_channels / (BATCH_SIZE + 1) * BATCH_SIZE;
     }
 #endif
-    for (; conv_params->input_tile_c_offset < input_channels; conv_params->input_tile_c_offset += flags->conv_input_tile_c) {
-        conv_params->cur_input_tile_c = MIN_VAL(flags->conv_input_tile_c, input_channels - conv_params->input_tile_c_offset);
+    for (; conv_params->input_tile_c_offset < input_channels; conv_params->input_tile_c_offset += flags->extra.conv.input_tile_c) {
+        conv_params->cur_input_tile_c = MIN_VAL(flags->extra.conv.input_tile_c, input_channels - conv_params->input_tile_c_offset);
         conv_params->cur_filter_tile_c = conv_params->cur_input_tile_c;
 #if JAPARI
         conv_params->input_tile_c_offset_with_footprints = extend_for_footprints(conv_params->input_tile_c_offset);
@@ -640,7 +640,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         }
         conv_params->filter_offset = conv_params->kH * conv_params->dest_offset;
 
-        while (conv_params->filter_tile_index * flags->conv_output_tile_c < conv_params->N_FILTERS) {
+        while (conv_params->filter_tile_index * flags->extra.conv.output_tile_c < conv_params->N_FILTERS) {
             for (; conv_params->input_w < W - conv_params->offset_w; conv_params->input_w += conv_params->stride) {
                 for (; conv_params->input_h < H - conv_params->offset_h; conv_params->input_h += conv_params->tile_h) {
                     handle_conv_inner_loop(model, conv_params);
@@ -649,7 +649,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             }
             conv_params->input_w = conv_params->offset_w;
             conv_params->filter_tile_index++;
-            conv_params->filter_idx = conv_params->filter_tile_index * flags->conv_output_tile_c;
+            conv_params->filter_idx = conv_params->filter_tile_index * flags->extra.conv.output_tile_c;
 #if INDIRECT_RECOVERY
             uint32_t new_output_offset = conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W;
 #if JAPARI
