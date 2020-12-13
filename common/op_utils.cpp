@@ -257,3 +257,14 @@ void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_
 }
 #endif
 
+void fix_first_unfinished_value_offset(const Model* model, uint32_t* p_first_unfinished_value_offset) {
+#if !JAPARI && BATCH_SIZE < 2
+    // Force recovery from an even OFM index as most DSPLib function does not like odd dimensions
+    if (*p_first_unfinished_value_offset % 2) {
+        (*p_first_unfinished_value_offset)--;
+#if HAWAII
+        write_hawaii_layer_footprint(model->layer_idx, -1); // discard last job
+#endif
+    }
+#endif
+}

@@ -72,12 +72,16 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     first_unfinished_value_offset -= BATCH_SIZE;
 #endif
 
+    fix_first_unfinished_value_offset(model, &first_unfinished_value_offset);
+
     tile = first_unfinished_value_offset / output_len;
     i = tile * flags->extra.gemm.tile_channel;
     j_with_footprints = first_unfinished_value_offset % output_len;
 
 #if JAPARI
     j = j_with_footprints / (BATCH_SIZE + 1) * BATCH_SIZE;
+#else
+    j = j_with_footprints;
 #endif
 
 #endif
@@ -165,7 +169,11 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             my_printf_debug(NEWLINE);
 
             my_printf_debug("output_offset=%d" NEWLINE, output_offset);
+#if !HAWAII
             my_memcpy_to_param(output, output_offset, buffer_temp, values_to_preserve * sizeof(int16_t));
+#else
+            hawaii_preserve_vector(model, output, output_offset, buffer_temp, values_to_preserve);
+#endif
             output_offset += values_to_preserve;
         }
     }

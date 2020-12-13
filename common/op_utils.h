@@ -41,3 +41,5 @@ void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int
 
 void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo* slot_info, uint16_t value_idx);
 #endif
+
+void fix_first_unfinished_value_offset(const Model* model, uint32_t* p_first_unfinished_value_offset);

@@ -564,15 +564,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     first_unfinished_value_offset -= BATCH_SIZE;
 #endif
 
-#if !JAPARI && BATCH_SIZE < 2
-    // Force recovery from an even OFM index as most DSPLib function does not like odd dimensions
-    if (first_unfinished_value_offset % 2) {
-        first_unfinished_value_offset--;
-#if HAWAII
-        write_hawaii_layer_footprint(model->layer_idx, -1); // abandon last job
-#endif
-    }
-#endif
+    fix_first_unfinished_value_offset(model, &first_unfinished_value_offset);
 
 #if INDIRECT_RECOVERY
     find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point,
