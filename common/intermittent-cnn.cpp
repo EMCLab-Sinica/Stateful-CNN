@@ -368,7 +368,7 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
 }
 #endif
 
-uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
+uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
 #if STATEFUL
     if (job_index >= output->params_len / sizeof(int16_t)) {
         return job_index;
@@ -396,22 +396,27 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint32_t job_index) {
     uint32_t orig_job_index = job_index;
 #endif
 
-    uint16_t OUTPUT_CHANNEL = output->dims[1], OUTPUT_H = output->dims[2], OUTPUT_W = output->dims[3];
-    uint16_t input_tile_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
+    /* BEGIN constants */
+    uint16_t input_tile_len, input_tile_jobs, jobs_in_a_filter_tile, jobs_in_an_op, output_tile_c, OUTPUT_CHANNEL;
+    OUTPUT_CHANNEL = output->dims[1];
+    uint16_t OUTPUT_H = output->dims[2], OUTPUT_W = output->dims[3];
+    input_tile_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
 #if JAPARI
-    uint16_t input_tile_jobs = input_tile_len / (BATCH_SIZE + 1);
+    input_tile_jobs = input_tile_len / (BATCH_SIZE + 1);
 #else
-    uint16_t input_tile_jobs = input_tile_len / BATCH_SIZE;
+    input_tile_jobs = input_tile_len / BATCH_SIZE;
 #endif
-    uint8_t input_tile_c_index = job_index / input_tile_jobs;
-    job_index = job_index % input_tile_jobs;
-    uint16_t output_tile_c = node->flags.extra.conv.output_tile_c;
-    uint16_t jobs_in_an_op = output_tile_c;
+    output_tile_c = node->flags.extra.conv.output_tile_c;
+    jobs_in_an_op = output_tile_c;
 #if JAPARI
     jobs_in_an_op = output_tile_c / BATCH_SIZE;
     output_tile_c = extend_for_footprints(output_tile_c);
 #endif
-    uint16_t jobs_in_a_filter_tile = OUTPUT_H * OUTPUT_W * jobs_in_an_op;
+    jobs_in_a_filter_tile = OUTPUT_H * OUTPUT_W * jobs_in_an_op;
+    /* END constants */
+
+    uint8_t input_tile_c_index = job_index / input_tile_jobs;
+    job_index = job_index % input_tile_jobs;
     uint16_t channel_offset = job_index / jobs_in_a_filter_tile * output_tile_c;
     job_index %= jobs_in_a_filter_tile;
     uint32_t offset = input_tile_c_index * input_tile_len +
