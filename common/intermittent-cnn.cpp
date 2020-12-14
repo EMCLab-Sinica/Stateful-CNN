@@ -352,7 +352,7 @@ uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offse
 #if HAWAII
 uint32_t run_recovery(Model* model, ParameterInfo*) {
     uint32_t footprint = read_hawaii_layer_footprint(model->layer_idx);
-    return footprint;
+    return footprint / BATCH_SIZE;
 }
 #endif
 
@@ -383,17 +383,12 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
     const Node* node = get_node(output);
 #if !JAPARI
     if (node->op_type != Conv) {
-        return job_index;
+        return (job_index + 1) * BATCH_SIZE - 1;
     }
 #else
     if (node->op_type != Conv) {
-        uint32_t offset = (job_index + 1) * (BATCH_SIZE + 1) - 1;
-        return offset;
+        return (job_index + 1) * (BATCH_SIZE + 1) - 1;
     }
-#endif
-
-#if !JAPARI && MY_DEBUG >= 1
-    uint32_t orig_job_index = job_index;
 #endif
 
     /* BEGIN constants */
@@ -407,9 +402,8 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
     input_tile_jobs = input_tile_len / BATCH_SIZE;
 #endif
     output_tile_c = node->flags.extra.conv.output_tile_c;
-    jobs_in_an_op = output_tile_c;
-#if JAPARI
     jobs_in_an_op = output_tile_c / BATCH_SIZE;
+#if JAPARI
     output_tile_c = extend_for_footprints(output_tile_c);
 #endif
     jobs_in_a_filter_tile = OUTPUT_H * OUTPUT_W * jobs_in_an_op;
@@ -423,14 +417,9 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
                       OUTPUT_CHANNEL * (job_index / jobs_in_an_op) +
                       channel_offset;
 #if !JAPARI
-    offset += job_index % jobs_in_an_op;
+    offset += (job_index % jobs_in_an_op + 1) * BATCH_SIZE - 1;
 #else
     offset += (job_index % jobs_in_an_op + 1) * (BATCH_SIZE + 1) - 1;
-#endif
-#if !JAPARI
-    if (output_tile_c == OUTPUT_CHANNEL) {
-        MY_ASSERT(orig_job_index == offset);
-    }
 #endif
     return offset;
 }

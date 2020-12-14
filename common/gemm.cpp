@@ -70,6 +70,8 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
 #if JAPARI
     first_unfinished_value_offset -= BATCH_SIZE;
+#else
+    first_unfinished_value_offset -= (BATCH_SIZE - 1);
 #endif
 
     fix_first_unfinished_value_offset(model, &first_unfinished_value_offset);

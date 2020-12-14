@@ -562,6 +562,8 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     uint32_t first_unfinished_value_offset = job_index_to_offset(output, first_unfinished_job_idx);
 #if JAPARI
     first_unfinished_value_offset -= BATCH_SIZE;
+#else
+    first_unfinished_value_offset -= (BATCH_SIZE - 1);
 #endif
 
     fix_first_unfinished_value_offset(model, &first_unfinished_value_offset);
@@ -603,6 +605,8 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     my_printf_debug("initial output H = %d" NEWLINE, conv_params->input_h / conv_params->stride);
     my_printf_debug("initial output W = %d" NEWLINE, conv_params->input_w / conv_params->stride);
     my_printf_debug("initial output C = %d" NEWLINE, conv_params->filter_idx);
+    // = happens when all values are finished
+    MY_ASSERT(conv_params->input_tile_c_index <= conv_params->n_tiles_c);
 #endif
 
     int16_t input_channels = conv_input->dims[1];
@@ -751,6 +755,8 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
     tiling_results_offset = first_unfinished_job_index;
 #if JAPARI
     tiling_results_offset *= (BATCH_SIZE + 1);
+#else
+    tiling_results_offset *= BATCH_SIZE;
 #endif
 
 #endif

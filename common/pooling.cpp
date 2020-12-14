@@ -153,6 +153,8 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     uint32_t first_unfinished_value_offset = job_index_to_offset(output, run_recovery(model, output));
 #if JAPARI
     first_unfinished_value_offset -= BATCH_SIZE;
+#else
+    first_unfinished_value_offset -= (BATCH_SIZE - 1);
 #endif
     if (first_unfinished_value_offset * sizeof(int16_t) == output->params_len) {
         // give up early, or initial_real_tile_c may be zero and results in SIGFPE
@@ -270,7 +272,9 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                         my_printf_debug("max=% 6d " NEWLINE, lea_buffer[0]);
                         put_q15_param(output, output_offset, lea_buffer[0]);
 #if HAWAII
-                        write_hawaii_layer_footprint(model->layer_idx, 1);
+                        if (output_offset % BATCH_SIZE == (BATCH_SIZE - 1)) {
+                            write_hawaii_layer_footprint(model->layer_idx, BATCH_SIZE);
+                        }
 #endif
                         output_offset++;
                         maxpool_params->output_w++;

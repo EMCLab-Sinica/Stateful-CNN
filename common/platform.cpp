@@ -208,6 +208,7 @@ void write_hawaii_layer_footprint(uint16_t layer_idx, int16_t n_jobs) {
     Node::Footprint* footprint_vm = footprints_vm + layer_idx;
     footprint_vm->value += n_jobs;
     MY_ASSERT(footprint_vm->value < INTERMEDIATE_VALUES_SIZE);
+    MY_ASSERT(footprint_vm->value % BATCH_SIZE == 0);
     commit_versioned_data<Node::Footprint>(layer_idx);
     my_printf_debug("Write HAWAII layer footprint %d for layer %d" NEWLINE, footprint_vm->value, layer_idx);
 }
@@ -215,6 +216,7 @@ void write_hawaii_layer_footprint(uint16_t layer_idx, int16_t n_jobs) {
 uint16_t read_hawaii_layer_footprint(uint16_t layer_idx) {
     uint16_t footprint = get_versioned_data<Node::Footprint>(layer_idx)->value;
     my_printf_debug("HAWAII layer footprint=%d for layer %d" NEWLINE, footprint, layer_idx);
+    MY_ASSERT(footprint % BATCH_SIZE == 0);
     return footprint;
 }
 
