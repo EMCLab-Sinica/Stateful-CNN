@@ -180,7 +180,7 @@ void copy_samples_data(void) {
 
 void notify_model_finished(void) {}
 
-void ERROR_OCCURRED(void) {
+[[ noreturn ]] void ERROR_OCCURRED(void) {
     exit_with_status(1);
 }
 

@@ -72,8 +72,6 @@ if (NOT USE_ARM_CMSIS)
             ${DSPLIB_PATH}/include
         PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/fake-msp430sdk
-        PRIVATE
-            ${COMMON_SRC_PATH}  # fake-msp430sdk/msp430.h uses common/platform.h
     )
 endif ()
 
@@ -92,12 +90,6 @@ add_executable(intermittent-cnn
     ${COMMON_SRC_PATH}/my_dsplib.cpp
 )
 target_link_libraries(intermittent-cnn)
-
-# Indirect used via TI-DSPLib
-target_include_directories(intermittent-cnn
-    PRIVATE
-        ${COMMON_SRC_PATH}
-)
 
 target_compile_definitions(intermittent-cnn
     PRIVATE

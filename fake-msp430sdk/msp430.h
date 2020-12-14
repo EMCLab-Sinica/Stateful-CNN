@@ -1,6 +1,4 @@
 #pragma once
 
-#include "platform.h"
-
-// In TI-DSPLib, __no_operation is called when msp_checkStatus failed, so also make it fail on PC
-#define __no_operation ERROR_OCCURRED
+/* Allow msp_checkStatus in TI-DSPLib to build. Not actually used in my application */
+#define __no_operation(...)

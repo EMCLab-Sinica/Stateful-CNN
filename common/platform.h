@@ -13,14 +13,7 @@ struct ParameterInfo;
 struct Model;
 extern uint8_t dma_counter_enabled;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-// not using [[ noreturn ]] here as this header is also included in C source files
-void ERROR_OCCURRED(void) __attribute__((noreturn));
-#ifdef __cplusplus
-}
-#endif
+[[ noreturn ]] void ERROR_OCCURRED(void);
 void my_memcpy(void* dest, const void* src, size_t n);
 void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, const void *src, size_t n);
 void my_memcpy_from_intermediate_values(void *dest, const struct ParameterInfo *param, uint16_t offset_in_word, size_t n);

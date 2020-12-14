@@ -7,15 +7,28 @@
 #include "my_dsplib.h"
 #include "platform.h"
 #include "my_debug.h"
+#include "op_utils.h"
+
+#ifndef USE_ARM_CMSIS
+#define my_checkStatus(status) MY_ASSERT(status == MSP_SUCCESS)
+#endif
+
+static inline void check_buffer_address(const int16_t* addr) {
+    MY_ASSERT(addr >= lea_buffer && addr < lea_buffer + LEA_BUFFER_SIZE);
+    MY_ASSERT((addr - lea_buffer) % 2 == 0);
+}
 
 void my_add_q15(const int16_t *pSrcA, const int16_t *pSrcB, int16_t *pDst, uint32_t blockSize) {
+    check_buffer_address(pSrcA);
+    check_buffer_address(pSrcB);
+    check_buffer_address(pDst);
 #ifndef USE_ARM_CMSIS
     uint32_t blockSizeForLEA = blockSize / 2 * 2;
     if (blockSizeForLEA) {
         msp_add_q15_params add_params;
         add_params.length = blockSizeForLEA;
         msp_status status = msp_add_q15(&add_params, pSrcA, pSrcB, pDst);
-        msp_checkStatus(status);
+        my_checkStatus(status);
     }
     if (blockSize % 2) {
         pDst[blockSize - 1] = pSrcA[blockSize - 1] + pSrcB[blockSize - 1];
@@ -26,6 +39,7 @@ void my_add_q15(const int16_t *pSrcA, const int16_t *pSrcB, int16_t *pDst, uint3
 }
 
 void my_fill_q15(int16_t value, int16_t *pDst, uint32_t blockSize) {
+    check_buffer_address(pDst);
 #ifndef USE_ARM_CMSIS
     uint32_t blockSizeForLEA = blockSize / 2 * 2;
     if (blockSizeForLEA) {
@@ -33,7 +47,7 @@ void my_fill_q15(int16_t value, int16_t *pDst, uint32_t blockSize) {
         fill_params.length = blockSizeForLEA;
         fill_params.value = value;
         msp_status status = msp_fill_q15(&fill_params, pDst);
-        msp_checkStatus(status);
+        my_checkStatus(status);
     }
     if (blockSize % 2) {
         pDst[blockSize - 1] = value;
@@ -55,6 +69,8 @@ void my_offset_q15(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t 
         MY_ASSERT(blockSize); // avoid overflow in the next line
         blockSize--;
     }
+    check_buffer_address(pSrc);
+    check_buffer_address(pDst);
     // LEA does not like zero-sized blocks
     uint16_t block_size_for_lea = blockSize / 2 * 2;
     if (block_size_for_lea) {
@@ -62,7 +78,7 @@ void my_offset_q15(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t 
         offset_params.length = block_size_for_lea;
         offset_params.offset = offset;
         msp_status status = msp_offset_q15(&offset_params, pSrc, pDst);
-        msp_checkStatus(status);
+        my_checkStatus(status);
     }
     if (blockSize % 2) {
         pDst[blockSize - 1] = pSrc[blockSize - 1] + offset;
@@ -73,13 +89,14 @@ void my_offset_q15(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t 
 }
 
 void my_max_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint16_t *pIndex) {
+    check_buffer_address(pSrc);
 #ifndef USE_ARM_CMSIS
     uint32_t blockSizeForLEA = blockSize / 2 * 2;
     if (blockSizeForLEA) {
         msp_max_q15_params max_params;
         max_params.length = blockSizeForLEA;
         msp_status status = msp_max_q15(&max_params, pSrc, pResult, pIndex);
-        msp_checkStatus(status);
+        my_checkStatus(status);
     }
     if (blockSize % 2) {
         if (*pResult < pSrc[blockSize - 1]) {
@@ -95,13 +112,14 @@ void my_max_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint1
 }
 
 void my_min_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint16_t *pIndex) {
+    check_buffer_address(pSrc);
 #ifndef USE_ARM_CMSIS
     uint32_t blockSizeForLEA = blockSize / 2 * 2;
     if (blockSizeForLEA) {
         msp_min_q15_params min_params;
         min_params.length = blockSizeForLEA;
         msp_status status = msp_min_q15(&min_params, pSrc, pResult, pIndex);
-        msp_checkStatus(status);
+        my_checkStatus(status);
     }
     if (blockSize % 2) {
         if (*pResult > pSrc[blockSize - 1]) {
@@ -127,6 +145,9 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
     // http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/716353?MSP430FR5992-MSP-DSPLib-msp-matrix-mpy-q15
     MY_ASSERT((A_cols & 1) || (B_cols & 1) == 0);
     MY_ASSERT(B_rows * B_cols <= ARM_PSTATE_LEN);
+    MY_ASSERT(A_cols == B_rows);
+    check_buffer_address(pSrcA);
+    check_buffer_address(pSrcB);
 #ifndef USE_ARM_CMSIS
     msp_matrix_mpy_q15_params matrix_mpy_params;
     matrix_mpy_params.srcARows = A_rows;
@@ -134,7 +155,7 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
     matrix_mpy_params.srcBRows = B_rows;
     matrix_mpy_params.srcBCols = B_cols;
     msp_status status = msp_matrix_mpy_q15(&matrix_mpy_params, pSrcA, pSrcB, pDst);
-    msp_checkStatus(status);
+    my_checkStatus(status);
 #else
     arm_matrix_instance_q15 A, B, C;
     arm_mat_init_q15(&A, A_rows, A_cols, pSrcA);
@@ -155,7 +176,7 @@ void my_scale_q15(const int16_t *pSrc, int16_t scaleFract, uint8_t shift, int16_
         scale_params.scale = scaleFract;
         scale_params.shift = shift;
         msp_status status = msp_scale_q15(&scale_params, pSrc, pDst);
-        msp_checkStatus(status);
+        my_checkStatus(status);
     }
     if (blockSize % 2) {
         pDst[blockSize - 1] = (pSrc[blockSize - 1] * scaleFract) >> (15 - shift);
@@ -166,13 +187,14 @@ void my_scale_q15(const int16_t *pSrc, int16_t scaleFract, uint8_t shift, int16_
 }
 
 void my_interleave_q15(const int16_t *pSrc, uint16_t channel, uint16_t numChannels, int16_t *pDst, uint32_t blockSize) {
+    MY_ASSERT(channel < numChannels);
 #ifndef USE_ARM_CMSIS
     msp_interleave_q15_params params;
     params.length = blockSize;
     params.numChannels = numChannels;
     params.channel = channel;
     msp_status status = msp_interleave_q15(&params, pSrc, pDst);
-    msp_checkStatus(status);
+    my_checkStatus(status);
 #else
     // CMSIS does not have interleave (yet)
     for (uint32_t idx = 0; idx < blockSize; idx++) {

@@ -124,10 +124,8 @@ void copy_samples_data(void) {
     write_to_nvm(samples_data, SAMPLES_OFFSET, SAMPLES_DATA_LEN);
 }
 
-void ERROR_OCCURRED(void) {
-    for (;;) {
-        __no_operation();
-    }
+[[ noreturn ]] void ERROR_OCCURRED(void) {
+    while (1);
 }
 
 #ifdef __MSP430__
@@ -148,11 +146,18 @@ void IntermittentCNNTest() {
     GPIO_setAsInputPinWithPullUpResistor(GPIO_RESET_PORT, GPIO_RESET_PIN);
 
     // sleep to wait for external FRAM
-    uint32_t counter = 100000;
+    volatile uint32_t counter = 100000;
     while (counter--);
 
     initSPI();
-    testSPI();
+    if (testSPI() != 0) {
+        // external FRAM failed to initialize - reset
+        counter = 1000;
+        // waiting some time seems to increase the possibility
+        // of a successful FRAM initialization on next boot
+        while (counter--);
+        WDTCTL = 0;
+    }
 
     Model* model = get_model();
     if (GPIO_getInputPinValue(GPIO_RESET_PORT, GPIO_RESET_PIN)) {
