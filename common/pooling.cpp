@@ -231,8 +231,9 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
         } else {
             // NCHW
 #if JAPARI
-            // extend c as input footprint channels are skipped
-            c = extend_for_footprints(c);
+            // extend c as input footprint channels are skipped.
+            // Not using extend_for_footprints() as the initial c may not be on a footprint channel
+            c += c / BATCH_SIZE;
 #endif
             uint8_t channel_stride = 1;
             for (; c < CHANNEL; c += channel_stride) {

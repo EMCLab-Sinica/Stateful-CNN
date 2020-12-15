@@ -268,3 +268,9 @@ void fix_first_unfinished_value_offset(const Model* model, uint32_t* p_first_unf
     }
 #endif
 }
+
+void make_buffer_aligned(int16_t** p_buffer) {
+    if ((*p_buffer - lea_buffer) % 2) {
+        (*p_buffer)++;
+    }
+}

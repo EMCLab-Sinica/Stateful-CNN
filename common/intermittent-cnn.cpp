@@ -402,11 +402,11 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
     input_tile_jobs = input_tile_len / BATCH_SIZE;
 #endif
     output_tile_c = node->flags.extra.conv.output_tile_c;
+    jobs_in_a_filter_tile = OUTPUT_H * OUTPUT_W * output_tile_c / BATCH_SIZE;
     jobs_in_an_op = output_tile_c / BATCH_SIZE;
 #if JAPARI
     output_tile_c = extend_for_footprints(output_tile_c);
 #endif
-    jobs_in_a_filter_tile = OUTPUT_H * OUTPUT_W * jobs_in_an_op;
     /* END constants */
 
     uint8_t input_tile_c_index = job_index / input_tile_jobs;
@@ -414,13 +414,20 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
     uint16_t channel_offset = job_index / jobs_in_a_filter_tile * output_tile_c;
     job_index %= jobs_in_a_filter_tile;
     uint32_t offset = input_tile_c_index * input_tile_len +
-                      OUTPUT_CHANNEL * (job_index / jobs_in_an_op) +
                       channel_offset;
+
+    if (jobs_in_an_op) {
+        // an op contains at least a batch
+        offset += OUTPUT_CHANNEL * (job_index / jobs_in_an_op);
 #if !JAPARI
-    offset += (job_index % jobs_in_an_op + 1) * BATCH_SIZE - 1;
+        offset += (job_index % jobs_in_an_op + 1) * BATCH_SIZE - 1;
 #else
-    offset += (job_index % jobs_in_an_op + 1) * (BATCH_SIZE + 1) - 1;
+        offset += (job_index % jobs_in_an_op + 1) * (BATCH_SIZE + 1) - 1;
 #endif
+    } else {
+        // TODO
+        ERROR_OCCURRED();
+    }
     return offset;
 }
 

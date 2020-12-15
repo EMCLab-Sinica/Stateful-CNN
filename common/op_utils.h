@@ -43,3 +43,4 @@ void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_
 #endif
 
 void fix_first_unfinished_value_offset(const Model* model, uint32_t* p_first_unfinished_value_offset);
+void make_buffer_aligned(int16_t** p_buffer);

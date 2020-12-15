@@ -54,6 +54,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             buffer_temp += 2;
 #endif
     int16_t *buffer_b = buffer_temp + output_len * upper_gauss(B->dims[0], flags->extra.gemm.tile_channel);
+    make_buffer_aligned(&buffer_b);
 
     uint16_t i = 0, tile = 0, j = 0, j_with_footprints = 0;
 
@@ -200,8 +201,10 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
     int16_t output_len = X->dims[0] * X->dims[1];
 
     int16_t *buffer_temp = lea_buffer,
-            *buffer_gemm = buffer_temp + output_len,
-            *buffer_c = buffer_gemm + output_len;
+            *buffer_gemm = buffer_temp + output_len;
+    make_buffer_aligned(&buffer_gemm);
+    int16_t *buffer_c = buffer_gemm + output_len;
+    make_buffer_aligned(&buffer_c);
 
     my_fill_q15(0, buffer_gemm, output_len);
 
