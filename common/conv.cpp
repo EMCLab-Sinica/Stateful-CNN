@@ -8,10 +8,6 @@
 // TODO: make these adjustable on runtime
 #define OUTPUT_LEN 100
 
-#if MY_DEBUG >= 1
-static int16_t last_output_data_offset;
-#endif
-
 /* Better to not use macros
  * https://stackoverflow.com/a/3437484/3786245
  */
@@ -244,12 +240,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #endif
     /* END dump data */
 
-#if MY_DEBUG >= 1
     my_printf_debug("output_data offset = %d" NEWLINE, cur_output_data_offset);
-    // XXX: restore strict check - cur_output_data_offset != last_output_data_offset + n_filters after recovery
-    // MY_ASSERT(cur_output_data_offset > last_output_data_offset);
-    last_output_data_offset = cur_output_data_offset;
-#endif
 
     MY_ASSERT(cur_output_data_offset + n_filters < INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
 
@@ -545,10 +536,6 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     conv_params->CHANNEL = CHANNEL;
     conv_params->OUTPUT_CHANNEL = output->dims[1];
     conv_params->N_FILTERS = conv_filter->dims[0];
-
-#if MY_DEBUG >= 1
-    last_output_data_offset = -1;
-#endif
 
     conv_params->input_tile_c_offset = 0;
     conv_params->input_tile_c_index = 0;
