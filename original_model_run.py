@@ -4,12 +4,26 @@ import os.path
 import pathlib
 
 import numpy as np
+import onnx
+import onnxruntime.backend as backend
 import tensorflow as tf
 from tensorflow.keras import backend as K
 
-from utils import load_data_cifar10, load_data_google_speech, GOOGLE_SPEECH_SAMPLE_RATE
+from utils import load_data_mnist, load_data_cifar10, load_data_google_speech, GOOGLE_SPEECH_SAMPLE_RATE
 
 kws_root = pathlib.Path('./data/ML-KWS-for-MCU')
+
+def onnxruntime_inference_one(model, images):
+    rep = backend.prepare(model)
+    return rep.run(images.astype(np.float32))
+
+def onnxruntime_get_intermediate_tensor(model, images):
+    # FIXME: only the last layer is returned for now.
+    # Any way to extract intermediate layers?
+    rep = backend.prepare(model)
+    output_name = model.graph.output[0].name
+    outputs = rep.run(images[0].astype(np.float32))
+    yield output_name, outputs
 
 # Modified from https://stackoverflow.com/a/41712013/3786245
 def keras_get_intermediate_tensor(model, images):
@@ -88,14 +102,23 @@ def print_tensor(tensor):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('config', choices=['cifar10', 'kws'])
+    parser.add_argument('config', choices=['mnist', 'cifar10', 'kws'])
     parser.add_argument('--limit', type=int, default=0)
     args = parser.parse_args()
 
     if args.limit == 0:
         args.limit = None
 
-    if args.config == 'cifar10':
+    if args.config == 'mnist':
+        # model is from https://github.com/onnx/models/tree/master/mnist
+        # https://github.com/onnx/onnx/blob/master/docs/PythonAPIOverview.md
+        model = onnx.load_model('./data/mnist-8.onnx')
+        onnx.checker.check_model(model)
+
+        get_intermediate_tensor = functools.partial(onnxruntime_get_intermediate_tensor, model)
+        inference_one = functools.partial(onnxruntime_inference_one, model)
+        model_data = load_data_mnist(start=0, limit=args.limit)
+    elif args.config == 'cifar10':
         squeezenet_cifar10_path = './data/SqueezeNet_vs_CIFAR10/models'
         with open(os.path.join(squeezenet_cifar10_path, 'squeeze_net.json')) as f:
             model_json = f.read()
