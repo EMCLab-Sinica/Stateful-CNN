@@ -100,7 +100,8 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     output_offset += first_unfinished_value_offset;
 
 #if INDIRECT_RECOVERY
-    int16_t offset, next_output_turning_point;
+    uint16_t next_output_turning_point;
+    int16_t offset;
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info,
@@ -147,7 +148,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if JAPARI
                         if ((c + idx) % (BATCH_SIZE + 1) == BATCH_SIZE) {
                             output_val = (offset ? 1 : -1);
-                            if (next_output_turning_point > 0 && (output_offset + idx >= next_output_turning_point)) {
+                            if (next_output_turning_point != INVALID_TURNING_POINT && (output_offset + idx >= next_output_turning_point)) {
                                 output_val = -output_val;
                             }
                         } else

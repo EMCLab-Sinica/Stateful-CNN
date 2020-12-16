@@ -169,14 +169,14 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 
     state_bit = get_state_bit(model, param->slot);
     uint8_t turning_point_idx = 0;
-    int16_t next_turning_point = -1;
+    uint16_t next_turning_point = INVALID_TURNING_POINT;
     SlotInfo *cur_slot_info = get_slot_info(model, param->slot);
     uint16_t n_turning_points = cur_slot_info ? cur_slot_info->n_turning_points : 0;
     uint8_t turning_point_found = 0;
     while (turning_point_idx < n_turning_points) {
         next_turning_point = cur_slot_info->turning_points[turning_point_idx];
         turning_point_idx++;
-        if (next_turning_point > start_offset) {
+        if (next_turning_point != INVALID_TURNING_POINT && next_turning_point > start_offset) {
             turning_point_found = 1;
             break;
         }
@@ -184,7 +184,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
     }
     if (!turning_point_found) {
         // no turning points not after start_offset found
-        next_turning_point = -1;
+        next_turning_point = INVALID_TURNING_POINT;
     }
 #endif
     for (uint32_t offset = start_offset; offset < params_len; offset += cur_chunk_len) {
@@ -192,7 +192,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 #if INDIRECT_RECOVERY
         uint8_t next_state_flipped = 0;
         // Use <= here as turning_point_idx is actually index for the _next_ turning point
-        if (next_turning_point > 0 && turning_point_idx <= cur_slot_info->n_turning_points) {
+        if (next_turning_point != INVALID_TURNING_POINT && turning_point_idx <= cur_slot_info->n_turning_points) {
             uint16_t chunk_len_before_turning_point = MIN_VAL(cur_chunk_len, next_turning_point - offset);
             if (chunk_len_before_turning_point != cur_chunk_len) {
                 next_turning_point = cur_slot_info->turning_points[turning_point_idx];
@@ -213,11 +213,11 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 }
 
 #if INDIRECT_RECOVERY
-void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param) {
+void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, uint16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param) {
     my_printf_debug("Initialize next_turning_point from output offset %d" NEWLINE, initial_value_idx);
     *p_offset = get_state_bit(model, param->slot) ? 0x4000 : 0;
     *p_turning_point_idx = 0;
-    *p_next_turning_point = -1;
+    *p_next_turning_point = INVALID_TURNING_POINT;
     *p_slot_info = get_slot_info(model, param->slot);
     uint8_t next_turning_point_found = 0;
     if (!(*p_slot_info)) {
@@ -226,25 +226,25 @@ void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, int
     while (*p_turning_point_idx < (*p_slot_info)->n_turning_points) {
         *p_next_turning_point = (*p_slot_info)->turning_points[*p_turning_point_idx];
         (*p_turning_point_idx)++;
-        if (*p_next_turning_point > static_cast<int16_t>(initial_value_idx)) {
+        if (*p_next_turning_point != INVALID_TURNING_POINT && *p_next_turning_point > initial_value_idx) {
             next_turning_point_found = 1;
             break;
         }
         *p_offset ^= 0x4000;
     }
     if (!next_turning_point_found) {
-        *p_next_turning_point = -1;
+        *p_next_turning_point = INVALID_TURNING_POINT;
     }
     my_printf_debug("next_turning_point = %d" NEWLINE, *p_next_turning_point);
 }
 
-void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_idx, int16_t* p_next_turning_point, SlotInfo* slot_info, uint16_t value_idx) {
+void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_idx, uint16_t* p_next_turning_point, SlotInfo* slot_info, uint16_t value_idx) {
     *p_offset ^= 0x4000;
     uint8_t next_turning_point_found = 0;
     while (*p_turning_point_idx < slot_info->n_turning_points) {
         *p_next_turning_point = slot_info->turning_points[*p_turning_point_idx];
         (*p_turning_point_idx)++;
-        if (*p_next_turning_point >= value_idx) {
+        if (*p_next_turning_point != INVALID_TURNING_POINT && *p_next_turning_point >= value_idx) {
             next_turning_point_found = 1;
             break;
         }
@@ -258,7 +258,10 @@ void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_
 #endif
 
 void fix_first_unfinished_value_offset(const Model* model, uint32_t* p_first_unfinished_value_offset) {
-#if !JAPARI && BATCH_SIZE < 2
+#if !JAPARI
+    if (BATCH_SIZE >= 2) {
+        return;
+    }
     // Force recovery from an even OFM index as most DSPLib function does not like odd dimensions
     if (*p_first_unfinished_value_offset % 2) {
         (*p_first_unfinished_value_offset)--;

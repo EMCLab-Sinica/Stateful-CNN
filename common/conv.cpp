@@ -56,7 +56,7 @@ typedef struct ConvTaskParams {
 #if INDIRECT_RECOVERY
     int16_t old_output_offset ;
     uint8_t turning_point_idx;
-    int16_t next_turning_point;
+    uint16_t next_turning_point;
     SlotInfo* cur_slot_info;
 #endif
 #if JAPARI
@@ -118,18 +118,21 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     channel_offset_c = extend_for_footprints(channel_offset_c);
 #endif
     // use NWHC so that output is written continuously on the address space
-    int16_t cur_output_data_offset =
-            conv_params->OUTPUT_W * conv_params->OUTPUT_H * (conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL) +   // n
-            conv_params->input_w / conv_params->stride * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL +       // w
-            (conv_params->input_h + offset_h) / conv_params->stride * conv_params->OUTPUT_CHANNEL +                  // h
-            channel_offset_c;                                                                                   // c
+    uint16_t cur_output_data_offset =
+             conv_params->OUTPUT_W * conv_params->OUTPUT_H * (conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL) +   // n
+             conv_params->input_w / conv_params->stride * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL +       // w
+             (conv_params->input_h + offset_h) / conv_params->stride * conv_params->OUTPUT_CHANNEL +                  // h
+             channel_offset_c;                                                                                   // c
 
 #if INDIRECT_RECOVERY
     SlotInfo *cur_slot_info = conv_params->cur_slot_info;
     int16_t n_keep_state_bits = n_filters;
-    if (conv_params->turning_point_idx <= cur_slot_info->n_turning_points && conv_params->next_turning_point > 0) {
+    if (conv_params->turning_point_idx <= cur_slot_info->n_turning_points && conv_params->next_turning_point != INVALID_TURNING_POINT) {
         my_printf_debug("next_turning_point = %d" NEWLINE, conv_params->next_turning_point);
-        n_keep_state_bits -= MAX_VAL(0, cur_output_data_offset + n_filters - MAX_VAL(conv_params->next_turning_point, cur_output_data_offset));
+        uint16_t ending_offset = MAX_VAL(conv_params->next_turning_point, cur_output_data_offset);
+        if (ending_offset < cur_output_data_offset + n_filters) {
+            n_keep_state_bits -= cur_output_data_offset + n_filters - ending_offset;
+        }
     }
     my_printf_debug("n_keep_state_bits = %d" NEWLINE, n_keep_state_bits);
     MY_ASSERT(n_keep_state_bits >= 0);
@@ -728,7 +731,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
     uint32_t tiling_results_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
 
     // uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
-    uint16_t chunk_len = 2 * OUTPUT_CHANNEL;
+    uint16_t chunk_len = OUTPUT_CHANNEL;
     MY_ASSERT(chunk_len % 2 == 0);
     MY_ASSERT(chunk_len * n_tiles_c < LEA_BUFFER_SIZE);
     uint32_t tiling_results_offset = 0;

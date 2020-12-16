@@ -32,6 +32,8 @@ Indexing policy:
     len(g.input)~ : other (hidden) nodes
 """
 
+MAX_BATCH_SIZE = 4
+
 class Constants:
     SLOT_PARAMETERS = 0xf0
     SLOT_TEST_SET = 0xff
@@ -57,7 +59,7 @@ class Constants:
 
     DEFAULT_TILE_C = 4
     DEFAULT_TILE_H = 4
-    BATCH_SIZE = 1
+    CUR_BATCH_SIZE = 1
     STATEFUL = 0
     HAWAII = 0
     JAPARI = 0
@@ -193,7 +195,7 @@ configs = {
         'scale': 8,
         'input_scale': 8,
         'num_slots': 3,
-        'intermediate_values_size': 30000,
+        'intermediate_values_size': 65000,
         'data_loader': load_data_cifar10,
         'n_all_samples': 10000,
         'sample_size': 2 * 32 * 32 * 3,
@@ -236,11 +238,11 @@ if args.all_samples:
     Constants.NVM_SIZE += config['n_all_samples'] * config['sample_size']
 model_data = config['data_loader'](start=0, limit=Constants.N_SAMPLES)
 
-Constants.BATCH_SIZE = args.batch_size
+Constants.CUR_BATCH_SIZE = args.batch_size
 if args.stateful:
     Constants.STATEFUL = 1
     Constants.METHOD = "STATEFUL"
-    Constants.BATCH_SIZE = 1  # TODO: supports batch_size > 1 for Stateful
+    Constants.CUR_BATCH_SIZE = 1  # TODO: supports batch_size > 1 for Stateful
 if args.hawaii:
     Constants.HAWAII = 1
     Constants.METHOD = "HAWAII"
@@ -441,7 +443,7 @@ def determine_conv_tile_c(n):
         output_tile_c = OUTPUT_CHANNEL
         while ((output_tile_c * 2 + 1) + Constants.TEMP_FILTER_WIDTH) * filter_len > Constants.LEA_BUFFER_SIZE:
             output_tile_c //= 2
-            if output_tile_c % 2:
+            if output_tile_c % 2 or output_tile_c < MAX_BATCH_SIZE:
                 # current input_tile_c is too large such that no even output_tile_c fits
                 input_tile_too_large = True
 
@@ -450,6 +452,7 @@ def determine_conv_tile_c(n):
             if params_len < config['intermediate_values_size']:
                 break
         node_flags.input_tile_c //= 2
+        assert node_flags.input_tile_c >= MAX_BATCH_SIZE
     node_flags.output_tile_c = output_tile_c
 
 def determine_gemm_tile_sizes(n):
@@ -468,7 +471,7 @@ def determine_gemm_tile_sizes(n):
 
     if Constants.JAPARI:
         assert output_len % Constants.BATCH_SIZE == 0
-        output_len += output_len // Constants.BATCH_SIZE
+        output_len += output_len // Constants.CUR_BATCH_SIZE
 
     while True:
         logger.debug("tile_width=%d", node_flags.tile_width)

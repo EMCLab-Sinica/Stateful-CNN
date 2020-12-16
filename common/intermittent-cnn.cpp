@@ -174,6 +174,9 @@ static void print_results(const ParameterInfo *output_node) {
     my_printf(NEWLINE "power counters: ");
     for (uint8_t i = 0; i < MODEL_NODES_LEN; i++) {
         my_printf("% 8d", counters()->power_counters[i]);
+        if (i % 16 == 15) {
+            my_printf(NEWLINE);
+        }
     }
     my_printf(NEWLINE "DMA invocations:");
     for (uint8_t i = 0; i < MODEL_NODES_LEN; i++) {
@@ -281,7 +284,7 @@ void flip_state_bit(Model *model, const ParameterInfo *output) {
 #endif
     SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
     // XXX: better way than copying the array?
-    int16_t new_turning_point = output->params_len / 2;
+    uint16_t new_turning_point = output->params_len / 2;
     my_printf_debug("New turning point=%d" NEWLINE, new_turning_point);
     uint8_t new_turning_point_inserted = 0;
     for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {

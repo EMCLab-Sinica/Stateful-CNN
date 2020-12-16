@@ -196,8 +196,12 @@ void dump_turning_points(Model *model, const ParameterInfo *output) {
     }
     my_printf("Initial state bit for slot %d: %d" NEWLINE, output->slot, cur_slot_info->state_bit);
     my_printf("%d turning point(s) for slot %d: ", cur_slot_info->n_turning_points, output->slot);
+    uint16_t last_turning_point = 0;
     for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
-        my_printf("%d ", cur_slot_info->turning_points[idx]);
+        uint16_t cur_turning_point = cur_slot_info->turning_points[idx];
+        MY_ASSERT(cur_turning_point > last_turning_point);
+        my_printf("%d ", cur_turning_point);
+        last_turning_point = cur_turning_point;
     }
     my_printf(NEWLINE);
 #endif

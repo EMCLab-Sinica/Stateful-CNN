@@ -62,7 +62,8 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     uint32_t first_unfinished_value_offset = job_index_to_offset(output, run_recovery(model, output));
 
 #if INDIRECT_RECOVERY
-    int16_t offset, next_output_turning_point;
+    int16_t offset;
+    uint16_t next_output_turning_point;
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
@@ -156,7 +157,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if STATEFUL
             check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
             uint16_t tile_width_first = tile_width;
-            if (next_output_turning_point > 0) {
+            if (next_output_turning_point != INVALID_TURNING_POINT) {
                 tile_width_first = MIN_VAL(next_output_turning_point - output_offset, tile_width);
             }
             my_printf_debug("tile_width_first=%d" NEWLINE, tile_width_first);

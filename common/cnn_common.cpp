@@ -4,6 +4,7 @@
 #include "intermittent-cnn.h"
 
 ParameterInfo intermediate_parameters_info_vm[MODEL_NODES_LEN];
+uint8_t BATCH_SIZE = CUR_BATCH_SIZE;
 
 const ParameterInfo* get_parameter_info(uint8_t i) {
     if (i < N_INPUT) {
