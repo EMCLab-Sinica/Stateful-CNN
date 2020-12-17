@@ -324,7 +324,8 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
     const ParameterInfo *data = input[0];
 
 #if STATEFUL
-    int16_t offset, next_output_turning_point;
+    int16_t offset;
+    uint16_t next_output_turning_point;
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, 0 /*TODO: first_unfinished_value_offset*/, model, output);

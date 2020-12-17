@@ -277,3 +277,21 @@ void make_buffer_aligned(int16_t** p_buffer) {
         (*p_buffer)++;
     }
 }
+
+float q15_to_float(int16_t val, const ValueInfo& val_info, uint8_t* p_use_prefix) {
+#if STATEFUL
+    if (val != -0x8000) {
+        if (val < -0x2000) {
+            // happens in the last value of each filter column (state embedding)
+            val += 0x4000;
+            MY_ASSERT(p_use_prefix != nullptr);
+            *p_use_prefix = 1;
+        }
+        if (get_value_state_bit(val)) {
+            // 2^15
+            val -= 0x4000;
+        }
+    }
+#endif
+    return val_info.scale * val / 32768.0;
+}

@@ -7,6 +7,7 @@
 struct Model;
 struct ParameterInfo;
 struct SlotInfo;
+struct ValueInfo;
 
 typedef void (*ChunkHandler)(uint32_t output_offset, uint16_t output_chunk_len, uint8_t old_output_state_bit, void* params);
 
@@ -46,3 +47,4 @@ void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_
 
 void fix_first_unfinished_value_offset(const Model* model, uint32_t* p_first_unfinished_value_offset);
 void make_buffer_aligned(int16_t** p_buffer);
+float q15_to_float(int16_t val, const ValueInfo& val_info, uint8_t* p_use_prefix = nullptr);

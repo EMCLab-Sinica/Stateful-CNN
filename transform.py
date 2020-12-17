@@ -32,8 +32,6 @@ Indexing policy:
     len(g.input)~ : other (hidden) nodes
 """
 
-MAX_BATCH_SIZE = 4
-
 class Constants:
     SLOT_PARAMETERS = 0xf0
     SLOT_TEST_SET = 0xff
@@ -187,7 +185,8 @@ configs = {
         'n_all_samples': 10000,
         # multiply by 2 for Q15
         'sample_size': 2 * 28 * 28,
-        'first_sample_outputs': [ -1282, 638, 8788, 9602, -13982, -6166, -23914, 28840, -6914, 4028 ],
+        'max_batch_size': 2,
+        'first_sample_outputs': [ -1.247997, 0.624493, 8.609308, 9.392411, -13.685033, -6.018567, -23.386677, 28.214134, -6.762523, 3.924627 ],
         'fp32_accuracy': 0.9889,
     },
     'cifar10': {
@@ -199,7 +198,8 @@ configs = {
         'data_loader': load_data_cifar10,
         'n_all_samples': 10000,
         'sample_size': 2 * 32 * 32 * 3,
-        'first_sample_outputs': [ 1245, 1075, 1154, 2910, 1112, 2718, 1336, 1612, 1451, 1318 ],
+        'max_batch_size': 4,
+        'first_sample_outputs': [ 4.895500, 4.331344, 4.631835, 11.602396, 4.454658, 10.819544, 5.423588, 6.451203, 5.806091, 5.272837 ],
         'fp32_accuracy': 0.7704,
     },
     'kws': {
@@ -211,7 +211,7 @@ configs = {
         'data_loader': load_data_google_speech,
         'n_all_samples': 4890,
         'sample_size': 2 * 25 * 10,  # MFCC gives 25x10 tensors
-        'first_sample_outputs': [ -23805, 4426, 18055, 2551, -8535, -7761, 12902, -3815, -11881, -1270, -4799, -5399 ],
+        'first_sample_outputs': [ -29.228327, 5.429047, 22.146973, 3.142066, -10.448060, -9.513299, 15.832925, -4.655487, -14.588447, -1.577156, -5.864228, -6.609077 ],
         # Much lower than reported on the paper due to mismatched window_size_ms/window_stride_ms (?)
         # See: https://github.com/ARM-software/ML-KWS-for-MCU/issues/44
         'fp32_accuracy': 0.6323,
@@ -443,7 +443,7 @@ def determine_conv_tile_c(n):
         output_tile_c = OUTPUT_CHANNEL
         while ((output_tile_c * 2 + 1) + Constants.TEMP_FILTER_WIDTH) * filter_len > Constants.LEA_BUFFER_SIZE:
             output_tile_c //= 2
-            if output_tile_c % 2 or output_tile_c < MAX_BATCH_SIZE:
+            if output_tile_c % 2 or output_tile_c < config['max_batch_size']:
                 # current input_tile_c is too large such that no even output_tile_c fits
                 input_tile_too_large = True
 
@@ -452,7 +452,7 @@ def determine_conv_tile_c(n):
             if params_len < config['intermediate_values_size']:
                 break
         node_flags.input_tile_c //= 2
-        assert node_flags.input_tile_c >= MAX_BATCH_SIZE
+        assert node_flags.input_tile_c >= config['max_batch_size']
     node_flags.output_tile_c = output_tile_c
 
 def determine_gemm_tile_sizes(n):

@@ -169,7 +169,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if STATEFUL
                     if (offset) {
                         uint8_t block_size;
-                        if (next_output_turning_point < 0) {
+                        if (next_output_turning_point == INVALID_TURNING_POINT) {
                             block_size = len;
                         } else {
                             block_size = MIN_VAL(len, next_output_turning_point - output_offset);

@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <inttypes.h> // for PRId32
+#include <math.h>
 
 #include "intermittent-cnn.h"
 #include "cnn_common.h"
@@ -78,7 +79,7 @@ static void handle_node(Model *model, uint16_t node_idx) {
     }
 }
 
-int16_t first_sample_outputs[] = FIRST_SAMPLE_OUTPUTS;
+float first_sample_outputs[] = FIRST_SAMPLE_OUTPUTS;
 
 static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     my_printf_debug("N_INPUT = %d" NEWLINE, N_INPUT);
@@ -123,20 +124,21 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     uint8_t buffer_len = MIN_VAL(output_node->dims[1], MAX_CLASSES);
     my_memcpy_from_param(model, lea_buffer, output_node, 0, buffer_len * sizeof(int16_t));
 
-// XXX: need a way to handle different scales and state bits of OFM in Stateful
-#if MY_DEBUG >= 1 && !STATEFUL
+#if MY_DEBUG >= 1
     if (sample_idx == 0) {
         for (uint8_t buffer_idx = 0, ofm_idx = 0; buffer_idx < buffer_len; buffer_idx++) {
-            int16_t got = lea_buffer[buffer_idx];
+            int16_t got_q15 = lea_buffer[buffer_idx];
 #if JAPARI
             if (buffer_idx % (BATCH_SIZE + 1) == BATCH_SIZE) {
-                check_footprint(got);
+                check_footprint(got_q15);
             } else
 #endif
             {
-                int16_t expected = first_sample_outputs[ofm_idx];
-                MY_ASSERT(expected == got,
-                          "Value mismatch at index %d: %d != %d" NEWLINE, buffer_idx, got, expected);
+                float got_real = q15_to_float(got_q15, ValueInfo(output_node));
+                float expected = first_sample_outputs[ofm_idx];
+                float error = fabs((got_real - expected) / expected);
+                MY_ASSERT(error <= 0.3,
+                          "Value error too large at index %d: got=%f, expected=%f" NEWLINE, buffer_idx, got_real, expected);
                 ofm_idx++;
             }
         }
