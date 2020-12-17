@@ -470,7 +470,7 @@ def determine_gemm_tile_sizes(n):
     output_len = A_rows * B_cols
 
     if Constants.JAPARI:
-        assert output_len % Constants.BATCH_SIZE == 0
+        assert output_len % Constants.CUR_BATCH_SIZE == 0
         output_len += output_len // Constants.CUR_BATCH_SIZE
 
     while True:

@@ -751,7 +751,12 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 
 #endif
 
-    float scale_f = 1.0 * find_max_multiplier(model, data) / n_tiles_c;
+    uint8_t divider = n_tiles_c;
+    if (divider > 2) {
+        // heuristic - try to avoid both scale overflow and value overflow at the same time
+        divider /= 2;
+    }
+    float scale_f = 1.0 * find_max_multiplier(model, data) / divider;
     int16_t scaleFract;
     uint8_t shift;
     float_to_scale_params(&scaleFract, &shift, scale_f);
