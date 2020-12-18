@@ -123,21 +123,20 @@ jobs:
     - name: Test
       run: ./utils/test.sh
 
-  mnist_baseline_cmsis:
+  cifar10_japari_b4:
     runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
-      CONFIG: '--all-samples --baseline mnist'
-      USE_ARM_CMSIS: 1
+      CONFIG: '--japari --batch-size 4 cifar10'
     steps:
     - name: Checkout main repo
       uses: actions/checkout@v2
-    - name: Checkout ARM-CMSIS
+    - name: Checkout TI-DSPLib
       uses: actions/checkout@v2
       with:
-        repository: EMCLab-Sinica/ARM-CMSIS_5
-        ref: patched
-        path: ARM-CMSIS_5
+        repository: EMCLab-Sinica/DSPLib
+        path: TI-DSPLib
+        token: ${{ secrets.access_token }}
     - name: Test
       run: ./utils/test.sh
 
@@ -146,42 +145,6 @@ jobs:
     container: archlinux:latest
     env:
       CONFIG: '--all-samples --stateful mnist'
-      USE_ARM_CMSIS: 1
-    steps:
-    - name: Checkout main repo
-      uses: actions/checkout@v2
-    - name: Checkout ARM-CMSIS
-      uses: actions/checkout@v2
-      with:
-        repository: EMCLab-Sinica/ARM-CMSIS_5
-        ref: patched
-        path: ARM-CMSIS_5
-    - name: Test
-      run: ./utils/test.sh
-
-  cifar10_baseline_cmsis:
-    runs-on: ubuntu-20.04
-    container: archlinux:latest
-    env:
-      CONFIG: '--all-samples --baseline cifar10'
-      USE_ARM_CMSIS: 1
-    steps:
-    - name: Checkout main repo
-      uses: actions/checkout@v2
-    - name: Checkout ARM-CMSIS
-      uses: actions/checkout@v2
-      with:
-        repository: EMCLab-Sinica/ARM-CMSIS_5
-        ref: patched
-        path: ARM-CMSIS_5
-    - name: Test
-      run: ./utils/test.sh
-
-  cifar10_stateful_cmsis:
-    runs-on: ubuntu-20.04
-    container: archlinux:latest
-    env:
-      CONFIG: '--all-samples --stateful cifar10'
       USE_ARM_CMSIS: 1
     steps:
     - name: Checkout main repo
