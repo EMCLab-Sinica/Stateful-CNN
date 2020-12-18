@@ -81,20 +81,30 @@ int16_t * const matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
 static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filters, uint16_t len, uint8_t first_round) {
     MY_ASSERT(len < OUTPUT_LEN);
     my_printf_debug("Flipping %d state bits in filters" NEWLINE, len);
-    // need negating filter value here as it will be multiplied with _Q15(-1.0), or -32768
+#if STATEFUL
     int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + n_filters * conv_params->filter_offset;
     if (first_round) {
         to_flip_state_bits -= len;
     } else {
         to_flip_state_bits -= n_filters;
     }
-#if STATEFUL
+    // need negating filter value here as it will be multiplied with _Q15(-1.0), or -32768
     int16_t offset = get_value_state_bit(-*to_flip_state_bits) ? 0x4000 : -0x4000;
     my_offset_q15(to_flip_state_bits, offset, to_flip_state_bits, len);
 #endif
 #if JAPARI
-    for (uint16_t idx = BATCH_SIZE; idx < len; idx += BATCH_SIZE + 1) {
-        to_flip_state_bits[idx] = -to_flip_state_bits[idx];
+    int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + n_filters * (conv_params->filter_offset - 1);
+    if (first_round) {
+        for (uint16_t idx = BATCH_SIZE; idx < n_filters; idx += BATCH_SIZE + 1) {
+            if (idx < n_filters - len) {
+                continue;
+            }
+            to_flip_state_bits[idx] = -to_flip_state_bits[idx];
+        }
+    } else {
+        for (uint16_t idx = BATCH_SIZE; idx < len; idx += BATCH_SIZE + 1) {
+            to_flip_state_bits[idx] = -to_flip_state_bits[idx];
+        }
     }
 #endif
 }
@@ -705,9 +715,10 @@ void ConvMergeOutputChunkHandler(uint32_t range_offset, uint16_t range_len, uint
     }
 #endif
 #if JAPARI
-    int16_t* footprint_buffer = lea_buffer + (LEA_BUFFER_SIZE - range_len) / 2 * 2;
-    my_fill_q15((state_bit ? -1 : 1), footprint_buffer, range_len);
-    my_interleave_q15(footprint_buffer, BATCH_SIZE, BATCH_SIZE + 1, to_offset, range_len);
+    uint16_t n_footprints = (range_len + BATCH_SIZE) / (BATCH_SIZE + 1);
+    int16_t* footprint_buffer = lea_buffer + (LEA_BUFFER_SIZE - n_footprints) / 2 * 2;
+    my_fill_q15((state_bit ? -1 : 1), footprint_buffer, n_footprints);
+    my_interleave_q15(footprint_buffer, BATCH_SIZE - (range_offset % (BATCH_SIZE + 1)), BATCH_SIZE + 1, to_offset, n_footprints);
 #endif
 }
 #endif
@@ -789,6 +800,8 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 #if INDIRECT_RECOVERY
         ConvMergeOutputChunkHandlerParams params({tiling_results_offset});
         iterate_chunks(model, output, tiling_results_offset, real_chunk_len, ConvMergeOutputChunkHandler, &params);
+        my_printf_debug("After writing state bits in [%d, %d)" NEWLINE, tiling_results_offset, tiling_results_offset + real_chunk_len);
+        dump_matrix_debug(lea_buffer, real_chunk_len, ValueInfo(output));
 #endif
 
 #if JAPARI

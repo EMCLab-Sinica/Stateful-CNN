@@ -23,7 +23,8 @@ static inline uint8_t get_value_state_bit(int16_t val) {
 #if JAPARI
 static inline void check_footprint(int16_t val) {
     // -255 and 255 happens when only the first byte of a footprint is written
-    MY_ASSERT(val == 0 || val == 1 || val == -1 || val == -255 || val == 255);
+    MY_ASSERT(val == 0 || val == 1 || val == -1 || val == -255 || val == 255,
+              "%d is not a valid footprint" NEWLINE, val);
 }
 
 static inline uint8_t get_value_state_bit(int16_t val) {

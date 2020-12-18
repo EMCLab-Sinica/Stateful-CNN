@@ -27,7 +27,6 @@ uint16_t hawaii_preserve_vector(Model* model, ParameterInfo* output, uint32_t ou
 int16_t input_buffer_with_footprints[INPUT_BUFFER_WITH_FOOTPRINTS_LEN];
 
 int16_t extend_for_footprints(int16_t val) {
-    MY_ASSERT(val % BATCH_SIZE == 0);
     return val + val / BATCH_SIZE;
 }
 

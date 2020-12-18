@@ -319,7 +319,7 @@ void flip_state_bit(Model *model, const ParameterInfo *output) {
     cur_slot_info->state_bit ^= 1;
 
     // Use first_unfinished_job_index = 0 here as all values finished and the initial state bit is flipped above
-    check_feature_map_states(model, output, 0, INTERMEDIATE_VALUES_SIZE / sizeof(int16_t), __func__);
+    check_feature_map_states(model, output, 0, output->params_len / sizeof(int16_t), __func__);
 
 #endif // INDIRECT_RECOVERY
 }
@@ -392,6 +392,13 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
     }
 #else
     if (node->op_type != Conv) {
+        if (node->op_type == Relu) {
+            uint16_t OUTPUT_CHANNEL = output->dims[1];
+            if (OUTPUT_CHANNEL % (BATCH_SIZE + 1) != 0) {
+                uint8_t jobs_in_a_tile = OUTPUT_CHANNEL / (BATCH_SIZE + 1);
+                return job_index / jobs_in_a_tile * OUTPUT_CHANNEL + job_index % jobs_in_a_tile * (BATCH_SIZE + 1) + BATCH_SIZE;
+            }
+        }
         return (job_index + 1) * (BATCH_SIZE + 1) - 1;
     }
 #endif
