@@ -10,7 +10,7 @@
 #include "op_utils.h"
 
 #ifndef USE_ARM_CMSIS
-#define my_checkStatus(status) MY_ASSERT(status == MSP_SUCCESS)
+#define my_checkStatus(status) MY_ASSERT(status == MSP_SUCCESS, "Error from TI-DSPLib: %d" NEWLINE, status)
 #endif
 
 static inline void check_buffer_address(const int16_t* addr) {
@@ -188,21 +188,13 @@ void my_scale_q15(const int16_t *pSrc, int16_t scaleFract, uint8_t shift, int16_
 
 void my_interleave_q15(const int16_t *pSrc, uint16_t channel, uint16_t numChannels, int16_t *pDst, uint32_t blockSize) {
     MY_ASSERT(channel < numChannels);
-#ifndef USE_ARM_CMSIS
-    msp_interleave_q15_params params;
-    params.length = blockSize;
-    params.numChannels = numChannels;
-    params.channel = channel;
-    msp_status status = msp_interleave_q15(&params, pSrc, pDst);
-    my_checkStatus(status);
-#else
+    // XXX: not using LEA here as pSrc and/or pDst is often unaligned
     // CMSIS does not have interleave (yet)
     for (uint32_t idx = 0; idx < blockSize; idx++) {
         *(pDst + channel) = *pSrc;
         pSrc++;
         pDst += numChannels;
     }
-#endif
 }
 
 void my_deinterleave_q15(const int16_t *pSrc, uint16_t channel, uint16_t numChannels, int16_t *pDst, uint32_t blockSize) {

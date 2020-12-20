@@ -26,7 +26,11 @@ uint16_t hawaii_preserve_vector(Model* model, ParameterInfo* output, uint32_t ou
 #if JAPARI
 int16_t input_buffer_with_footprints[INPUT_BUFFER_WITH_FOOTPRINTS_LEN];
 
-int16_t extend_for_footprints(int16_t val) {
+int16_t extend_for_footprints(int16_t val, uint8_t force_aligned) {
+    if (force_aligned) {
+        val = upper_gauss(val, BATCH_SIZE) * BATCH_SIZE;
+    }
+    MY_ASSERT(val % BATCH_SIZE == 0);
     return val + val / BATCH_SIZE;
 }
 
@@ -292,5 +296,5 @@ float q15_to_float(int16_t val, const ValueInfo& val_info, uint8_t* p_use_prefix
         }
     }
 #endif
-    return val_info.scale * val / 32768.0;
+    return val_info.scale * static_cast<int32_t>(val) / 32768.0;
 }

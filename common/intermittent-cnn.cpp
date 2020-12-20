@@ -12,8 +12,6 @@
 
 uint16_t sample_idx;
 
-const uint8_t MAX_CLASSES = 20;
-
 static void handle_node(Model *model, uint16_t node_idx) {
     my_printf_debug("Current node: %d, ", node_idx);
 
@@ -121,7 +119,7 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     }
     int16_t max = INT16_MIN;
     uint16_t u_ans;
-    uint8_t buffer_len = MIN_VAL(output_node->dims[1], MAX_CLASSES);
+    uint8_t buffer_len = MIN_VAL(output_node->dims[1], sizeof(first_sample_outputs) / sizeof(float));
     my_memcpy_from_param(model, lea_buffer, output_node, 0, buffer_len * sizeof(int16_t));
 
 #if MY_DEBUG >= 1
@@ -137,7 +135,7 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
                 float got_real = q15_to_float(got_q15, ValueInfo(output_node));
                 float expected = first_sample_outputs[ofm_idx];
                 float error = fabs((got_real - expected) / expected);
-                MY_ASSERT(error <= 0.3,
+                MY_ASSERT(error <= 0.1,
                           "Value error too large at index %d: got=%f, expected=%f" NEWLINE, buffer_idx, got_real, expected);
                 ofm_idx++;
             }
@@ -413,7 +411,7 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
 #else
     input_tile_jobs = input_tile_len / BATCH_SIZE;
 #endif
-    output_tile_c = node->flags.extra.conv.output_tile_c;
+    output_tile_c = upper_gauss(node->flags.extra.conv.output_tile_c, BATCH_SIZE) * BATCH_SIZE;
     jobs_in_a_filter_tile = OUTPUT_H * OUTPUT_W * output_tile_c / BATCH_SIZE;
     jobs_in_an_op = output_tile_c / BATCH_SIZE;
 #if JAPARI

@@ -62,6 +62,7 @@ typedef struct ConvTaskParams {
 #if JAPARI
     uint8_t conv_input_has_footprints;
     uint16_t input_tile_c_offset_with_footprints;
+    uint8_t force_align_footprints;
 #endif
 
     uint16_t filter_idx;
@@ -123,7 +124,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #endif
     int16_t channel_offset_c = conv_params->filter_idx;
 #if JAPARI
-    values_to_preserve = extend_for_footprints(n_filters);
+    values_to_preserve = extend_for_footprints(n_filters, conv_params->force_align_footprints);
     n_filters = (values_to_preserve + 1) / 2 * 2; // LEA requires even number of columns
     channel_offset_c = extend_for_footprints(channel_offset_c);
 #endif
@@ -495,7 +496,8 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     conv_params->OUTPUT_W = (W - conv_params->offset_w * 2) / conv_params->stride;
 
 #if JAPARI
-    OUTPUT_CHANNEL = extend_for_footprints(OUTPUT_CHANNEL);
+    conv_params->force_align_footprints = (OUTPUT_CHANNEL % BATCH_SIZE != 0);
+    OUTPUT_CHANNEL = extend_for_footprints(OUTPUT_CHANNEL, conv_params->force_align_footprints);
     if (has_footprints(conv_input)) {
         conv_params->n_tiles_c = CHANNEL / extend_for_footprints(flags->extra.conv.input_tile_c);
     } else
@@ -577,7 +579,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     uint16_t cur_output_tile_c = flags->extra.conv.output_tile_c;
 #if JAPARI
-    cur_output_tile_c = extend_for_footprints(cur_output_tile_c);
+    cur_output_tile_c = extend_for_footprints(cur_output_tile_c, conv_params->force_align_footprints);
 #endif
     uint16_t slice_size_input_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL;
 
@@ -636,7 +638,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         }
         conv_params->filter_offset = conv_params->kH * conv_params->dest_offset;
 
-        while (conv_params->filter_tile_index * flags->extra.conv.output_tile_c < conv_params->N_FILTERS) {
+        while (true) {
             for (; conv_params->input_w < W - conv_params->offset_w; conv_params->input_w += conv_params->stride) {
                 for (; conv_params->input_h < H - conv_params->offset_h; conv_params->input_h += conv_params->tile_h) {
                     handle_conv_inner_loop(model, conv_params);
@@ -645,6 +647,9 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             }
             conv_params->input_w = conv_params->offset_w;
             conv_params->filter_tile_index++;
+            if (conv_params->filter_tile_index * flags->extra.conv.output_tile_c >= conv_params->N_FILTERS) {
+                break;
+            }
             conv_params->filter_idx = conv_params->filter_tile_index * flags->extra.conv.output_tile_c;
 #if INDIRECT_RECOVERY
             uint32_t new_output_offset = conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W;
@@ -743,8 +748,6 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 
     // uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
     uint16_t chunk_len = OUTPUT_CHANNEL;
-    MY_ASSERT(chunk_len % 2 == 0);
-    MY_ASSERT(chunk_len * n_tiles_c < LEA_BUFFER_SIZE);
     uint32_t tiling_results_offset = 0;
 #if INTERMITTENT
     uint32_t first_unfinished_job_index = run_recovery(model, output);
@@ -753,6 +756,9 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
     uint16_t n_chunks = chunk_len / (BATCH_SIZE + 1) / 2 * 2;
     chunk_len = n_chunks * (BATCH_SIZE + 1);
 #endif
+    MY_ASSERT(chunk_len % 2 == 0);
+    MY_ASSERT(chunk_len * n_tiles_c < LEA_BUFFER_SIZE);
+
     tiling_results_offset = first_unfinished_job_index;
 #if JAPARI
     tiling_results_offset *= (BATCH_SIZE + 1);
