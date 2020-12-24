@@ -12,7 +12,7 @@ SigLevel = Never
 EOF
 
 pacman -Syu --noconfirm
-pacman -S --noconfirm --needed base-devel cmake python-numpy python-onnx wget
+pacman -S --noconfirm --needed base-devel cmake python-numpy python-onnx python-tensorflow wget
 pacman -U --noconfirm https://build.archlinuxcn.org/~yan12125/python-torchaudio-git-r628.9c484027-1-x86_64.pkg.tar.zst
 
 # preparation
