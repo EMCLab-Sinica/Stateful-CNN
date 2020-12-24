@@ -36,6 +36,10 @@ fi
 if [[ $CONFIG = *cifar10* ]]; then
     ./data/download-cifar10.sh
 fi
+if [[ $CONFIG = *kws* ]]; then
+    git submodule init
+    git submodule update data/ML-KWS-for-MCU
+fi
 
 python transform.py $CONFIG
 cmake -B build $cmake_args
