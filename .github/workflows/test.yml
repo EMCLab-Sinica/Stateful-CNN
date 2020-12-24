@@ -140,6 +140,23 @@ jobs:
     - name: Test
       run: ./utils/test.sh
 
+  kws_japari_b2:
+    runs-on: ubuntu-20.04
+    container: archlinux:latest
+    env:
+      CONFIG: '--japari --batch-size 2 kws'
+    steps:
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout TI-DSPLib
+      uses: actions/checkout@v2
+      with:
+        repository: EMCLab-Sinica/DSPLib
+        path: TI-DSPLib
+        token: ${{ secrets.access_token }}
+    - name: Test
+      run: ./utils/test.sh
+
   mnist_stateful_cmsis:
     runs-on: ubuntu-20.04
     container: archlinux:latest

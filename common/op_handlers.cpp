@@ -199,19 +199,25 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         }
     } else {
         uint16_t i = 0;
+#if JAPARI
+        uint8_t cur_batch_offset = i % (BATCH_SIZE + 1);
+#endif
         for (; i < data_len; i++) {
             int16_t output_val;
 #if JAPARI
-            if (i % 2) {
-                output_val = 1;
+            if (cur_batch_offset == BATCH_SIZE) {
+                cur_batch_offset -= BATCH_SIZE + 1;
+                output_val = (offset ? 1 : -1);
             } else
 #endif
             {
                 int16_t input_val = get_q15_param(model, X, data_offset);
+#if INDIRECT_RECOVERY
 #if STATEFUL
                 if (get_value_state_bit(input_val)) {
                     input_val -= 0x4000;
                 }
+#endif
                 check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
 #endif
                 output_val = MAX_VAL(input_val, 0);
@@ -225,6 +231,9 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
             data_offset++;
             output_offset++;
+#if JAPARI
+            cur_batch_offset++;
+#endif
         }
     }
 

@@ -94,16 +94,19 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         uint16_t tile_channels = MIN_VAL(flags->extra.gemm.tile_channel, B->dims[0] - i);
         uint16_t extended_tile_channels = tile_channels;
 
-#if !JAPARI
-        my_memcpy_from_param(model, buffer_a, A, i, tile_channels * sizeof(uint16_t));
-#else
-        for (uint16_t idx = 0, output_idx = 0; output_idx < tile_channels; idx += BATCH_SIZE + 1, output_idx += BATCH_SIZE) {
-            my_memcpy_from_param(model, buffer_a + output_idx, A, i + idx, BATCH_SIZE * sizeof(uint16_t));
-        }
-        extended_tile_channels += 2;
+#if JAPARI
         buffer_a[tile_channels] = -0x8000;
         buffer_a[tile_channels + 1] = 0;
+        extended_tile_channels += 2;
+        if (has_footprints(A)) {
+            for (uint16_t idx = 0, output_idx = 0; output_idx < tile_channels; idx += BATCH_SIZE + 1, output_idx += BATCH_SIZE) {
+                my_memcpy_from_param(model, buffer_a + output_idx, A, i + idx, BATCH_SIZE * sizeof(uint16_t));
+            }
+        } else
 #endif
+        {
+            my_memcpy_from_param(model, buffer_a, A, i, tile_channels * sizeof(uint16_t));
+        }
 
 #if STATEFUL
         iterate_chunks(model, A, 0, 0, GemmInputChunkHandler, buffer_a);
