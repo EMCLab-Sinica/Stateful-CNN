@@ -143,6 +143,25 @@ jobs:
     - name: Test
       run: ./utils/test.sh
 
+  kws_baseline:
+    runs-on: ubuntu-20.04
+    container: archlinux:latest
+    env:
+      CONFIG: '--all-samples --baseline kws'
+    steps:
+    - name: Install git
+      run: 'pacman -Syu --noconfirm && pacman -S --noconfirm git'
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout TI-DSPLib
+      uses: actions/checkout@v2
+      with:
+        repository: EMCLab-Sinica/DSPLib
+        path: TI-DSPLib
+        token: ${{ secrets.access_token }}
+    - name: Test
+      run: ./utils/test.sh
+
   kws_japari_b2:
     runs-on: ubuntu-20.04
     container: archlinux:latest
@@ -162,11 +181,30 @@ jobs:
     - name: Test
       run: ./utils/test.sh
 
+  kws_stateful:
+    runs-on: ubuntu-20.04
+    container: archlinux:latest
+    env:
+      CONFIG: '--all-samples --stateful kws'
+    steps:
+    - name: Install git
+      run: 'pacman -Syu --noconfirm && pacman -S --noconfirm git'
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout TI-DSPLib
+      uses: actions/checkout@v2
+      with:
+        repository: EMCLab-Sinica/DSPLib
+        path: TI-DSPLib
+        token: ${{ secrets.access_token }}
+    - name: Test
+      run: ./utils/test.sh
+
   mnist_stateful_cmsis:
     runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
-      CONFIG: '--all-samples --stateful mnist'
+      CONFIG: '--stateful mnist'
       USE_ARM_CMSIS: 1
     steps:
     - name: Checkout main repo
