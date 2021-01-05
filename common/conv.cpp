@@ -300,7 +300,6 @@ static inline uint8_t load_input_vector(uint32_t src_addr, int16_t* dest_addr, u
 #if JAPARI
     if (conv_params->conv_input_has_footprints) {
         // Use nested loops as skipping footprints by `% (BATCH_SIZE)` is quite slow on boards
-        MY_ASSERT(conv_params->input_tile_c_offset_with_footprints % (BATCH_SIZE + 1) == 0);
         int16_t *dest_ptr = dest_addr,
                 *src_ptr = input_buffer_with_footprints;
         for (uint8_t src_idx = 0; src_idx < len; src_idx += (BATCH_SIZE + 1)) {
@@ -499,7 +498,7 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     conv_params->force_align_footprints = (OUTPUT_CHANNEL % BATCH_SIZE != 0);
     OUTPUT_CHANNEL = extend_for_footprints(OUTPUT_CHANNEL, conv_params->force_align_footprints);
     if (has_footprints(conv_input)) {
-        conv_params->n_tiles_c = CHANNEL / extend_for_footprints(flags->extra.conv.input_tile_c);
+        conv_params->n_tiles_c = CHANNEL / (BATCH_SIZE + 1) * BATCH_SIZE / flags->extra.conv.input_tile_c;
     } else
 #endif
     {

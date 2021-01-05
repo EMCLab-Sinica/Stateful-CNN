@@ -30,7 +30,6 @@ int16_t extend_for_footprints(int16_t val, uint8_t force_aligned) {
     if (force_aligned) {
         val = upper_gauss(val, BATCH_SIZE) * BATCH_SIZE;
     }
-    MY_ASSERT(val % BATCH_SIZE == 0);
     return val + val / BATCH_SIZE;
 }
 

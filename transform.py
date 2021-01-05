@@ -180,12 +180,12 @@ configs = {
         'scale': 8,
         'input_scale': 8,
         'num_slots': 2,
-        'intermediate_values_size': 20000,
+        'intermediate_values_size': 26000,
         'data_loader': load_data_mnist,
         'n_all_samples': 10000,
         # multiply by 2 for Q15
         'sample_size': 2 * 28 * 28,
-        'max_batch_size': 2,
+        'op_filters': 4,
         'first_sample_outputs': [ -1.247997, 0.624493, 8.609308, 9.392411, -13.685033, -6.018567, -23.386677, 28.214134, -6.762523, 3.924627 ],
         'fp32_accuracy': 0.9889,
     },
@@ -198,7 +198,7 @@ configs = {
         'data_loader': load_data_cifar10,
         'n_all_samples': 10000,
         'sample_size': 2 * 32 * 32 * 3,
-        'max_batch_size': 4,
+        'op_filters': 4,
         'first_sample_outputs': [ 4.895500, 4.331344, 4.631835, 11.602396, 4.454658, 10.819544, 5.423588, 6.451203, 5.806091, 5.272837 ],
         'fp32_accuracy': 0.7704,
     },
@@ -443,7 +443,7 @@ def determine_conv_tile_c(n):
         output_tile_c = OUTPUT_CHANNEL
         while ((output_tile_c * 2 + 1) + Constants.TEMP_FILTER_WIDTH) * filter_len > Constants.LEA_BUFFER_SIZE:
             output_tile_c //= 2
-            if output_tile_c % 2 or output_tile_c < config['max_batch_size']:
+            if output_tile_c % 2 or output_tile_c < config['op_filters']:
                 # current input_tile_c is too large such that no even output_tile_c fits
                 input_tile_too_large = True
 
@@ -452,7 +452,7 @@ def determine_conv_tile_c(n):
             if params_len < config['intermediate_values_size']:
                 break
         node_flags.input_tile_c //= 2
-        assert node_flags.input_tile_c >= config['max_batch_size']
+        assert node_flags.input_tile_c
     node_flags.output_tile_c = output_tile_c
 
 def determine_gemm_tile_sizes(n):
@@ -470,7 +470,6 @@ def determine_gemm_tile_sizes(n):
     output_len = A_rows * B_cols
 
     if Constants.JAPARI:
-        assert output_len % Constants.CUR_BATCH_SIZE == 0
         output_len += output_len // Constants.CUR_BATCH_SIZE
 
     while True:
