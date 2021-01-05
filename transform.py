@@ -469,7 +469,15 @@ def determine_gemm_tile_sizes(n):
     B_cols = B.dims[1]
     node_flags = n.flags.b.extra.gemm
 
-    node_flags.tile_width = config['op_filters']
+    if Constants.INDIRECT_RECOVERY:
+        # Use smaller tile sizes so that filters will not exceed LEA buffer
+        # manual appending/embedding is utilized when needed
+        tile_size_unit = 2
+    else:
+        # For HAWAII, writing a batch at a time is simpler
+        tile_size_unit = config['op_filters']
+
+    node_flags.tile_width = tile_size_unit
     total_buffer_size = Constants.LEA_BUFFER_SIZE - A_rows * A_cols;
     output_len = A_rows * B_cols
 
@@ -490,11 +498,11 @@ def determine_gemm_tile_sizes(n):
         if node_flags.tile_channel > 0:
             break
         assert node_flags.tile_width % 2 == 0
-        node_flags.tile_width += config['op_filters']
+        node_flags.tile_width += tile_size_unit
 
     while node_flags.tile_width * (node_flags.tile_channel + 2) > Constants.ARM_PSTATE_LEN:
-        assert node_flags.tile_width > config['op_filters']
-        node_flags.tile_width -= config['op_filters']
+        assert node_flags.tile_width > tile_size_unit
+        node_flags.tile_width -= tile_size_unit
 
 graph = []
 for n in nodes:

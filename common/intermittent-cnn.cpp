@@ -119,7 +119,11 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     }
     int16_t max = INT16_MIN;
     uint16_t u_ans;
-    uint8_t buffer_len = MIN_VAL(output_node->dims[1], sizeof(first_sample_outputs) / sizeof(float));
+    uint8_t ans_len = sizeof(first_sample_outputs) / sizeof(float);
+#if JAPARI
+    ans_len = extend_for_footprints(ans_len);
+#endif
+    uint8_t buffer_len = MIN_VAL(output_node->dims[1], ans_len);
     my_memcpy_from_param(model, lea_buffer, output_node, 0, buffer_len * sizeof(int16_t));
 
 #if MY_DEBUG >= 1
