@@ -89,7 +89,13 @@ void my_offset_q15(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t 
 }
 
 void my_max_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint16_t *pIndex) {
-    check_buffer_address(pSrc);
+    uint8_t unaligned = 0;
+    if ((pSrc - lea_buffer) % 2) {
+        unaligned = 1;
+        pSrc++;
+        MY_ASSERT(blockSize > 0);
+        blockSize--;
+    }
 #ifndef USE_ARM_CMSIS
     uint32_t blockSizeForLEA = blockSize / 2 * 2;
     if (blockSizeForLEA) {
@@ -109,10 +115,25 @@ void my_max_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint1
     arm_max_q15(pSrc, blockSize, pResult, &pIndex_u32);
     *pIndex = pIndex_u32;
 #endif
+    if (unaligned) {
+        int16_t candidate = *(pSrc - 1); // -1 as pSrc was +1
+        if (*pResult > candidate) {
+            (*pIndex)++;
+        } else {
+            *pIndex = 0;
+            *pResult = candidate;
+        }
+    }
 }
 
 void my_min_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint16_t *pIndex) {
-    check_buffer_address(pSrc);
+    uint8_t unaligned = 0;
+    if ((pSrc - lea_buffer) % 2) {
+        unaligned = 1;
+        pSrc++;
+        MY_ASSERT(blockSize > 0);
+        blockSize--;
+    }
 #ifndef USE_ARM_CMSIS
     uint32_t blockSizeForLEA = blockSize / 2 * 2;
     if (blockSizeForLEA) {
@@ -132,6 +153,15 @@ void my_min_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint1
     arm_min_q15(pSrc, blockSize, pResult, &pIndex_u32);
     *pIndex = pIndex_u32;
 #endif
+    if (unaligned) {
+        int16_t candidate = *(pSrc - 1); // -1 as pSrc was +1
+        if (*pResult < candidate) {
+            (*pIndex)++;
+        } else {
+            *pIndex = 0;
+            *pResult = candidate;
+        }
+    }
 }
 
 #ifdef USE_ARM_CMSIS
