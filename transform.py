@@ -52,7 +52,7 @@ class Constants:
     # (4096 - 0x138 (LEASTACK) - 2 * 8 (MSP_LEA_MAC_PARAMS)) / sizeof(int16_t)
     LEA_BUFFER_SIZE = 1884
     # somehow MSP432 does not work with pState with length 2048
-    ARM_PSTATE_LEN = 1400
+    ARM_PSTATE_LEN = 1600
     CONFIG = None
 
     DEFAULT_TILE_C = 4
@@ -211,6 +211,7 @@ configs = {
         'data_loader': load_data_google_speech,
         'n_all_samples': 4890,
         'sample_size': 2 * 25 * 10,  # MFCC gives 25x10 tensors
+        'op_filters': 4,
         'first_sample_outputs': [ -29.228327, 5.429047, 22.146973, 3.142066, -10.448060, -9.513299, 15.832925, -4.655487, -14.588447, -1.577156, -5.864228, -6.609077 ],
         # Much lower than reported on the paper due to mismatched window_size_ms/window_stride_ms (?)
         # See: https://github.com/ARM-software/ML-KWS-for-MCU/issues/44
@@ -224,12 +225,15 @@ parser.add_argument('config', choices=configs.keys())
 parser.add_argument('--all-samples', action='store_true')
 parser.add_argument('--write-images', action='store_true')
 parser.add_argument('--batch-size', type=int, default=Constants.DEFAULT_TILE_C)
+parser.add_argument('--debug', action='store_true')
 intermittent_methodology = parser.add_mutually_exclusive_group(required=True)
 intermittent_methodology.add_argument('--baseline', action='store_true')
 intermittent_methodology.add_argument('--hawaii', action='store_true')
 intermittent_methodology.add_argument('--japari', action='store_true')
 intermittent_methodology.add_argument('--stateful', action='store_true')
 args = parser.parse_args()
+if args.debug:
+    logger.setLevel(logging.DEBUG)
 config = configs[args.config]
 Constants.CONFIG = args.config
 Constants.FIRST_SAMPLE_OUTPUTS = config['first_sample_outputs']
@@ -465,7 +469,7 @@ def determine_gemm_tile_sizes(n):
     B_cols = B.dims[1]
     node_flags = n.flags.b.extra.gemm
 
-    node_flags.tile_width = 2
+    node_flags.tile_width = config['op_filters']
     total_buffer_size = Constants.LEA_BUFFER_SIZE - A_rows * A_cols;
     output_len = A_rows * B_cols
 
@@ -486,11 +490,11 @@ def determine_gemm_tile_sizes(n):
         if node_flags.tile_channel > 0:
             break
         assert node_flags.tile_width % 2 == 0
-        node_flags.tile_width += 2
+        node_flags.tile_width += config['op_filters']
 
     while node_flags.tile_width * (node_flags.tile_channel + 2) > Constants.ARM_PSTATE_LEN:
-        assert node_flags.tile_width > 2
-        node_flags.tile_width -= 2
+        assert node_flags.tile_width > config['op_filters']
+        node_flags.tile_width -= config['op_filters']
 
 graph = []
 for n in nodes:
