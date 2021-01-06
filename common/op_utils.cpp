@@ -66,6 +66,16 @@ struct MaxMultiplierChunkHandlerParams {
     uint16_t *max_multiplier;
 };
 
+static inline void reduce_max_multiplier(uint16_t* max_multiplier) {
+    // XXX: a heuristic - works when 3 is too large and 2 is OK
+    // as seen in Statefull/KWS
+    if ((*max_multiplier) % 2) {
+        (*max_multiplier)--;
+    } else {
+        (*max_multiplier) /= 2;
+    }
+}
+
 void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params) {
     MaxMultiplierChunkHandlerParams* params = reinterpret_cast<MaxMultiplierChunkHandlerParams*>(_params);
 #if !STATEFUL
@@ -105,7 +115,7 @@ void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t
     u_max_val = abs(max_val);
     // use > instead of >= as the value may be exactly on the bound
     while (max_val && u_max_val * (*params->max_multiplier) > bound) {
-        (*params->max_multiplier) /= 2;
+        reduce_max_multiplier(params->max_multiplier);
     }
 
     my_min_q15(cur_buffer, real_chunk_len, &min_val, &index);
@@ -116,7 +126,7 @@ void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t
     my_printf_debug(" occurs at index %d" NEWLINE, index);
     u_min_val = abs(min_val);
     while (min_val && u_min_val * (*params->max_multiplier) > bound) {
-        (*params->max_multiplier) /= 2;
+        reduce_max_multiplier(params->max_multiplier);
     }
     my_printf_debug("Current max_multiplier=%d" NEWLINE, *params->max_multiplier);
 }
