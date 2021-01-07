@@ -182,7 +182,9 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 filter_tmp[conv_params->filter_offset - 1] = 0;
             }
             if (conv_params->input_tile_c_index == 0) {
-                int16_t bias_val = -get_q15_param(conv_params->model, conv_params->conv_bias, conv_params->filter_idx + idx) / conv_params->conv_input->scale;
+                // convert int16_t to int32_t first as on MSP430, registers are 20 bit while there are only 16 bits when int16_t is converted to uint16_t
+                // If the dividend is negative, the quotient is wrong
+                int16_t bias_val = -static_cast<int32_t>(get_q15_param(conv_params->model, conv_params->conv_bias, conv_params->filter_idx + idx)) / conv_params->conv_input->scale;
 #if !STATEFUL
                 filter_tmp[conv_params->filter_offset - 1] = bias_val;
 #else
