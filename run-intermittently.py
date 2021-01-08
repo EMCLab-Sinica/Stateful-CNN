@@ -50,9 +50,9 @@ def main():
     parser.add_argument('program')
     args = parser.parse_args()
 
-    logfile_path = os.path.join(tempfile.gettempdir(), 'intermittent-cnn')
     rounds = 0
     while True:
+        logfile_path = os.path.join(tempfile.gettempdir(), f'intermittent-cnn-{rounds}')
         with open(logfile_path, mode='w+b') as logfile:
             run_one_inference(args.program, args.interval, logfile, args.shutdown_after_writes)
             rounds += 1
