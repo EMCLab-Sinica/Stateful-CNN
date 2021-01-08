@@ -705,7 +705,7 @@ void ConvMergeInputChunkHandler(uint32_t range_offset, uint16_t range_len, uint8
 }
 #endif
 
-#if INDIRECT_RECOVERY
+#if JAPARI
 struct ConvMergeOutputChunkHandlerParams {
     uint32_t tiling_results_offset;
 };
@@ -714,18 +714,10 @@ void ConvMergeOutputChunkHandler(uint32_t range_offset, uint16_t range_len, uint
     ConvMergeOutputChunkHandlerParams* params = reinterpret_cast<ConvMergeOutputChunkHandlerParams*>(_params);
     my_printf_debug("output range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
     int16_t *to_offset = lea_buffer + range_offset - params->tiling_results_offset;
-#if STATEFUL
-    // output state bit has not been flipped yet
-    if (!state_bit) {
-        my_offset_q15(to_offset, 0x4000, to_offset, range_len);
-    }
-#endif
-#if JAPARI
     uint16_t n_footprints = (range_len + BATCH_SIZE) / (BATCH_SIZE + 1);
     int16_t* footprint_buffer = lea_buffer + (LEA_BUFFER_SIZE - n_footprints) / 2 * 2;
     my_fill_q15((state_bit ? -1 : 1), footprint_buffer, n_footprints);
     my_interleave_q15(footprint_buffer, BATCH_SIZE - (range_offset % (BATCH_SIZE + 1)), BATCH_SIZE + 1, to_offset, n_footprints);
-#endif
 }
 #endif
 
@@ -769,6 +761,18 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 
 #endif
 
+#if INDIRECT_RECOVERY
+    int16_t old_output_offset;
+    uint8_t output_turning_point_idx;
+    uint16_t next_output_turning_point;
+    SlotInfo *cur_output_slot_info;
+
+    find_initial_state_bit(&old_output_offset, &output_turning_point_idx, &next_output_turning_point,
+                           &cur_output_slot_info, job_index_to_offset(output, first_unfinished_job_index), model, output);
+
+    my_printf_debug("old_output_offset = %d" NEWLINE, old_output_offset);
+#endif
+
     float scale_f = 1.0 * find_max_multiplier(model, data) / n_tiles_c;
     int16_t scaleFract;
     uint8_t shift;
@@ -776,7 +780,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 
     // XXX: use iterate_chunks() for the outer loop?
     for (; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
-        uint32_t real_chunk_len = (MIN_VAL(chunk_len, tiling_results_len - tiling_results_offset) + 1) / 2 * 2;
+        uint16_t real_chunk_len = MIN_VAL(chunk_len, tiling_results_len - tiling_results_offset);
         my_printf_debug("real_chunk_len = %d" NEWLINE, real_chunk_len);
         for (uint16_t input_tile_c_index = 0; input_tile_c_index < n_tiles_c; input_tile_c_index++) {
             int16_t *to_add = lea_buffer + input_tile_c_index * chunk_len;
@@ -800,8 +804,23 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
             }
         }
 #if INDIRECT_RECOVERY
+
+#if STATEFUL
+        if (!old_output_offset) {
+            my_offset_q15(lea_buffer, 0x4000, lea_buffer, MIN_VAL(next_output_turning_point - tiling_results_offset, real_chunk_len));
+        } else if (next_output_turning_point < tiling_results_offset + real_chunk_len) {
+            int16_t* to_offset = lea_buffer + next_output_turning_point - tiling_results_offset;
+            my_offset_q15(to_offset, 0x4000, to_offset, real_chunk_len - (next_output_turning_point - tiling_results_offset));
+        }
+        check_next_turning_point(old_output_offset, output_turning_point_idx,
+                                 next_output_turning_point, cur_output_slot_info, tiling_results_offset + real_chunk_len);
+#endif
+
+#if JAPARI
         ConvMergeOutputChunkHandlerParams params({tiling_results_offset});
         iterate_chunks(model, output, tiling_results_offset, real_chunk_len, ConvMergeOutputChunkHandler, &params);
+#endif
+
         my_printf_debug("After writing state bits in [%d, %d)" NEWLINE, tiling_results_offset, tiling_results_offset + real_chunk_len);
         dump_matrix_debug(lea_buffer, real_chunk_len, ValueInfo(output));
 #endif
