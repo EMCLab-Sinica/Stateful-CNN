@@ -56,7 +56,7 @@ extern "C" void TA1_0_IRQHandler(void)
 {
     // one tick is configured as roughly 1 millisecond
     // See vApplicationSetupTimerInterrupt() in main.h and FreeRTOSConfig.h
-    counters()->time_counters[get_model()->layer_idx]++;
+    counters()->time_counters[model_vm.layer_idx]++;
 #ifdef __MSP432__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast" // the macro TIMER_A1_BASE ends up with an old-style cast
