@@ -56,7 +56,7 @@ class Constants:
     CONFIG = None
 
     DEFAULT_TILE_C = 4
-    DEFAULT_TILE_H = 4
+    DEFAULT_TILE_H = 8
     CUR_BATCH_SIZE = 1
     STATEFUL = 0
     HAWAII = 0
@@ -246,7 +246,6 @@ Constants.CUR_BATCH_SIZE = args.batch_size
 if args.stateful:
     Constants.STATEFUL = 1
     Constants.METHOD = "STATEFUL"
-    Constants.CUR_BATCH_SIZE = 1  # TODO: supports batch_size > 1 for Stateful
 if args.hawaii:
     Constants.HAWAII = 1
     Constants.METHOD = "HAWAII"

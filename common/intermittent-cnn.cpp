@@ -95,6 +95,9 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
             reset_hawaii_layer_footprint(node_idx);
         }
 #endif
+        for (uint16_t counter_idx = 0; counter_idx < COUNTERS_LEN; counter_idx++) {
+            counters()->time_counters[counter_idx] = 0;
+        }
         model->running = 1;
         commit_model();
     }
