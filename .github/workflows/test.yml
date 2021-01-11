@@ -23,11 +23,11 @@ jobs:
     - name: Test
       run: ./utils/test.sh
 
-  mnist_stateful:
+  mnist_stateful_b1:
     runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
-      CONFIG: '--all-samples --stateful mnist'
+      CONFIG: '--all-samples --stateful --batch-size 1 mnist'
     steps:
     - name: Checkout main repo
       uses: actions/checkout@v2
@@ -108,11 +108,11 @@ jobs:
     - name: Test
       run: ./utils/test.sh
 
-  cifar10_stateful:
+  cifar10_stateful_b1:
     runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
-      CONFIG: '--all-samples --stateful cifar10'
+      CONFIG: '--all-samples --stateful --batch-size 1 cifar10'
     steps:
     - name: Checkout main repo
       uses: actions/checkout@v2
@@ -199,11 +199,11 @@ jobs:
     - name: Test
       run: ./utils/test.sh
 
-  kws_stateful:
+  kws_stateful_b1:
     runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
-      CONFIG: '--all-samples --stateful kws'
+      CONFIG: '--all-samples --stateful --batch-size 1 kws'
     steps:
     - name: Install git
       run: 'pacman -Syu --noconfirm && pacman -S --noconfirm git'
@@ -218,11 +218,11 @@ jobs:
     - name: Test
       run: ./utils/test.sh
 
-  mnist_stateful_cmsis:
+  mnist_stateful_b1_cmsis:
     runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
-      CONFIG: '--stateful mnist'
+      CONFIG: '--stateful --batch-size 1 mnist'
       USE_ARM_CMSIS: 1
     steps:
     - name: Checkout main repo
@@ -240,7 +240,7 @@ jobs:
     runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
-      CONFIG: '--stateful mnist'
+      CONFIG: '--stateful --batch-size 1 mnist'
       DEBUG_BUILD: 1
     steps:
     - name: Checkout main repo
