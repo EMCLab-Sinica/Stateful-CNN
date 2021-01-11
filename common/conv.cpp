@@ -420,12 +420,22 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         }
 
 #if STATEFUL
-        // XXX: stipping states inside the h loop is faster
+        // stipping states inside the h loop is faster as biases multipliers can be skipped
         int16_t *input_row_end = orig_dest_addr + input_row_len;
-        for (int16_t *dest_ptr = orig_dest_addr; dest_ptr < input_row_end; dest_ptr++) {
-            int16_t val = *dest_ptr;
-            if (get_value_state_bit(val)) {
-                *dest_ptr = val - 0x4000;
+        uint8_t start_state = get_value_state_bit(*orig_dest_addr);
+        if (start_state == get_value_state_bit(*(input_row_end - 1))) {
+            // XXX: a heuristic - assume there is at most one turning points in a row
+            my_printf_debug("Using my_offset_q15 for stripping state bits" NEWLINE);
+            if (start_state) {
+                my_offset_q15(orig_dest_addr, -0x4000, orig_dest_addr, input_row_len);
+            }
+        } else {
+            my_printf_debug("Using a loop for stripping state bits" NEWLINE);
+            for (int16_t *dest_ptr = orig_dest_addr; dest_ptr < input_row_end; dest_ptr++) {
+                int16_t val = *dest_ptr;
+                if (get_value_state_bit(val)) {
+                    *dest_ptr = val - 0x4000;
+                }
             }
         }
 #endif
