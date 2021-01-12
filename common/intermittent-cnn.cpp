@@ -158,7 +158,7 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     *ansptr = u_ans;
 }
 
-#if MY_DEBUG >= 1
+#if MY_DEBUG >= 1 || !defined(EXTFRAM_USE_DMA)
 static void print_results(const ParameterInfo *output_node) {
     Model *model = get_model();
 
@@ -227,7 +227,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
         my_printf_debug("idx=%d label=%d predicted=%d correct=%d" NEWLINE, i, label, predicted, label == predicted);
 #endif
     }
-#if MY_DEBUG >= 1
+#if MY_DEBUG >= 1 || !defined(EXTFRAM_USE_DMA)
     if (n_samples == 1) {
         print_results(output_node);
     }

@@ -7,7 +7,6 @@
 #endif
 #include <stdint.h>
 #include <string.h>
-#include "Tools/ext_fram/extfram.h"
 #include "intermittent-cnn.h"
 #include "cnn_common.h"
 #include "platform.h"
