@@ -23,6 +23,7 @@ from utils import (
     load_data_google_speech,
 )
 
+logging.basicConfig()
 logger = logging.getLogger(__name__)
 
 """
@@ -409,6 +410,8 @@ def find_node_by_output(output_name):
             return node
 
 def determine_conv_tile_c(n):
+    logger.debug('Determine tile size for Conv node %s', n.name)
+
     output_value_info = find_tensor_value_info(n.output[0])
     filter_info = find_initializer(n.input[1])
     node_flags = n.flags.b.extra.conv
@@ -437,18 +440,28 @@ def determine_conv_tile_c(n):
         while max_continuous_channels % (node_flags.input_tile_c * 2) == 0 and node_flags.input_tile_c < 128:
             node_flags.input_tile_c *= 2
 
+    logger.debug('Initial input_tile_c=%d', node_flags.input_tile_c)
+
+    def get_memory_usage(output_tile_c, filter_len):
+        # *2 as in JAPARI, the number of footprint weights is up to the number of
+        # filters (e.g., batch size=1)
+        ret = ((output_tile_c * 2 + 1) + Constants.TEMP_FILTER_WIDTH) * filter_len
+        logger.debug('Checking output_tile_c=%d, filter_len=%d, memory usage=%d', output_tile_c, filter_len, ret)
+        return ret
+
     while True:
         input_tile_too_large = False
         # inner +1 for biases
-        # * 2 as in JAPARI, the number of footprint weights is up to the number of
-        # filters (e.g., batch size=1)
         filter_len = ((node_flags.input_tile_c * kW + 1) + 1) // 2 * 2 * 2 * kH
         output_tile_c = OUTPUT_CHANNEL
-        while ((output_tile_c * 2 + 1) + Constants.TEMP_FILTER_WIDTH) * filter_len > Constants.LEA_BUFFER_SIZE:
+        while get_memory_usage(output_tile_c, filter_len) > Constants.LEA_BUFFER_SIZE:
+            logger.debug('output_tile_c=%d', output_tile_c)
             output_tile_c //= 2
             if output_tile_c % 2 or output_tile_c < config['op_filters']:
                 # current input_tile_c is too large such that no even output_tile_c fits
                 input_tile_too_large = True
+                logger.debug("Input too large!")
+                break
 
         if not input_tile_too_large:
             params_len = CHANNEL / node_flags.input_tile_c * OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W * 2
@@ -456,9 +469,12 @@ def determine_conv_tile_c(n):
                 break
         node_flags.input_tile_c //= 2
         assert node_flags.input_tile_c
+        logger.debug('input_tile_c=%d', node_flags.input_tile_c)
     node_flags.output_tile_c = output_tile_c
 
 def determine_gemm_tile_sizes(n):
+    logger.debug('Determine tile size for Gemm node %s', n.name)
+
     A = find_tensor_value_info(n.input[0])
     B = find_initializer(n.input[1])
     A_shape = A.type.tensor_type.shape
