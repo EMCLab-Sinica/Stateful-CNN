@@ -13,15 +13,16 @@
 #define my_checkStatus(status) MY_ASSERT(status == MSP_SUCCESS, "Error from TI-DSPLib: %d" NEWLINE, status)
 #endif
 
-static inline void check_buffer_address(const int16_t* addr) {
+static inline void check_buffer_address(const int16_t* addr, uint32_t blockSize) {
     MY_ASSERT(addr >= lea_buffer && addr < lea_buffer + LEA_BUFFER_SIZE);
+    MY_ASSERT(addr + blockSize - 1 >= lea_buffer && addr + blockSize - 1 < lea_buffer + LEA_BUFFER_SIZE);
     MY_ASSERT((addr - lea_buffer) % 2 == 0);
 }
 
 void my_add_q15(const int16_t *pSrcA, const int16_t *pSrcB, int16_t *pDst, uint32_t blockSize) {
-    check_buffer_address(pSrcA);
-    check_buffer_address(pSrcB);
-    check_buffer_address(pDst);
+    check_buffer_address(pSrcA, blockSize);
+    check_buffer_address(pSrcB, blockSize);
+    check_buffer_address(pDst, blockSize);
 #ifndef USE_ARM_CMSIS
     uint32_t blockSizeForLEA = blockSize / 2 * 2;
     if (blockSizeForLEA) {
@@ -39,7 +40,7 @@ void my_add_q15(const int16_t *pSrcA, const int16_t *pSrcB, int16_t *pDst, uint3
 }
 
 void my_fill_q15(int16_t value, int16_t *pDst, uint32_t blockSize) {
-    check_buffer_address(pDst);
+    check_buffer_address(pDst, blockSize);
 #ifndef USE_ARM_CMSIS
     uint32_t blockSizeForLEA = blockSize / 2 * 2;
     if (blockSizeForLEA) {
@@ -69,8 +70,8 @@ void my_offset_q15(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t 
         MY_ASSERT(blockSize); // avoid overflow in the next line
         blockSize--;
     }
-    check_buffer_address(pSrc);
-    check_buffer_address(pDst);
+    check_buffer_address(pSrc, blockSize);
+    check_buffer_address(pDst, blockSize);
     // LEA does not like zero-sized blocks
     uint16_t block_size_for_lea = blockSize / 2 * 2;
     if (block_size_for_lea) {
@@ -176,8 +177,8 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
     MY_ASSERT((A_cols & 1) || (B_cols & 1) == 0);
     MY_ASSERT(B_rows * B_cols <= ARM_PSTATE_LEN);
     MY_ASSERT(A_cols == B_rows);
-    check_buffer_address(pSrcA);
-    check_buffer_address(pSrcB);
+    check_buffer_address(pSrcA, A_rows * A_cols);
+    check_buffer_address(pSrcB, B_rows * B_cols);
 #ifndef USE_ARM_CMSIS
     msp_matrix_mpy_q15_params matrix_mpy_params;
     matrix_mpy_params.srcARows = A_rows;

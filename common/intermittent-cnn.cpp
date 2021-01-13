@@ -473,6 +473,8 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
 
     while (1) {
 #if 0
+        uint32_t cur_begin_offset = job_index_to_offset(output, cur_begin_job_index),
+                 cur_end_offset = job_index_to_offset(output, cur_end_job_index);
         dump_matrix_debug(model, output, cur_begin_offset, cur_end_offset - cur_begin_offset, ValueInfo(output));
 #endif
         if (cur_end_job_index - cur_begin_job_index <= 1) {

@@ -484,20 +484,16 @@ def determine_gemm_tile_sizes(n):
     B_cols = B.dims[1]
     node_flags = n.flags.b.extra.gemm
 
-    if Constants.INDIRECT_RECOVERY:
-        # Use smaller tile sizes so that filters will not exceed LEA buffer
-        # manual appending/embedding is utilized when needed
-        tile_size_unit = 2
-    else:
-        # For HAWAII, writing a batch at a time is simpler
-        tile_size_unit = config['op_filters']
+    # writing a batch at a time is simpler and faster
+    tile_size_unit = config['op_filters']
 
     node_flags.tile_width = tile_size_unit
-    total_buffer_size = Constants.LEA_BUFFER_SIZE - A_rows * A_cols;
+    # +2 for bias multiplier and padding
+    total_buffer_size = Constants.LEA_BUFFER_SIZE - (A_rows * A_cols + 2)
     output_len = A_rows * B_cols
 
-    if Constants.JAPARI:
-        output_len += output_len // Constants.CUR_BATCH_SIZE
+    # Extend to the max possible output_len (JAPARI, B=1)
+    output_len += output_len // Constants.CUR_BATCH_SIZE
 
     while True:
         logger.debug("tile_width=%d", node_flags.tile_width)
@@ -506,7 +502,8 @@ def determine_gemm_tile_sizes(n):
         while node_flags.tile_channel > 0:
             tmp = int(math.ceil(B_rows / node_flags.tile_channel))
             logger.debug("tile_channel=%d, tmp=%d", node_flags.tile_channel, tmp)
-            if total_buffer_size - node_flags.tile_channel * node_flags.tile_width >= output_len * tmp:
+            # * 2 to fit JAPARI footprint kernels
+            if total_buffer_size - (node_flags.tile_channel + 2) * node_flags.tile_width * 2 >= output_len * tmp:
                 break
             node_flags.tile_channel -= 2
         logger.debug("tile_channel = %d", node_flags.tile_channel)

@@ -30,6 +30,7 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 
 void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params) {
     int16_t* buffer_a = reinterpret_cast<int16_t*>(_params);
+    my_printf_debug("GemmInputChunkHandler offset=%d real_chunk_len=%d state_bit=%d" NEWLINE, offset, real_chunk_len, state_bit);
     if (state_bit) {
         int16_t* to_offset = buffer_a + offset;
         my_offset_q15(to_offset, -0x4000, to_offset, real_chunk_len);
@@ -196,6 +197,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
             output_offset += values_to_preserve;
         }
+        j = 0;
     }
 
     flip_state_bit(model, output);

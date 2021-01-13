@@ -198,7 +198,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             output_w = 0;
         }
     } else {
-        uint16_t i = 0;
+        uint16_t i = output_offset;
 #if JAPARI
         uint8_t cur_batch_offset = i % (BATCH_SIZE + 1);
 #endif
@@ -225,6 +225,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if STATEFUL
             output_val += offset;
 #endif
+            my_printf_debug("output_offset=%d output_val=%d" NEWLINE, output_offset, output_val);
             put_q15_param(output, output_offset, output_val);
 #if HAWAII
             write_hawaii_layer_footprint(model->layer_idx, 1);
