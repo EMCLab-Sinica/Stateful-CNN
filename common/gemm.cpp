@@ -133,11 +133,18 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if JAPARI
                 if (!manual_appending) {
                     int16_t* cur_filter_start = filter_ptr;
+                    uint8_t copy_size = MIN_VAL(BATCH_SIZE, tile_width);
                     for (uint16_t col = 0; filter_ptr < cur_filter_start + values_to_preserve; col += BATCH_SIZE) {
                         my_memcpy_from_param(model, filter_ptr,
                                   B, (i + row) * B->dims[1] + j + col,
-                                  tile_width * sizeof(uint16_t));
-                        filter_ptr += full_tile_width;
+                                  copy_size * sizeof(uint16_t));
+                        filter_ptr += copy_size;
+                        if (tile_width >= BATCH_SIZE) {
+                            filter_ptr++;
+                        }
+                        if (values_to_preserve != full_tile_width) {
+                            filter_ptr++;
+                        }
                         my_printf_debug("filter_ptr = lea_buffer + %ld" NEWLINE, filter_ptr - lea_buffer);
                     }
                 } else
