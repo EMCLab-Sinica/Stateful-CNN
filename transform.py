@@ -498,18 +498,18 @@ def determine_gemm_tile_sizes(n):
     while True:
         logger.debug("tile_width=%d", node_flags.tile_width)
         # LEA wants addresses to be 4 byte-aligned, or 2 Q15-aligned
-        node_flags.tile_channel = min([(Constants.ARM_PSTATE_LEN / node_flags.tile_width) / 2 * 2 - 2, B_rows])
+        node_flags.tile_channel = min([(Constants.ARM_PSTATE_LEN / node_flags.tile_width) / 2 * 2 - 2, B_rows]) // tile_size_unit * tile_size_unit
         while node_flags.tile_channel > 0:
             tmp = int(math.ceil(B_rows / node_flags.tile_channel))
             logger.debug("tile_channel=%d, tmp=%d", node_flags.tile_channel, tmp)
             # * 2 to fit JAPARI footprint kernels
             if total_buffer_size - (node_flags.tile_channel + 2) * node_flags.tile_width * 2 >= output_len * tmp:
                 break
-            node_flags.tile_channel -= 2
+            node_flags.tile_channel -= tile_size_unit
         logger.debug("tile_channel = %d", node_flags.tile_channel)
         if node_flags.tile_channel > 0:
             break
-        assert node_flags.tile_width % 2 == 0
+        assert node_flags.tile_width % tile_size_unit == 0
         node_flags.tile_width += tile_size_unit
 
     while node_flags.tile_width * (node_flags.tile_channel + 2) > Constants.ARM_PSTATE_LEN:
