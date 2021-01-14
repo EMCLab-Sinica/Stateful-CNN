@@ -104,8 +104,9 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         buffer_a[tile_channels + 1] = 0;
         extended_tile_channels += 2;
         if (has_footprints(A)) {
+            uint16_t input_offset = extend_for_footprints(i);
             for (uint16_t idx = 0, output_idx = 0; output_idx < tile_channels; idx += BATCH_SIZE + 1, output_idx += BATCH_SIZE) {
-                my_memcpy_from_param(model, buffer_a + output_idx, A, i + idx, BATCH_SIZE * sizeof(uint16_t));
+                my_memcpy_from_param(model, buffer_a + output_idx, A, input_offset + idx, BATCH_SIZE * sizeof(uint16_t));
             }
         } else
 #endif
@@ -114,7 +115,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         }
 
 #if STATEFUL
-        iterate_chunks(model, A, 0, 0, GemmInputChunkHandler, buffer_a);
+        iterate_chunks(model, A, i, 0, GemmInputChunkHandler, buffer_a);
 #endif
 
         my_printf_debug("Tile for A" NEWLINE);
