@@ -88,7 +88,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
 #if INDIRECT_RECOVERY
-    uint8_t manual_appending = (flags->extra.gemm.tile_width < BATCH_SIZE);
+    MY_ASSERT(flags->extra.gemm.tile_width >= BATCH_SIZE);
 #endif
 
     for (; i < B->dims[0]; i += flags->extra.gemm.tile_channel, tile++) {
@@ -131,30 +131,27 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             my_fill_q15(0, filter_ptr, extended_tile_channels * full_tile_width);
             for (uint16_t row = 0; row < tile_channels; row++) {
 #if JAPARI
-                if (!manual_appending) {
-                    int16_t* cur_filter_start = filter_ptr;
-                    uint8_t copy_size = MIN_VAL(BATCH_SIZE, tile_width);
-                    for (uint16_t col = 0; filter_ptr < cur_filter_start + values_to_preserve; col += BATCH_SIZE) {
-                        my_memcpy_from_param(model, filter_ptr,
-                                  B, (i + row) * B->dims[1] + j + col,
-                                  copy_size * sizeof(uint16_t));
-                        filter_ptr += copy_size;
-                        if (tile_width >= BATCH_SIZE) {
-                            filter_ptr++;
-                        }
-                        if (values_to_preserve != full_tile_width) {
-                            filter_ptr++;
-                        }
-                        my_printf_debug("filter_ptr = lea_buffer + %ld" NEWLINE, filter_ptr - lea_buffer);
-                    }
-                } else
-#endif
-                {
+                int16_t* cur_filter_start = filter_ptr;
+                uint8_t copy_size = MIN_VAL(BATCH_SIZE, tile_width);
+                for (uint16_t col = 0; filter_ptr < cur_filter_start + values_to_preserve; col += BATCH_SIZE) {
                     my_memcpy_from_param(model, filter_ptr,
-                              B, (i + row) * B->dims[1] + j,
-                              tile_width * sizeof(uint16_t));
-                    filter_ptr += full_tile_width;
+                              B, (i + row) * B->dims[1] + j + col,
+                              copy_size * sizeof(uint16_t));
+                    filter_ptr += copy_size;
+                    if (tile_width >= BATCH_SIZE) {
+                        filter_ptr++;
+                    }
+                    if (values_to_preserve != full_tile_width) {
+                        filter_ptr++;
+                    }
+                    my_printf_debug("filter_ptr = lea_buffer + %ld" NEWLINE, filter_ptr - lea_buffer);
                 }
+#else
+                my_memcpy_from_param(model, filter_ptr,
+                          B, (i + row) * B->dims[1] + j,
+                          tile_width * sizeof(uint16_t));
+                filter_ptr += full_tile_width;
+#endif
             }
 #if JAPARI
             my_fill_q15(0, filter_ptr, 2 * full_tile_width);
@@ -187,12 +184,6 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
             my_printf_debug("output_offset=%d" NEWLINE, output_offset);
 #if !HAWAII
-#if INDIRECT_RECOVERY
-            if (manual_appending && (output_offset + values_to_preserve) % (BATCH_SIZE + 1) == BATCH_SIZE) {
-                buffer_temp[values_to_preserve] = (param_state_bit(model, output, output_offset) ? -1 : 1);
-                values_to_preserve++;
-            }
-#endif
 #if JAPARI
             if (values_to_preserve < BATCH_SIZE + 1) {
                 my_fill_q15(0, buffer_temp + values_to_preserve, BATCH_SIZE - values_to_preserve);
