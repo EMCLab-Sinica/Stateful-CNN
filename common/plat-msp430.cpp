@@ -106,6 +106,7 @@ void read_from_nvm(void* vm_buffer, uint32_t nvm_offset, size_t n) {
     SPI_ADDR addr;
     addr.L = nvm_offset;
     SPI_READ(&addr, reinterpret_cast<uint8_t*>(vm_buffer), n);
+    my_printf_debug("%d words read from NVM offset %d" NEWLINE, n, nvm_offset);
 }
 
 void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n) {
@@ -113,6 +114,7 @@ void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n) {
     addr.L = nvm_offset;
     check_nvm_write_address(nvm_offset, n);
     SPI_WRITE(&addr, reinterpret_cast<const uint8_t*>(vm_buffer), n);
+    my_printf_debug("%d words written to NVM offset %d" NEWLINE, n, nvm_offset);
 }
 
 void my_erase() {
@@ -120,7 +122,10 @@ void my_erase() {
 }
 
 void copy_samples_data(void) {
-    write_to_nvm(samples_data, SAMPLES_OFFSET, SAMPLES_DATA_LEN);
+    // DMA controller on MSP432 can handle at most 1024 words at a time
+    for (uint16_t idx = 0; idx < SAMPLES_DATA_LEN; idx += 1024) {
+        write_to_nvm(samples_data + idx, SAMPLES_OFFSET + idx, MIN_VAL(SAMPLES_DATA_LEN - idx, 1024));
+    }
 }
 
 [[ noreturn ]] void ERROR_OCCURRED(void) {
@@ -150,6 +155,7 @@ void IntermittentCNNTest() {
 
     initSPI();
     if (testSPI() != 0) {
+        my_printf_debug("Failed to initialize FRAM, resetting..." NEWLINE);
         // external FRAM failed to initialize - reset
         counter = 1000;
         // waiting some time seems to increase the possibility
