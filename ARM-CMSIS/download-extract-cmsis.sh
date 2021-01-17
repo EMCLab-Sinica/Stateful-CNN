@@ -3,7 +3,22 @@
 set -x
 set -e
 
-CMSIS_ROOT="$1"
+CMSIS_VERSION=5.7.0
+CMSIS_ARCHIVE="ARM.CMSIS.$CMSIS_VERSION.pack"
+
+cleanup() {
+    rm -rvf CMSIS
+    rm -vf $CMSIS_ARCHIVE
+}
+
+trap cleanup EXIT SIGINT
+
+cleanup
+
+wget "https://github.com/ARM-software/CMSIS_5/releases/download/$CMSIS_VERSION/$CMSIS_ARCHIVE"
+unzip $CMSIS_ARCHIVE 'CMSIS/Core/*' 'CMSIS/DSP/*'
+
+CMSIS_ROOT="$PWD/CMSIS"
 
 [[ $CMSIS_ROOT != "" ]] || exit 1
 
@@ -20,11 +35,11 @@ sources=(
 )
 
 mkdir -p Core DSP/Source
-ln -sf "$CMSIS_ROOT"/Core/Include Core/
-ln -sf "$CMSIS_ROOT"/DSP/Include DSP/
-ln -sf "$CMSIS_ROOT"/DSP/PrivateInclude DSP/
+cp -vrf "$CMSIS_ROOT"/Core/Include Core/
+cp -vrf "$CMSIS_ROOT"/DSP/Include DSP/
+cp -vrf "$CMSIS_ROOT"/DSP/PrivateInclude DSP/
 for f in ${sources[@]}; do
     dir="$(dirname $f)"
     mkdir -p "$dir"
-    ln -sf "$CMSIS_ROOT/$f" "$dir"
+    cp -vf "$CMSIS_ROOT/$f" "$dir"
 done
