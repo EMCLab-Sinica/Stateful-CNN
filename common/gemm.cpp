@@ -197,7 +197,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
             output_offset += values_to_preserve;
         }
-        j = 0;
+        j = j_with_footprints = 0;
     }
 
     flip_state_bit(model, output);

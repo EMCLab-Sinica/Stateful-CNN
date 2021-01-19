@@ -48,7 +48,7 @@ void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, co
     MY_ASSERT(param->bitwidth == 16);
     MY_ASSERT(param->slot < SLOT_CONSTANTS_MIN);
     uint32_t total_offset = param->params_offset + offset_in_word * sizeof(int16_t);
-    MY_ASSERT(total_offset + n <= INTERMEDIATE_VALUES_SIZE);
+    MY_ASSERT(total_offset + n <= param->params_len);
     write_to_nvm(src, intermediate_values_offset(param->slot) + total_offset, n);
 }
 
