@@ -138,8 +138,8 @@ void copy_samples_data(void) {
 #else
 #define GPIO_COUNTER_PORT GPIO_PORT_P3
 #define GPIO_COUNTER_PIN GPIO_PIN6
-#define GPIO_RESET_PORT GPIO_PORT_P1
-#define GPIO_RESET_PIN GPIO_PIN6
+#define GPIO_RESET_PORT GPIO_PORT_P2
+#define GPIO_RESET_PIN GPIO_PIN5
 #endif
 
 void IntermittentCNNTest() {
@@ -163,7 +163,7 @@ void IntermittentCNNTest() {
     }
 
     Model* model = get_model();
-    if (GPIO_getInputPinValue(GPIO_RESET_PORT, GPIO_RESET_PIN)) {
+    if (!GPIO_getInputPinValue(GPIO_RESET_PORT, GPIO_RESET_PIN)) {
         my_printf(NEWLINE "run_counter = %d" NEWLINE, model->run_counter);
 
         first_run();
