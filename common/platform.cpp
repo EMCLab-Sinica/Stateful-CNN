@@ -147,7 +147,8 @@ void first_run(void) {
     memset(counters(), 0, sizeof(Counters));
 #endif
 
-    write_to_nvm(intermediate_parameters_info_data, intermediate_parameters_info_addr(0), INTERMEDIATE_PARAMETERS_INFO_DATA_LEN);
+    write_to_nvm_segmented(intermediate_parameters_info_data, intermediate_parameters_info_addr(0),
+                           INTERMEDIATE_PARAMETERS_INFO_DATA_LEN, sizeof(ParameterInfo));
     write_to_nvm(model_data, nvm_addr<Model>(0, 0), MODEL_DATA_LEN);
     write_to_nvm(model_data, nvm_addr<Model>(1, 0), MODEL_DATA_LEN);
     dma_counter_enabled = 1;
@@ -183,6 +184,12 @@ void check_nvm_write_address(uint32_t nvm_offset, size_t n) {
         MY_ASSERT((nvm_offset - INTERMEDIATE_PARAMETERS_INFO_OFFSET) % sizeof(ParameterInfo) == 0);
     } else if (nvm_offset < INTERMEDIATE_PARAMETERS_INFO_OFFSET) {
         MY_ASSERT(n <= INTERMEDIATE_PARAMETERS_INFO_OFFSET - nvm_offset, "Size %d too large!!! nvm_offset=%d" NEWLINE, n, nvm_offset);
+    }
+}
+
+void write_to_nvm_segmented(const uint8_t* vm_buffer, uint32_t nvm_offset, uint16_t total_len, uint16_t segment_size) {
+    for (uint16_t idx = 0; idx < total_len; idx += segment_size) {
+        write_to_nvm(vm_buffer + idx, nvm_offset + idx, MIN_VAL(total_len - idx, segment_size));
     }
 }
 

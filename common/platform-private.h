@@ -22,5 +22,7 @@ extern Model model_vm;
 
 void read_from_nvm(void* vm_buffer, uint32_t nvm_offset, size_t n);
 void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n);
+// DMA controller on MSP432 can handle at most 1024 words at a time
+void write_to_nvm_segmented(const uint8_t* vm_buffer, uint32_t nvm_offset, uint16_t total_len, uint16_t segment_size = 1024);
 void my_erase(void);
 void copy_samples_data(void);

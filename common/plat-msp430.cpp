@@ -113,6 +113,7 @@ void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n) {
     SPI_ADDR addr;
     addr.L = nvm_offset;
     check_nvm_write_address(nvm_offset, n);
+    MY_ASSERT(n <= 1024);
     SPI_WRITE(&addr, reinterpret_cast<const uint8_t*>(vm_buffer), n);
     my_printf_debug("%d words written to NVM offset %d" NEWLINE, n, nvm_offset);
 }
@@ -122,10 +123,7 @@ void my_erase() {
 }
 
 void copy_samples_data(void) {
-    // DMA controller on MSP432 can handle at most 1024 words at a time
-    for (uint16_t idx = 0; idx < SAMPLES_DATA_LEN; idx += 1024) {
-        write_to_nvm(samples_data + idx, SAMPLES_OFFSET + idx, MIN_VAL(SAMPLES_DATA_LEN - idx, 1024));
-    }
+    write_to_nvm_segmented(samples_data, SAMPLES_OFFSET, SAMPLES_DATA_LEN);
 }
 
 [[ noreturn ]] void ERROR_OCCURRED(void) {
