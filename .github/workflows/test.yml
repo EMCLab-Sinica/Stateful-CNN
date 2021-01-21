@@ -230,24 +230,6 @@ jobs:
     - name: Test
       run: ./utils/test.sh
 
-  debug_build:
-    runs-on: ubuntu-20.04
-    container: archlinux:latest
-    env:
-      CONFIG: '--stateful --batch-size 1 mnist'
-      DEBUG_BUILD: 1
-    steps:
-    - name: Checkout main repo
-      uses: actions/checkout@v2
-    - name: Checkout TI-DSPLib
-      uses: actions/checkout@v2
-      with:
-        repository: EMCLab-Sinica/DSPLib
-        path: TI-DSPLib
-        token: ${{ secrets.access_token }}
-    - name: Test
-      run: ./utils/test.sh
-
   old_system:
     runs-on: ubuntu-20.04
     container: centos:7

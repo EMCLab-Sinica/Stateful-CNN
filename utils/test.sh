@@ -13,7 +13,6 @@ pacman -U --noconfirm https://build.archlinuxcn.org/~yan12125/python-torchaudio-
 
 # preparation
 cmake_args=""
-MY_DEBUG="1"
 run_args=""
 
 if [[ $USE_ARM_CMSIS = 1 ]]; then
@@ -21,11 +20,7 @@ if [[ $USE_ARM_CMSIS = 1 ]]; then
     cmake_args="$cmake_args -D USE_ARM_CMSIS=ON"
 fi
 
-if [[ $DEBUG_BUILD = 1 ]]; then
-    MY_DEBUG="2"
-    run_args="$run_args 1"
-fi
-cmake_args="$cmake_args -D MY_DEBUG=$MY_DEBUG"
+cmake_args="$cmake_args -D MY_DEBUG=1"
 
 if [[ $CONFIG = *mnist* ]]; then
     ./data/download-mnist.sh
@@ -42,3 +37,12 @@ python transform.py $CONFIG
 cmake -B build $cmake_args
 make -C build
 ./build/intermittent-cnn $run_args
+
+# Test intermittent running
+if [[ ! $CONFIG = *baseline* ]]; then
+    rm -vf nvm.bin
+    cmake_args=${cmake_args/MY_DEBUG=1/MY_DEBUG=2}
+    cmake -B build $cmake_args
+    make -C build
+    python ./run-intermittently.py --rounds 100 ./build/intermittent-cnn
+fi
