@@ -133,8 +133,8 @@ void copy_samples_data(void) {
 #ifdef __MSP430__
 #define GPIO_COUNTER_PORT GPIO_PORT_P1
 #define GPIO_COUNTER_PIN GPIO_PIN5
-#define GPIO_RESET_PORT GPIO_PORT_P8
-#define GPIO_RESET_PIN GPIO_PIN1
+#define GPIO_RESET_PORT GPIO_PORT_P5
+#define GPIO_RESET_PIN GPIO_PIN7
 #else
 #define GPIO_COUNTER_PORT GPIO_PORT_P3
 #define GPIO_COUNTER_PIN GPIO_PIN6
@@ -185,5 +185,6 @@ void button_pushed(uint16_t button1_status, uint16_t button2_status) {
 }
 
 void notify_model_finished(void) {
+    my_printf("." NEWLINE);
     GPIO_toggleOutputOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
 }
