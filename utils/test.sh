@@ -22,12 +22,14 @@ fi
 
 cmake_args="$cmake_args -D MY_DEBUG=1"
 
+rounds=100
 power_cycle=0.01
 if [[ $CONFIG = *mnist* ]]; then
     ./data/download-mnist.sh
 fi
 if [[ $CONFIG = *cifar10* ]]; then
     ./data/download-cifar10.sh
+    rounds=50
     power_cycle=0.02
 fi
 if [[ $CONFIG = *kws* ]]; then
@@ -46,5 +48,5 @@ if [[ ! $CONFIG = *baseline* ]]; then
     cmake_args=${cmake_args/MY_DEBUG=1/MY_DEBUG=2}
     cmake -B build $cmake_args
     make -C build
-    python ./run-intermittently.py --rounds 100 --interval $power_cycle ./build/intermittent-cnn
+    python ./run-intermittently.py --rounds $rounds --interval $power_cycle --compress ./build/intermittent-cnn
 fi

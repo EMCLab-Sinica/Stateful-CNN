@@ -39,6 +39,13 @@ jobs:
         token: ${{ secrets.access_token }}
     - name: Test
       run: ./utils/test.sh
+    - name: upload logs
+      if: '${{ failure() }}'
+      uses: actions/upload-artifact@v2
+      with:
+        name: logs-mnist_stateful_b1
+        path: /tmp/intermittent.tar
+        retention-days: 1
 
   mnist_japari_b1:
     runs-on: ubuntu-20.04
@@ -124,12 +131,19 @@ jobs:
         token: ${{ secrets.access_token }}
     - name: Test
       run: ./utils/test.sh
+    - name: upload logs
+      if: '${{ failure() }}'
+      uses: actions/upload-artifact@v2
+      with:
+        name: logs-cifar10_stateful_b1
+        path: /tmp/intermittent.tar
+        retention-days: 1
 
   cifar10_stateful_b2:
     runs-on: ubuntu-20.04
     container: archlinux:latest
     env:
-      CONFIG: '--all-samples --stateful --batch-size 2 cifar10'
+      CONFIG: '--stateful --batch-size 2 cifar10'
     steps:
     - name: Checkout main repo
       uses: actions/checkout@v2
@@ -141,6 +155,13 @@ jobs:
         token: ${{ secrets.access_token }}
     - name: Test
       run: ./utils/test.sh
+    - name: upload logs
+      if: '${{ failure() }}'
+      uses: actions/upload-artifact@v2
+      with:
+        name: logs-cifar10_stateful_b2
+        path: /tmp/intermittent.tar
+        retention-days: 1
 
   cifar10_japari_b4:
     runs-on: ubuntu-20.04
