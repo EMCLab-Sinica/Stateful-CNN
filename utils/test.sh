@@ -45,6 +45,13 @@ make -C build
 # Test intermittent running
 if [[ ! $CONFIG = *baseline* ]]; then
     rm -vf nvm.bin
+
+    # somehow a large samples.bin breaks intermittent
+    # execution - regenerate samples when needed
+    if [[ $CONFIG = *all-samples* ]]; then
+        python transform.py ${CONFIG/--all-samples/}
+    fi
+
     cmake_args=${cmake_args/MY_DEBUG=1/MY_DEBUG=2}
     cmake -B build $cmake_args
     make -C build
