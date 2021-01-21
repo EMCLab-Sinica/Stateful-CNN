@@ -125,6 +125,23 @@ jobs:
     - name: Test
       run: ./utils/test.sh
 
+  cifar10_stateful_b2:
+    runs-on: ubuntu-20.04
+    container: archlinux:latest
+    env:
+      CONFIG: '--all-samples --stateful --batch-size 2 cifar10'
+    steps:
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout TI-DSPLib
+      uses: actions/checkout@v2
+      with:
+        repository: EMCLab-Sinica/DSPLib
+        path: TI-DSPLib
+        token: ${{ secrets.access_token }}
+    - name: Test
+      run: ./utils/test.sh
+
   cifar10_japari_b4:
     runs-on: ubuntu-20.04
     container: archlinux:latest

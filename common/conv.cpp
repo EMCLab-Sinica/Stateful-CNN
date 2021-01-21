@@ -90,8 +90,8 @@ static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filte
         to_flip_state_bits -= n_filters;
     }
     // need negating filter value here as it will be multiplied with _Q15(-1.0), or -32768
-    int16_t offset = get_value_state_bit(-*to_flip_state_bits) ? 0x4000 : -0x4000;
-    my_offset_q15(to_flip_state_bits, offset, to_flip_state_bits, len);
+    int16_t offset = get_value_state_bit(-*(to_flip_state_bits + BATCH_SIZE - 1)) ? 0x4000 : -0x4000;
+    my_offset_q15_batched(to_flip_state_bits, offset, to_flip_state_bits, len);
 #endif
 #if JAPARI
     int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + n_filters * (conv_params->filter_offset - 1);
@@ -172,7 +172,8 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 }
             }
 #if STATEFUL
-            if ((!conv_params->old_output_offset && idx < n_keep_state_bits) || (conv_params->old_output_offset && idx >= n_keep_state_bits)) {
+            if (((!conv_params->old_output_offset && idx < n_keep_state_bits) || (conv_params->old_output_offset && idx >= n_keep_state_bits)) &&
+                    ((BATCH_SIZE == 1 || ((cur_output_data_offset + idx) % BATCH_SIZE == BATCH_SIZE - 1)))) {
                 my_printf_debug("Adding state bit for newly loaded filter idx=%d" NEWLINE, idx);
                 filter_tmp[conv_params->filter_offset - 1] = -0x4000;
             } else
@@ -422,12 +423,12 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
 #if STATEFUL
         // stipping states inside the h loop is faster as biases multipliers can be skipped
         int16_t *input_row_end = orig_dest_addr + input_row_len;
-        uint8_t start_state = get_value_state_bit(*orig_dest_addr);
+        uint8_t start_state = get_value_state_bit(*(orig_dest_addr + BATCH_SIZE - 1));
         if (start_state == get_value_state_bit(*(input_row_end - 1))) {
             // XXX: a heuristic - assume there is at most one turning points in a row
             my_printf_debug("Using my_offset_q15 for stripping state bits" NEWLINE);
             if (start_state) {
-                my_offset_q15(orig_dest_addr, -0x4000, orig_dest_addr, input_row_len);
+                my_offset_q15_batched(orig_dest_addr, -0x4000, orig_dest_addr, input_row_len);
             }
         } else {
             my_printf_debug("Using a loop for stripping state bits" NEWLINE);
@@ -710,7 +711,7 @@ void ConvMergeInputChunkHandler(uint32_t range_offset, uint16_t range_len, uint8
     my_printf_debug("input range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
     int16_t *to_offset = params->to_add + range_offset - params->data_offset;
     if (state_bit) {
-        my_offset_q15(to_offset, -0x4000, to_offset, range_len);
+        my_offset_q15_batched(to_offset, -0x4000, to_offset, range_len);
     }
 }
 #endif
@@ -817,10 +818,10 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 
 #if STATEFUL
         if (!old_output_offset) {
-            my_offset_q15(lea_buffer, 0x4000, lea_buffer, MIN_VAL(next_output_turning_point - tiling_results_offset, real_chunk_len));
+            my_offset_q15_batched(lea_buffer, 0x4000, lea_buffer, MIN_VAL(next_output_turning_point - tiling_results_offset, real_chunk_len));
         } else if (next_output_turning_point < tiling_results_offset + real_chunk_len) {
             int16_t* to_offset = lea_buffer + next_output_turning_point - tiling_results_offset;
-            my_offset_q15(to_offset, 0x4000, to_offset, real_chunk_len - (next_output_turning_point - tiling_results_offset));
+            my_offset_q15_batched(to_offset, 0x4000, to_offset, real_chunk_len - (next_output_turning_point - tiling_results_offset));
         }
         check_next_turning_point(old_output_offset, output_turning_point_idx,
                                  next_output_turning_point, cur_output_slot_info, tiling_results_offset + real_chunk_len);

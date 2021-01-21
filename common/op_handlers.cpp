@@ -174,10 +174,10 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         } else {
                             block_size = MIN_VAL(len, next_output_turning_point - output_offset);
                         }
-                        my_offset_q15(lea_buffer, offset, lea_buffer, block_size);
+                        my_offset_q15_batched(lea_buffer, offset, lea_buffer, block_size);
                     } else if (next_output_turning_point < output_offset + len) {
                         int16_t* to_offset = lea_buffer + next_output_turning_point - output_offset;
-                        my_offset_q15(to_offset, 0x4000, to_offset, output_offset + len - next_output_turning_point);
+                        my_offset_q15_batched(to_offset, 0x4000, to_offset, output_offset + len - next_output_turning_point);
                     }
 #endif
 #if HAWAII

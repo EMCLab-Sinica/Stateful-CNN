@@ -62,7 +62,8 @@ void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_
 struct MaxMultiplierChunkHandlerParams {
     Model *model;
     const ParameterInfo *param;
-    const int16_t* buffer;
+    // not declaring buffer as const to allow stripping states
+    int16_t* buffer;
     uint16_t *max_multiplier;
 };
 
@@ -83,12 +84,6 @@ void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t
 #else
     // For stateful CNN, values should not reach 8192, or get_value_state_bit() is confused
     uint16_t bound = 8191;
-    int16_t val_offset = 0;
-    if (!params->buffer) {
-        // if the buffer is pre-filled (e.g., in GemmMerge), its state bits
-        // should already be stripped, too
-        val_offset = param_state_bit(params->model, params->param, offset) ? -16384 : 0;
-    }
 #endif
     int16_t max_val, min_val;
     // Apparently TI's compiler does not handle multiplication between
@@ -96,7 +91,7 @@ void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t
     uint32_t u_max_val, u_min_val;
     uint16_t index;
 
-    const int16_t* cur_buffer;
+    int16_t* cur_buffer;
     if (!params->buffer) {
         my_memcpy_from_param(params->model, lea_buffer, params->param, offset, real_chunk_len * sizeof(int16_t));
         cur_buffer = lea_buffer;
@@ -104,12 +99,18 @@ void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t
         cur_buffer = params->buffer + offset;
     }
 
+#if STATEFUL
+    for (uint16_t idx = 0; idx < real_chunk_len; idx++) {
+        int16_t val = cur_buffer[idx];
+        if (get_value_state_bit(val)) {
+            cur_buffer[idx] = val - 0x4000;
+        }
+    }
+#endif
+
     dump_matrix_debug(cur_buffer, real_chunk_len, ValueInfo(params->param));
 
     my_max_q15(cur_buffer, real_chunk_len, &max_val, &index);
-#if STATEFUL
-    max_val += val_offset;
-#endif
     my_printf_debug("Max value %d", max_val);
     my_printf_debug(" occurs at index %d" NEWLINE, index);
     u_max_val = abs(max_val);
@@ -119,9 +120,6 @@ void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t
     }
 
     my_min_q15(cur_buffer, real_chunk_len, &min_val, &index);
-#if STATEFUL
-    min_val += val_offset;
-#endif
     my_printf_debug("Min value %d", min_val);
     my_printf_debug(" occurs at index %d" NEWLINE, index);
     u_min_val = abs(min_val);
@@ -131,7 +129,7 @@ void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t
     my_printf_debug("Current max_multiplier=%d" NEWLINE, *params->max_multiplier);
 }
 
-uint16_t find_max_multiplier(Model *model, const ParameterInfo *param, const int16_t* buffer, uint16_t len) {
+uint16_t find_max_multiplier(Model *model, const ParameterInfo *param, int16_t* buffer, uint16_t len) {
     uint16_t max_multiplier = 0;
     if (!buffer && sample_idx == 0) {
         max_multiplier = read_max_multiplier(param);
@@ -306,4 +304,15 @@ float q15_to_float(int16_t val, const ValueInfo& val_info, uint8_t* p_use_prefix
     }
 #endif
     return val_info.scale * static_cast<int32_t>(val) / 32768.0;
+}
+
+void my_offset_q15_batched(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t blockSize) {
+    MY_ASSERT(pSrc == pDst);
+    if (BATCH_SIZE == 1) {
+        my_offset_q15(pSrc, offset, pDst, blockSize);
+    } else {
+        for (uint8_t val_idx = BATCH_SIZE - 1; val_idx < blockSize; val_idx += BATCH_SIZE) {
+            pDst[val_idx] += offset;
+        }
+    }
 }

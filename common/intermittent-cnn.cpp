@@ -268,6 +268,13 @@ static void check_feature_map_states(Model *model, const ParameterInfo* output, 
         }
         MY_ASSERT(get_value_state_bit(val) == cur_state_bit,
             "Value %d at job index %d (offset %" PRIu32 ") does not have expected state bit %d" NEWLINE, val, idx, offset, cur_state_bit);
+#if STATEFUL
+        for (uint8_t val_idx = 1; val_idx < BATCH_SIZE; val_idx++) {
+            val = get_q15_param(model, output, offset - val_idx);
+            MY_ASSERT(get_value_state_bit(val) == 0,
+                      "Value %d at offset %" PRIu32 " does not have expected state bit 0" NEWLINE, val, offset - val_idx);
+        }
+#endif
     }
 #endif
 }

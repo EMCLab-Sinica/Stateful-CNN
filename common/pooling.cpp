@@ -107,8 +107,8 @@ static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
 #if STATEFUL
 static inline void offset_vector(int16_t* const buffer, int16_t offset, uint8_t len, const uint16_t output_offset, const uint16_t next_output_turning_point) {
     int16_t cur_offset = offset;
-    for (uint8_t idx = 0; idx < len; idx++) {
-        if (output_offset + idx == next_output_turning_point) {
+    for (uint8_t idx = BATCH_SIZE - 1; idx < len; idx += BATCH_SIZE) {
+        if (output_offset + idx == next_output_turning_point + BATCH_SIZE - 1) {
             cur_offset ^= 0x4000;
         }
         buffer[idx] += cur_offset;
