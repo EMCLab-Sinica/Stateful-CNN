@@ -48,7 +48,7 @@ void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_
     int16_t* to_offset = buffer + offset;
 #if STATEFUL
     if (!state_bit) {
-        my_offset_q15(to_offset, 0x4000, to_offset, real_chunk_len);
+        my_offset_q15_batched(to_offset, 0x4000, to_offset, real_chunk_len);
     }
 #endif
 #if JAPARI

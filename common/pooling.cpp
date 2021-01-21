@@ -236,6 +236,11 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
             // Not using extend_for_footprints() as the initial c may not be on a footprint channel
             c += c / BATCH_SIZE;
 #endif
+
+#if STATEFUL
+            uint8_t cur_batch_offset = output_offset % (BATCH_SIZE + 1);
+#endif
+
             uint8_t channel_stride = 1;
             for (; c < CHANNEL; c += channel_stride) {
 #if JAPARI
@@ -268,8 +273,12 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                         }
                         my_printf_debug("output_offset=% 5d ", output_offset);
 #if STATEFUL
-                        check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
-                        lea_buffer[0] += offset;
+                        if (cur_batch_offset == BATCH_SIZE - 1) {
+                            check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
+                            lea_buffer[0] += offset;
+                            cur_batch_offset -= BATCH_SIZE;
+                        }
+                        cur_batch_offset++;
 #endif
                         my_printf_debug("max=% 6d " NEWLINE, lea_buffer[0]);
                         put_q15_param(output, output_offset, lea_buffer[0]);

@@ -47,6 +47,30 @@ jobs:
         path: /tmp/intermittent.tar
         retention-days: 1
 
+  mnist_stateful_b2:
+    runs-on: ubuntu-20.04
+    container: archlinux:latest
+    env:
+      CONFIG: '--stateful --batch-size 2 mnist'
+    steps:
+    - name: Checkout main repo
+      uses: actions/checkout@v2
+    - name: Checkout TI-DSPLib
+      uses: actions/checkout@v2
+      with:
+        repository: EMCLab-Sinica/DSPLib
+        path: TI-DSPLib
+        token: ${{ secrets.access_token }}
+    - name: Test
+      run: ./utils/test.sh
+    - name: upload logs
+      if: '${{ failure() }}'
+      uses: actions/upload-artifact@v2
+      with:
+        name: logs-mnist_stateful_b1
+        path: /tmp/intermittent.tar
+        retention-days: 1
+
   mnist_japari_b1:
     runs-on: ubuntu-20.04
     container: archlinux:latest

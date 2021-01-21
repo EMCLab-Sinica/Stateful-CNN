@@ -32,7 +32,7 @@ void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t sta
     my_printf_debug("GemmInputChunkHandler offset=%d real_chunk_len=%d state_bit=%d" NEWLINE, offset, real_chunk_len, state_bit);
     if (state_bit) {
         int16_t* to_offset = buffer_a + offset;
-        my_offset_q15(to_offset, -0x4000, to_offset, real_chunk_len);
+        my_offset_q15_batched(to_offset, -0x4000, to_offset, real_chunk_len);
     }
 }
 
@@ -172,9 +172,9 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             }
             my_printf_debug("tile_width_first=%d" NEWLINE, tile_width_first);
             MY_ASSERT(tile_width_first <= tile_width);
-            my_offset_q15(buffer_temp, offset, buffer_temp, tile_width_first);
+            my_offset_q15_batched(buffer_temp, offset, buffer_temp, tile_width_first);
             if (tile_width_first != tile_width) {
-                my_offset_q15(buffer_temp + tile_width_first, offset ^ 0x4000, buffer_temp + tile_width_first, tile_width - tile_width_first);
+                my_offset_q15_batched(buffer_temp + tile_width_first, offset ^ 0x4000, buffer_temp + tile_width_first, tile_width - tile_width_first);
             }
 #endif
 
