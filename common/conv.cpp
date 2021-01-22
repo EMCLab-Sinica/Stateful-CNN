@@ -424,7 +424,8 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         // stipping states inside the h loop is faster as biases multipliers can be skipped
         int16_t *input_row_end = orig_dest_addr + input_row_len;
         uint8_t start_state = get_value_state_bit(*(orig_dest_addr + BATCH_SIZE - 1));
-        if (start_state == get_value_state_bit(*(input_row_end - 1))) {
+        // if input_tile_c is smaller than BATCH_SIZE, state bits are not always at offset BATCH_SIZE - 1
+        if (conv_params->flags->extra.conv.input_tile_c >= BATCH_SIZE && start_state == get_value_state_bit(*(input_row_end - 1))) {
             // XXX: a heuristic - assume there is at most one turning points in a row
             my_printf_debug("Using my_offset_q15 for stripping state bits" NEWLINE);
             if (start_state) {
@@ -449,10 +450,10 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         float_to_scale_params(&scaleFract, &shift, 1.0f * conv_params->real_conv_input->scale / conv_params->conv_input->scale);
         my_scale_q15(lea_buffer, scaleFract, shift, lea_buffer, inputs_len);
     }
-#if STATEFUL && MY_DEBUG >= 2
+#if STATEFUL && MY_DEBUG >= 1
     int16_t *ptr = lea_buffer;
     for (size_t idx = 0; idx < inputs_len; idx++) {
-        MY_ASSERT(!get_value_state_bit(*ptr));
+        MY_ASSERT(!get_value_state_bit(*ptr), "Input index %d has value with unexpected state: %d" NEWLINE, idx, *ptr);
         ptr++;
     }
 #endif

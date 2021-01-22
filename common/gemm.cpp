@@ -15,6 +15,8 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     output->dims[0] = A->dims[0];
 #if JAPARI
     output->dims[1] = upper_gauss(B->dims[1], BATCH_SIZE) * (BATCH_SIZE + 1);
+#elif STATEFUL
+    output->dims[1] = upper_gauss(B->dims[1], BATCH_SIZE) * BATCH_SIZE;
 #else
     output->dims[1] = B->dims[1];
 #endif
@@ -164,8 +166,11 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
             my_matrix_mpy_q15(1, extended_tile_channels, extended_tile_channels, full_tile_width, buffer_a, buffer_b, buffer_temp);
 
-#if STATEFUL
+#if INDIRECT_RECOVERY
             check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
+#endif
+
+#if STATEFUL
             uint16_t tile_width_first = tile_width;
             if (next_output_turning_point != INVALID_TURNING_POINT) {
                 tile_width_first = MIN_VAL(next_output_turning_point - output_offset, tile_width);
@@ -184,13 +189,29 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
             my_printf_debug("output_offset=%d" NEWLINE, output_offset);
 #if !HAWAII
+
+#if INDIRECT_RECOVERY
+
 #if JAPARI
-            if (values_to_preserve < BATCH_SIZE + 1) {
-                my_fill_q15(0, buffer_temp + values_to_preserve, BATCH_SIZE - values_to_preserve);
-                values_to_preserve = BATCH_SIZE + 1;
-                buffer_temp[values_to_preserve - 1] = (param_state_bit(model, output, output_offset) ? -1 : 1);
-            }
+            int16_t expected_values_to_preserve = BATCH_SIZE + 1;
+#else
+            int16_t expected_values_to_preserve = BATCH_SIZE;
 #endif
+            if (values_to_preserve < expected_values_to_preserve) {
+                my_fill_q15(0, buffer_temp + values_to_preserve, expected_values_to_preserve - values_to_preserve);
+                values_to_preserve = expected_values_to_preserve;
+
+                check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset + values_to_preserve - 1);
+#if JAPARI
+                buffer_temp[values_to_preserve - 1] += (offset ? 1 : -1);
+#else
+                buffer_temp[values_to_preserve - 1] += offset;
+#endif
+                my_printf_debug("After padding" NEWLINE);
+                dump_matrix_debug(buffer_temp, values_to_preserve, ValueInfo(output, model));
+            }
+#endif // INDIRECT_RECOVERY
+
             my_memcpy_to_param(output, output_offset, buffer_temp, values_to_preserve * sizeof(int16_t));
 #else
             hawaii_preserve_vector(model, output, output_offset, buffer_temp, values_to_preserve);
