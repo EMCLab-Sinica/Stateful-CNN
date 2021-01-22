@@ -236,3 +236,8 @@ void my_deinterleave_q15(const int16_t *pSrc, uint16_t channel, uint16_t numChan
         pDst++;
     }
 }
+
+int16_t padding_for_lea(int16_t val) {
+    // LEA requires parameters to be even in many places
+    return (val + 1) / 2 * 2;
+}

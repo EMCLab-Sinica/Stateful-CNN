@@ -64,6 +64,9 @@ typedef struct ConvTaskParams {
     uint16_t input_tile_c_offset_with_footprints;
     uint8_t force_align_footprints;
 #endif
+#if STATEFUL
+    uint8_t output_padding;
+#endif
 
     uint16_t filter_idx;
     uint16_t filter_tile_index;
@@ -125,8 +128,14 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     int16_t channel_offset_c = conv_params->filter_idx;
 #if JAPARI
     values_to_preserve = extend_for_footprints(n_filters, conv_params->force_align_footprints);
-    n_filters = (values_to_preserve + 1) / 2 * 2; // LEA requires even number of columns
+    n_filters = padding_for_lea(values_to_preserve);
     channel_offset_c = extend_for_footprints(channel_offset_c);
+#endif
+#if STATEFUL
+    if (conv_params->output_padding) {
+        values_to_preserve += conv_params->output_padding;
+        n_filters = padding_for_lea(values_to_preserve);
+    }
 #endif
     // use NWHC so that output is written continuously on the address space
     uint16_t cur_output_data_offset =
@@ -210,6 +219,15 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
             }
         }
 #endif
+
+#if STATEFUL
+        if (conv_params->output_padding &&
+            ((!conv_params->old_output_offset && n_filters - 1 < n_keep_state_bits) ||
+              (conv_params->old_output_offset && n_filters - 1 >= n_keep_state_bits))) {
+            conv_params->filter_buffer_addr[n_filters * conv_params->filter_offset - 1] = -0x4000;
+        }
+#endif
+
         conv_params->cached_filter_idx = conv_params->filter_idx;
         conv_params->cached_input_tile_c_offset = conv_params->input_tile_c_offset;
     } else {
@@ -518,6 +536,14 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     {
         conv_params->n_tiles_c = CHANNEL / flags->extra.conv.input_tile_c;
     }
+#if STATEFUL
+    if (flags->extra.conv.output_tile_c % BATCH_SIZE) {
+        conv_params->output_padding = BATCH_SIZE - flags->extra.conv.output_tile_c % BATCH_SIZE;
+    } else {
+        conv_params->output_padding = 0;
+    }
+    OUTPUT_CHANNEL += conv_params->output_padding;
+#endif
     my_printf_debug("input_tile_c=%d, output_tile_c=%d" NEWLINE, flags->extra.conv.input_tile_c, flags->extra.conv.output_tile_c);
 
     /* XXX: extend flags; assume dilation=(1, 1) for now */
@@ -604,7 +630,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     conv_params->filter_tile_index = (first_unfinished_value_offset % conv_params->OUTPUT_CHANNEL) / cur_output_tile_c;
     conv_params->filter_idx = conv_params->filter_tile_index * flags->extra.conv.output_tile_c;
 
-    uint8_t filter_offset_in_tile = first_unfinished_value_offset % cur_output_tile_c;
+    uint8_t filter_offset_in_tile = first_unfinished_value_offset % (cur_output_tile_c + conv_params->output_padding);
 #if JAPARI
     filter_offset_in_tile = filter_offset_in_tile / (BATCH_SIZE + 1) * BATCH_SIZE;
 #endif
