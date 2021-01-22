@@ -7,7 +7,7 @@ on: push
 
 jobs:
   mnist_baseline:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: archlinux:latest
     env:
       CONFIG: '--all-samples --baseline mnist'
@@ -24,7 +24,7 @@ jobs:
       run: ./utils/test.sh
 
   mnist_stateful_b1:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: archlinux:latest
     env:
       CONFIG: '--all-samples --stateful --batch-size 1 mnist'
@@ -48,7 +48,7 @@ jobs:
         retention-days: 1
 
   mnist_stateful_b2:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: archlinux:latest
     env:
       CONFIG: '--stateful --batch-size 2 mnist'
@@ -72,7 +72,7 @@ jobs:
         retention-days: 1
 
   mnist_japari_b1:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: archlinux:latest
     env:
       CONFIG: '--japari --batch-size 1 mnist'
@@ -89,7 +89,7 @@ jobs:
       run: ./utils/test.sh
 
   mnist_japari_b2:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: archlinux:latest
     env:
       CONFIG: '--japari --batch-size 2 mnist'
@@ -106,7 +106,7 @@ jobs:
       run: ./utils/test.sh
 
   mnist_japari_b4:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: archlinux:latest
     env:
       CONFIG: '--japari --batch-size 4 mnist'
@@ -123,7 +123,7 @@ jobs:
       run: ./utils/test.sh
 
   cifar10_baseline:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: archlinux:latest
     env:
       CONFIG: '--all-samples --baseline cifar10'
@@ -140,7 +140,7 @@ jobs:
       run: ./utils/test.sh
 
   cifar10_stateful_b1:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: archlinux:latest
     env:
       CONFIG: '--all-samples --stateful --batch-size 1 cifar10'
@@ -164,7 +164,7 @@ jobs:
         retention-days: 1
 
   cifar10_stateful_b2:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: archlinux:latest
     env:
       CONFIG: '--stateful --batch-size 2 cifar10'
@@ -188,7 +188,7 @@ jobs:
         retention-days: 1
 
   cifar10_japari_b4:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: archlinux:latest
     env:
       CONFIG: '--japari --batch-size 4 cifar10'
@@ -205,7 +205,7 @@ jobs:
       run: ./utils/test.sh
 
   kws_baseline:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: archlinux:latest
     env:
       CONFIG: '--all-samples --baseline kws'
@@ -224,7 +224,7 @@ jobs:
       run: ./utils/test.sh
 
   kws_japari_b2:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: archlinux:latest
     env:
       CONFIG: '--japari --batch-size 2 kws'
@@ -243,7 +243,7 @@ jobs:
       run: ./utils/test.sh
 
   kws_japari_b4:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: archlinux:latest
     env:
       CONFIG: '--japari --batch-size 4 kws'
@@ -262,7 +262,7 @@ jobs:
       run: ./utils/test.sh
 
   kws_stateful_b1:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: archlinux:latest
     env:
       CONFIG: '--all-samples --stateful --batch-size 1 kws'
@@ -281,7 +281,7 @@ jobs:
       run: ./utils/test.sh
 
   mnist_stateful_b1_cmsis:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: archlinux:latest
     env:
       CONFIG: '--stateful --batch-size 1 mnist'
@@ -293,7 +293,7 @@ jobs:
       run: ./utils/test.sh
 
   old_system:
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, x64]
     container: centos:7
     steps:
     - name: Checkout main repo
