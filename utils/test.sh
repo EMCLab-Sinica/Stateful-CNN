@@ -21,6 +21,9 @@ if [[ $CONFIG = *cifar10* ]]; then
     ./data/download-cifar10.sh
     rounds=50
     power_cycle=0.02
+    if [[ $CONFIG = *japari* ]]; then
+        power_cycle=0.03
+    fi
 fi
 if [[ $CONFIG = *kws* ]]; then
     git submodule init

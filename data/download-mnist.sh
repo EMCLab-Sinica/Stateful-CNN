@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/bash
+[[ -d data/MNIST ]] && exit 0
 mkdir -p data/MNIST
 cd data/MNIST
 wget https://github.com/microsoft/NativeKeras/raw/master/Datasets/cntk_mnist/Test-28x28_cntk_text.txt

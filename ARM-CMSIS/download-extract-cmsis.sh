@@ -15,6 +15,8 @@ trap cleanup EXIT SIGINT
 
 cleanup
 
+[[ -d DSP ]] && exit 0
+
 wget "https://github.com/ARM-software/CMSIS_5/releases/download/$CMSIS_VERSION/$CMSIS_ARCHIVE"
 unzip $CMSIS_ARCHIVE 'CMSIS/Core/*' 'CMSIS/DSP/*'
 
