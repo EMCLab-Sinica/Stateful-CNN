@@ -201,6 +201,8 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         uint16_t i = output_offset;
 #if JAPARI
         uint8_t cur_batch_offset = i % (BATCH_SIZE + 1);
+#else
+        uint8_t cur_batch_offset = i % BATCH_SIZE;
 #endif
         for (; i < data_len; i++) {
             int16_t output_val;
@@ -228,7 +230,10 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             my_printf_debug("output_offset=%d output_val=%d" NEWLINE, output_offset, output_val);
             put_q15_param(output, output_offset, output_val);
 #if HAWAII
-            write_hawaii_layer_footprint(model->layer_idx, 1);
+            if (cur_batch_offset == BATCH_SIZE - 1) {
+                write_hawaii_layer_footprint(model->layer_idx, BATCH_SIZE);
+                cur_batch_offset -= BATCH_SIZE;
+            }
 #endif
             data_offset++;
             output_offset++;
