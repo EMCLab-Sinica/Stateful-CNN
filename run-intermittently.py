@@ -53,6 +53,7 @@ def main():
     parser.add_argument('--interval', type=float, default=0.01)
     parser.add_argument('--shutdown-after-writes', type=int, default=0)
     parser.add_argument('--power-cycles-limit', type=int, default=200)
+    parser.add_argument('--suffix', default='')
     parser.add_argument('--compress', default=False, action='store_true')
     parser.add_argument('program')
     args = parser.parse_args()
@@ -60,9 +61,15 @@ def main():
     rounds = 0
     ret = 0
     logdir = pathlib.Path(tempfile.gettempdir())
-    log_archive = logdir / 'intermittent.tar'
+    if args.suffix:
+        log_archive = logdir / f'intermittent-{args.suffix}.tar'
+    else:
+        log_archive = logdir / 'intermittent.tar'
     while True:
-        logfile_path = logdir / f'intermittent-cnn-{rounds}'
+        if args.suffix:
+            logfile_path = logdir / f'intermittent-cnn-{args.suffix}-{rounds}'
+        else:
+            logfile_path = logdir / f'intermittent-cnn-{rounds}'
         compressed_logfile_path = logfile_path.with_suffix('.zst')
         with open(logfile_path, mode='w+b') as logfile:
             success = run_one_inference(args.program, args.interval, logfile, args.shutdown_after_writes, args.power_cycles_limit)
