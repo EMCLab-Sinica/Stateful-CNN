@@ -6,6 +6,7 @@ import io
 import itertools
 import logging
 import math
+import os.path
 import pprint
 import struct
 import textwrap
@@ -14,7 +15,6 @@ from typing import List
 
 import onnx
 import onnx.helper
-import onnx.optimizer
 import numpy as np
 
 from utils import (
@@ -257,18 +257,23 @@ if args.japari:
 Constants.INTERMITTENT = Constants.STATEFUL | Constants.HAWAII | Constants.JAPARI
 Constants.INDIRECT_RECOVERY = Constants.STATEFUL | Constants.JAPARI
 
-onnx_model = onnx.load(config['onnx_model'])
-try:
-    # https://zhuanlan.zhihu.com/p/41255090
-    onnx_model = onnx.optimizer.optimize(onnx_model, [
-        'fuse_add_bias_into_conv',
-        'fuse_matmul_add_bias_into_gemm',
-    ])
-except IndexError:
-    # Somehow the optimizer cannot handle models transformed from keras2onnx
-    pass
-onnx_model = onnx.shape_inference.infer_shapes(onnx_model)
-onnx.save_model(onnx_model, config['onnx_model'].replace('.onnx', '-opt.onnx'))
+onnx_opt_model_name = config['onnx_model'].replace('.onnx', '-opt.onnx')
+if os.path.exists(onnx_opt_model_name):
+    onnx_model = onnx.load(onnx_opt_model_name)
+else:
+    onnx_model = onnx.load(config['onnx_model'])
+    try:
+        import onnx.optimizer
+        # https://zhuanlan.zhihu.com/p/41255090
+        onnx_model = onnx.optimizer.optimize(onnx_model, [
+            'fuse_add_bias_into_conv',
+            'fuse_matmul_add_bias_into_gemm',
+        ])
+    except IndexError:
+        # Somehow the optimizer cannot handle models transformed from keras2onnx
+        pass
+    onnx_model = onnx.shape_inference.infer_shapes(onnx_model)
+    onnx.save_model(onnx_model, onnx_opt_model_name)
 g = onnx_model.graph
 names = {}
 

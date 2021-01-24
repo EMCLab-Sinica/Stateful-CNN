@@ -3,7 +3,6 @@ samples.bin
 *.pyc
 /images/*
 !/images/.keep
-*-opt.onnx
 data.cpp
 data.h
 /data/cifar-10-python.tar.gz
