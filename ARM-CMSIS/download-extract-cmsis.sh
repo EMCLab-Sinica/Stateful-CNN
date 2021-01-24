@@ -17,8 +17,8 @@ cleanup
 
 [[ -d DSP ]] && exit 0
 
-wget "https://github.com/ARM-software/CMSIS_5/releases/download/$CMSIS_VERSION/$CMSIS_ARCHIVE"
-unzip $CMSIS_ARCHIVE 'CMSIS/Core/*' 'CMSIS/DSP/*'
+curl -LO "https://github.com/ARM-software/CMSIS_5/releases/download/$CMSIS_VERSION/$CMSIS_ARCHIVE"
+bsdtar xf $CMSIS_ARCHIVE 'CMSIS/Core/*' 'CMSIS/DSP/*'
 
 CMSIS_ROOT="$PWD/CMSIS"
 
