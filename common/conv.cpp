@@ -285,7 +285,6 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     uint16_t batch_offset = 0;
     for (uint16_t row = 0; row < A_rows; row++) {
         batch_offset += hawaii_preserve_vector(conv_params->model, conv_params->output, cur_output_data_offset + batch_offset, matrix_mpy_results + batch_offset, B_cols);
-        MY_ASSERT(read_hawaii_layer_footprint(conv_params->model->layer_idx) % conv_params->flags->extra.conv.output_tile_c == 0);
     }
 #endif
 

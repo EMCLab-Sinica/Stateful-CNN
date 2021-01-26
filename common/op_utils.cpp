@@ -11,13 +11,31 @@
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
 #if HAWAII
+static uint8_t non_recorded_jobs = 0;
+
+static void hawaii_preserve_unit(const Model* model, ParameterInfo* output, uint32_t output_offset, const int16_t* buffer, uint8_t n_jobs, uint16_t* preserved_jobs) {
+    my_memcpy_to_param(output, output_offset + (*preserved_jobs), buffer + (*preserved_jobs), n_jobs * sizeof(int16_t));
+    (*preserved_jobs) += n_jobs;
+    write_hawaii_layer_footprint(model->layer_idx, n_jobs + non_recorded_jobs);
+    non_recorded_jobs = 0;
+}
+
 uint16_t hawaii_preserve_vector(Model* model, ParameterInfo* output, uint32_t output_offset, const int16_t* buffer, uint16_t vector_len) {
     uint16_t preserved_jobs = 0;
-    for (uint16_t col = 0; col < vector_len; col += BATCH_SIZE) {
-        uint16_t n_jobs = MIN_VAL(vector_len - col, BATCH_SIZE);
-        my_memcpy_to_param(output, output_offset + preserved_jobs, buffer + preserved_jobs, n_jobs * sizeof(int16_t));
-        preserved_jobs += n_jobs;
-        write_hawaii_layer_footprint(model->layer_idx, n_jobs);
+    if (non_recorded_jobs + vector_len < BATCH_SIZE) {
+        non_recorded_jobs += vector_len;
+        return 0;
+    }
+    uint16_t col = BATCH_SIZE - non_recorded_jobs;
+    hawaii_preserve_unit(model, output, output_offset, buffer, BATCH_SIZE - non_recorded_jobs, &preserved_jobs);
+    for (; col < vector_len; col += BATCH_SIZE) {
+        if (vector_len - col < BATCH_SIZE) {
+            non_recorded_jobs += vector_len - col;
+            // still preserving intermediate results, but not incrementing footprint as a batch is not reached yet
+            my_memcpy_to_param(output, output_offset + preserved_jobs, buffer + preserved_jobs, (vector_len - col) * sizeof(int16_t));
+            break;
+        }
+        hawaii_preserve_unit(model, output, output_offset, buffer, BATCH_SIZE, &preserved_jobs);
     }
     return preserved_jobs;
 }
