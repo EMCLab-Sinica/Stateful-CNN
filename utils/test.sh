@@ -21,13 +21,13 @@ if [[ $CONFIG = *cifar10* ]]; then
     ./data/download-cifar10.sh
     rounds=50
     power_cycle=0.02
-    if [[ $CONFIG = *japari* ]]; then
-        power_cycle=0.03
-    fi
 fi
 if [[ $CONFIG = *kws* ]]; then
     git submodule init
     git submodule update data/ML-KWS-for-MCU
+fi
+if [[ $CONFIG = *japari* ]]; then
+    power_cycle=$(awk "BEGIN {print $power_cycle+0.01}")
 fi
 
 rm -vf nvm.bin

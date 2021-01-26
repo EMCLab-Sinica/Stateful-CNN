@@ -24,6 +24,7 @@ uint16_t hawaii_preserve_vector(Model* model, ParameterInfo* output, uint32_t ou
     uint16_t preserved_jobs = 0;
     if (non_recorded_jobs + vector_len < BATCH_SIZE) {
         non_recorded_jobs += vector_len;
+        my_memcpy_to_param(output, output_offset, buffer, vector_len * sizeof(int16_t));
         return 0;
     }
     uint16_t col = BATCH_SIZE - non_recorded_jobs;
