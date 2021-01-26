@@ -238,7 +238,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 #endif
 
 #if STATEFUL
-            uint8_t cur_batch_offset = output_offset % (BATCH_SIZE + 1);
+            uint8_t cur_batch_offset = output_offset % BATCH_SIZE;
 #endif
 
             uint8_t channel_stride = 1;
