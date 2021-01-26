@@ -225,7 +225,10 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                 output_val = MAX_VAL(input_val, 0);
             }
 #if STATEFUL
-            output_val += offset;
+            if (cur_batch_offset == BATCH_SIZE - 1) {
+                cur_batch_offset -= BATCH_SIZE;
+                output_val += offset;
+            }
 #endif
             my_printf_debug("output_offset=%d output_val=%d" NEWLINE, output_offset, output_val);
             put_q15_param(output, output_offset, output_val);
@@ -237,9 +240,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
             data_offset++;
             output_offset++;
-#if JAPARI
             cur_batch_offset++;
-#endif
         }
     }
 
