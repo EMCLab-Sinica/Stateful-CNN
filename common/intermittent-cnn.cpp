@@ -429,7 +429,17 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
 
     /* BEGIN constants */
     uint16_t input_tile_len, input_tile_jobs, jobs_in_a_filter_tile, jobs_in_an_op, output_tile_c, OUTPUT_CHANNEL;
+    output_tile_c = node->flags.extra.conv.output_tile_c;
     OUTPUT_CHANNEL = output->dims[1];
+
+#if !INDIRECT_RECOVERY
+    // not taking this shortcut for approaches that use indirect recovery as
+    // output padding is used in those approaches
+    if (output_tile_c == OUTPUT_CHANNEL) {
+        return job_index * BATCH_SIZE + BATCH_SIZE - 1;
+    }
+#endif
+
     uint16_t OUTPUT_H = output->dims[2], OUTPUT_W = output->dims[3];
     input_tile_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
 #if JAPARI
@@ -437,9 +447,11 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
 #else
     input_tile_jobs = input_tile_len / BATCH_SIZE;
 #endif
-    output_tile_c = upper_gauss(node->flags.extra.conv.output_tile_c, BATCH_SIZE) * BATCH_SIZE;
+    output_tile_c = upper_gauss(output_tile_c, BATCH_SIZE) * BATCH_SIZE;
     jobs_in_a_filter_tile = OUTPUT_H * OUTPUT_W * output_tile_c / BATCH_SIZE;
     jobs_in_an_op = output_tile_c / BATCH_SIZE;
+    // TODO: handle cases where the following condition is not met
+    MY_ASSERT(output_tile_c % BATCH_SIZE == 0);
 #if JAPARI
     output_tile_c = extend_for_footprints(output_tile_c);
 #endif

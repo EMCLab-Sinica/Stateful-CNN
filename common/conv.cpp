@@ -837,6 +837,11 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
             my_printf_debug("Before my_scale_q15" NEWLINE);
             ValueInfo val_info_data(data);
             dump_matrix_debug(to_add, real_chunk_len, val_info_data);
+#if MY_DEBUG >= 1
+            for (uint16_t idx = 0; idx < real_chunk_len; idx++) {
+                MY_ASSERT(abs(to_add[idx]) < 32768 / scale_f);
+            }
+#endif
             my_scale_q15(to_add, scaleFract, shift, to_add, real_chunk_len);
             my_printf_debug("After my_scale_q15" NEWLINE);
             val_info_data.scale /= scale_f;
