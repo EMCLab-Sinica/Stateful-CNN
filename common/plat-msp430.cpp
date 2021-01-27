@@ -142,6 +142,8 @@ void copy_samples_data(void) {
 #define GPIO_RESET_PIN GPIO_PIN5
 #endif
 
+#define STABLE_POWER_ITERATIONS 10
+
 void IntermittentCNNTest() {
     GPIO_setAsOutputPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
     GPIO_setOutputLowOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
@@ -168,7 +170,10 @@ void IntermittentCNNTest() {
 
         first_run();
 
-        run_cnn_tests(1);
+        // The first iteration takes longer as it needs to compute layer multipliers
+        for (uint8_t idx = 0; idx < 1 + STABLE_POWER_ITERATIONS; idx++) {
+            run_cnn_tests(1);
+        }
 
         my_printf("Done testing run" NEWLINE);
 
