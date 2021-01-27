@@ -12,6 +12,9 @@ current = None
 filename = sys.argv[1]
 with open(filename) as f:
     for line in f:
+        if line.startswith('*'):
+            title = line[1:].strip()
+            continue
         parts = line.split()
         if not parts:
             continue
@@ -53,7 +56,7 @@ for idx, model in enumerate(['LeNet/MNIST', 'SqueezeNet/CIFAR-10', 'KWS/GoogleSp
     ax.bar(x=0, height=baseline_data['y'], width=width, bottom=0, fill=False, hatch=hatches[0])
     for idx, method in enumerate(['HAWAII', 'JAPARI', 'Stateful']):
         data = current[method]
-        plots.append(ax.bar(x=ind + width * idx, height=data['y'], width=width, bottom=0, fill=False, hatch=hatches[idx + 1]))
+        plots.append(ax.bar(x=ind + width * idx, height=data['y'], yerr=data['yerr'], width=width, bottom=0, fill=False, hatch=hatches[idx + 1]))
 
     ax.set_title(model)
     ax.set_xticks(np.concatenate(([0], np.arange(N) + 3 * width), axis=None))
@@ -68,9 +71,11 @@ for idx, model in enumerate(['LeNet/MNIST', 'SqueezeNet/CIFAR-10', 'KWS/GoogleSp
     ax.autoscale_view()
 
 plt.xlabel('Progress preservation granularity')
-plt.suptitle('Stable power', y=0.95)
+plt.suptitle(title, y=0.95)
 
 # plt.show()
-name, _ = os.path.splitext(os.path.basename(filename))
-plt.savefig(f'chart-{name}.png')
-plt.savefig(f'chart-{name}.pdf')
+basename = os.path.basename(filename)
+name, _ = os.path.splitext(basename)
+chart_path = filename.replace(basename, f'chart-{name}')
+plt.savefig(chart_path + '.png')
+plt.savefig(chart_path + '.pdf')
