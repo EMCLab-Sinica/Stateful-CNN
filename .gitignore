@@ -10,6 +10,7 @@ data.h
 /data/MNIST/
 /ARM-CMSIS/*
 !/ARM-CMSIS/*.sh
-/TI-DSPLib
+/TI-DSPLib/*
+!/TI-DSPLib/*.sh
 /build/
 /charts/chart-*
