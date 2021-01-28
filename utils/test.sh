@@ -9,7 +9,6 @@ if [[ $USE_ARM_CMSIS = 1 ]]; then
     pushd ARM-CMSIS && ./download-extract-cmsis.sh && popd
     cmake_args="$cmake_args -D USE_ARM_CMSIS=ON"
 else
-    # TODO
     pushd TI-DSPLib && ./download-extract-dsplib.sh && popd
     cmake_args="$cmake_args -D USE_ARM_CMSIS=OFF"
 fi
