@@ -16,7 +16,6 @@ void main(void)
 	WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;		// stop watchdog timer
 
     setFrequency(FreqLevel);
-    uartinit();
     // XXX: disabled - timer intterupts appear to interfere DMA read for external FRAM
     // timerinit();
 

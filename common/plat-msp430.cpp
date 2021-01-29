@@ -13,6 +13,7 @@
 #include "platform-private.h"
 #include "data.h"
 #include "my_debug.h"
+#include "Tools/myuart.h"
 
 static Counters counters_data;
 Counters *counters() {
@@ -155,7 +156,6 @@ void IntermittentCNNTest() {
 
     initSPI();
     if (testSPI() != 0) {
-        my_printf_debug("Failed to initialize FRAM, resetting..." NEWLINE);
         // external FRAM failed to initialize - reset
         counter = 1000;
         // waiting some time seems to increase the possibility
@@ -166,6 +166,8 @@ void IntermittentCNNTest() {
 
     Model* model = get_model();
     if (!GPIO_getInputPinValue(GPIO_RESET_PORT, GPIO_RESET_PIN)) {
+        uartinit();
+
         my_printf(NEWLINE "run_counter = %d" NEWLINE, model->run_counter);
 
         first_run();

@@ -102,9 +102,6 @@ static void prvSetupHardware( void )
 
 	/* Disable the GPIO power-on default high-impedance mode. */
 	PMM_unlockLPM5();
-
-	/* Initail Uart */
-	uartinit();
 }
 /*-----------------------------------------------------------*/
 

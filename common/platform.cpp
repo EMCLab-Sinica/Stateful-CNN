@@ -135,6 +135,9 @@ Model* get_model(void) {
 }
 
 void commit_model(void) {
+    if (!model_vm.running) {
+        notify_model_finished();
+    }
     return commit_versioned_data<Model>(0);
 }
 
