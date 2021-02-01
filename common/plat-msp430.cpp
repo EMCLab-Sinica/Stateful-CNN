@@ -150,14 +150,18 @@ void IntermittentCNNTest() {
     GPIO_setOutputLowOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
     GPIO_setAsInputPinWithPullUpResistor(GPIO_RESET_PORT, GPIO_RESET_PIN);
 
+
     // sleep to wait for external FRAM
-    volatile uint32_t counter = 100000;
-    while (counter--);
+#ifdef __MSP430__
+    __delay_cycles(100000);
+#else
+#error "TODO: __delay_cycles() for MSP432"
+#endif
 
     initSPI();
     if (testSPI() != 0) {
         // external FRAM failed to initialize - reset
-        counter = 1000;
+        volatile uint16_t counter = 1000;
         // waiting some time seems to increase the possibility
         // of a successful FRAM initialization on next boot
         while (counter--);
