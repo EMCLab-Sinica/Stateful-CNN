@@ -14,6 +14,7 @@
 #include "data.h"
 #include "my_debug.h"
 #include "Tools/myuart.h"
+#include "Tools/our_misc.h"
 
 static Counters counters_data;
 Counters *counters() {
@@ -137,8 +138,8 @@ void copy_samples_data(void) {
 #define GPIO_RESET_PORT GPIO_PORT_P5
 #define GPIO_RESET_PIN GPIO_PIN7
 #else
-#define GPIO_COUNTER_PORT GPIO_PORT_P3
-#define GPIO_COUNTER_PIN GPIO_PIN6
+#define GPIO_COUNTER_PORT GPIO_PORT_P5
+#define GPIO_COUNTER_PIN GPIO_PIN5
 #define GPIO_RESET_PORT GPIO_PORT_P2
 #define GPIO_RESET_PIN GPIO_PIN5
 #endif
@@ -155,7 +156,8 @@ void IntermittentCNNTest() {
 #ifdef __MSP430__
     __delay_cycles(100000);
 #else
-#error "TODO: __delay_cycles() for MSP432"
+    // 5ms / (1/12MHz) = 60000
+    our_delay_cycles(60000);
 #endif
 
     initSPI();
