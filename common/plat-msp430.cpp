@@ -23,9 +23,6 @@ Counters *counters() {
 #ifdef __MSP430__
 
 #define MY_DMA_CHANNEL DMA_CHANNEL_0
-static DMA_initParam dma_params = {
-    .channelSelect = MY_DMA_CHANNEL,
-};
 
 #pragma vector=DMA_VECTOR
 __interrupt void DMA_ISR(void)
@@ -67,14 +64,17 @@ extern "C" void TA1_0_IRQHandler(void)
 
 void my_memcpy(void* dest, const void* src, size_t n) {
 #ifdef __MSP430__
-    DMA_init(&dma_params); // XXX: DMA not working without this
+    DMA0CTL = 0;
+
+    DMACTL0 &= 0xFF00;
+    // set DMA transfer trigger for channel 0
+    DMACTL0 |= DMA0TSEL__DMAREQ;
+
     DMA_setSrcAddress(MY_DMA_CHANNEL, (uint32_t)src, DMA_DIRECTION_INCREMENT);
     DMA_setDstAddress(MY_DMA_CHANNEL, (uint32_t)dest, DMA_DIRECTION_INCREMENT);
     /* transfer size is in words (2 bytes) */
     DMA0SZ = n >> 1;
-    // DMA_enableInterrupt(MY_DMA_CHANNEL);
-    // _3 => increment
-    DMA0CTL |= DMAEN + DMA_TRANSFER_BLOCK;
+    DMA0CTL |= DMAEN + DMA_TRANSFER_BLOCK + DMA_SIZE_SRCWORD_DSTWORD;
     DMA0CTL |= DMAREQ;
 #elif defined(__MSP432__)
     MAP_DMA_enableModule();

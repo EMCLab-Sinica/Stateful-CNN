@@ -205,7 +205,7 @@ SECTIONS
         .jtagpassword       : {}            /* JTAG Password                     */
     } > IPESIGNATURE
 
-    .bss        : {} > RAM                  /* Global & static vars              */
+    .bss        : {} > RAM type=NOINIT      /* Global & static vars              */
     .data       : {} > RAM                  /* Global & static vars              */
     .TI.noinit  : {} > RAM                  /* For #pragma noinit                */
     .nvm        : {} > FRAM type=NOINIT
@@ -221,7 +221,7 @@ SECTIONS
     .infoD : type = NOINIT{} > INFOD
 
 
-    .leaRAM      : {} > LEARAM               /* LEA RAM                           */
+    .leaRAM      : {} > LEARAM type=NOINIT   /* LEA RAM                           */
     .leaStack    : {} > LEASTACK (HIGH)      /* LEA STACK                         */
 
     /* MSP430 interrupt vectors */

@@ -76,7 +76,7 @@ static void handle_node(Model *model, uint16_t node_idx) {
     }
 }
 
-float first_sample_outputs[] = FIRST_SAMPLE_OUTPUTS;
+const float first_sample_outputs[] = FIRST_SAMPLE_OUTPUTS;
 
 static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     my_printf_debug("N_INPUT = %d" NEWLINE, N_INPUT);

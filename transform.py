@@ -801,7 +801,7 @@ struct NodeFlags;
     for idx, op in enumerate(keys):
         output_h.write(f'#define {op} {idx}\n')
 
-    output_c.write('uint8_t expected_inputs_len[] = {')
+    output_c.write('const uint8_t expected_inputs_len[] = {')
     for op in keys:
         output_c.write(f'{ops[op][0]}, ')
     output_c.write('};\n\n')
@@ -809,11 +809,11 @@ struct NodeFlags;
     for op in keys:
         output_h.write('void alloc_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, const struct NodeFlags* flags);\n'.format(op.lower()))
         output_h.write('void handle_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, const struct NodeFlags* flags);\n'.format(op.lower()))
-    output_c.write('handler handlers[] = {\n')
+    output_c.write('const handler handlers[] = {\n')
     for op in keys:
         output_c.write(f'    handle_{op},\n'.lower())
     output_c.write('};\n')
-    output_c.write('allocator allocators[] = {\n')
+    output_c.write('const allocator allocators[] = {\n')
     for op in keys:
         output_c.write(f'    alloc_{op},\n'.lower())
     output_c.write('};\n')
@@ -837,7 +837,7 @@ struct NodeFlags;
 
     def define_var(var_name, data):
         output_h.write(f'''
-extern const uint8_t *{var_name};
+extern const uint8_t * const {var_name};
 #define {var_name.upper()}_LEN {len(data)}
 ''')
         # #define with _Pragma seems to be broken :/
@@ -850,7 +850,7 @@ const uint8_t _{var_name}[{len(data)}] = {{
         if remaining:
             output_c.write(hex_str(data[len(data) - remaining:len(data)]))
         output_c.write(f'''}};
-const uint8_t *{var_name} = _{var_name};
+const uint8_t * const {var_name} = _{var_name};
 ''')
 
     for var_name, data_obj in outputs.items():

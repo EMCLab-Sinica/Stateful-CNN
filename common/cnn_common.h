@@ -53,8 +53,6 @@ static_assert(sizeof(Node) == 46 + HAWAII * 8, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct ParameterInfo {
-    ParameterInfo() : parameter_info_idx(static_cast<uint16_t>(-1)) {}
-
     uint32_t params_offset;
     uint32_t params_len;  /* in bytes */
     /* Known bitwidth values:
@@ -73,13 +71,12 @@ typedef struct ParameterInfo {
     uint16_t scale;
     uint8_t flags;
     uint8_t extra_info[EXTRA_INFO_LEN];
-    const uint16_t parameter_info_idx; // must be the last member of this struct
+    uint16_t parameter_info_idx; // must be the last member of this struct
 } ParameterInfo;
 
 static_assert(sizeof(ParameterInfo) == 28, "Unexpected size for ParameterInfo");
 
 typedef struct SlotInfo {
-    SlotInfo() {}
 #if INDIRECT_RECOVERY
     uint8_t state_bit;
     uint8_t n_turning_points;
@@ -151,7 +148,7 @@ void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, 
 typedef void (*handler)(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags);
 typedef void (*allocator)(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags);
 // below are defined in ops.c
-extern uint8_t expected_inputs_len[];
-extern handler handlers[];
-extern allocator allocators[];
+extern const uint8_t expected_inputs_len[];
+extern const handler handlers[];
+extern const allocator allocators[];
 extern uint8_t BATCH_SIZE;
