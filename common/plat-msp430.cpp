@@ -133,8 +133,8 @@ void copy_samples_data(void) {
 }
 
 #ifdef __MSP430__
-#define GPIO_COUNTER_PORT GPIO_PORT_P1
-#define GPIO_COUNTER_PIN GPIO_PIN5
+#define GPIO_COUNTER_PORT GPIO_PORT_P8
+#define GPIO_COUNTER_PIN GPIO_PIN0
 #define GPIO_RESET_PORT GPIO_PORT_P5
 #define GPIO_RESET_PIN GPIO_PIN7
 #else
