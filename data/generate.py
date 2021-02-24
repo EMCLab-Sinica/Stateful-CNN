@@ -47,7 +47,7 @@ def plot(df, device, variant, outdir):
 
     width = 1.0 / (1 + n_methods)     # the width of the bars
     ind = np.arange(N) + 2 * width    # the x locations for the groups
-    hatches = ['', '//', r'\\', '..']
+    hatches = ['', 'o', r'\\', '..']
     xs = np.linspace(-0.25, 3.25, 200)
 
     titles = {
@@ -72,14 +72,21 @@ def plot(df, device, variant, outdir):
         current = df[df['config'] == config]
         if current.empty:
             continue
+
+        ax.set_ylim([0, current['Average'].max() * 1.3])
+
         if x_axis_use_power:
-            current = current.sort_values('power', ascending=False)
+            current = current.sort_values('power')
         else:
             current = current.sort_values('batch')
         baseline_data = current.query('method == "Baseline"')
         has_baseline = variant == 'stable'
         if has_baseline:
             ax.bar(x=0, height=baseline_data['Average'], width=width, bottom=0, fill=False, hatch=hatches[0])
+        elif n_configs == 1:
+            ax.bar(x=0, height=0, width=width, bottom=0, fill=False, hatch=hatches[0])
+        stateful_time = current.query('method == "Stateful"')['Average']
+        max_height = current.max()['Average']
         for idx, method in enumerate(methods):
             data = current[current['method'] == method]
             if data.empty:
@@ -95,6 +102,15 @@ def plot(df, device, variant, outdir):
                 kwargs['yerr'] = data['Stdev']
             plots.append(ax.bar(**kwargs))
 
+            # Based on a function from Daniel Tsai
+            if x_axis_use_power:
+                for value_idx, height in enumerate(data['Average']):
+                    if not data.query('method == "Stateful"').empty:
+                        continue
+                    xy = (value_idx + 0.4 + width * idx, height + max_height * 0.05)
+                    ax.annotate('-{}%'.format(int((1 - list(stateful_time)[value_idx] / height) * 100)),
+                                xy=xy, xycoords='data', annotation_clip=False)
+
         if n_configs > 1:
             ax.set_title(config_names[config])
         # Put ticks at the middle bar - average of first bar (2) and the last bar (n_methods + 1)
@@ -103,7 +119,7 @@ def plot(df, device, variant, outdir):
             x_labels = [f'{power}mW' for power in current.query('method == "HAWAII"')['power']]
         else:
             x_labels = [job_desc(job) for job in current.query('method == "HAWAII"')['batch']]
-        if has_baseline:
+        if has_baseline or n_configs == 1:
             x_labels = ['Ideal'] + x_labels
         else:
             x_labels = [''] + x_labels
@@ -115,7 +131,7 @@ def plot(df, device, variant, outdir):
 
         ax.set(ylabel='Inference time (seconds)')
 
-        ax.legend(plots, methods)
+        ax.legend(plots, methods, fontsize='small')
         ax.autoscale_view()
 
     if not x_axis_use_power:
@@ -123,11 +139,9 @@ def plot(df, device, variant, outdir):
 
     title = titles.get(variant)
     if title:
-        plt.suptitle('\n'.join(textwrap.wrap(title, 50)), y=0.95)
+        plt.suptitle('\n'.join(textwrap.wrap(title, 50)), y=0.98)
 
-    axes = plt.gca()
-    axes.set_ylim([0, df['Average'].max() * 1.3])
-    plt.subplots_adjust(left=0.2, bottom=0.2, right=0.95, top=0.8)
+    plt.subplots_adjust(left=0.2, bottom=0.2, right=0.95, top=0.9, hspace=0.5)
 
     filename = f'{device}-{variant}'
     if n_configs == 1:
