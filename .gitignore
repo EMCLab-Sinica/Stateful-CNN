@@ -8,6 +8,7 @@ data.h
 /data/cifar-10-python.tar.gz
 /data/cifar-10-batches-py/
 /data/MNIST/
+/data/others.txt
 /ARM-CMSIS/*
 !/ARM-CMSIS/*.sh
 /TI-DSPLib/*
