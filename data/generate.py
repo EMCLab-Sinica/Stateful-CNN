@@ -105,9 +105,10 @@ def plot(df, device, variant, outdir):
             # Based on a function from Daniel Tsai
             if x_axis_use_power:
                 for value_idx, height in enumerate(data['Average']):
-                    if not data.query('method == "Stateful"').empty:
+                    if not data.query('method == "Stateful"').empty or not height:
                         continue
-                    xy = (value_idx + 0.4 + width * idx, height + max_height * 0.05)
+                    yerr = list(data['Stdev'])[value_idx]
+                    xy = (value_idx + 0.4 + width * idx, height + max_height * 0.04 + yerr)
                     ax.annotate('-{}%'.format(int((1 - list(stateful_time)[value_idx] / height) * 100)),
                                 xy=xy, xycoords='data', annotation_clip=False)
 
