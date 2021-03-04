@@ -12,6 +12,8 @@ matplotlib.rcParams.update({
     'font.size': 14,
 })
 
+MOTIVATION_CONFIG = 'mnist'
+
 def calculate_avg_stdev(df):
     timings = df.loc[:, '0':'9']
     average = timings.mean(axis=1)
@@ -25,7 +27,7 @@ def plot(df, device, variant, outdir):
     df = df[df['device'] == device]
     print(df)
 
-    N = len(df.query('config == "cifar10" & method == "HAWAII"'))
+    N = len(df.query(f'config == "{MOTIVATION_CONFIG}" & method == "HAWAII"'))
 
     config_names = {
         'mnist': 'LeNet/MNIST',
@@ -155,9 +157,9 @@ def main():
     df = pd.read_csv(pathlib.Path(__file__).parent / 'data.csv')
     outdir = pathlib.Path(sys.argv[1])
 
-    motivation_data = calculate_avg_stdev(df.query('config == "cifar10" & method != "Stateful"'))
+    motivation_data = calculate_avg_stdev(df.query(f'config == "{MOTIVATION_CONFIG}" & method != "Stateful"'))
     plot(motivation_data.query('power == 0'), 'msp430', 'stable', outdir)
-    plot(motivation_data.query('power == 5'), 'msp430', 'unstable', outdir)
+    plot(motivation_data.query('power == 4'), 'msp430', 'unstable', outdir)
 
     for device in ['msp430', 'msp432']:
         unstable_data = calculate_avg_stdev(df.query('power > 0 & batch == 1'))
