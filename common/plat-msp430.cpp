@@ -120,6 +120,10 @@ void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n) {
     my_printf_debug("%d words written to NVM offset %d" NEWLINE, n, nvm_offset);
 }
 
+uint64_t get_nvm_writes(void) {
+    return 0;
+}
+
 void my_erase() {
     eraseFRAM();
 }

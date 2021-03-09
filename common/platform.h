@@ -27,6 +27,7 @@ uint16_t read_max_multiplier(const struct ParameterInfo* param);
 void write_max_multiplier(const struct ParameterInfo* param, uint16_t max_multiplier);
 void first_run(void);
 void notify_model_finished(void);
+uint64_t get_nvm_writes(void);
 #if HAWAII
 void write_hawaii_layer_footprint(uint16_t layer_idx, int16_t n_jobs);
 uint16_t read_hawaii_layer_footprint(uint16_t layer_idx);

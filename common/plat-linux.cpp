@@ -26,6 +26,7 @@
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
 uint32_t shutdown_counter = UINT32_MAX;
+static uint64_t nvm_writes = 0;
 
 Counters *counters() {
     return reinterpret_cast<Counters*>(nvm + COUNTERS_OFFSET);
@@ -154,6 +155,13 @@ void read_from_nvm(void *vm_buffer, uint32_t nvm_offset, size_t n) {
 void write_to_nvm(const void *vm_buffer, uint32_t nvm_offset, size_t n) {
     check_nvm_write_address(nvm_offset, n);
     my_memcpy_ex(nvm + nvm_offset, vm_buffer, n, 1);
+    if (dma_counter_enabled) {
+        nvm_writes += n;
+    }
+}
+
+uint64_t get_nvm_writes(void) {
+    return nvm_writes;
 }
 
 void my_erase() {

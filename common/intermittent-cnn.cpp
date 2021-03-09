@@ -209,6 +209,8 @@ static void print_results(const ParameterInfo *output_node) {
     my_printf(NEWLINE "Total DMA bytes: %d", total_dma_bytes);
 #endif
     my_printf(NEWLINE "run_counter: %d" NEWLINE, model->run_counter);
+
+    my_printf("NVM writes: %ld" NEWLINE, get_nvm_writes());
 }
 #endif
 
