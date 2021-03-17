@@ -10,6 +10,7 @@ import pandas as pd
 
 matplotlib.rcParams.update({
     'errorbar.capsize': 5,
+    # 'font.family': 'DejaVu Serif',
     'font.size': 12,
 })
 
@@ -35,9 +36,18 @@ def plot(df, device, variant, outdir):
     N = len(df.query(f'config == "{MOTIVATION_CONFIG}" & method == "HAWAII"'))
 
     config_names = {
-        'mnist': 'LeNet/MNIST',
+        'mnist': 'CNN/MNIST',
         'cifar10': 'SqueezeNet/CIFAR-10',
-        'kws': 'KWS/Google Speech',
+        'kws': 'KWS/Speech Commands',
+    }
+
+    ylim = {
+        'msp430': [150, 500, 15],
+        'msp432': [128, 320, 16],
+    }
+    yticks = {
+        'msp430': [np.arange(0, 121, step=30), np.arange(0, 401, step=100), np.arange(0, 13, step=3)],
+        'msp432': [np.arange(0, 121, step=40), np.arange(0, 301, step=100), np.arange(0, 16, step=5)],
     }
 
     n_configs = df['config'].nunique()
@@ -80,10 +90,11 @@ def plot(df, device, variant, outdir):
             continue
 
         if n_batches == 2:
-            p = current.query('method == "Baseline"')['Average'].iat[0]
-            ax.set_ylim([0, p * 4.5])
-        else:
-            ax.set_ylim([0, current['Average'].max() * 1.3])
+            p = current.query('method == "Baseline"')['Average'].iat[0] or 10
+            ax.set_ylim([0, p * 5.5])
+        elif n_configs > 1:
+            ax.set_ylim([0, ylim[device][idx_config]])
+            ax.set_yticks(yticks[device][idx_config])
 
         if x_axis == XAxisType.POWER:
             current = current.sort_values('power')
@@ -95,6 +106,7 @@ def plot(df, device, variant, outdir):
             ax.bar(x=0, height=baseline_data['Average'], width=width, bottom=0, fill=False, hatch=hatches[0])
         elif n_configs == 1:
             ax.bar(x=0, height=0, width=width, bottom=0, fill=False, hatch=hatches[0])
+            ax.annotate('×', xy=(-0.1, 5), xycoords='data', fontsize='xx-large', fontweight='bold')
         stateful_time = current.query('method == "Stateful"')['Average']
         max_height = current.max()['Average']
         for idx_method, method in enumerate(methods):
@@ -115,10 +127,14 @@ def plot(df, device, variant, outdir):
             # Based on a function from Daniel Tsai
             if x_axis == XAxisType.POWER:
                 for value_idx, height in enumerate(data['Average']):
-                    if not data.query('method == "Stateful"').empty or not height:
+                    if not data.query('method == "Stateful"').empty:
                         continue
                     yerr = data['Stdev'].iat[value_idx]
-                    xy = (value_idx + 0.38 + width * idx_method, height + max_height * 0.03 + yerr)
+                    xy = [value_idx + 0.38 + width * idx_method, height + max_height * 0.03 + yerr]
+                    if not height:
+                        xy[0] += 0.04
+                        ax.annotate('×', xy=xy, xycoords='data', fontsize='xx-large', fontweight='bold')
+                        continue
                     ax.annotate('-{}%'.format(int((1 - stateful_time.iat[value_idx] / height) * 100)),
                                 xy=xy, xycoords='data', annotation_clip=False, fontsize='small')
 
