@@ -15,6 +15,7 @@
 #include "my_debug.h"
 #include "Tools/myuart.h"
 #include "Tools/our_misc.h"
+#include "Tools/dvfs.h"
 
 static Counters counters_data;
 Counters *counters() {
@@ -160,8 +161,8 @@ void IntermittentCNNTest() {
 #ifdef __MSP430__
     __delay_cycles(100000);
 #else
-    // 5ms / (1/12MHz) = 60000
-    our_delay_cycles(60000);
+    // 5ms / (1/f)
+    our_delay_cycles(5E-3 * getFrequency(FreqLevel));
 #endif
 
     initSPI();
