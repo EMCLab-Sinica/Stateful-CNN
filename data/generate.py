@@ -1,4 +1,5 @@
 import enum
+import os
 import pathlib
 import subprocess
 import sys
@@ -28,6 +29,7 @@ def calculate_avg_stdev(df):
 class XAxisType(enum.Enum):
     GRANULARITY = enum.auto()
     POWER = enum.auto()
+    METHODOLOGY = enum.auto()
 
 def plot(df, device, variant, outdir):
     df = df[df['device'] == device]
@@ -36,9 +38,9 @@ def plot(df, device, variant, outdir):
     N = len(df.query(f'config == "{MOTIVATION_CONFIG}" & method == "HAWAII"'))
 
     config_names = {
-        'mnist': 'CNN/MNIST',
-        'cifar10': 'SqueezeNet/CIFAR-10',
-        'kws': 'KWS/Speech Commands',
+        'mnist': 'CNN for MNIST',
+        'cifar10': 'SqueezeNet',
+        'kws': 'KWS',
     }
 
     ylim = {
@@ -66,7 +68,6 @@ def plot(df, device, variant, outdir):
     width = 1.0 / (1 + n_methods)     # the width of the bars
     ind = np.arange(N) + 2 * width    # the x locations for the groups
     hatches = ['', '--', r'\\', 'xx']
-    xs = np.linspace(-0.25, N + 0.25, 200)
 
     def job_desc(job):
         if job == 1:
@@ -77,8 +78,13 @@ def plot(df, device, variant, outdir):
 
     if variant == 'unstable' and n_configs > 1:
         x_axis = XAxisType.POWER
+        x_axis_rotation = 0
+    elif n_batches == 2:
+        x_axis = XAxisType.METHODOLOGY
+        x_axis_rotation = 45
     else:
         x_axis = XAxisType.GRANULARITY
+        x_axis_rotation = 0
 
     for idx_config, config in enumerate(config_names.keys()):
         if n_configs == 1:
@@ -91,14 +97,14 @@ def plot(df, device, variant, outdir):
 
         if n_batches == 2:
             p = current.query('method == "Baseline"')['Average'].iat[0] or 10
-            ax.set_ylim([0, p * 5.5])
+            ax.set_ylim([0, p * 4.6])
         elif n_configs > 1:
             ax.set_ylim([0, ylim[device][idx_config]])
             ax.set_yticks(yticks[device][idx_config])
 
         if x_axis == XAxisType.POWER:
             current = current.sort_values('power')
-        elif x_axis == XAxisType.GRANULARITY:
+        else:
             current = current.sort_values('batch')
         baseline_data = current.query('method == "Baseline"')
         has_baseline = variant == 'stable'
@@ -107,7 +113,10 @@ def plot(df, device, variant, outdir):
         elif n_configs == 1:
             ax.bar(x=0, height=0, width=width, bottom=0, fill=False, hatch=hatches[0])
             ax.annotate('×', xy=(-0.1, 5), xycoords='data', fontsize='xx-large', fontweight='bold')
-        stateful_time = current.query('method == "Stateful"')['Average']
+
+        base_method = 'Stateful' if x_axis == XAxisType.POWER else 'Baseline'
+        base_method_time = current[current.method == base_method]['Average']
+
         max_height = current.max()['Average']
         for idx_method, method in enumerate(methods):
             data = current[current['method'] == method]
@@ -120,14 +129,16 @@ def plot(df, device, variant, outdir):
                 'fill': False,
                 'hatch': hatches[idx_method + 1],
             }
+            if x_axis == XAxisType.METHODOLOGY:
+                kwargs['x'] -= width
             if not has_baseline:
                 kwargs['yerr'] = data['Stdev']
             plots.append(ax.bar(**kwargs))
 
             # Based on a function from Daniel Tsai
-            if x_axis == XAxisType.POWER:
+            if x_axis in (XAxisType.POWER, XAxisType.METHODOLOGY):
                 for value_idx, height in enumerate(data['Average']):
-                    if not data.query('method == "Stateful"').empty:
+                    if not data[data.method == base_method].empty:
                         continue
                     yerr = data['Stdev'].iat[value_idx]
                     xy = [value_idx + 0.38 + width * idx_method, height + max_height * 0.03 + yerr]
@@ -135,25 +146,39 @@ def plot(df, device, variant, outdir):
                         xy[0] += 0.04
                         ax.annotate('×', xy=xy, xycoords='data', fontsize='xx-large', fontweight='bold')
                         continue
-                    ax.annotate('-{}%'.format(int((1 - stateful_time.iat[value_idx] / height) * 100)),
-                                xy=xy, xycoords='data', annotation_clip=False, fontsize='small')
+                    if x_axis == XAxisType.METHODOLOGY:
+                        text = '+{}%'.format(int((height / base_method_time.iat[value_idx] - 1) * 100))
+                        xy[0] = xy[0] - width + 0.02 * (5 - len(text))
+                    else:
+                        text = '-{}%'.format(int((1 - base_method_time.iat[value_idx] / height) * 100))
+                    ax.annotate(text, xy=xy, xycoords='data', annotation_clip=False, fontsize='small')
 
         if n_configs > 1:
             ax.set_title(config_names[config])
         # Put ticks at the middle bar - average of first bar (2) and the last bar (n_methods + 1)
-        x_ticks = np.concatenate(([0], np.arange(N) + (2 + (n_methods + 1)) / 2 * width), axis=None)
+        if x_axis == XAxisType.METHODOLOGY:
+            x_ticks = np.arange(current['method'].nunique()) * width - width / 2
+        else:
+            x_ticks = np.concatenate(([0], np.arange(N) + (2 + (n_methods + 1)) / 2 * width), axis=None)
         ax.set_xticks(x_ticks)
         if x_axis == XAxisType.POWER:
             x_labels = [f'{power}mW' for power in current.query('method == "HAWAII"')['power']]
         elif x_axis == XAxisType.GRANULARITY:
             x_labels = [job_desc(job) for job in current.query('method == "HAWAII"')['batch']]
-        if has_baseline or n_configs == 1:
-            x_labels = ['Ideal'] + x_labels
-        else:
-            x_labels = [''] + x_labels
-        ax.set_xticklabels(x_labels)
+        elif x_axis == XAxisType.METHODOLOGY:
+            x_labels = list(current['method'])
+        if x_axis != XAxisType.METHODOLOGY:
+            if has_baseline or n_configs == 1:
+                x_labels = ['Ideal'] + x_labels
+            else:
+                x_labels = [''] + x_labels
+        ax.set_xticklabels(x_labels, rotation=x_axis_rotation)
 
         if has_baseline:
+            if x_axis == XAxisType.METHODOLOGY:
+                xs = np.linspace(-0.25, N + 0.25 - width, 200)
+            else:
+                xs = np.linspace(-0.25, N + 0.25, 200)
             horiz_line_data = np.array([baseline_data['Average'] for i in range(len(xs))])
             ax.plot(xs, horiz_line_data, linestyle='--', color='black')
 
@@ -164,18 +189,20 @@ def plot(df, device, variant, outdir):
             ax.legend(plots, methods)
         ax.autoscale_view()
 
-    if n_configs > 1:
+    if n_configs > 1 and x_axis != XAxisType.METHODOLOGY:
         plt.figlegend(plots, methods, ncol=len(methods))
 
-    plt.subplots_adjust(left=0.15, bottom=0.1, right=1, top=0.8, wspace=0.2)
+    plt.subplots_adjust(left=0.15, bottom=0.2, right=1, top=0.8, wspace=0.2)
 
     filename = f'{device}-{variant}'
     if n_configs == 1 and n_batches != 2:
         filename += '-motivation'
     filename = 'chart-' + filename
+    pdf_path = outdir / (filename + '.pdf')
     plt.savefig(outdir / (filename + '.png'))
-    plt.savefig(outdir / (filename + '.pdf'))
-    subprocess.check_call(['pdfcrop', outdir / (filename + '.pdf'), outdir / (filename + '-cropped.pdf')])
+    plt.savefig(pdf_path)
+    subprocess.check_call(['pdfcrop', pdf_path, outdir / (filename + '-cropped.pdf')])
+    os.remove(pdf_path)
 
 def main():
     df = pd.read_csv(pathlib.Path(__file__).parent / 'data.csv')
