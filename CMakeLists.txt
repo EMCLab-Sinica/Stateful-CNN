@@ -28,30 +28,27 @@ else ()
     set (BUILD_MSP432 OFF)
 endif ()
 
-# MSP432 needs ARM CMSIS
-if (BUILD_MSP432)
-    # Keep this list in sync with ARM-CMSIS/create_symlinks.sh
-    set(ARM_CMSIS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/ARM-CMSIS)
-    add_library(arm_cmsis_dsp
-        ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_add_q15.c
-        ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_offset_q15.c
-        ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_scale_q15.c
-        ${ARM_CMSIS_PATH}/DSP/Source/MatrixFunctions/arm_mat_init_q15.c
-        ${ARM_CMSIS_PATH}/DSP/Source/MatrixFunctions/arm_mat_mult_fast_q15.c
-        ${ARM_CMSIS_PATH}/DSP/Source/StatisticsFunctions/arm_max_q15.c
-        ${ARM_CMSIS_PATH}/DSP/Source/StatisticsFunctions/arm_min_q15.c
-        ${ARM_CMSIS_PATH}/DSP/Source/SupportFunctions/arm_fill_q15.c
-    )
-    target_include_directories(arm_cmsis_dsp
-        PUBLIC
-            ${ARM_CMSIS_PATH}/Core/Include
-            ${ARM_CMSIS_PATH}/DSP/Include
-    )
-    target_compile_definitions(arm_cmsis_dsp
-        PRIVATE
-            ARM_MATH_MATRIX_CHECK
-    )
-endif ()
+# Keep this list in sync with ARM-CMSIS/create_symlinks.sh
+set(ARM_CMSIS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/ARM-CMSIS)
+add_library(arm_cmsis_dsp
+    ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_add_q15.c
+    ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_offset_q15.c
+    ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_scale_q15.c
+    ${ARM_CMSIS_PATH}/DSP/Source/MatrixFunctions/arm_mat_init_q15.c
+    ${ARM_CMSIS_PATH}/DSP/Source/MatrixFunctions/arm_mat_mult_fast_q15.c
+    ${ARM_CMSIS_PATH}/DSP/Source/StatisticsFunctions/arm_max_q15.c
+    ${ARM_CMSIS_PATH}/DSP/Source/StatisticsFunctions/arm_min_q15.c
+    ${ARM_CMSIS_PATH}/DSP/Source/SupportFunctions/arm_fill_q15.c
+)
+target_include_directories(arm_cmsis_dsp
+    PUBLIC
+        ${ARM_CMSIS_PATH}/Core/Include
+        ${ARM_CMSIS_PATH}/DSP/Include
+)
+target_compile_definitions(arm_cmsis_dsp
+    PRIVATE
+        ARM_MATH_MATRIX_CHECK
+)
 
 set(DSPLIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/TI-DSPLib)
 add_library(dsplib
