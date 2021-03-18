@@ -5,11 +5,8 @@ set -x
 cmake_args=""
 run_args=""
 
-if [[ $CONFIG = *msp432* ]]; then
-    pushd ARM-CMSIS && ./download-extract-cmsis.sh && popd
-else
-    pushd TI-DSPLib && ./download-extract-dsplib.sh && popd
-fi
+pushd ARM-CMSIS && ./download-extract-cmsis.sh && popd
+pushd TI-DSPLib && ./download-extract-dsplib.sh && popd
 
 cmake_args="$cmake_args -D MY_DEBUG=1"
 
