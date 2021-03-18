@@ -1,4 +1,6 @@
-#ifndef USE_ARM_CMSIS
+#include "data.h"
+
+#if !USE_ARM_CMSIS
 #include <DSPLib.h>
 #else
 #include <arm_math.h>
@@ -9,7 +11,7 @@
 #include "my_debug.h"
 #include "op_utils.h"
 
-#ifndef USE_ARM_CMSIS
+#if !USE_ARM_CMSIS
 #define my_checkStatus(status) MY_ASSERT(status == MSP_SUCCESS, "Error from TI-DSPLib: %d" NEWLINE, status)
 #endif
 
@@ -23,7 +25,7 @@ void my_add_q15(const int16_t *pSrcA, const int16_t *pSrcB, int16_t *pDst, uint3
     check_buffer_address(pSrcA, blockSize);
     check_buffer_address(pSrcB, blockSize);
     check_buffer_address(pDst, blockSize);
-#ifndef USE_ARM_CMSIS
+#if !USE_ARM_CMSIS
     uint32_t blockSizeForLEA = blockSize / 2 * 2;
     if (blockSizeForLEA) {
         msp_add_q15_params add_params;
@@ -41,7 +43,7 @@ void my_add_q15(const int16_t *pSrcA, const int16_t *pSrcB, int16_t *pDst, uint3
 
 void my_fill_q15(int16_t value, int16_t *pDst, uint32_t blockSize) {
     check_buffer_address(pDst, blockSize);
-#ifndef USE_ARM_CMSIS
+#if !USE_ARM_CMSIS
     uint32_t blockSizeForLEA = blockSize / 2 * 2;
     if (blockSizeForLEA) {
         msp_fill_q15_params fill_params;
@@ -59,7 +61,7 @@ void my_fill_q15(int16_t value, int16_t *pDst, uint32_t blockSize) {
 }
 
 void my_offset_q15(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t blockSize) {
-#ifndef USE_ARM_CMSIS
+#if !USE_ARM_CMSIS
     // XXX: the alignment adjustment code in this function only supports pSrc == pDst
     MY_ASSERT(pSrc == pDst);
     // if pSrc is not 4-byte aligned...
@@ -97,7 +99,7 @@ void my_max_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint1
         MY_ASSERT(blockSize > 0);
         blockSize--;
     }
-#ifndef USE_ARM_CMSIS
+#if !USE_ARM_CMSIS
     uint32_t blockSizeForLEA = blockSize / 2 * 2;
     if (blockSizeForLEA) {
         msp_max_q15_params max_params;
@@ -135,7 +137,7 @@ void my_min_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint1
         MY_ASSERT(blockSize > 0);
         blockSize--;
     }
-#ifndef USE_ARM_CMSIS
+#if !USE_ARM_CMSIS
     uint32_t blockSizeForLEA = blockSize / 2 * 2;
     if (blockSizeForLEA) {
         msp_min_q15_params min_params;
@@ -165,7 +167,7 @@ void my_min_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint1
     }
 }
 
-#ifdef USE_ARM_CMSIS
+#if USE_ARM_CMSIS
 static int16_t pState[ARM_PSTATE_LEN];
 #endif
 
@@ -179,7 +181,7 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
     MY_ASSERT(A_cols == B_rows);
     check_buffer_address(pSrcA, A_rows * A_cols);
     check_buffer_address(pSrcB, B_rows * B_cols);
-#ifndef USE_ARM_CMSIS
+#if !USE_ARM_CMSIS
     msp_matrix_mpy_q15_params matrix_mpy_params;
     matrix_mpy_params.srcARows = A_rows;
     matrix_mpy_params.srcACols = A_cols;
@@ -199,7 +201,7 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
 }
 
 void my_scale_q15(const int16_t *pSrc, int16_t scaleFract, uint8_t shift, int16_t *pDst, uint32_t blockSize) {
-#ifndef USE_ARM_CMSIS
+#if !USE_ARM_CMSIS
     uint32_t blockSizeForLEA = blockSize / 2 * 2;
     if (blockSizeForLEA) {
         msp_scale_q15_params scale_params;

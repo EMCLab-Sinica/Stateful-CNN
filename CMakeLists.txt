@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 2.8.12)
 
 project(intermittent-cnn)
 
-option(USE_ARM_CMSIS "Use DSP from ARM CMSIS pack" OFF)
 set(MY_DEBUG "1" CACHE STRING "Local debug flag. See my_debug.h for details.")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -30,7 +29,7 @@ else ()
 endif ()
 
 # MSP432 needs ARM CMSIS
-if (USE_ARM_CMSIS OR BUILD_MSP432)
+if (BUILD_MSP432)
     # Keep this list in sync with ARM-CMSIS/create_symlinks.sh
     set(ARM_CMSIS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/ARM-CMSIS)
     add_library(arm_cmsis_dsp
@@ -54,26 +53,24 @@ if (USE_ARM_CMSIS OR BUILD_MSP432)
     )
 endif ()
 
-if (NOT USE_ARM_CMSIS)
-    set(DSPLIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/TI-DSPLib)
-    add_library(dsplib
-        ${DSPLIB_PATH}/source/matrix/msp_matrix_mpy_q15.c
-        ${DSPLIB_PATH}/source/vector/msp_add_q15.c
-        ${DSPLIB_PATH}/source/vector/msp_offset_q15.c
-        ${DSPLIB_PATH}/source/vector/msp_max_q15.c
-        ${DSPLIB_PATH}/source/vector/msp_min_q15.c
-        ${DSPLIB_PATH}/source/vector/msp_scale_q15.c
-        ${DSPLIB_PATH}/source/utility/msp_deinterleave_q15.c
-        ${DSPLIB_PATH}/source/utility/msp_interleave_q15.c
-        ${DSPLIB_PATH}/source/utility/msp_fill_q15.c
-    )
-    target_include_directories(dsplib
-        SYSTEM PUBLIC
-            ${DSPLIB_PATH}/include
-        PUBLIC
-            ${CMAKE_CURRENT_SOURCE_DIR}/fake-msp430sdk
-    )
-endif ()
+set(DSPLIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/TI-DSPLib)
+add_library(dsplib
+    ${DSPLIB_PATH}/source/matrix/msp_matrix_mpy_q15.c
+    ${DSPLIB_PATH}/source/vector/msp_add_q15.c
+    ${DSPLIB_PATH}/source/vector/msp_offset_q15.c
+    ${DSPLIB_PATH}/source/vector/msp_max_q15.c
+    ${DSPLIB_PATH}/source/vector/msp_min_q15.c
+    ${DSPLIB_PATH}/source/vector/msp_scale_q15.c
+    ${DSPLIB_PATH}/source/utility/msp_deinterleave_q15.c
+    ${DSPLIB_PATH}/source/utility/msp_interleave_q15.c
+    ${DSPLIB_PATH}/source/utility/msp_fill_q15.c
+)
+target_include_directories(dsplib
+    SYSTEM PUBLIC
+        ${DSPLIB_PATH}/include
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/fake-msp430sdk
+)
 
 add_executable(intermittent-cnn
     ${COMMON_SRC_PATH}/intermittent-cnn.cpp
@@ -98,15 +95,7 @@ target_compile_definitions(intermittent-cnn
         MY_DEBUG=${MY_DEBUG}
 )
 
-if (USE_ARM_CMSIS)
-    target_compile_definitions(intermittent-cnn
-        PRIVATE
-            USE_ARM_CMSIS
-    )
-    target_link_libraries(intermittent-cnn arm_cmsis_dsp)
-else (USE_ARM_CMSIS)
-    target_link_libraries(intermittent-cnn dsplib)
-endif (USE_ARM_CMSIS)
+target_link_libraries(intermittent-cnn arm_cmsis_dsp dsplib)
 
 # Below is not actually used for the build on PC. I added it here so that
 # clangd can identify platform-dependent codes

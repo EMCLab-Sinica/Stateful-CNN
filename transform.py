@@ -50,10 +50,9 @@ class Constants:
     N_SAMPLES = 20
     # to make the code clearer; used in Conv
     TEMP_FILTER_WIDTH = 1
-    # (4096 - 0x138 (LEASTACK) - 2 * 8 (MSP_LEA_MAC_PARAMS)) / sizeof(int16_t)
-    LEA_BUFFER_SIZE = 1884
-    # somehow MSP432 does not work with pState with length 2048
-    ARM_PSTATE_LEN = 1600
+    LEA_BUFFER_SIZE = 0
+    ARM_PSTATE_LEN = 8704
+    USE_ARM_CMSIS = 0
     CONFIG = None
 
     DEFAULT_TILE_C = 4
@@ -220,12 +219,19 @@ configs = {
     },
 }
 
+lea_buffer_size = {
+    # (4096 - 0x138 (LEASTACK) - 2 * 8 (MSP_LEA_MAC_PARAMS)) / sizeof(int16_t)
+    'msp430': 1884,
+    # determined by trial and error
+    'msp432': 18000,
+}
 
 parser = argparse.ArgumentParser()
 parser.add_argument('config', choices=configs.keys())
 parser.add_argument('--all-samples', action='store_true')
 parser.add_argument('--write-images', action='store_true')
 parser.add_argument('--batch-size', type=int, default=Constants.DEFAULT_TILE_C)
+parser.add_argument('--target', choices=('msp430', 'msp432'), required=True)
 parser.add_argument('--debug', action='store_true')
 intermittent_methodology = parser.add_mutually_exclusive_group(required=True)
 intermittent_methodology.add_argument('--baseline', action='store_true')
@@ -256,6 +262,9 @@ if args.japari:
     config['intermediate_values_size'] *= 2
 Constants.INTERMITTENT = Constants.STATEFUL | Constants.HAWAII | Constants.JAPARI
 Constants.INDIRECT_RECOVERY = Constants.STATEFUL | Constants.JAPARI
+if args.target == 'msp432':
+    Constants.USE_ARM_CMSIS = 1
+Constants.LEA_BUFFER_SIZE = lea_buffer_size[args.target]
 
 onnx_opt_model_name = config['onnx_model'].replace('.onnx', '-opt.onnx')
 if os.path.exists(onnx_opt_model_name):

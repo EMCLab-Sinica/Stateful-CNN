@@ -7,7 +7,7 @@ python3 -m pip install --user dataclasses numpy onnx
 
 ./data/download-mnist.sh
 
-python3 transform.py --stateful --batch-size 1 mnist
+python3 transform.py --target msp430 --stateful --batch-size 1 mnist
 mkdir build
 cd build
 cmake ..

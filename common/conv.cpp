@@ -6,7 +6,11 @@
 #include "my_dsplib.h"
 
 // TODO: make these adjustable on runtime
+#if !USE_ARM_CMSIS
 #define OUTPUT_LEN 100
+#else
+#define OUTPUT_LEN 256
+#endif
 
 /* Better to not use macros
  * https://stackoverflow.com/a/3437484/3786245
@@ -299,11 +303,14 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #endif
 }
 
-static inline uint8_t load_input_vector(uint32_t src_addr, int16_t* dest_addr, uint8_t len, const ConvTaskParams* conv_params) {
+static inline uint16_t load_input_vector(uint32_t src_addr, int16_t* dest_addr, uint16_t len, const ConvTaskParams* conv_params) {
     my_printf_debug("Load %d IFM values from range [%d, %d) ",
                     len, src_addr, static_cast<int>(src_addr + len));
     int16_t* memcpy_dest_addr = nullptr;
-    uint8_t loaded_len = 0;
+    uint16_t loaded_len = 0;
+
+    MY_ASSERT(len != 0);
+
 #if JAPARI
     if (conv_params->conv_input_has_footprints) {
         memcpy_dest_addr = input_buffer_with_footprints;
@@ -322,7 +329,7 @@ static inline uint8_t load_input_vector(uint32_t src_addr, int16_t* dest_addr, u
         // Use nested loops as skipping footprints by `% (BATCH_SIZE)` is quite slow on boards
         int16_t *dest_ptr = dest_addr,
                 *src_ptr = input_buffer_with_footprints;
-        for (uint8_t src_idx = 0; src_idx < len; src_idx += (BATCH_SIZE + 1)) {
+        for (uint16_t src_idx = 0; src_idx < len; src_idx += (BATCH_SIZE + 1)) {
             for (uint8_t batch_offset = 0; batch_offset < BATCH_SIZE; batch_offset++) {
                 *dest_ptr = *src_ptr;
                 dest_ptr++;
@@ -335,7 +342,7 @@ static inline uint8_t load_input_vector(uint32_t src_addr, int16_t* dest_addr, u
 #endif
 
 #if MY_DEBUG >= 1
-    for (uint8_t idx = 0; idx < loaded_len; idx++) {
+    for (uint16_t idx = 0; idx < loaded_len; idx++) {
         my_printf_debug("%d ", dest_addr[idx]);
     }
     my_printf_debug(NEWLINE);
@@ -394,8 +401,8 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     my_printf_debug("h_start=%" PRId32 " ", h_start);
     my_printf_debug("h_end=%" PRId32 NEWLINE, h_end);
 
-    uint8_t cur_input_tile_c = conv_params->cur_input_tile_c,
-            im2col_channel_offset = cur_input_tile_c;
+    uint16_t cur_input_tile_c = conv_params->cur_input_tile_c;
+    uint8_t im2col_channel_offset = cur_input_tile_c;
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                     static_cast<int>(dest - lea_buffer));
     uint16_t cur_input_channel = conv_params->CHANNEL;

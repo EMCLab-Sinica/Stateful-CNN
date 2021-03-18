@@ -79,7 +79,7 @@ int main(int argc, char* argv[]) {
         goto exit;
     }
 
-#ifdef USE_ARM_CMSIS
+#if USE_ARM_CMSIS
     my_printf("Use DSP from ARM CMSIS pack" NEWLINE);
 #else
     my_printf("Use TI DSPLib" NEWLINE);

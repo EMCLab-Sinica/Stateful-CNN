@@ -5,12 +5,10 @@ set -x
 cmake_args=""
 run_args=""
 
-if [[ $USE_ARM_CMSIS = 1 ]]; then
+if [[ $CONFIG = *msp432* ]]; then
     pushd ARM-CMSIS && ./download-extract-cmsis.sh && popd
-    cmake_args="$cmake_args -D USE_ARM_CMSIS=ON"
 else
     pushd TI-DSPLib && ./download-extract-dsplib.sh && popd
-    cmake_args="$cmake_args -D USE_ARM_CMSIS=OFF"
 fi
 
 cmake_args="$cmake_args -D MY_DEBUG=1"
