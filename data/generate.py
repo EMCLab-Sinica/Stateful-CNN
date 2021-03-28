@@ -44,12 +44,16 @@ def plot(df, device, variant, outdir):
     }
 
     ylim = {
-        'msp430': [150, 500, 15],
-        'msp432': [128, 320, 16],
+        'msp430': [165, 550, 11],
+        'msp432': [120, 300, 30],
     }
     yticks = {
-        'msp430': [np.arange(0, 121, step=30), np.arange(0, 401, step=100), np.arange(0, 13, step=3)],
-        'msp432': [np.arange(0, 121, step=40), np.arange(0, 301, step=100), np.arange(0, 16, step=5)],
+        'msp430': [np.arange(0, 151, step=30), np.arange(0, 501, step=100), np.arange(0, 11, step=2)],
+        'msp432': [np.arange(0, 121, step=40), np.arange(0, 301, step=100), np.arange(0, 31, step=10)],
+    }
+    stable_ratio = {
+        'msp430': 4.6,
+        'msp432': 9.5,
     }
 
     n_configs = df['config'].nunique()
@@ -97,7 +101,7 @@ def plot(df, device, variant, outdir):
 
         if n_batches == 2:
             p = current.query('method == "Baseline"')['Average'].iat[0] or 10
-            ax.set_ylim([0, p * 4.6])
+            ax.set_ylim([0, p * stable_ratio[device]])
         elif n_configs > 1:
             ax.set_ylim([0, ylim[device][idx_config]])
             ax.set_yticks(yticks[device][idx_config])
