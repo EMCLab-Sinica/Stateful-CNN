@@ -9,6 +9,10 @@
 #  include "plat-linux.h"
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct ParameterInfo;
 struct Model;
 extern uint8_t dma_counter_enabled;
@@ -32,4 +36,8 @@ uint64_t get_nvm_writes(void);
 void write_hawaii_layer_footprint(uint16_t layer_idx, int16_t n_jobs);
 uint16_t read_hawaii_layer_footprint(uint16_t layer_idx);
 void reset_hawaii_layer_footprint(uint16_t layer_idx);
+#endif
+
+#ifdef __cplusplus
+}
 #endif

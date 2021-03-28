@@ -253,7 +253,12 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     B_cols = n_filters;
     MY_ASSERT(A_rows * B_cols <= OUTPUT_LEN);
     MY_ASSERT(input_buffer_addr + A_rows * A_cols <= filter_buffer_addr);
-    my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results);
+#if HAWAII
+    my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results, nullptr, 0, 0);
+#else
+    my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results,
+                      conv_params->output, cur_output_data_offset, values_to_preserve);
+#endif
 
     /* START dump data */
 #if MY_DEBUG >= 2
@@ -283,9 +288,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
     MY_ASSERT(cur_output_data_offset + n_filters < INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
 
-#if !HAWAII
-    my_memcpy_to_param(conv_params->output, cur_output_data_offset, matrix_mpy_results, values_to_preserve * sizeof(int16_t));
-#else
+#if HAWAII
     uint16_t batch_offset = 0;
     for (uint16_t row = 0; row < A_rows; row++) {
         batch_offset += hawaii_preserve_vector(conv_params->model, conv_params->output, cur_output_data_offset + batch_offset, matrix_mpy_results + batch_offset, B_cols);

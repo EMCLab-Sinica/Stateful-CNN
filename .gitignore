@@ -13,6 +13,7 @@ data.h
 !/ARM-CMSIS/*.sh
 /TI-DSPLib/*
 !/TI-DSPLib/*.sh
+!/TI-DSPLib/*.diff
 /build/
 /charts/chart-*
 

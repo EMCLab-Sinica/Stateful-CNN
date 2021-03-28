@@ -171,7 +171,7 @@ void my_min_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint1
 static int16_t pState[ARM_PSTATE_LEN];
 #endif
 
-void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16_t B_cols, int16_t *pSrcA, int16_t *pSrcB, int16_t *pDst) {
+void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16_t B_cols, int16_t *pSrcA, int16_t *pSrcB, int16_t *pDst, struct ParameterInfo *param, uint16_t offset_in_word, size_t values_to_preserve) {
     // XXX: LEA doc requires all matrix dimensions to be even, while LEA
     // appears to still give correct results when srcARows is odd
     // srcBCols should really be even, though
@@ -187,7 +187,7 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
     matrix_mpy_params.srcACols = A_cols;
     matrix_mpy_params.srcBRows = B_rows;
     matrix_mpy_params.srcBCols = B_cols;
-    msp_status status = msp_matrix_mpy_q15(&matrix_mpy_params, pSrcA, pSrcB, pDst);
+    msp_status status = msp_matrix_mpy_q15(&matrix_mpy_params, pSrcA, pSrcB, pDst, param, offset_in_word, values_to_preserve);
     my_checkStatus(status);
 #else
     arm_matrix_instance_q15 A, B, C;
@@ -197,6 +197,10 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
     arm_status status;
     status = arm_mat_mult_fast_q15(&A, &B, &C, pState);
     MY_ASSERT(status == ARM_MATH_SUCCESS);
+    // TODO: pipeline DMA and SIMD operations
+    if (param) {
+        my_memcpy_to_param(param, offset_in_word, pDst, values_to_preserve * sizeof(int16_t));
+    }
 #endif
 }
 

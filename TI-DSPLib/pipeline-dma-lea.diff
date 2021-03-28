@@ -1,0 +1,88 @@
+diff -ur TI-DSPLib-orig/include/DSPLib_matrix.h TI-DSPLib/include/DSPLib_matrix.h
+--- TI-DSPLib-orig/include/DSPLib_matrix.h	2018-05-02 08:11:56.000000000 +0800
++++ TI-DSPLib/include/DSPLib_matrix.h	2021-03-28 19:54:02.371136229 +0800
+@@ -32,6 +32,10 @@
+ #ifndef __DSPLIB_MATRIX_H__
+ #define __DSPLIB_MATRIX_H__
+ 
++#include <stdint.h>
++#include <stdlib.h>
++struct ParameterInfo;
++
+ //******************************************************************************
+ //
+ //! \addtogroup dsplib_matrix_api Matrix
+@@ -483,7 +487,7 @@
+ extern msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params,
+                                      const _q15 *srcA,
+                                      const _q15 *srcB,
+-                                     _q15 *dst);
++                                     _q15 *dst, struct ParameterInfo *param, uint16_t offset_in_word, size_t values_to_preserve);
+ 
+ //******************************************************************************
+ //
+diff -ur TI-DSPLib-orig/source/matrix/msp_matrix_mpy_q15.c TI-DSPLib/source/matrix/msp_matrix_mpy_q15.c
+--- TI-DSPLib-orig/source/matrix/msp_matrix_mpy_q15.c	2018-05-02 08:11:57.000000000 +0800
++++ TI-DSPLib/source/matrix/msp_matrix_mpy_q15.c	2021-03-28 20:11:12.964086518 +0800
+@@ -31,10 +31,12 @@
+  * --/COPYRIGHT--*/
+ 
+ #include "DSPLib.h"
++#include <stdint.h>
++#include "platform.h"
+ 
+ #if defined(MSP_USE_LEA)
+ 
+-msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q15 *srcA, const _q15 *srcB, _q15 *dst)
++msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q15 *srcA, const _q15 *srcB, _q15 *dst, struct ParameterInfo *param, uint16_t offset_in_word, size_t values_to_preserve)
+ {
+     uint16_t srcARows;
+     uint16_t srcACols;
+@@ -92,7 +94,26 @@
+         LEAPMS1 = MSP_LEA_CONVERT_ADDRESS(leaParams);
+ 
+         /* Invoke the LEACMD__MPYMATRIXROW command. */
+-        msp_lea_invokeCommand(LEACMD__MPYMATRIXROW);
++
++        /* simplified from msp_lea_invokeCommand() */
++        /* Save interrupt state and disable interrupts. */
++        uint16_t interruptState = __get_interrupt_state();
++        __disable_interrupt();
++
++        /* Clear interrupt flag and invoke the command. */
++        msp_lea_ifg = 0;
++        LEAPMCB = LEACMD__MPYMATRIXROW | LEAITFLG1;
++
++        __bis_SR_register(GIE);
++
++        if (param) {
++            my_memcpy_to_param(param, offset_in_word, dst, values_to_preserve * sizeof(int16_t));
++        }
++
++        while(!msp_lea_ifg);
++
++        /* Restore original interrupt state. */
++        __set_interrupt_state(interruptState);
+ 
+ #ifndef MSP_DISABLE_DIAGNOSTICS
+         /* Check LEA interrupt flags for any errors. */
+@@ -125,7 +146,7 @@
+ 
+ #else //MSP_USE_LEA
+ 
+-msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q15 *srcA, const _q15 *srcB, _q15 *dst)
++msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q15 *srcA, const _q15 *srcB, _q15 *dst, struct ParameterInfo *param, uint16_t offset_in_word, size_t values_to_preserve)
+ {
+     uint16_t cntr;
+     uint16_t srcARows;
+@@ -233,6 +254,10 @@
+     }
+ #endif //__MSP430_HAS_MPY32__
+ 
++    if (param) {
++        my_memcpy_to_param(param, offset_in_word, dst, values_to_preserve * sizeof(int16_t));
++    }
++
+     return MSP_SUCCESS;
+ }
+ 

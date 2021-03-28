@@ -23,3 +23,4 @@ bsdtar xf $DSPLIB_ARCHIVE
 
 find $DSPLIB_DIR -type f -print0 | xargs -0 chmod -x
 mv $DSPLIB_DIR/{include,source} .
+patch -Np1 -i pipeline-dma-lea.diff

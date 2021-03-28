@@ -67,6 +67,8 @@ target_include_directories(dsplib
         ${DSPLIB_PATH}/include
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/fake-msp430sdk
+    PRIVATE
+        ${COMMON_SRC_PATH}
 )
 
 add_executable(intermittent-cnn

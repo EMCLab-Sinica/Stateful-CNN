@@ -164,7 +164,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             my_printf_debug("Tile for B" NEWLINE);
             dump_matrix2_debug(buffer_b, extended_tile_channels, full_tile_width, ValueInfo(B, model));
 
-            my_matrix_mpy_q15(1, extended_tile_channels, extended_tile_channels, full_tile_width, buffer_a, buffer_b, buffer_temp);
+            my_matrix_mpy_q15(1, extended_tile_channels, extended_tile_channels, full_tile_width, buffer_a, buffer_b, buffer_temp, nullptr, 0, 0);
 
 #if INDIRECT_RECOVERY
             check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
