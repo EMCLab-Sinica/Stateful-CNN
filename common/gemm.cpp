@@ -39,12 +39,12 @@ void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t sta
 }
 
 void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
-    const ParameterInfo *A = input[0], *B = input[1];
+    const ParameterInfo *A = input[0], *B = input[1], *C = input[2];
 
     my_printf_debug("Gemm! A: (%dx%d), B: (%dx%d)" NEWLINE,
               A->dims[0], A->dims[1], B->dims[0], B->dims[1]);
 
-    int16_t A_len = A->dims[0] * A->dims[1],
+    int16_t A_len = A->dims[0] * A->dims[1] + 2,
             output_len = output->dims[0] * output->dims[1];
 
     int16_t *buffer_a = lea_buffer,
@@ -95,12 +95,11 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     for (; i < B->dims[0]; i += flags->extra.gemm.tile_channel, tile++) {
         uint16_t tile_channels = MIN_VAL(flags->extra.gemm.tile_channel, B->dims[0] - i);
-        uint16_t extended_tile_channels = tile_channels;
-
-#if JAPARI
+        uint16_t extended_tile_channels = tile_channels + 2;
         buffer_a[tile_channels] = -0x8000;
         buffer_a[tile_channels + 1] = 0;
-        extended_tile_channels += 2;
+
+#if JAPARI
         if (has_footprints(A)) {
             uint16_t input_offset = extend_for_footprints(i);
             for (uint16_t idx = 0, output_idx = 0; output_idx < tile_channels; idx += BATCH_SIZE + 1, output_idx += BATCH_SIZE) {
@@ -113,7 +112,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         }
 
 #if STATEFUL
-        iterate_chunks(model, A, i, 0, GemmInputChunkHandler, buffer_a);
+        iterate_chunks(model, A, i, tile_channels, GemmInputChunkHandler, buffer_a);
 #endif
 
         my_printf_debug("Tile for A" NEWLINE);
@@ -157,14 +156,22 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             }
 #if JAPARI
             my_fill_q15(0, filter_ptr, 2 * full_tile_width);
-            for (uint16_t idx = BATCH_SIZE; idx < values_to_preserve; idx += BATCH_SIZE + 1) {
-                filter_ptr[idx] = (param_state_bit(model, output, output_offset) ? 1 : -1);
+            uint8_t processed_biases = 0, bias_offset = 0;
+            for (uint16_t idx = 0; idx < values_to_preserve; idx++) {
+                if (processed_biases == BATCH_SIZE) {
+                    processed_biases = 0;
+                    filter_ptr[idx] = (param_state_bit(model, output, output_offset) ? 1 : -1);
+                } else {
+                    filter_ptr[idx] = -get_q15_param(model, C, bias_offset + j) / A->scale;
+                    bias_offset++;
+                    processed_biases++;
+                }
+            }
+#else
+            for (uint16_t idx = 0; idx < values_to_preserve; idx++) {
+                filter_ptr[idx] = -static_cast<int32_t>(get_q15_param(model, C, idx + j)) / A->scale;
             }
 #endif
-            my_printf_debug("Tile for B" NEWLINE);
-            dump_matrix2_debug(buffer_b, extended_tile_channels, full_tile_width, ValueInfo(B, model));
-
-            my_matrix_mpy_q15(1, extended_tile_channels, extended_tile_channels, full_tile_width, buffer_a, buffer_b, buffer_temp, nullptr, 0, 0);
 
 #if INDIRECT_RECOVERY
             check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
@@ -173,47 +180,33 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if STATEFUL
             uint16_t tile_width_first = tile_width;
             if (next_output_turning_point != INVALID_TURNING_POINT) {
+                my_printf_debug("next_output_turning_point=%d output_offset=%d" NEWLINE, next_output_turning_point, output_offset);
                 tile_width_first = MIN_VAL(next_output_turning_point - output_offset, tile_width);
             }
             my_printf_debug("tile_width_first=%d" NEWLINE, tile_width_first);
             MY_ASSERT(tile_width_first <= tile_width);
-            my_offset_q15_batched(buffer_temp, offset, buffer_temp, tile_width_first);
+            my_offset_q15_batched(filter_ptr, -offset, filter_ptr, tile_width_first);
             if (tile_width_first != tile_width) {
-                my_offset_q15_batched(buffer_temp + tile_width_first, offset ^ 0x4000, buffer_temp + tile_width_first, tile_width - tile_width_first);
+                my_offset_q15_batched(filter_ptr + tile_width_first, -(offset ^ 0x4000), filter_ptr + tile_width_first, tile_width - tile_width_first);
             }
 #endif
 
-            my_printf_debug("temp with states" NEWLINE);
+            my_printf_debug("Tile for B" NEWLINE);
+            dump_matrix2_debug(buffer_b, extended_tile_channels, full_tile_width, ValueInfo(B, model));
+
+#if HAWAII
+            my_matrix_mpy_q15(1, extended_tile_channels, extended_tile_channels, full_tile_width, buffer_a, buffer_b, buffer_temp, nullptr, 0, 0);
+#else
+            my_matrix_mpy_q15(1, extended_tile_channels, extended_tile_channels, full_tile_width, buffer_a, buffer_b, buffer_temp,
+                              output, output_offset, values_to_preserve);
+#endif
+
+            my_printf_debug("matrix_mpy_results" NEWLINE);
             dump_matrix_debug(buffer_temp, full_tile_width, ValueInfo(output, model));
             my_printf_debug(NEWLINE);
 
             my_printf_debug("output_offset=%d" NEWLINE, output_offset);
-#if !HAWAII
-
-#if INDIRECT_RECOVERY
-
-#if JAPARI
-            int16_t expected_values_to_preserve = BATCH_SIZE + 1;
-#else
-            int16_t expected_values_to_preserve = BATCH_SIZE;
-#endif
-            if (values_to_preserve < expected_values_to_preserve) {
-                my_fill_q15(0, buffer_temp + values_to_preserve, expected_values_to_preserve - values_to_preserve);
-                values_to_preserve = expected_values_to_preserve;
-
-                check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset + values_to_preserve - 1);
-#if JAPARI
-                buffer_temp[values_to_preserve - 1] += (offset ? 1 : -1);
-#else
-                buffer_temp[values_to_preserve - 1] += offset;
-#endif
-                my_printf_debug("After padding" NEWLINE);
-                dump_matrix_debug(buffer_temp, values_to_preserve, ValueInfo(output, model));
-            }
-#endif // INDIRECT_RECOVERY
-
-            my_memcpy_to_param(output, output_offset, buffer_temp, values_to_preserve * sizeof(int16_t));
-#else
+#if HAWAII
             hawaii_preserve_vector(model, output, output_offset, buffer_temp, values_to_preserve);
 #endif
             output_offset += values_to_preserve;
@@ -234,7 +227,7 @@ void alloc_gemmmerge(struct Model *model, const struct ParameterInfo **input, st
 }
 
 void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const struct NodeFlags *flags) {
-    const ParameterInfo *X = input[0], *C = input[1];
+    const ParameterInfo *X = input[0];
 
     my_printf_debug("GemmMerge!" NEWLINE);
 
@@ -243,8 +236,6 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
     int16_t *buffer_temp = lea_buffer,
             *buffer_gemm = buffer_temp + output_len;
     make_buffer_aligned(&buffer_gemm);
-    int16_t *buffer_c = buffer_gemm + output_len;
-    make_buffer_aligned(&buffer_c);
 
     my_fill_q15(0, buffer_gemm, output_len);
 
@@ -267,24 +258,8 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
         dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
     }
 
-#if JAPARI
-    my_fill_q15(0, buffer_c, output_len);
-    for (uint16_t idx = 0, c_idx = 0; idx < output_len; idx += BATCH_SIZE + 1, c_idx += BATCH_SIZE) {
-        my_memcpy_from_param(model, buffer_c + idx, C, c_idx, BATCH_SIZE * sizeof(int16_t));
-    }
-#else
-    my_memcpy_from_param(model, buffer_c, C, 0, output_len * sizeof(int16_t));
-#endif
-
-    my_printf_debug("C" NEWLINE);
-    dump_params_debug(model, C);
-
     my_printf_debug("Find max_multiplier for buffer_gemm" NEWLINE);
-    uint16_t max_multiplier_gemm = find_max_multiplier(model, output, buffer_gemm, output_len);
-    my_printf_debug("Find max_multiplier for C" NEWLINE);
-    uint16_t max_multiplier_c = find_max_multiplier(model, C, buffer_c);
-    // divide by 2 to avoid overflow after addition
-    uint16_t max_multiplier = MIN_VAL(max_multiplier_gemm, max_multiplier_c) / 2;
+    uint16_t max_multiplier = find_max_multiplier(model, output, buffer_gemm, output_len);
 
     MY_ASSERT(max_multiplier != 0);
 
@@ -294,10 +269,6 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
     // XXX: reduce calls to find_max_multiplier?
     float_to_scale_params(&scaleFract, &shift, 1.0f * max_multiplier);
     my_scale_q15(buffer_gemm, scaleFract, shift, buffer_gemm, output_len);
-
-    float_to_scale_params(&scaleFract, &shift, 1.0f * C->scale / X->scale * max_multiplier);
-    my_scale_q15(buffer_c, scaleFract, shift, buffer_c, output_len);
-    my_add_q15(buffer_gemm, buffer_c, buffer_gemm, output_len);
 
     output->scale /= max_multiplier;
 

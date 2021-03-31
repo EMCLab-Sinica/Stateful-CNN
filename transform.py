@@ -76,8 +76,7 @@ ops = {
     'ConvMerge': [1, 0],
     'Dropout': [1, 1],
     'Gemm': [3, 0],
-    # two inputs as GemmMerge also adds up the bias
-    'GemmMerge': [2, 0],
+    'GemmMerge': [1, 0],
     'GlobalAveragePool': [1, 0],
     'MaxPool': [1, 0],
     'Relu': [1, 0],
@@ -346,8 +345,6 @@ for idx, n in enumerate(g.node):
         new_node.name = (n.name or n.op_type) + ':merge'
         new_node.op_type = n.op_type + 'Merge'
         new_node.input[:] = n.output[:] = [output_name + '_before_merge']
-        if n.op_type == 'Gemm':
-            new_node.input[:] = new_node.input[:] + [n.input[2]]
         new_node.output[:] = [output_name]
         new_nodes.append(new_node)
 
