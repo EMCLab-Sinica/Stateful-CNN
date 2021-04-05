@@ -20,10 +20,6 @@ if [[ $CONFIG = *cifar10* ]]; then
     rounds=50
     power_cycle=0.02
 fi
-if [[ $CONFIG = *kws* ]]; then
-    git submodule init
-    git submodule update data/ML-KWS-for-MCU
-fi
 if [[ $CONFIG = *japari* ]]; then
     power_cycle=$(awk "BEGIN {print $power_cycle+0.01}")
 fi

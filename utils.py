@@ -1,7 +1,9 @@
+import os.path
 import pathlib
 import pickle
 import re
 from typing import Dict, List, NamedTuple
+from urllib.request import urlretrieve
 
 import numpy as np
 
@@ -72,10 +74,8 @@ def load_data_google_speech(start: int, limit: int, for_onnx=True) -> ModelData:
 
     dataset = torchaudio.datasets.SPEECHCOMMANDS(root=cache_dir, url=GOOGLE_SPEECH_URL, download=True)
 
-    kws_root = pathlib.Path('./data/ML-KWS-for-MCU')
-
-    with open(kws_root / 'Pretrained_models' / 'labels.txt') as f:
-        new_labels = f.read().strip().split()
+    # From https://github.com/ARM-software/ML-KWS-for-MCU/blob/master/Pretrained_models/labels.txt
+    new_labels = '_silence_ _unknown_ yes no up down left right on off stop go'.split(' ')
 
     decoded_wavs = []
     labels = []
@@ -90,7 +90,7 @@ def load_data_google_speech(start: int, limit: int, for_onnx=True) -> ModelData:
         if limit and idx == limit - 1:
             break
     if for_onnx:
-        with open(kws_root / 'Pretrained_models' / 'DNN' / 'DNN_S.pb', 'rb') as f:
+        with open(kws_dnn_model(), 'rb') as f:
             graph_def = tf.compat.v1.GraphDef()
             graph_def.ParseFromString(f.read())
             tf.import_graph_def(graph_def)
@@ -110,3 +110,10 @@ def load_data_google_speech(start: int, limit: int, for_onnx=True) -> ModelData:
         return ModelData(labels=labels, images=mfccs, input_mapping=input_mapping)
     else:
         return ModelData(labels=labels, images=decoded_wavs)
+
+def kws_dnn_model():
+    kws_dnn_url = 'https://github.com/ARM-software/ML-KWS-for-MCU/raw/master/Pretrained_models/DNN/DNN_S.pb'
+    kws_dnn_local_path = pathlib.Path(os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))) / 'KWS-DNN_S.pb'
+    if not kws_dnn_local_path.exists():
+        urlretrieve(kws_dnn_url, kws_dnn_local_path)
+    return kws_dnn_local_path

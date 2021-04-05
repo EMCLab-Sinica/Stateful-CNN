@@ -1,7 +1,6 @@
 import argparse
 import functools
 import os.path
-import pathlib
 
 import numpy as np
 import onnx
@@ -9,9 +8,7 @@ import onnxruntime.backend as backend
 import tensorflow as tf
 from tensorflow.keras import backend as K
 
-from utils import load_data_mnist, load_data_cifar10, load_data_google_speech, GOOGLE_SPEECH_SAMPLE_RATE
-
-kws_root = pathlib.Path('./data/ML-KWS-for-MCU')
+from utils import load_data_mnist, load_data_cifar10, load_data_google_speech, GOOGLE_SPEECH_SAMPLE_RATE, kws_dnn_model
 
 def onnxruntime_inference_one(model, images):
     rep = backend.prepare(model)
@@ -129,7 +126,7 @@ def main():
         inference_one = functools.partial(keras_inference_one, model)
         model_data = load_data_cifar10(start=0, limit=args.limit)
     elif args.config == 'kws':
-        with open(kws_root / 'Pretrained_models' / 'DNN' / 'DNN_S.pb', 'rb') as f:
+        with open(kws_dnn_model(), 'rb') as f:
             graph_def = tf.compat.v1.GraphDef()
             graph_def.ParseFromString(f.read())
             tf.import_graph_def(graph_def)
