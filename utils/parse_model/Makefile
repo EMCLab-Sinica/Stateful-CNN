@@ -1,4 +1,5 @@
 CPPFLAGS = -I .
+CFLAGS = -g -Wall -Wextra
 
 all: parse_model
 
