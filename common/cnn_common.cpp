@@ -59,7 +59,7 @@ int16_t get_q15_param(Model* model, const ParameterInfo *param, uint16_t i) {
 }
 
 void put_q15_param(ParameterInfo *param, uint16_t i, int16_t val) {
-    my_memcpy_to_param(param, i, &val, sizeof(int16_t));
+    my_memcpy_to_param(param, i, &val, sizeof(int16_t), 0);
 }
 
 int64_t get_int64_param(const ParameterInfo *param, size_t i) {

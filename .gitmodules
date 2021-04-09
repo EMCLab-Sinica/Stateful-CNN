@@ -5,3 +5,6 @@
 [submodule "Tools"]
 	path = Tools
 	url = ssh://git@github.com/EMCLab-Sinica/Tools.git
+[submodule "TI-DSPLib"]
+	path = TI-DSPLib
+	url = ssh://git@github.com/EMCLab-Sinica/DSPLib.git

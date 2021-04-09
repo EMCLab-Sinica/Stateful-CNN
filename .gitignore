@@ -11,9 +11,6 @@ data.h
 /data/others.txt
 /ARM-CMSIS/*
 !/ARM-CMSIS/*.sh
-/TI-DSPLib/*
-!/TI-DSPLib/*.sh
-!/TI-DSPLib/*.diff
 /build/
 /charts/chart-*
 

@@ -1,7 +1,10 @@
+#include <cstring>
 #include <inttypes.h> // for PRId64
+#include <cstdint>
 #include "my_debug.h"
 #include "cnn_common.h"
 #include "intermittent-cnn.h"
+#include "my_dsplib.h"
 #include "op_utils.h"
 
 uint8_t dump_integer = 1;
@@ -216,3 +219,19 @@ void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_i
     }
     my_printf(NEWLINE);
 }
+
+#if MY_DEBUG >= 1
+static const uint16_t BUFFER_TEMP_SIZE = 256;
+static int16_t buffer_temp[BUFFER_TEMP_SIZE];
+
+void compare_vm_nvm_impl(int16_t* vm_data, Model* model, const ParameterInfo* output, uint16_t output_offset, uint16_t blockSize) {
+    check_buffer_address(vm_data, blockSize);
+    MY_ASSERT(blockSize <= BUFFER_TEMP_SIZE);
+
+    memset(buffer_temp, 0, blockSize * sizeof(int16_t));
+    my_memcpy_from_param(model, buffer_temp, output, output_offset, blockSize * sizeof(int16_t));
+    for (uint16_t idx = 0; idx < blockSize; idx++) {
+        MY_ASSERT(vm_data[idx] == buffer_temp[idx]);
+    }
+}
+#endif

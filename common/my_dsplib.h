@@ -14,3 +14,4 @@ void my_scale_q15(const int16_t *pSrc, int16_t scaleFract, uint8_t shift, int16_
 void my_interleave_q15(const int16_t *pSrc, uint16_t channel, uint16_t numChannels, int16_t *pDst, uint32_t blockSize);
 void my_deinterleave_q15(const int16_t *pSrc, uint16_t channel, uint16_t numChannels, int16_t *pDst, uint32_t blockSize);
 int16_t padding_for_lea(int16_t val);
+void check_buffer_address(const int16_t* addr, uint32_t blockSize);

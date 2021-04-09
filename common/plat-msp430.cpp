@@ -112,12 +112,12 @@ void read_from_nvm(void* vm_buffer, uint32_t nvm_offset, size_t n) {
     my_printf_debug("%d words read from NVM offset %d" NEWLINE, n, nvm_offset);
 }
 
-void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n) {
+void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n, uint16_t timer_delay) {
     SPI_ADDR addr;
     addr.L = nvm_offset;
     check_nvm_write_address(nvm_offset, n);
     MY_ASSERT(n <= 1024);
-    SPI_WRITE(&addr, reinterpret_cast<const uint8_t*>(vm_buffer), n);
+    SPI_WRITE2(&addr, reinterpret_cast<const uint8_t*>(vm_buffer), n, timer_delay);
     my_printf_debug("%d words written to NVM offset %d" NEWLINE, n, nvm_offset);
 }
 
@@ -156,14 +156,9 @@ void IntermittentCNNTest() {
     GPIO_setOutputLowOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
     GPIO_setAsInputPinWithPullUpResistor(GPIO_RESET_PORT, GPIO_RESET_PIN);
 
-
     // sleep to wait for external FRAM
-#ifdef __MSP430__
-    __delay_cycles(100000);
-#else
     // 5ms / (1/f)
     our_delay_cycles(5E-3 * getFrequency(FreqLevel));
-#endif
 
     initSPI();
     if (testSPI() != 0) {

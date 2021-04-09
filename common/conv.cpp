@@ -261,13 +261,14 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #endif
 
     /* START dump data */
-#if MY_DEBUG >= 2
     my_printf_debug("input_h=%d" NEWLINE, conv_params->input_h + offset_h);
     my_printf_debug("filter_idx=");
+#if MY_DEBUG >= 1
     for (uint16_t idx = 0; idx < cur_output_tile_c; idx++) {
         my_printf_debug("%d ", conv_params->filter_idx + idx);
         MY_ASSERT(conv_params->filter_idx + idx < conv_params->N_FILTERS);
     }
+#endif
     my_printf_debug("output_h=%d ", (conv_params->input_h + offset_h) / conv_params->stride);
     my_printf_debug("output_w=%d" NEWLINE, conv_params->input_w / conv_params->stride);
 
@@ -281,7 +282,8 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     my_printf_debug("matrix_mpy_results" NEWLINE);
     dump_matrix2_debug(matrix_mpy_results, A_rows, B_cols, ValueInfo(conv_params->output));
     my_printf_debug(NEWLINE);
-#endif
+
+    compare_vm_nvm(matrix_mpy_results, conv_params->model, conv_params->output, cur_output_data_offset, values_to_preserve);
     /* END dump data */
 
     my_printf_debug("output_data offset = %d" NEWLINE, cur_output_data_offset);
@@ -880,7 +882,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 #if JAPARI
 #endif
 #if !HAWAII
-        my_memcpy_to_param(output, tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t));
+        my_memcpy_to_param(output, tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t), 0);
 #else
         hawaii_preserve_vector(model, output, tiling_results_offset, lea_buffer, real_chunk_len);
 #endif

@@ -58,7 +58,7 @@ void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *outpu
     iterate_chunks(model, output, 0, vector_size, OutputChunkHandler, buffer_a);
 #endif
 
-    my_memcpy_to_param(output, 0, buffer_a, output->params_len);
+    my_memcpy_to_param(output, 0, buffer_a, output->params_len, 0);
 
     flip_state_bit(model, output);
 
@@ -183,7 +183,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if HAWAII
                     hawaii_preserve_vector(model, output, output_offset, lea_buffer, len);
 #else
-                    my_memcpy_to_param(output, output_offset, lea_buffer, output_idx * sizeof(int16_t));
+                    my_memcpy_to_param(output, output_offset, lea_buffer, output_idx * sizeof(int16_t), 0);
 #endif
 
                     my_printf_debug("output_offset=[% 6d, % 6d), output val=", output_offset, output_offset + output_idx);

@@ -205,6 +205,8 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             dump_matrix_debug(buffer_temp, full_tile_width, ValueInfo(output, model));
             my_printf_debug(NEWLINE);
 
+            compare_vm_nvm(buffer_temp, model, output, output_offset, values_to_preserve);
+
             my_printf_debug("output_offset=%d" NEWLINE, output_offset);
 #if HAWAII
             hawaii_preserve_vector(model, output, output_offset, buffer_temp, values_to_preserve);
@@ -287,7 +289,7 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
     iterate_chunks(model, output, 0, 0, OutputChunkHandler, buffer_gemm);
 #endif
 
-    my_memcpy_to_param(output, 0, buffer_gemm, output->params_len);
+    my_memcpy_to_param(output, 0, buffer_gemm, output->params_len, 0);
 
     flip_state_bit(model, output);
 

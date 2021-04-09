@@ -94,3 +94,9 @@ void dump_turning_points(Model *model, const ParameterInfo *output);
 
 #endif
 
+#if MY_DEBUG >= 1
+void compare_vm_nvm_impl(int16_t* vm_data, Model* model, const ParameterInfo* output, uint16_t output_offset, uint16_t blockSize);
+#define compare_vm_nvm compare_vm_nvm_impl
+#else
+#define compare_vm_nvm(...)
+#endif

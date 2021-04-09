@@ -15,7 +15,7 @@
 #define my_checkStatus(status) MY_ASSERT(status == MSP_SUCCESS, "Error from TI-DSPLib: %d" NEWLINE, status)
 #endif
 
-static inline void check_buffer_address(const int16_t* addr, uint32_t blockSize) {
+void check_buffer_address(const int16_t* addr, uint32_t blockSize) {
     MY_ASSERT(addr >= lea_buffer && addr < lea_buffer + LEA_BUFFER_SIZE);
     MY_ASSERT(addr + blockSize - 1 >= lea_buffer && addr + blockSize - 1 < lea_buffer + LEA_BUFFER_SIZE);
     MY_ASSERT((addr - lea_buffer) % 2 == 0);
