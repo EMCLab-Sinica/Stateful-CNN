@@ -45,3 +45,8 @@ for f in ${sources[@]}; do
     mkdir -p "$dir"
     cp -vf "$CMSIS_ROOT/$f" "$dir"
 done
+
+# CMSIS sources use CR/LF, and CR/LF in the patch is converted to CR by git
+dos2unix DSP/Include/arm_math.h DSP/Source/MatrixFunctions/arm_mat_mult_fast_q15.c
+
+patch -Np2 -i pipeline-dma.diff

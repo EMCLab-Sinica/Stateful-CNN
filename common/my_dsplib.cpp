@@ -194,13 +194,16 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
     arm_mat_init_q15(&A, A_rows, A_cols, pSrcA);
     arm_mat_init_q15(&B, B_rows, B_cols, pSrcB);
     arm_mat_init_q15(&C, A_rows, B_cols, pDst);
-    arm_status status;
-    status = arm_mat_mult_fast_q15(&A, &B, &C, pState);
+#ifdef __MSP432__
+    arm_status status = arm_mat_mult_fast_q15(&A, &B, &C, pState, param, offset_in_word, values_to_preserve);
     MY_ASSERT(status == ARM_MATH_SUCCESS);
-    // TODO: pipeline DMA and SIMD operations
+#else
+    arm_status status = arm_mat_mult_fast_q15(&A, &B, &C, pState, NULL, 0, 0);
+    MY_ASSERT(status == ARM_MATH_SUCCESS);
     if (param) {
-        my_memcpy_to_param(param, offset_in_word, pDst, values_to_preserve * sizeof(int16_t));
+        my_memcpy_to_param(param, offset_in_word, pDst, values_to_preserve * sizeof(int16_t), 0);
     }
+#endif
 #endif
 }
 

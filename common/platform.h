@@ -17,7 +17,11 @@ struct ParameterInfo;
 struct Model;
 extern uint8_t dma_counter_enabled;
 
+#ifdef __cplusplus
 [[ noreturn ]] void ERROR_OCCURRED(void);
+#else
+_Noreturn void ERROR_OCCURRED(void);
+#endif
 void my_memcpy(void* dest, const void* src, size_t n);
 void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, const void *src, size_t n, uint16_t timer_delay);
 void my_memcpy_from_intermediate_values(void *dest, const struct ParameterInfo *param, uint16_t offset_in_word, size_t n);
