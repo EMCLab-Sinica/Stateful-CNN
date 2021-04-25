@@ -220,7 +220,7 @@ void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_i
     my_printf(NEWLINE);
 }
 
-#if MY_DEBUG >= 1
+#if MY_DEBUG >= 1 && !HAWAII
 static const uint16_t BUFFER_TEMP_SIZE = 256;
 static int16_t buffer_temp[BUFFER_TEMP_SIZE];
 
