@@ -420,6 +420,9 @@ def find_node_by_output(output_name):
         if node.output[0] == output_name:
             return node
 
+def extend_for_footprints(n):
+    return n + n // Constants.CUR_BATCH_SIZE
+
 def determine_conv_tile_c(n):
     logger.debug('Determine tile size for Conv node %s', n.name)
 
@@ -501,10 +504,8 @@ def determine_gemm_tile_sizes(n):
     node_flags.tile_width = tile_size_unit
     # +2 for bias multiplier and padding
     total_buffer_size = Constants.LEA_BUFFER_SIZE - (A_rows * A_cols + 2)
-    output_len = A_rows * B_cols
-
-    # Extend to the max possible output_len (JAPARI, B=1)
-    output_len += output_len // Constants.CUR_BATCH_SIZE
+    # Extend for footprints in JAPARI
+    output_len = extend_for_footprints(A_rows * B_cols)
 
     while True:
         logger.debug("tile_width=%d", node_flags.tile_width)
@@ -514,7 +515,7 @@ def determine_gemm_tile_sizes(n):
             tmp = int(math.ceil(B_rows / node_flags.tile_channel))
             logger.debug("tile_channel=%d, tmp=%d", node_flags.tile_channel, tmp)
             # * 2 to fit JAPARI footprint kernels
-            if total_buffer_size - (node_flags.tile_channel + 2) * (node_flags.tile_width + node_flags.tile_width // Constants.CUR_BATCH_SIZE)  >= output_len * tmp:
+            if total_buffer_size - (node_flags.tile_channel + 2) * (extend_for_footprints(node_flags.tile_width)+1)/2*2 >= output_len * tmp:
                 break
             node_flags.tile_channel -= tile_size_unit
         logger.debug("tile_channel = %d", node_flags.tile_channel)
