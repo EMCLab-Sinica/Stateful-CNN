@@ -514,7 +514,7 @@ def determine_gemm_tile_sizes(n):
             tmp = int(math.ceil(B_rows / node_flags.tile_channel))
             logger.debug("tile_channel=%d, tmp=%d", node_flags.tile_channel, tmp)
             # * 2 to fit JAPARI footprint kernels
-            if total_buffer_size - (node_flags.tile_channel + 2) * node_flags.tile_width * 2 >= output_len * tmp:
+            if total_buffer_size - (node_flags.tile_channel + 2) * (node_flags.tile_width + node_flags.tile_width // Constants.CUR_BATCH_SIZE)  >= output_len * tmp:
                 break
             node_flags.tile_channel -= tile_size_unit
         logger.debug("tile_channel = %d", node_flags.tile_channel)
