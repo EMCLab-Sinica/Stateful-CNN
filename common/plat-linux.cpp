@@ -135,7 +135,6 @@ void my_memcpy_ex(void* dest, const void* src, size_t n, uint8_t write_to_nvm) {
     for (size_t idx = 0; idx < n; idx++) {
         dest_u[idx] = src_u[idx];
         if (write_to_nvm) {
-            my_printf_debug("Writing to NVM offset %ld" NEWLINE, dest_u + idx - nvm);
             shutdown_counter--;
             if (!shutdown_counter) {
                 exit_with_status(2);

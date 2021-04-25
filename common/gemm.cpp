@@ -14,9 +14,7 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 
     output->dims[0] = A->dims[0];
 #if JAPARI
-    output->dims[1] = upper_gauss(B->dims[1], BATCH_SIZE) * (BATCH_SIZE + 1);
-#elif STATEFUL
-    output->dims[1] = upper_gauss(B->dims[1], BATCH_SIZE) * BATCH_SIZE;
+    output->dims[1] = B->dims[1] / BATCH_SIZE * (BATCH_SIZE + 1) + B->dims[1] % BATCH_SIZE;
 #else
     output->dims[1] = B->dims[1];
 #endif
@@ -26,7 +24,7 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 
     uint16_t output_len = output->dims[0] * output->dims[1];
 
-    output->params_len = output_len * upper_gauss(B->dims[0], flags->extra.gemm.tile_channel) * sizeof(int16_t);
+    output->params_len = output_len * sizeof(int16_t);
 }
 
 void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params) {
@@ -145,7 +143,6 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     if (values_to_preserve != full_tile_width) {
                         filter_ptr++;
                     }
-                    my_printf_debug("filter_ptr = lea_buffer + %ld" NEWLINE, filter_ptr - lea_buffer);
                 }
 #else
                 my_memcpy_from_param(model, filter_ptr,
