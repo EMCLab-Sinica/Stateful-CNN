@@ -24,7 +24,7 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 
     uint16_t output_len = output->dims[0] * output->dims[1];
 
-    output->params_len = output_len * sizeof(int16_t);
+    output->params_len = output_len * upper_gauss(B->dims[0], flags->extra.gemm.tile_channel) * sizeof(int16_t);
 }
 
 void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params) {
