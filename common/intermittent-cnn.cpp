@@ -311,7 +311,12 @@ void flip_state_bit(Model *model, const ParameterInfo *output) {
 #endif
     SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
     // XXX: better way than copying the array?
-    uint16_t new_turning_point = (output->params_len / 2) / BATCH_SIZE * BATCH_SIZE;  // abandon output features smaller than a batch
+#if JAPARI
+    // abandon output features smaller than a batch
+    uint16_t new_turning_point = (output->params_len / 2) / (BATCH_SIZE + 1) * (BATCH_SIZE + 1);
+#else
+    uint16_t new_turning_point = (output->params_len / 2) / BATCH_SIZE * BATCH_SIZE;
+#endif
     my_printf_debug("New turning point=%d" NEWLINE, new_turning_point);
     uint8_t new_turning_point_inserted = 0;
     for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
