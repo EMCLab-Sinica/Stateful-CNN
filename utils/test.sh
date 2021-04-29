@@ -11,11 +11,7 @@ cmake_args="$cmake_args -D MY_DEBUG=1"
 
 rounds=100
 power_cycle=0.01
-if [[ $CONFIG = *mnist* ]]; then
-    ./data/download-mnist.sh
-fi
 if [[ $CONFIG = *cifar10* ]]; then
-    ./data/download-cifar10.sh
     rounds=50
     power_cycle=0.02
 fi

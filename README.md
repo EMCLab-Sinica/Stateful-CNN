@@ -16,10 +16,7 @@ If you are using Python 3.6, install one more Python package:
 # Preparation steps for all platforms
 
 * `git submodule update --init --recursive`
-* `git submodule update --remote --merge`
 * `pushd ARM-CMSIS && ./download-extract-cmsis.sh && popd` if you want to use ARM CMSIS DSP library
-* `pushd TI-DSPLib && ./download-extract-dsplib.sh && popd` if you want to use TI DSPLib
-* `./data/download-mnist.sh` and `./data/download-cifar10.sh` to download MNIST and CIFAR-10 datasets
 * `./transform.py --target (msp430|msp432) (--baseline|--hawaii|--japari|--stateful) --batch-size 1 (mnist|cifar10|kws)`
 
 # Building for POSIX-compliant systems

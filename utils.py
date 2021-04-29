@@ -1,11 +1,16 @@
+import fcntl
+import logging
 import os.path
 import pathlib
 import pickle
 import re
-from typing import Dict, List, NamedTuple
+import tarfile
+from typing import Callable, Dict, List, NamedTuple, Optional
 from urllib.request import urlretrieve
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 class ModelData(NamedTuple):
     labels: List[int]
@@ -17,7 +22,8 @@ def load_data_mnist(start: int, limit: int) -> ModelData:
     images = []
     labels = []
 
-    filename = 'data/MNIST/Test-28x28_cntk_text.txt'
+    filename = download_file('https://github.com/microsoft/NativeKeras/raw/master/Datasets/cntk_mnist/Test-28x28_cntk_text.txt',
+                             'MNIST-Test-28x28_cntk_text.txt')
 
     with open(filename) as f:
         counter = 0
@@ -42,9 +48,17 @@ def load_data_mnist(start: int, limit: int) -> ModelData:
     return ModelData(labels=labels, images=images)
 
 def load_data_cifar10(start: int, limit: int) -> ModelData:
-    filename = 'data/cifar-10-batches-py/test_batch'
+    def extract_archive(archive_path):
+        archive_dir = archive_path.with_name('cifar-10-batches-py')
+        if not archive_dir.exists():
+            with tarfile.open(archive_path) as tar:
+                tar.extractall(archive_path.parent)
+        return archive_dir
 
-    with open(filename, 'rb') as f:
+    archive_dir = download_file('https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz',
+                                'cifar-10-python.tar.gz', extract_archive)
+
+    with open(archive_dir / 'test_batch', 'rb') as f:
         test_data = pickle.load(f, encoding='bytes')
     if limit is None:
         limit = len(test_data[b'labels'])
@@ -112,8 +126,40 @@ def load_data_google_speech(start: int, limit: int, for_onnx=True) -> ModelData:
         return ModelData(labels=labels, images=decoded_wavs)
 
 def kws_dnn_model():
-    kws_dnn_url = 'https://github.com/ARM-software/ML-KWS-for-MCU/raw/master/Pretrained_models/DNN/DNN_S.pb'
-    kws_dnn_local_path = pathlib.Path(os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))) / 'KWS-DNN_S.pb'
-    if not kws_dnn_local_path.exists():
-        urlretrieve(kws_dnn_url, kws_dnn_local_path)
-    return kws_dnn_local_path
+    return download_file('https://github.com/ARM-software/ML-KWS-for-MCU/raw/master/Pretrained_models/DNN/DNN_S.pb', 'KWS-DNN_S.pb')
+
+def download_file(url: str, filename: str, post_processor: Optional[Callable] = None) -> os.PathLike:
+    xdg_cache_home = pathlib.Path(os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache')))
+
+    # Based on https://myapollo.com.tw/zh-tw/python-fcntl-flock/
+    lock_path = xdg_cache_home / f'{filename}.lock'
+    try:
+        lock_f = open(lock_path, 'r')
+    except FileNotFoundError:
+        lock_f = open(lock_path, 'w')
+
+    # Inspired by https://stackoverflow.com/a/53643011
+    class ProgressHandler:
+        def __init__(self):
+            self.last_reported = 0
+
+        def __call__(self, block_num, block_size, total_size):
+            progress = int(block_num * block_size / total_size * 100)
+            if progress > self.last_reported + 5:
+                logger.info('Downloaded: %d%%', progress)
+                self.last_reported = progress
+
+    try:
+        fcntl.flock(lock_f, fcntl.LOCK_EX)
+
+        local_path = xdg_cache_home / filename
+        if not local_path.exists():
+            urlretrieve(url, local_path, ProgressHandler())
+
+        ret = local_path
+        if post_processor:
+            ret = post_processor(local_path)
+    finally:
+        lock_f.close()
+
+    return ret

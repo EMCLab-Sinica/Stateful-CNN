@@ -239,7 +239,7 @@ intermittent_methodology.add_argument('--japari', action='store_true')
 intermittent_methodology.add_argument('--stateful', action='store_true')
 args = parser.parse_args()
 if args.debug:
-    logger.setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.DEBUG)
 config = configs[args.config]
 Constants.CONFIG = args.config
 Constants.FIRST_SAMPLE_OUTPUTS = config['first_sample_outputs']
