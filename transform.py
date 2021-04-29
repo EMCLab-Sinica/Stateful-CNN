@@ -495,27 +495,23 @@ def determine_gemm_tile_sizes(n):
     A_rows = A_shape.dim[0].dim_value
     A_cols = A_shape.dim[1].dim_value
     B_rows = B.dims[0]
-    B_cols = B.dims[1]
     node_flags = n.flags.b.extra.gemm
 
     # writing a batch at a time is simpler and faster
     tile_size_unit = config['op_filters']
 
     node_flags.tile_width = tile_size_unit
-    # +2 for bias multiplier and padding
-    total_buffer_size = Constants.LEA_BUFFER_SIZE - (A_rows * A_cols + 2)
-    # Extend for footprints in JAPARI
-    output_len = extend_for_footprints(A_rows * B_cols)
 
     while True:
         logger.debug("tile_width=%d", node_flags.tile_width)
         # LEA wants addresses to be 4 byte-aligned, or 2 Q15-aligned
         node_flags.tile_channel = min([(Constants.ARM_PSTATE_LEN / node_flags.tile_width) / 2 * 2 - 2, B_rows]) // tile_size_unit * tile_size_unit
+        full_tile_width = (extend_for_footprints(node_flags.tile_width)+1)/2*2
         while node_flags.tile_channel > 0:
             tmp = int(math.ceil(B_rows / node_flags.tile_channel))
-            logger.debug("tile_channel=%d, tmp=%d", node_flags.tile_channel, tmp)
-            # * 2 to fit JAPARI footprint kernels
-            if total_buffer_size - (node_flags.tile_channel + 2) * (extend_for_footprints(node_flags.tile_width)+1)/2*2 >= output_len * tmp:
+            needed_mem = (A_rows * A_cols + 2) + (node_flags.tile_channel + 2) * full_tile_width + A_rows * full_tile_width
+            logger.debug("tile_channel=%d, tmp=%d, needed_mem=%d", node_flags.tile_channel, tmp, needed_mem)
+            if needed_mem <= Constants.LEA_BUFFER_SIZE:
                 break
             node_flags.tile_channel -= tile_size_unit
         logger.debug("tile_channel = %d", node_flags.tile_channel)

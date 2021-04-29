@@ -49,8 +49,10 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             *buffer_temp = buffer_a + A_len;
 #if JAPARI
             buffer_temp += 2;
+    int16_t* buffer_b = buffer_temp + extend_for_footprints(flags->extra.gemm.tile_width);
+#else
+    int16_t* buffer_b = buffer_temp + flags->extra.gemm.tile_width;
 #endif
-    int16_t *buffer_b = buffer_temp + output->params_len / sizeof(int16_t);
     make_buffer_aligned(&buffer_b);
 
     uint16_t i = 0, tile = 0, j = 0, j_with_footprints = 0;
