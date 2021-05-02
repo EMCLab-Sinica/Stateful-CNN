@@ -107,6 +107,10 @@ extern void PORT4_IRQHandler    (void) __attribute__((weak,alias("Default_Handle
 extern void PORT5_IRQHandler    (void) __attribute__((weak,alias("Default_Handler")));
 extern void PORT6_IRQHandler    (void) __attribute__((weak,alias("Default_Handler")));
 
+/* prevents interruptVectors from being optimized away in LTO */
+#pragma GCC push_options
+#pragma GCC optimize ("O0")
+
 /* Interrupt vector table.  Note that the proper constructs must be placed on this to */
 /* ensure that it ends up at physical address 0x0000.0000 or at the start of          */
 /* the program if located at a start address other than 0.                            */
@@ -171,6 +175,8 @@ void (* const interruptVectors[])(void) __attribute__ ((section (".intvecs"))) =
     PORT5_IRQHandler,                      /* Port5 Interrupt           */
     PORT6_IRQHandler                       /* Port6 Interrupt           */
 };
+
+#pragma GCC pop_options
 
 /* Forward declaration of the default fault handlers. */
 /* This is the code that gets called when the processor first starts execution */
