@@ -69,12 +69,10 @@ class Constants:
 # https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # [expected_inputs_len, inplace_update]
 ops = {
-    'Add': [2, 0],
     # Concat actually accepts 1~infinity inputs. Use 2 to fit SqueezeNet
     'Concat': [2, 0],
     'Conv': [3, 0],
     'ConvMerge': [1, 0],
-    'Dropout': [1, 1],
     'Gemm': [3, 0],
     'GemmMerge': [1, 0],
     'GlobalAveragePool': [1, 0],

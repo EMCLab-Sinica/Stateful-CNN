@@ -6,66 +6,6 @@
 
 #define RESHAPE_AUTO_DIM static_cast<uint16_t>(-1)
 
-void alloc_add(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
-    const ParameterInfo *A = input[0];
-    MY_ASSERT(A->bitwidth == 16 && input[1]->bitwidth == 16);
-
-    output->slot = get_next_slot(model, A);
-}
-
-void handle_add(Model* model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
-    /* Add: Y = X + W */
-    my_printf_debug("Add!" NEWLINE);
-
-    const ParameterInfo *A = input[0], *B = input[1];
-
-    my_printf_debug("handle_add input A" NEWLINE);
-    dump_params_debug(model, A);
-    my_printf_debug("handle_add input B" NEWLINE);
-    dump_params_debug(model, B);
-
-    uint16_t vector_size = A->dims[1];
-
-    int16_t *buffer_a = lea_buffer,
-            *buffer_b = lea_buffer + vector_size;
-    my_memcpy_from_param(model, buffer_a, A, 0, output->params_len);
-    my_memcpy_from_param(model, buffer_b, B, 0, output->params_len);
-
-#if STATEFUL
-    // XXX: use LEA?
-    for (uint16_t idx = 0; idx < vector_size; idx++) {
-        if (get_value_state_bit(buffer_a[idx])) {
-            buffer_a[idx] -= 0x4000;
-        }
-        if (get_value_state_bit(buffer_b[idx])) {
-            buffer_a[idx] -= 0x4000;
-        }
-    }
-#endif
-
-    int16_t scaleFract;
-    uint8_t shift;
-    if (A->scale > B->scale) {
-        float_to_scale_params(&scaleFract, &shift, 1.0f * B->scale / A->scale);
-        my_scale_q15(buffer_b, scaleFract, shift, buffer_b, vector_size);
-    } else if (B->scale > A->scale) {
-        float_to_scale_params(&scaleFract, &shift, 1.0f * A->scale / B->scale);
-        my_scale_q15(buffer_a, scaleFract, shift, buffer_a, vector_size);
-    }
-    my_add_q15(buffer_a, buffer_b, buffer_a, vector_size);
-
-#if INDIRECT_RECOVERY
-    iterate_chunks(model, output, 0, vector_size, OutputChunkHandler, buffer_a);
-#endif
-
-    my_memcpy_to_param(output, 0, buffer_a, output->params_len, 0);
-
-    flip_state_bit(model, output);
-
-    my_printf_debug("handle_add output" NEWLINE);
-    dump_params_debug(model, output);
-}
-
 void alloc_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *data = input[0];
     output->slot = get_next_slot(model, data);
@@ -348,10 +288,6 @@ void handle_concat(Model *model, const ParameterInfo *input[], ParameterInfo *ou
 
     dump_params_nhwc_debug(model, A);
     dump_params_nhwc_debug(model, B);
-}
-
-void handle_dropout(Model*, const ParameterInfo*[], ParameterInfo*, const NodeFlags*) {
-    ERROR_OCCURRED();
 }
 
 void handle_softmax(Model*, const ParameterInfo*[], ParameterInfo*, const NodeFlags*) {
