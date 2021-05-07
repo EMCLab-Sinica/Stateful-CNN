@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 2.8.12)
 project(intermittent-cnn)
 
 set(MY_DEBUG "1" CACHE STRING "Local debug flag. See my_debug.h for details.")
+option(ENABLE_COVERAGE "Enable coverage via gcov." OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -12,6 +13,10 @@ if (${MY_DEBUG} GREATER 1)
     set(COMMON_FLAGS "${COMMON_FLAGS} -g -O0")
 else ()
     set(COMMON_FLAGS "${COMMON_FLAGS} -O3")
+endif ()
+if (ENABLE_COVERAGE)
+    set(COMMON_FLAGS "${COMMON_FLAGS} --coverage -fprofile-dir=gcov/%p")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
 endif ()
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS} -Wstrict-prototypes -std=c11")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -std=c++11 -Wold-style-cast")
