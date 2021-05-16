@@ -12,7 +12,7 @@ import pandas as pd
 matplotlib.rcParams.update({
     'errorbar.capsize': 5,
     # 'font.family': 'DejaVu Serif',
-    'font.size': 12,
+    'font.size': 10,
 })
 
 MOTIVATION_CONFIG = 'mnist'
@@ -38,7 +38,7 @@ def plot(df, device, variant, outdir):
     N = len(df.query(f'config == "{MOTIVATION_CONFIG}" & method == "HAWAII"'))
 
     config_names = {
-        'mnist': 'CNN for MNIST',
+        'mnist': 'LeNet',
         'cifar10': 'SqueezeNet',
         'kws': 'KWS',
     }
@@ -193,10 +193,16 @@ def plot(df, device, variant, outdir):
             ax.legend(plots, methods)
         ax.autoscale_view()
 
+    plt_top = 0.9
     if n_configs > 1 and x_axis != XAxisType.METHODOLOGY:
         plt.figlegend(plots, methods, ncol=len(methods))
+        plt_top = 0.75
 
-    plt.subplots_adjust(left=0.15, bottom=0.2, right=1, top=0.8, wspace=0.2)
+    plt.subplots_adjust(left=0.15,
+                        bottom=0.3 if x_axis_rotation != 0 else 0.1,
+                        right=1,
+                        top=plt_top,
+                        wspace=0.2)
 
     filename = f'{device}-{variant}'
     if n_configs == 1 and n_batches != 2:
@@ -215,6 +221,8 @@ def main():
     motivation_data = calculate_avg_stdev(df.query(f'config == "{MOTIVATION_CONFIG}" & method != "Stateful"'))
     plot(motivation_data.query('power == 0'), 'msp430', 'stable', outdir)
     plot(motivation_data.query('power == 4'), 'msp430', 'unstable', outdir)
+
+    matplotlib.rcParams['font.size'] = 18
 
     for device in ['msp430', 'msp432']:
         unstable_data = calculate_avg_stdev(df.query('power > 0 & batch == 1'))
