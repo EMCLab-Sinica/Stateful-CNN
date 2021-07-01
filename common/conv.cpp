@@ -388,14 +388,14 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     // TEMP_FILTER_WIDTH additional filters for values before transpose
     uint16_t inputs_len = MIN_VAL(
         LEA_BUFFER_SIZE - OUTPUT_LEN - (max_n_filters + TEMP_FILTER_WIDTH) * conv_params->filter_offset,
-        (conv_params->tile_h + conv_params->kH - conv_params->stride) * conv_params->dest_offset
+        (conv_params->tile_h + 2 * field_size) * conv_params->dest_offset
     );
     MY_ASSERT(inputs_len < LEA_BUFFER_SIZE); // make sure no overflow occurs in the previous line
 
     dest = lea_buffer;
 
-    int32_t h_start = int16_max(                                       -field_size,                                   -conv_params->input_h),
-            h_end =   int16_min(conv_params->tile_h-conv_params->stride+field_size, conv_params->H-conv_params->stride-conv_params->input_h);
+    int32_t h_start = int16_max(                                       -field_size, -conv_params->input_h),
+            h_end =   int16_min(conv_params->tile_h-conv_params->stride+field_size,      conv_params->H-1);
 
     my_printf_debug("Reinitialize input buffer" NEWLINE "inputs_len = %d" NEWLINE, inputs_len);
 
@@ -450,7 +450,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         }
 
 #if STATEFUL
-        // stipping states inside the h loop is faster as biases multipliers can be skipped
+        // stripping states inside the h loop is faster as biases multipliers can be skipped
         int16_t *input_row_end = orig_dest_addr + input_row_len;
         uint8_t start_state = get_value_state_bit(*(orig_dest_addr + BATCH_SIZE - 1));
         // if input_tile_c is smaller than BATCH_SIZE, state bits are not always at offset BATCH_SIZE - 1
@@ -526,16 +526,23 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 
     conv_params->kH = conv_filter->dims[2];
     conv_params->kW = conv_filter->dims[3];
+    // XXX: many places in this file assume odd kernel sizes...
+    MY_ASSERT(conv_params->kH % 2 ==1);
+    MY_ASSERT(conv_params->kW % 2 ==1);
 
     conv_params->stride = flags->stride;
     if (flags->generic == AUTO_PAD_VALID) {
         conv_params->offset_h = conv_params->kH / 2;
         conv_params->offset_w = conv_params->kW / 2;
+        conv_params->OUTPUT_H = (H - conv_params->kH) / conv_params->stride + 1;
+        conv_params->OUTPUT_W = (W - conv_params->kW) / conv_params->stride + 1;
     } else {
         conv_params->offset_h = conv_params->offset_w = 0;
+        // By definition, output_shape[i] = ceil(input_shape[i] / strides[i]) for SAME
+        // https://github.com/onnx/onnx/blob/master/docs/Operators.md#conv
+        conv_params->OUTPUT_H = (H + conv_params->stride - 1) / conv_params->stride;
+        conv_params->OUTPUT_W = (W + conv_params->stride - 1) / conv_params->stride;
     }
-    conv_params->OUTPUT_H = (H - conv_params->offset_h * 2) / conv_params->stride;
-    conv_params->OUTPUT_W = (W - conv_params->offset_w * 2) / conv_params->stride;
 
 #if JAPARI
     conv_params->force_align_footprints = (OUTPUT_CHANNEL % BATCH_SIZE != 0);
@@ -581,8 +588,6 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     ConvTaskParams *conv_params = &conv_params_obj;
 
     conv_params->tile_h = MIN_VAL(H, DEFAULT_TILE_H * conv_params->stride);
-
-    MY_ASSERT(conv_params->tile_h / conv_params->stride * conv_params->stride == conv_params->tile_h);
 
     my_printf_debug("n_tiles_c = %d" NEWLINE, conv_params->n_tiles_c);
 
