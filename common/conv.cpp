@@ -394,8 +394,8 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
 
     dest = lea_buffer;
 
-    int32_t h_start = int16_max(                                       -field_size, -conv_params->input_h),
-            h_end =   int16_min(conv_params->tile_h-conv_params->stride+field_size,      conv_params->H-1);
+    int32_t h_start = int16_max(                                       -field_size,                 -conv_params->input_h),
+            h_end =   int16_min(conv_params->tile_h-conv_params->stride+field_size, conv_params->H-1-conv_params->input_h);
 
     my_printf_debug("Reinitialize input buffer" NEWLINE "inputs_len = %d" NEWLINE, inputs_len);
 
