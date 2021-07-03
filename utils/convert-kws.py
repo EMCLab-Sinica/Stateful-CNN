@@ -1,11 +1,18 @@
+import pathlib
+import sys
+
 import onnx
 import tensorflow as tf
 import tf2onnx
 
+sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
+
+from utils import kws_dnn_model
+
 # Simplied from tf2onnx/convert.py and added code for shape information
 def main():
     graph_def = tf.compat.v1.GraphDef()
-    with open('data/ML-KWS-for-MCU/Pretrained_models/DNN/DNN_S.pb', 'rb') as f:
+    with open(kws_dnn_model(), 'rb') as f:
         content = f.read()
         graph_def.ParseFromString(content)
 
