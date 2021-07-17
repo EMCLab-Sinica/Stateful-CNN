@@ -1,19 +1,26 @@
-nvm.bin
-samples.bin
+# built files
+*.o
 *.pyc
-/images/*
-!/images/.keep
-data.cpp
-data.h
-/data/cifar-10-python.tar.gz
-/data/cifar-10-batches-py/
-/data/MNIST/
+/build/
+/utils/parse_model/external/*.pb-c.*
+/utils/parse_model/parse_model
+
+# data files
+/nvm.bin
+/samples.bin
+/images/
+/common/data.cpp
+/common/data.h
 /data/others.txt
+
+# CCS-generated files
+.launches/
+/msp430/Large_Data/
+/msp432/Debug__GNU/
+
+# External projects
+/msp430/driverlib
+/msp432/driverlib
 /ARM-CMSIS/*
 !/ARM-CMSIS/*.sh
 !/ARM-CMSIS/*.diff
-/build/
-/charts/chart-*
-
-# CCS files
-.launches/

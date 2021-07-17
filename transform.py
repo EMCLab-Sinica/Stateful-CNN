@@ -746,6 +746,7 @@ for idx, im in enumerate(model_data.images):
                 outputs['samples'].write(to_bytes(_Q15(im[0, idx_c, idx_h, idx_w] / config['input_scale'])))
     if args.write_images:
         import cv2
+        os.makedirs('images', exist_ok=True)
         # Restore conanical image format (H, W, C)
         im = np.squeeze(im * 256)
         if args.config == 'mnist':
