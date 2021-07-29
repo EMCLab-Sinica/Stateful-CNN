@@ -20,10 +20,8 @@ MOTIVATION_CONFIG = 'mnist'
 def calculate_avg_stdev(df):
     timings = df.loc[:, '0':'9']
     average = timings.mean(axis=1)
-    stdev = timings.std(axis=1)
     df = df.drop(columns=[str(idx) for idx in range(10)])
     df['Average'] = average
-    df['Stdev'] = stdev
     return df
 
 class XAxisType(enum.Enum):
@@ -135,8 +133,6 @@ def plot(df, device, variant, outdir):
             }
             if x_axis == XAxisType.METHODOLOGY:
                 kwargs['x'] -= width
-            if not has_baseline:
-                kwargs['yerr'] = data['Stdev']
             plots.append(ax.bar(**kwargs))
 
             # Based on a function from Daniel Tsai
@@ -144,8 +140,7 @@ def plot(df, device, variant, outdir):
                 for value_idx, height in enumerate(data['Average']):
                     if not data[data.method == base_method].empty:
                         continue
-                    yerr = data['Stdev'].iat[value_idx]
-                    xy = [value_idx + 0.38 + width * idx_method, height + max_height * 0.03 + yerr]
+                    xy = [value_idx + 0.38 + width * idx_method, height + max_height * 0.03]
                     if not height:
                         xy[0] += 0.04
                         ax.annotate('×', xy=xy, xycoords='data', fontsize='xx-large', fontweight='bold')
