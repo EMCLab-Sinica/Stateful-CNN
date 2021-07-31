@@ -24,6 +24,12 @@ def calculate_avg_stdev(df):
     df['Average'] = average
     return df
 
+def job_desc(job):
+    job = int(job)
+    if job == 1:
+        return '1 job'
+    return f'{job} jobs'
+
 class XAxisType(enum.Enum):
     GRANULARITY = enum.auto()
     POWER = enum.auto()
@@ -70,11 +76,6 @@ def plot(df, device, variant, outdir):
     width = 1.0 / (1 + n_methods)     # the width of the bars
     ind = np.arange(N) + 2 * width    # the x locations for the groups
     hatches = ['', '--', r'\\', 'xx']
-
-    def job_desc(job):
-        if job == 1:
-            return '1 job'
-        return f'{job} jobs'
 
     methods = ['HAWAII', 'JAPARI', 'Stateful']
 
