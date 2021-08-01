@@ -182,14 +182,6 @@ void write_max_multiplier(const ParameterInfo* param, uint16_t max_multiplier) {
     }
 }
 
-void check_nvm_write_address(uint32_t nvm_offset, size_t n) {
-    if (nvm_offset >= INTERMEDIATE_PARAMETERS_INFO_OFFSET && nvm_offset < MODEL_OFFSET) {
-        MY_ASSERT((nvm_offset - INTERMEDIATE_PARAMETERS_INFO_OFFSET) % sizeof(ParameterInfo) == 0);
-    } else if (nvm_offset < INTERMEDIATE_PARAMETERS_INFO_OFFSET) {
-        MY_ASSERT(n <= INTERMEDIATE_PARAMETERS_INFO_OFFSET - nvm_offset, "Size %d too large!!! nvm_offset=%d" NEWLINE, n, nvm_offset);
-    }
-}
-
 void write_to_nvm_segmented(const uint8_t* vm_buffer, uint32_t nvm_offset, uint16_t total_len, uint16_t segment_size) {
     for (uint16_t idx = 0; idx < total_len; idx += segment_size) {
         write_to_nvm(vm_buffer + idx, nvm_offset + idx, MIN_VAL(total_len - idx, segment_size));

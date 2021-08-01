@@ -25,7 +25,6 @@
 #  define NEWLINE "\n"
 #endif
 
-#if MY_DEBUG >= 1
 template<typename ...Args>
 void my_printf_wrapper(Args... args) {
     my_printf(args...);
@@ -43,10 +42,13 @@ void my_assert_impl(const char *file, uint16_t line, uint8_t cond, Args... args)
     }
 }
 
+#if MY_DEBUG >= 1
 #define MY_ASSERT(...) my_assert_impl(__FILE__, __LINE__, __VA_ARGS__)
 #else
 #define MY_ASSERT(...)
 #endif
+// for checks that need to run when MY_DEBUG == 0
+#define MY_ASSERT_ALWAYS(...) my_assert_impl(__FILE__, __LINE__, __VA_ARGS__)
 
 struct ParameterInfo;
 struct Model;
@@ -69,6 +71,8 @@ void dump_params(struct Model *model, const ParameterInfo *cur_param);
 void dump_params_nhwc(struct Model *model, const ParameterInfo *cur_param);
 void dump_model(struct Model *model);
 void dump_turning_points(Model *model, const ParameterInfo *output);
+void compare_vm_nvm_impl(int16_t* vm_data, Model* model, const ParameterInfo* output, uint16_t output_offset, uint16_t blockSize);
+void check_nvm_write_address_impl(uint32_t nvm_offset, size_t n);
 
 #if MY_DEBUG >= 2
 
@@ -94,9 +98,15 @@ void dump_turning_points(Model *model, const ParameterInfo *output);
 
 #endif
 
-#if MY_DEBUG >= 1 && !HAWAII
-void compare_vm_nvm_impl(int16_t* vm_data, Model* model, const ParameterInfo* output, uint16_t output_offset, uint16_t blockSize);
+
+#if MY_DEBUG >= 1
+
 #define compare_vm_nvm compare_vm_nvm_impl
+#define check_nvm_write_address check_nvm_write_address_impl
+
 #else
+
 #define compare_vm_nvm(...)
+#define check_nvm_write_address(...)
+
 #endif

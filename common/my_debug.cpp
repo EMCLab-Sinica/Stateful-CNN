@@ -6,13 +6,12 @@
 #include "intermittent-cnn.h"
 #include "my_dsplib.h"
 #include "op_utils.h"
+#include "platform-private.h"
 
 uint8_t dump_integer = 1;
 
-#if MY_DEBUG >= 1
 template<>
 void my_printf_wrapper() {}
-#endif
 
 ValueInfo::ValueInfo(const ParameterInfo *cur_param, Model *model) {
     this->scale = cur_param->scale;
@@ -220,7 +219,6 @@ void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_i
     my_printf(NEWLINE);
 }
 
-#if MY_DEBUG >= 1 && !HAWAII
 static const uint16_t BUFFER_TEMP_SIZE = 256;
 static int16_t buffer_temp[BUFFER_TEMP_SIZE];
 
@@ -231,7 +229,14 @@ void compare_vm_nvm_impl(int16_t* vm_data, Model* model, const ParameterInfo* ou
     memset(buffer_temp, 0, blockSize * sizeof(int16_t));
     my_memcpy_from_param(model, buffer_temp, output, output_offset, blockSize * sizeof(int16_t));
     for (uint16_t idx = 0; idx < blockSize; idx++) {
-        MY_ASSERT(vm_data[idx] == buffer_temp[idx]);
+        MY_ASSERT_ALWAYS(vm_data[idx] == buffer_temp[idx]);
     }
 }
-#endif
+
+void check_nvm_write_address_impl(uint32_t nvm_offset, size_t n) {
+    if (nvm_offset >= INTERMEDIATE_PARAMETERS_INFO_OFFSET && nvm_offset < MODEL_OFFSET) {
+        MY_ASSERT((nvm_offset - INTERMEDIATE_PARAMETERS_INFO_OFFSET) % sizeof(ParameterInfo) == 0);
+    } else if (nvm_offset < INTERMEDIATE_PARAMETERS_INFO_OFFSET) {
+        MY_ASSERT(n <= INTERMEDIATE_PARAMETERS_INFO_OFFSET - nvm_offset, "Size %d too large!!! nvm_offset=%d" NEWLINE, n, nvm_offset);
+    }
+}
