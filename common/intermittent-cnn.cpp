@@ -76,7 +76,9 @@ static void handle_node(Model *model, uint16_t node_idx) {
     }
 }
 
+#if MY_DEBUG >= 1
 const float first_sample_outputs[] = FIRST_SAMPLE_OUTPUTS;
+#endif
 
 static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     my_printf_debug("N_INPUT = %d" NEWLINE, N_INPUT);
@@ -114,11 +116,13 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
         dump_model_debug(model);
     }
 
-    /* XXX: is the last node always the output node? */
+    // the parameter info for the last node should also be refreshed when MY_DEBUG == 0
+    // Otherwise, the model is not correctly re-initialized in some cases
     const ParameterInfo *output_node = get_parameter_info(MODEL_NODES_LEN + N_INPUT - 1);
     if (output_node_ptr) {
         *output_node_ptr = output_node;
     }
+#if MY_DEBUG >= 1
     int16_t max = INT16_MIN;
     uint16_t u_ans;
     uint8_t ans_len = sizeof(first_sample_outputs) / sizeof(float);
@@ -139,7 +143,6 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     }
 #endif
 
-#if MY_DEBUG >= 1
     if (sample_idx == 0) {
         for (uint8_t buffer_idx = 0, ofm_idx = 0; buffer_idx < buffer_len; buffer_idx++) {
             int16_t got_q15 = lea_buffer[buffer_idx];
@@ -159,16 +162,16 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
             }
         }
     }
-#endif
 
     my_max_q15(lea_buffer, buffer_len, &max, &u_ans);
 #if JAPARI
     u_ans = u_ans / (BATCH_SIZE + 1) * BATCH_SIZE + u_ans % (BATCH_SIZE + 1);
 #endif
     *ansptr = u_ans;
+#endif
 }
 
-#if MY_DEBUG >= 1 || !defined(EXTFRAM_USE_DMA)
+#if MY_DEBUG >= 1
 static void print_results(const ParameterInfo *output_node) {
     Model *model = get_model();
 
@@ -215,22 +218,25 @@ static void print_results(const ParameterInfo *output_node) {
 #endif
 
 uint8_t run_cnn_tests(uint16_t n_samples) {
-    int8_t label = -1, predicted = -1;
+    int8_t predicted = -1;
+    const ParameterInfo *output_node;
+#if MY_DEBUG >= 1
+    int8_t label = -1;
     uint32_t correct = 0, total = 0;
     if (!n_samples) {
         n_samples = PLAT_LABELS_DATA_LEN;
     }
-    const ParameterInfo *output_node;
     const uint8_t *labels = labels_data;
+#endif
     for (uint16_t i = 0; i < n_samples; i++) {
         sample_idx = i;
-        label = labels[i];
         run_model(&predicted, &output_node);
+#if MY_DEBUG >= 1
+        label = labels[i];
         total++;
         if (label == predicted) {
             correct++;
         }
-#if MY_DEBUG >= 1
         if (i % 100 == 0) {
             my_printf("Sample %d finished" NEWLINE, sample_idx);
             // stdout is not flushed at \n if it is not a terminal
@@ -239,19 +245,19 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
         my_printf_debug("idx=%d label=%d predicted=%d correct=%d" NEWLINE, i, label, predicted, label == predicted);
 #endif
     }
-#if MY_DEBUG >= 1 || !defined(EXTFRAM_USE_DMA)
+#if MY_DEBUG >= 1
     if (n_samples == 1) {
         print_results(output_node);
     }
     my_printf("correct=%" PRId32 " ", correct);
     my_printf("total=%" PRId32 " ", total);
     my_printf("rate=%f" NEWLINE, 1.0*correct/total);
-#endif
 
     // Allow only 1% of accuracy drop
     if (N_SAMPLES == N_ALL_SAMPLES && correct < (FP32_ACCURACY - 0.01) * total) {
         return 1;
     }
+#endif
     return 0;
 }
 
