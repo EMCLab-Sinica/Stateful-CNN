@@ -193,12 +193,8 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             my_printf_debug("Tile for B" NEWLINE);
             dump_matrix2_debug(buffer_b, extended_tile_channels, full_tile_width, ValueInfo(B, model));
 
-#if HAWAII
-            my_matrix_mpy_q15(1, extended_tile_channels, extended_tile_channels, full_tile_width, buffer_a, buffer_b, buffer_temp, nullptr, 0, 0);
-#else
             my_matrix_mpy_q15(1, extended_tile_channels, extended_tile_channels, full_tile_width, buffer_a, buffer_b, buffer_temp,
                               output, output_offset, values_to_preserve);
-#endif
 
             my_printf_debug("matrix_mpy_results" NEWLINE);
             dump_matrix_debug(buffer_temp, full_tile_width, ValueInfo(output, model));
@@ -208,7 +204,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
             my_printf_debug("output_offset=%d" NEWLINE, output_offset);
 #if HAWAII
-            hawaii_preserve_vector(model, output, output_offset, buffer_temp, values_to_preserve);
+            hawaii_record_footprints(model, values_to_preserve);
 #endif
             output_offset += values_to_preserve;
         }

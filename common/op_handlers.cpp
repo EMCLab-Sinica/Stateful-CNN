@@ -180,10 +180,9 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         my_offset_q15_batched(to_offset, 0x4000, to_offset, output_offset + len - next_output_turning_point);
                     }
 #endif
-#if HAWAII
-                    hawaii_preserve_vector(model, output, output_offset, lea_buffer, len);
-#else
                     my_memcpy_to_param(output, output_offset, lea_buffer, output_idx * sizeof(int16_t), 0);
+#if HAWAII
+                    hawaii_record_footprints(model, len);
 #endif
 
                     my_printf_debug("output_offset=[% 6d, % 6d), output val=", output_offset, output_offset + output_idx);

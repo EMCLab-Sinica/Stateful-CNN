@@ -126,9 +126,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     MY_ASSERT(cur_output_tile_c > 0);
 
     int16_t n_filters = cur_output_tile_c;
-#if !HAWAII
     int16_t values_to_preserve = n_filters;
-#endif
     int16_t channel_offset_c = conv_params->filter_idx;
 #if JAPARI
     values_to_preserve = extend_for_footprints(n_filters, conv_params->force_align_footprints);
@@ -253,12 +251,8 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     B_cols = n_filters;
     MY_ASSERT(A_rows * B_cols <= OUTPUT_LEN);
     MY_ASSERT(input_buffer_addr + A_rows * A_cols <= filter_buffer_addr);
-#if HAWAII
-    my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results, nullptr, 0, 0);
-#else
     my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results,
                       conv_params->output, cur_output_data_offset, values_to_preserve);
-#endif
 
     /* START dump data */
     my_printf_debug("input_h=%d" NEWLINE, conv_params->input_h + offset_h);
@@ -291,10 +285,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     MY_ASSERT(cur_output_data_offset + n_filters < INTERMEDIATE_VALUES_SIZE * NUM_SLOTS);
 
 #if HAWAII
-    uint16_t batch_offset = 0;
-    for (uint16_t row = 0; row < A_rows; row++) {
-        batch_offset += hawaii_preserve_vector(conv_params->model, conv_params->output, cur_output_data_offset + batch_offset, matrix_mpy_results + batch_offset, B_cols);
-    }
+    hawaii_record_footprints(conv_params->model, values_to_preserve);
 #endif
 
 #if INDIRECT_RECOVERY
@@ -886,10 +877,9 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 
 #if JAPARI
 #endif
-#if !HAWAII
         my_memcpy_to_param(output, tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t), 0);
-#else
-        hawaii_preserve_vector(model, output, tiling_results_offset, lea_buffer, real_chunk_len);
+#if HAWAII
+        hawaii_record_footprints(model, real_chunk_len);
 #endif
     }
 

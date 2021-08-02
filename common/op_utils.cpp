@@ -11,12 +11,10 @@
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
 #if HAWAII
-uint16_t hawaii_preserve_vector(Model* model, ParameterInfo* output, uint32_t output_offset, const int16_t* buffer, uint16_t vector_len) {
-    my_memcpy_to_param(output, output_offset, buffer, vector_len * sizeof(int16_t), 0);
+void hawaii_record_footprints(Model* model, uint16_t vector_len) {
     for (int16_t non_recorded_jobs = vector_len; non_recorded_jobs >= 0; non_recorded_jobs -= BATCH_SIZE) {
         write_hawaii_layer_footprint(model->layer_idx, MIN_VAL(BATCH_SIZE, non_recorded_jobs));
     }
-    return vector_len;
 }
 #endif
 

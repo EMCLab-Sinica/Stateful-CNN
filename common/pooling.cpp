@@ -218,10 +218,9 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                     }
                     my_printf_debug(NEWLINE);
 #endif
-#if HAWAII
-                    hawaii_preserve_vector(model, output, output_offset, lea_buffer, len);
-#else
                     my_memcpy_to_param(output, output_offset, lea_buffer, len * sizeof(int16_t), 0);
+#if HAWAII
+                    hawaii_record_footprints(model, len);
 #endif
                     output_offset += len;
                     c = 0;
