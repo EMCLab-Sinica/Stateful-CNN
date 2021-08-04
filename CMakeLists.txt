@@ -19,12 +19,12 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -std=c++11 -Wold-style-c
 set(COMMON_SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/common)
 
 
-file(GLOB CCS_ROOT $ENV{HOME}/ti/ccs*)
-if (NOT "${CCS_ROOT}" STREQUAL "")
-    message(STATUS "Found CCS at ${CCS_ROOT}")
+file(GLOB CCS_ARM_ROOT $ENV{HOME}/ti/ccs*/ccs/ccs_base/arm)
+if (NOT "${CCS_ARM_ROOT}" STREQUAL "")
+    message(STATUS "Found CCS ARM root at ${CCS_ARM_ROOT}")
     set (BUILD_MSP432 ON)
 else ()
-    message(WARNING "No CCS found. Not building plat-msp432.")
+    message(WARNING "No CCS ARM root found. Not building plat-msp432.")
     set (BUILD_MSP432 OFF)
 endif ()
 
@@ -109,7 +109,7 @@ if (BUILD_MSP432)
     target_include_directories(plat-msp432
         SYSTEM PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/msp432/driverlib/MSP432P4xx
-            ${CCS_ROOT}/ccs/ccs_base/arm/include
+            ${CCS_ARM_ROOT}/include
             $<TARGET_PROPERTY:arm_cmsis_dsp,INCLUDE_DIRECTORIES>
     )
     target_compile_definitions(plat-msp432
