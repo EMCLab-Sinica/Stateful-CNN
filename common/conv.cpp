@@ -789,8 +789,9 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 
     uint32_t tiling_results_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
 
+    // Not using the largest size to avoid non-termination under frequent power failures
     // uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
-    uint16_t chunk_len = OUTPUT_CHANNEL;
+    uint16_t chunk_len = OUTPUT_CHANNEL * 2; // make sure there are still two chunks when BATCH_SIZE == OUTPUT_CHANNEL
     uint32_t tiling_results_offset = 0;
 #if INTERMITTENT
     uint32_t first_unfinished_job_index = run_recovery(model, output);
