@@ -131,27 +131,25 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             int16_t *filter_ptr = buffer_b;
             my_fill_q15(0, filter_ptr, extended_tile_channels * full_tile_width);
             for (uint16_t row = 0; row < tile_channels; row++) {
-#if JAPARI
-                int16_t* cur_filter_start = filter_ptr;
-                uint8_t copy_size = MIN_VAL(BATCH_SIZE, tile_width);
-                for (uint16_t col = 0; filter_ptr < cur_filter_start + values_to_preserve; col += BATCH_SIZE) {
-                    my_memcpy_from_param(model, filter_ptr,
-                              B, (i + row) * B->dims[1] + j + col,
-                              copy_size * sizeof(uint16_t));
-                    filter_ptr += copy_size;
-                    if (tile_width >= BATCH_SIZE) {
-                        filter_ptr++;
-                    }
-                    if (values_to_preserve != full_tile_width) {
-                        filter_ptr++;
-                    }
-                }
-#else
                 my_memcpy_from_param(model, filter_ptr,
                           B, (i + row) * B->dims[1] + j,
                           tile_width * sizeof(uint16_t));
-                filter_ptr += full_tile_width;
+#if JAPARI
+                // move loaded filters around to create zeros for footprint kernels
+                int16_t move_offset = values_to_preserve - tile_width;
+                int16_t cur_remaining = values_to_preserve % (BATCH_SIZE + 1);
+                for (int16_t move_dest = values_to_preserve - 1; move_dest >= 0; move_dest--) {
+                    if (cur_remaining == 0) {
+                        filter_ptr[move_dest] = 0;
+                        move_offset--;
+                        cur_remaining = BATCH_SIZE;
+                        continue;
+                    }
+                    filter_ptr[move_dest] = filter_ptr[move_dest - move_offset];
+                    cur_remaining--;
+                }
 #endif
+                filter_ptr += full_tile_width;
             }
 #if JAPARI
             my_fill_q15(0, filter_ptr, 2 * full_tile_width);
