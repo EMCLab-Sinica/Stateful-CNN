@@ -94,13 +94,12 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
     for (; i < B->dims[0]; i += flags->extra.gemm.tile_channel, tile++) {
-        uint16_t tile_channels = MIN_VAL(flags->extra.gemm.tile_channel, B->dims[0] - i);
-        uint16_t extended_tile_channels = tile_channels + 2;
-        buffer_a[tile_channels] = -0x8000;
-        buffer_a[tile_channels + 1] = 0;
+        const uint16_t tile_channels = MIN_VAL(flags->extra.gemm.tile_channel, B->dims[0] - i);
+        const uint16_t extended_tile_channels = tile_channels + 2;
 
 #if JAPARI
         if (has_footprints(A)) {
+            // somehow loading many pieces is faster than loading a chunk and moving values around to remove footprints, even with external FRAM
             uint16_t input_offset = extend_for_footprints(i);
             for (uint16_t idx = 0, output_idx = 0; output_idx < tile_channels; idx += BATCH_SIZE + 1, output_idx += BATCH_SIZE) {
                 my_memcpy_from_param(model, buffer_a + output_idx, A, input_offset + idx, BATCH_SIZE * sizeof(uint16_t));
@@ -114,6 +113,8 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if STATEFUL
         iterate_chunks(model, A, i, tile_channels, GemmInputChunkHandler, buffer_a);
 #endif
+        buffer_a[tile_channels] = -0x8000;
+        buffer_a[tile_channels + 1] = 0;
 
         my_printf_debug("Tile for A" NEWLINE);
         dump_matrix2_debug(buffer_a, 1, extended_tile_channels, ValueInfo(A, model));
@@ -159,14 +160,18 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     processed_biases = 0;
                     filter_ptr[idx] = (param_state_bit(model, output, output_offset) ? 1 : -1);
                 } else {
-                    filter_ptr[idx] = -static_cast<int32_t>(get_q15_param(model, C, bias_offset + j)) / A->scale;
+                    if (tile == 0) {
+                        filter_ptr[idx] = -static_cast<int32_t>(get_q15_param(model, C, bias_offset + j)) / A->scale;
+                    }
                     bias_offset++;
                     processed_biases++;
                 }
             }
 #else
-            for (uint16_t idx = 0; idx < values_to_preserve; idx++) {
-                filter_ptr[idx] = -static_cast<int32_t>(get_q15_param(model, C, idx + j)) / A->scale;
+            if (tile == 0) {
+                for (uint16_t idx = 0; idx < values_to_preserve; idx++) {
+                    filter_ptr[idx] = -static_cast<int32_t>(get_q15_param(model, C, idx + j)) / A->scale;
+                }
             }
 #endif
 
