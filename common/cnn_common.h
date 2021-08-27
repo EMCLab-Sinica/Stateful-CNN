@@ -18,6 +18,10 @@ struct GemmNodeFlags {
     uint16_t tile_width;
 };
 
+struct GemmMergeNodeFlags {
+    uint16_t tile_length;
+};
+
 struct SqueezeNodeFlags {
     uint8_t axes;
 };
@@ -25,6 +29,7 @@ struct SqueezeNodeFlags {
 union ExtraNodeFlags {
     ConvNodeFlags conv;
     GemmNodeFlags gemm;
+    GemmMergeNodeFlags gemmmerge;
     SqueezeNodeFlags squeeze;
 };
 

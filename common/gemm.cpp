@@ -1,5 +1,6 @@
 #include <cstdint>
 #include "cnn_common.h"
+#include "data.h"
 #include "platform.h"
 #include "my_debug.h"
 #include "op_utils.h"
@@ -242,39 +243,46 @@ void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
 
     int16_t output_len = X->dims[0] * X->dims[1];
 
-    int16_t *buffer_temp = lea_buffer,
-            *buffer_gemm = buffer_temp + output_len;
-    make_buffer_aligned(&buffer_gemm);
+    uint8_t output_tile_size = node->flags.extra.gemmmerge.tile_length || output_len;
+#if JAPARI
+    output_tile_size = extend_for_footprints(output_tile_size);
+#endif
 
-    my_fill_q15(0, buffer_gemm, output_len);
+    int16_t *buffer_temp = lea_buffer,
+            *buffer_gemm = buffer_temp + output_tile_size;
+    make_buffer_aligned(&buffer_gemm);
 
     int16_t n_tiles = X->params_len / output_len / sizeof(int16_t);
     my_printf_debug("n_tiles=%d" NEWLINE, n_tiles);
     MY_ASSERT(n_tiles);
 
-    for (uint16_t tile = 0; tile < n_tiles; tile++) {
-        my_memcpy_from_param(model, buffer_temp, input[0], tile * output_len, output_len * sizeof(int16_t));
+    for (uint16_t offset = 0; offset < output_len; offset += output_tile_size) {
+        uint8_t cur_tile_size = MIN_VAL(output_tile_size, output_len - offset);
+        my_fill_q15(0, buffer_gemm, cur_tile_size);
+
+        for (uint16_t tile = 0; tile < n_tiles; tile++) {
+            my_memcpy_from_param(model, buffer_temp, input[0], tile * output_len + offset, cur_tile_size * sizeof(int16_t));
 #if STATEFUL
-        for (uint16_t idx = BATCH_SIZE - 1; idx < output_len; idx += BATCH_SIZE) {
-            strip_state(buffer_temp + idx);
-        }
+            for (uint16_t idx = BATCH_SIZE - 1; idx < output_len; idx += BATCH_SIZE) {
+                strip_state(buffer_temp + idx);
+            }
 #endif
-        my_add_q15(buffer_gemm, buffer_temp, buffer_gemm, output_len);
-        my_printf_debug("accumulated buffer_gemm" NEWLINE);
-        dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
-    }
-
-    my_printf_debug("buffer_gemm with bias" NEWLINE);
-    dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
-
-    my_printf_debug("buffer_gemm after scaling up" NEWLINE);
-    dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
+            my_add_q15(buffer_gemm, buffer_temp, buffer_gemm, cur_tile_size);
+            my_printf_debug("accumulated buffer_gemm" NEWLINE);
+            dump_matrix_debug(buffer_gemm, cur_tile_size, ValueInfo(output, model));
+        }
 
 #if INDIRECT_RECOVERY
-    iterate_chunks(model, output, 0, 0, OutputChunkHandler, buffer_gemm);
+        OutputChunkHandlerParams params;
+        params.buffer = buffer_gemm;
+        params.buffer_offset = offset;
+        iterate_chunks(model, output, offset, cur_tile_size, OutputChunkHandler, &params);
 #endif
+        my_printf_debug("buffer_gemm after adjusting states" NEWLINE);
+        dump_matrix_debug(buffer_gemm, cur_tile_size, ValueInfo(output, model));
 
-    my_memcpy_to_param(output, 0, buffer_gemm, output->params_len, 0);
+        my_memcpy_to_param(output, offset, buffer_gemm, cur_tile_size * sizeof(int16_t), 0);
+    }
 
     flip_state_bit(model, output);
 

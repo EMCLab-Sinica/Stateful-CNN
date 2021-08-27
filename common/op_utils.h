@@ -32,6 +32,10 @@ uint8_t has_footprints(const ParameterInfo* cur_param);
 #if INDIRECT_RECOVERY
 const uint16_t INVALID_TURNING_POINT = static_cast<uint16_t>(-1);
 
+struct OutputChunkHandlerParams {
+    int16_t* buffer;
+    uint16_t buffer_offset;
+};
 void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, int8_t state_bit, void* _params);
 void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, uint16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param);
 

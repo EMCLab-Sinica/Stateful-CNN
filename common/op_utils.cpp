@@ -40,8 +40,8 @@ int16_t upper_gauss(int16_t a, int16_t b) {
 
 #if INDIRECT_RECOVERY
 void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, int8_t state_bit, void* _params) {
-    int16_t* buffer = reinterpret_cast<int16_t*>(_params);
-    int16_t* to_offset = buffer + offset;
+    OutputChunkHandlerParams* params = reinterpret_cast<OutputChunkHandlerParams*>(_params);
+    int16_t* to_offset = params->buffer + (offset - params->buffer_offset);
 #if STATEFUL
     my_offset_q15_batched(to_offset, -state_bit*0x4000, to_offset, real_chunk_len, true);
 #endif

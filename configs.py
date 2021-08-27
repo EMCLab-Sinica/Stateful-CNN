@@ -42,6 +42,7 @@ configs = {
         'n_all_samples': 4890,
         'sample_size': [25, 10],  # MFCC gives 25x10 tensors
         'op_filters': 4,
+        'gemm_tile_length': 8,
         'first_sample_outputs': [ -29.228327, 5.429047, 22.146973, 3.142066, -10.448060, -9.513299, 15.832925, -4.655487, -14.588447, -1.577156, -5.864228, -6.609077 ],
         'fp32_accuracy': 0.7983,
     },
