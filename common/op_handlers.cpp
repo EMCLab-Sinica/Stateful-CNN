@@ -31,13 +31,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     uint16_t output_offset = 0;
 #if INTERMITTENT
 
-    uint32_t first_unfinished_value_offset = job_index_to_offset(output, run_recovery(model, output));
-
-#if JAPARI
-    first_unfinished_value_offset -= BATCH_SIZE;
-#else
-    first_unfinished_value_offset -= (BATCH_SIZE - 1);
-#endif
+    uint32_t first_unfinished_value_offset = batch_start(job_index_to_offset(output, run_recovery(model, output)));
     data_offset += first_unfinished_value_offset;
     output_offset += first_unfinished_value_offset;
 

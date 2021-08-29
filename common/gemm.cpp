@@ -73,11 +73,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     offset = -offset;
 #endif
 
-#if JAPARI
-    first_unfinished_value_offset -= BATCH_SIZE;
-#else
-    first_unfinished_value_offset -= (BATCH_SIZE - 1);
-#endif
+    first_unfinished_value_offset = batch_start(first_unfinished_value_offset);
 
     fix_first_unfinished_value_offset(model, &first_unfinished_value_offset);
 
@@ -248,6 +244,11 @@ void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
     output_tile_size = extend_for_footprints(output_tile_size);
 #endif
 
+    uint16_t merge_offset = 0;
+#if INTERMITTENT
+    merge_offset = batch_start(job_index_to_offset(output, run_recovery(model, output)));
+#endif
+
     int16_t *buffer_temp = lea_buffer,
             *buffer_gemm = buffer_temp + output_tile_size;
     make_buffer_aligned(&buffer_gemm);
@@ -256,12 +257,12 @@ void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
     my_printf_debug("n_tiles=%d" NEWLINE, n_tiles);
     MY_ASSERT(n_tiles);
 
-    for (uint16_t offset = 0; offset < output_len; offset += output_tile_size) {
-        uint8_t cur_tile_size = MIN_VAL(output_tile_size, output_len - offset);
+    for (; merge_offset < output_len; merge_offset += output_tile_size) {
+        uint8_t cur_tile_size = MIN_VAL(output_tile_size, output_len - merge_offset);
         my_fill_q15(0, buffer_gemm, cur_tile_size);
 
         for (uint16_t tile = 0; tile < n_tiles; tile++) {
-            my_memcpy_from_param(model, buffer_temp, input[0], tile * output_len + offset, cur_tile_size * sizeof(int16_t));
+            my_memcpy_from_param(model, buffer_temp, input[0], tile * output_len + merge_offset, cur_tile_size * sizeof(int16_t));
 #if STATEFUL
             for (uint16_t idx = BATCH_SIZE - 1; idx < output_len; idx += BATCH_SIZE) {
                 strip_state(buffer_temp + idx);
@@ -275,13 +276,16 @@ void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
 #if INDIRECT_RECOVERY
         OutputChunkHandlerParams params;
         params.buffer = buffer_gemm;
-        params.buffer_offset = offset;
-        iterate_chunks(model, output, offset, cur_tile_size, OutputChunkHandler, &params);
+        params.buffer_offset = merge_offset;
+        iterate_chunks(model, output, merge_offset, cur_tile_size, OutputChunkHandler, &params);
 #endif
-        my_printf_debug("buffer_gemm after adjusting states" NEWLINE);
+        my_printf_debug("buffer_gemm after adjusting states; merge_offset=%d" NEWLINE, merge_offset);
         dump_matrix_debug(buffer_gemm, cur_tile_size, ValueInfo(output, model));
 
-        my_memcpy_to_param(output, offset, buffer_gemm, cur_tile_size * sizeof(int16_t), 0);
+        my_memcpy_to_param(output, merge_offset, buffer_gemm, cur_tile_size * sizeof(int16_t), 0);
+#if HAWAII
+        hawaii_record_footprints(model, cur_tile_size);
+#endif
     }
 
     flip_state_bit(model, output);

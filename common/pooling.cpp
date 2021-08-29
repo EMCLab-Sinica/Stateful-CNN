@@ -149,12 +149,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     uint16_t output_offset = 0;
 
 #if INTERMITTENT
-    uint32_t first_unfinished_value_offset = job_index_to_offset(output, run_recovery(model, output));
-#if JAPARI
-    first_unfinished_value_offset -= BATCH_SIZE;
-#else
-    first_unfinished_value_offset -= (BATCH_SIZE - 1);
-#endif
+    uint32_t first_unfinished_value_offset = batch_start(job_index_to_offset(output, run_recovery(model, output)));
     if (first_unfinished_value_offset * sizeof(int16_t) == output->params_len) {
         // give up early, or initial_real_tile_c may be zero and results in SIGFPE
         goto finished;

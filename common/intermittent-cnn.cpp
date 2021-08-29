@@ -472,6 +472,14 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
     return offset;
 }
 
+uint32_t batch_start(uint32_t batch_end_offset) {
+#if JAPARI
+    return batch_end_offset - BATCH_SIZE;
+#else
+    return batch_end_offset - (BATCH_SIZE - 1);
+#endif
+}
+
 #if INDIRECT_RECOVERY
 
 static uint8_t after_recovery = 1;

@@ -279,7 +279,6 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     my_printf_debug("output_h=%d ", (conv_params->input_h + offset_h) / conv_params->stride);
     my_printf_debug("output_w=%d" NEWLINE, conv_params->input_w / conv_params->stride);
 
-    my_printf_debug("input_buffer_addr = lea_buffer + %d" NEWLINE, static_cast<int>(input_buffer_addr - lea_buffer));
     my_printf_debug("input" NEWLINE);
     dump_matrix_debug(input_buffer_addr, A_rows, A_cols, ValueInfo(conv_params->conv_input, nullptr), false);
     my_printf_debug("filter_buffer_addr = lea_buffer + LEA_BUFFER_SIZE - %d" NEWLINE, static_cast<int>(lea_buffer + LEA_BUFFER_SIZE - filter_buffer_addr));
@@ -618,12 +617,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if INTERMITTENT
 
     uint32_t first_unfinished_job_idx = run_recovery(model, output);
-    uint32_t first_unfinished_value_offset = job_index_to_offset(output, first_unfinished_job_idx);
-#if JAPARI
-    first_unfinished_value_offset -= BATCH_SIZE;
-#else
-    first_unfinished_value_offset -= (BATCH_SIZE - 1);
-#endif
+    uint32_t first_unfinished_value_offset = batch_start(job_index_to_offset(output, first_unfinished_job_idx));
 
     fix_first_unfinished_value_offset(model, &first_unfinished_value_offset);
 
