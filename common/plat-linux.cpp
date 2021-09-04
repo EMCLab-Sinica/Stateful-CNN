@@ -25,7 +25,7 @@
 
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
-uint32_t shutdown_counter = UINT32_MAX;
+static uint32_t shutdown_counter = UINT32_MAX;
 static uint64_t nvm_writes = 0;
 
 Counters *counters() {
@@ -127,7 +127,6 @@ void my_memcpy_ex(void* dest, const void* src, size_t n, uint8_t write_to_nvm) {
     Model* model = &model_vm;
     counters()->dma_invocations[model->layer_idx]++;
     counters()->dma_bytes[model->layer_idx] += n;
-    // my_printf_debug("%s copied %zu bytes" NEWLINE, __func__, n);
     // Not using memcpy here so that it is more likely that power fails during
     // memcpy, which is the case for external FRAM
     uint8_t *dest_u = reinterpret_cast<uint8_t*>(dest);

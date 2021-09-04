@@ -5,7 +5,7 @@
 #elif defined(__MSP432__)
 #include <msp432.h>
 #endif
-#include <stdint.h>
+#include <cstdint>
 #include <string.h>
 #include "intermittent-cnn.h"
 #include "cnn_common.h"
@@ -109,7 +109,6 @@ void read_from_nvm(void* vm_buffer, uint32_t nvm_offset, size_t n) {
     SPI_ADDR addr;
     addr.L = nvm_offset;
     SPI_READ(&addr, reinterpret_cast<uint8_t*>(vm_buffer), n);
-    my_printf_debug("%d words read from NVM offset %d" NEWLINE, n, nvm_offset);
 }
 
 void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n, uint16_t timer_delay) {
@@ -118,7 +117,6 @@ void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n, uint16_t
     check_nvm_write_address(nvm_offset, n);
     MY_ASSERT(n <= 1024);
     SPI_WRITE2(&addr, reinterpret_cast<const uint8_t*>(vm_buffer), n, timer_delay);
-    my_printf_debug("%d words written to NVM offset %d" NEWLINE, n, nvm_offset);
 }
 
 uint64_t get_nvm_writes(void) {
