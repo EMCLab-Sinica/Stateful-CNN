@@ -13,6 +13,7 @@
 /common/data.cpp
 /common/data.h
 /data/others.txt
+/data/*-opt*.onnx
 
 # CCS-generated files
 .launches/
