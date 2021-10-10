@@ -1,3 +1,4 @@
+#include <cstdint>
 #include "cnn_common.h"
 #include "op_utils.h"
 #include "my_debug.h"
@@ -244,11 +245,10 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
     MY_ASSERT(new_len * sizeof(int16_t) == output->params_len);
 }
 
-void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
+void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
     my_printf_debug("Squeeze!" NEWLINE);
 
     const ParameterInfo *data = input[0];
-    /* XXX: add flags; assume squeeze all one-size axes */
     output->params_offset = data->params_offset;
     output->params_len = data->params_len;
     output->bitwidth = data->bitwidth;
@@ -257,11 +257,29 @@ void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *o
     if (cur_slot_info) {
         cur_slot_info->user = model->layer_idx;
     }
-    for (uint8_t i = 0, j = 0; i < 4; i++) {
-        if (input[0]->dims[i] != 1) {
-            output->dims[j] = input[0]->dims[i];
-            j++;
+    uint8_t axes = flags->extra.squeeze.axes;
+    // If axes is not provided, all the single dimensions will be removed from the shape.
+    // https://github.com/onnx/onnx/blob/master/docs/Operators.md#squeeze
+    uint8_t j = 0;
+    if (axes == 0) {
+        for (uint8_t i = 0; i < 4; i++) {
+            if (input[0]->dims[i] != 1) {
+                output->dims[j] = input[0]->dims[i];
+                j++;
+            }
         }
+    } else {
+        for (uint8_t i = 0; i < 4; i++) {
+            if (axes & (1 << i)) {
+                MY_ASSERT(input[0]->dims[i] == 1);
+            } else {
+                output->dims[j] = input[0]->dims[i];
+                j++;
+            }
+        }
+    }
+    for (; j < 4; j++) {
+        output->dims[j] = 0;
     }
 }
 

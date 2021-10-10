@@ -129,10 +129,16 @@ class GemmNodeFlags(ctypes.Structure):
         ("tile_width", ctypes.c_uint16, 16),
     ]
 
+class SqueezeNodeFlags(ctypes.Structure):
+    _fields_ = [
+        ("axes", ctypes.c_uint8, 8),  # a bitmap for axes to squeeze
+    ]
+
 class ExtraNodeFlags(ctypes.Union):
     _fields_ = [
         ("conv", ConvNodeFlags),
         ("gemm", GemmNodeFlags),
+        ("squeeze", SqueezeNodeFlags),
     ]
 
 class NodeFlags_bits(ctypes.LittleEndianStructure):
@@ -379,7 +385,8 @@ for idx, n in enumerate(nodes):
         # https://github.com/onnx/onnx/blob/master/docs/Operators.md#conv
         conv_param_names.add(n.input[1])
         auto_pad = get_attr(n, 'auto_pad')
-        if auto_pad == b'VALID':
+        pads = get_attr(n ,'pads')
+        if auto_pad == b'VALID' or auto_pad is None and pads is None:
             n.flags.b.generic += op_flag('AUTO_PAD_VALID')
     if n.op_type == 'MaxPool':
         kernel_shape = get_attr(n, 'kernel_shape')
@@ -390,6 +397,12 @@ for idx, n in enumerate(nodes):
         n.flags.b.stride = stride
     if n.op_type == 'Reshape' and prev_node and prev_node.op_type == 'MaxPool':
         prev_node.flags.b.generic += op_flag('NHWC2NCHW')
+    if n.op_type == 'Squeeze':
+        axes = get_attr(n, 'axes') or []
+        node_flags = n.flags.b.extra.squeeze
+        node_flags.axes = 0
+        for axis in axes:
+            node_flags.axes |= (1 << axis)
     names[output[0]] = idx + Constants.N_INPUT
     prev_node = n
 
