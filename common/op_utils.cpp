@@ -199,7 +199,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
         // Use <= here as turning_point_idx is actually index for the _next_ turning point
         if (next_turning_point != INVALID_TURNING_POINT && turning_point_idx <= cur_slot_info->n_turning_points) {
             uint16_t chunk_len_before_turning_point = MIN_VAL(cur_chunk_len, next_turning_point - offset);
-            if (chunk_len_before_turning_point != cur_chunk_len) {
+            if (offset + chunk_len >= next_turning_point) {
                 next_turning_point = cur_slot_info->turning_points[turning_point_idx];
                 turning_point_idx++;
                 next_state_flipped = 1;
