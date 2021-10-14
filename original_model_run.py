@@ -2,13 +2,20 @@ import argparse
 
 import numpy as np
 import onnx
+import onnxruntime
 import onnxruntime.backend as backend
 
 from configs import configs
 from utils import change_batch_size, find_tensor_value_info
 
+def onnxruntime_prepare_model(model):
+    return backend.prepare(
+        onnxruntime.InferenceSession(model.SerializeToString(),
+        providers=["CPUExecutionProvider"],
+    ))
+
 def onnxruntime_inference(model, images):
-    rep = backend.prepare(model)
+    rep = onnxruntime_prepare_model(model)
     return rep.run(np.concatenate(images).astype(np.float32))
 
 def onnxruntime_get_intermediate_tensor(model, images):
@@ -21,7 +28,7 @@ def onnxruntime_get_intermediate_tensor(model, images):
         tmp_model.graph.output[0].CopyFrom(new_output)
         onnx.checker.check_model(tmp_model)
 
-        rep = backend.prepare(tmp_model)
+        rep = onnxruntime_prepare_model(tmp_model)
         outputs = rep.run(images[0].astype(np.float32))
         yield new_output.name, outputs
 
