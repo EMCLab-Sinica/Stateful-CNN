@@ -18,11 +18,8 @@ import onnx.helper
 import onnxoptimizer
 import numpy as np
 
-from utils import (
-    load_data_mnist,
-    load_data_cifar10,
-    load_data_google_speech,
-)
+from configs import configs
+from utils import find_initializer
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -175,54 +172,6 @@ class ONNXNodeWrapper:
 def get_prev_node(n):
     return nodes[names[n.input[0]] - Constants.N_INPUT]
 
-
-# intermediate_values_size should < 65536, or TI's compiler gets confused
-configs = {
-    'mnist': {
-        # https://github.com/onnx/models/raw/master/vision/classification/mnist/model/mnist-8.onnx
-        'onnx_model': 'data/mnist-8.onnx',
-        'scale': 8,
-        'input_scale': 8,
-        'num_slots': 2,
-        'intermediate_values_size': 26000,
-        'data_loader': load_data_mnist,
-        'n_all_samples': 10000,
-        # multiply by 2 for Q15
-        'sample_size': 2 * 28 * 28,
-        'op_filters': 4,
-        'first_sample_outputs': [ -1.247997, 0.624493, 8.609308, 9.392411, -13.685033, -6.018567, -23.386677, 28.214134, -6.762523, 3.924627 ],
-        'fp32_accuracy': 0.9889,
-    },
-    'cifar10': {
-        'onnx_model': 'data/squeezenet_cifar10.onnx',
-        'scale': 8,
-        'input_scale': 8,
-        'num_slots': 3,
-        'intermediate_values_size': 65000,
-        'data_loader': load_data_cifar10,
-        'n_all_samples': 10000,
-        'sample_size': 2 * 32 * 32 * 3,
-        'op_filters': 4,
-        'first_sample_outputs': [ 4.895500, 4.331344, 4.631835, 11.602396, 4.454658, 10.819544, 5.423588, 6.451203, 5.806091, 5.272837 ],
-        'fp32_accuracy': 0.7704,
-    },
-    'kws': {
-        'onnx_model': 'data/KWS-DNN_S.onnx',
-        'scale': 8,
-        'input_scale': 120,
-        'num_slots': 2,
-        'intermediate_values_size': 20000,
-        'data_loader': load_data_google_speech,
-        'n_all_samples': 4890,
-        'sample_size': 2 * 25 * 10,  # MFCC gives 25x10 tensors
-        'op_filters': 4,
-        'first_sample_outputs': [ -29.228327, 5.429047, 22.146973, 3.142066, -10.448060, -9.513299, 15.832925, -4.655487, -14.588447, -1.577156, -5.864228, -6.609077 ],
-        # Much lower than reported on the paper due to mismatched window_size_ms/window_stride_ms (?)
-        # See: https://github.com/ARM-software/ML-KWS-for-MCU/issues/44
-        'fp32_accuracy': 0.6323,
-    },
-}
-
 lea_buffer_size = {
     # (4096 - 0x138 (LEASTACK) - 2 * 8 (MSP_LEA_MAC_PARAMS)) / sizeof(int16_t)
     'msp430': 1884,
@@ -295,16 +244,11 @@ def get_attr(node, attr_name):
 # Remove Squeeze and Reshape nodes with constants as the input
 replaced_nodes_map = {}
 
-def find_initializer(name):
-    for initializer in g.initializer:
-        if initializer.name == name:
-            return initializer
-
 def replace_squeeze(node, inp):
     # Since opset 13, axes is an input instead of an attribute
     try:
         axes_name = node.input[1]
-        axes = find_initializer(axes_name).int64_data
+        axes = find_initializer(onnx_model, axes_name).int64_data
     except IndexError:
         axes = get_attr(node, 'axes')
     new_dims = [dim for dim_idx, dim in enumerate(inp.dims) if dim_idx not in axes]
@@ -314,7 +258,7 @@ def replace_squeeze(node, inp):
 
 def replace_reshape(node, inp):
     dims_name = node.input[1]
-    new_dims = find_initializer(dims_name).int64_data
+    new_dims = find_initializer(onnx_model, dims_name).int64_data
     assert new_dims
     inp.dims[:] = new_dims
 
@@ -327,7 +271,7 @@ def replace_nodes():
     for n in g.node:
         if n.op_type not in ('Squeeze', 'Reshape'):
             continue
-        inp = find_initializer(n.input[0])
+        inp = find_initializer(onnx_model, n.input[0])
         if inp:
             replace_handlers[n.op_type](n, inp)
             replaced_nodes_map[n.output[0]] = n.input[0]
@@ -436,11 +380,11 @@ def determine_conv_tile_c(n):
     logger.debug('Determine tile size for Conv node %s', n.name)
 
     output_value_info = find_tensor_value_info(n.output[0])
-    filter_info = find_initializer(n.input[1])
+    filter_info = find_initializer(onnx_model, n.input[1])
     node_flags = n.flags.b.extra.conv
 
     is_separate_tiling = False
-    if not find_initializer(n.input[0]):
+    if not find_initializer(onnx_model, n.input[0]):
         input_node = find_node_by_output(n.input[0])
         if input_node and input_node.op_type == 'Concat':
             is_separate_tiling = True
@@ -499,7 +443,7 @@ def determine_gemm_tile_sizes(n):
     logger.debug('Determine tile size for Gemm node %s', n.name)
 
     A = find_tensor_value_info(n.input[0])
-    B = find_initializer(n.input[1])
+    B = find_initializer(onnx_model, n.input[1])
     A_shape = A.type.tensor_type.shape
     A_rows = A_shape.dim[0].dim_value
     A_cols = A_shape.dim[1].dim_value

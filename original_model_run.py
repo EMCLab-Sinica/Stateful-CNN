@@ -1,82 +1,50 @@
 import argparse
-import functools
-import os.path
 
 import numpy as np
 import onnx
 import onnxruntime.backend as backend
-import tensorflow as tf
-from tensorflow.keras import backend as K
 
-from utils import load_data_mnist, load_data_cifar10, load_data_google_speech, GOOGLE_SPEECH_SAMPLE_RATE, kws_dnn_model
+from configs import configs
+from utils import change_batch_size, find_tensor_value_info
 
-def onnxruntime_inference_one(model, images):
+def onnxruntime_inference(model, images):
     rep = backend.prepare(model)
-    return rep.run(images.astype(np.float32))
+    return rep.run(np.concatenate(images).astype(np.float32))
 
 def onnxruntime_get_intermediate_tensor(model, images):
-    # FIXME: only the last layer is returned for now.
-    # Any way to extract intermediate layers?
-    rep = backend.prepare(model)
-    output_name = model.graph.output[0].name
-    outputs = rep.run(images[0].astype(np.float32))
-    yield output_name, outputs
+    for idx, node in enumerate(model.graph.node):
+        # Creating a new model with a given node as the output
+        # XXX: Is there a faster way?
+        tmp_model = onnx.ModelProto()
+        tmp_model.CopyFrom(model)
+        new_output = find_tensor_value_info(model, node.output[0])
+        tmp_model.graph.output[0].CopyFrom(new_output)
+        onnx.checker.check_model(tmp_model)
 
-# Modified from https://stackoverflow.com/a/41712013/3786245
-def keras_get_intermediate_tensor(model, images):
-    for layer in model.layers:
-        output = layer.output
-        yield output.name, K.function([model.input], [output])(images)
-
-def keras_inference_one(model, images):
-    layer_outs = model(images)
-    # Tensorflow 2.x uses .numpy instead of .eval for eager execution
-    return layer_outs.numpy()[0]
-
-def tensorflow_inference_layer(decoded_wavs, idx):
-    with tf.compat.v1.Session() as sess:
-        op = sess.graph.get_operations()[idx]
-        tensor = sess.graph.get_tensor_by_name(op.outputs[0].name)
-        return sess.run(tensor, {
-            'decoded_sample_data:0': decoded_wavs[0],
-            'decoded_sample_data:1': GOOGLE_SPEECH_SAMPLE_RATE,
-        })
-
-def tensorflow_get_intermediate_tensor(graph_def, decoded_wavs):
-    for idx, node in enumerate(graph_def.node):
-        if node.op in ('Const', 'Identity', 'Placeholder'):
-            continue
-        tensor_name = node.name
-        tensor_values = tensorflow_inference_layer(decoded_wavs, idx)
-        yield tensor_name, tensor_values
-
-def tensorflow_inference_one(decoded_wav):
-    return tensorflow_inference_layer([decoded_wav], -1)[0]
+        rep = backend.prepare(tmp_model)
+        outputs = rep.run(images[0].astype(np.float32))
+        yield new_output.name, outputs
 
 def print_float(val):
     print('%13.6f' % val, end='')
 
 def print_tensor(tensor):
-    shape = tf.shape(tensor)
+    shape = np.shape(tensor)
     print(f'Original shape: {shape}')
-    dimensions = tf.shape(shape)[0]
+    dimensions = np.shape(shape)[0]
     if dimensions and shape[0] == 1:
         tensor = tensor[0]
         dimensions -= 1
         shape = shape[1:]
-    if dimensions and shape[-1] == 1:
-        tensor = np.squeeze(tensor, axis=-1)
-        dimensions -= 1
-        shape = shape[:-1]
     print(f'New shape: {shape}')
     if dimensions == 4:
-        N, H, W, C = shape
+        N, C, H, W = shape
         assert N == 1
         for c in range(C):
             print(f'Channel {c}')
             for h in range(H):
                 for w in range(W):
-                    print_float(tensor[0, h, w, c])
+                    print_float(tensor[0, c, h, w])
                 print()
             print()
     elif dimensions == 2:
@@ -99,52 +67,32 @@ def print_tensor(tensor):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('config', choices=['mnist', 'cifar10', 'kws'])
+    parser.add_argument('config', choices=configs.keys())
     parser.add_argument('--limit', type=int, default=0)
     args = parser.parse_args()
 
     if args.limit == 0:
         args.limit = None
 
-    if args.config == 'mnist':
-        # model is from https://github.com/onnx/models/tree/master/mnist
-        # https://github.com/onnx/onnx/blob/master/docs/PythonAPIOverview.md
-        model = onnx.load_model('./data/mnist-8.onnx')
-        onnx.checker.check_model(model)
+    config = configs[args.config]
 
-        get_intermediate_tensor = functools.partial(onnxruntime_get_intermediate_tensor, model)
-        inference_one = functools.partial(onnxruntime_inference_one, model)
-        model_data = load_data_mnist(start=0, limit=args.limit)
-    elif args.config == 'cifar10':
-        squeezenet_cifar10_path = './data/SqueezeNet_vs_CIFAR10/models'
-        with open(os.path.join(squeezenet_cifar10_path, 'squeeze_net.json')) as f:
-            model_json = f.read()
-        model = tf.keras.models.model_from_json(model_json)
-        model.load_weights(os.path.join(squeezenet_cifar10_path, 'squeeze_net.h5'))
+    # https://github.com/onnx/onnx/blob/master/docs/PythonAPIOverview.md
+    model = onnx.load_model(config['onnx_model'].replace('.onnx', '-opt.onnx'))
+    change_batch_size(model, 'N')
+    onnx.checker.check_model(model)
 
-        get_intermediate_tensor = functools.partial(keras_get_intermediate_tensor, model)
-        inference_one = functools.partial(keras_inference_one, model)
-        model_data = load_data_cifar10(start=0, limit=args.limit)
-    elif args.config == 'kws':
-        with open(kws_dnn_model(), 'rb') as f:
-            graph_def = tf.compat.v1.GraphDef()
-            graph_def.ParseFromString(f.read())
-            tf.import_graph_def(graph_def)
-
-        get_intermediate_tensor = functools.partial(tensorflow_get_intermediate_tensor, graph_def)
-        inference_one = tensorflow_inference_one
-        model_data = load_data_google_speech(start=0, limit=args.limit, for_onnx=False)
+    model_data = config['data_loader'](start=0, limit=args.limit)
 
     # Testing
     if args.limit == 1:
-        for layer_name, layer_out in get_intermediate_tensor(model_data.images):
+        for layer_name, layer_out in onnxruntime_get_intermediate_tensor(model, model_data.images):
             print(f'Layer: {layer_name}')
             print_tensor(layer_out)
     else:
         correct = 0
-        for idx, image in enumerate(model_data.images):
-            layer_outs = inference_one(image)
-            predicted = np.argmax(layer_outs)
+        layer_outs = onnxruntime_inference(model, model_data.images)[0]
+        for idx, layer_out in enumerate(layer_outs):
+            predicted = np.argmax(layer_out)
             if predicted == model_data.labels[idx]:
                 print(f'Correct at idx={idx}')
                 correct += 1

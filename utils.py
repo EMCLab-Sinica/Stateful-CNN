@@ -1,14 +1,17 @@
 import fcntl
+import itertools
 import logging
 import os.path
 import pathlib
 import pickle
 import re
+import struct
 import tarfile
-from typing import Callable, Dict, List, NamedTuple, Optional
+from typing import Callable, Dict, List, NamedTuple, Optional, Union
 from urllib.request import urlretrieve
 
 import numpy as np
+import onnx
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +21,6 @@ class ModelData(NamedTuple):
     input_mapping: Dict[str, str] = {}
 
 def load_data_mnist(start: int, limit: int) -> ModelData:
-    # XXX: implement start for MNIST
     images = []
     labels = []
 
@@ -28,6 +30,9 @@ def load_data_mnist(start: int, limit: int) -> ModelData:
     with open(filename) as f:
         counter = 0
         for line in f:
+            if start > 0:
+                start -= 1
+                continue
             mobj = re.match(r'\|labels ([\d ]+) \|features ([\d ]+)', line)
             if mobj is None:
                 raise ValueError
@@ -163,3 +168,73 @@ def download_file(url: str, filename: str, post_processor: Optional[Callable] = 
         lock_f.close()
 
     return ret
+
+def extract_data(params):
+    if params.data_type == onnx.TensorProto.FLOAT and params.float_data:
+        ret = params.float_data
+    elif params.data_type == onnx.TensorProto.INT64 and params.int64_data:
+        ret = params.int64_data
+
+    else:
+        format_char = {
+            onnx.TensorProto.FLOAT: 'f',
+            onnx.TensorProto.INT64: 'q',
+        }[params.data_type]
+        ret = list(map(lambda t: t[0], struct.iter_unpack(format_char, params.raw_data)))
+
+    # Undocumented (?) - empty dims means scalar
+    # https://github.com/onnx/onnx/issues/1131
+    if not len(params.dims):
+        assert len(ret) == 1
+        return ret[0]
+
+    return np.reshape(ret, params.dims)
+
+def find_initializer(onnx_model: onnx.ModelProto, name: str) -> Optional[onnx.TensorProto]:
+    for initializer in onnx_model.graph.initializer:
+        if initializer.name == name:
+            return initializer
+
+def find_tensor_value_info(onnx_model: onnx.ModelProto, name: str) -> onnx.ValueInfoProto:
+    if name.endswith('_before_merge'):
+        name = name[:-len('_before_merge')]
+    g = onnx_model.graph
+    for value_info in itertools.chain(g.value_info, g.input, g.output):
+        if value_info.name == name:
+            return value_info
+    raise ValueError(f'No value_info found for {name}')
+
+def change_batch_size(onnx_model: onnx.ModelProto, batch_size: Union[str, int]):
+    g = onnx_model.graph
+    initializer_names = set([initializer.name for initializer in g.initializer])
+    constant_names = set([node.output[0] for node in g.node if node.op_type == 'Constant'])
+    for value_info in itertools.chain(g.value_info, g.input, g.output):
+        if value_info.name in initializer_names or value_info.name in constant_names:
+            continue
+        shape = value_info.type.tensor_type.shape
+        if shape.dim:
+            if isinstance(batch_size, str):
+                shape.dim[0].dim_param = batch_size
+            else:
+                shape.dim[0].dim_value = batch_size
+
+    if isinstance(batch_size, str):
+        for node in g.node:
+            if node.op_type != 'Reshape':
+                continue
+            if find_initializer(onnx_model, node.input[0]):
+                continue
+            new_shape = find_initializer(onnx_model, node.input[1])
+            if not new_shape:
+                continue
+            new_shape_value = extract_data(new_shape)
+            new_shape_value[0] = 0
+            new_shape.CopyFrom(onnx.helper.make_tensor(
+                name=new_shape.name,
+                data_type=onnx.TensorProto.INT64,
+                dims=np.shape(new_shape_value),
+                vals=new_shape_value,
+            ))
+
+    # make sure above steps did not break the model
+    onnx.shape_inference.infer_shapes(onnx_model)
