@@ -19,7 +19,7 @@ import onnxoptimizer
 import numpy as np
 
 from configs import configs
-from utils import find_initializer
+from utils import extract_data, find_initializer
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -276,7 +276,24 @@ def replace_nodes():
             replace_handlers[n.op_type](n, inp)
             replaced_nodes_map[n.output[0]] = n.input[0]
 
+def transpose_gemm(onnx_model: onnx.ModelProto):
+    for node in onnx_model.graph.node:
+        if node.op_type != 'Gemm':
+            continue
+        transB = get_attr(node, 'transB')
+        B = find_initializer(onnx_model, node.input[1])
+        if transB != 1 or B is None:
+            continue
+        data = extract_data(B)
+        data = np.transpose(data)
+        B.CopyFrom(onnx.helper.make_tensor(B.name, B.data_type, (B.dims[1], B.dims[0]), np.concatenate(data)))
+        for idx, attr in enumerate(node.attribute):
+            if attr.name == 'transB':
+                del node.attribute[idx]
+                break
+
 replace_nodes()
+transpose_gemm(onnx_model)
 
 # Split Conv/Gemm into Conv/Gemm and ConvMerge/GemmMerge (for OFM scaling up and merge of OFMs from channel tiling)
 new_nodes = []
