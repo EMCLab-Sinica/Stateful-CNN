@@ -43,7 +43,6 @@ def load_data_mnist(start: int, limit: int) -> ModelData:
             # for data formats
             im = im / 256
             im = np.expand_dims(im, axis=0)
-            im = np.expand_dims(im, axis=0)
             images.append(im)
 
             counter += 1
@@ -77,14 +76,13 @@ def load_data_cifar10(start: int, limit: int) -> ModelData:
         im = np.reshape(im, (3, H, W))
         im = im / 256
         im = np.moveaxis(im, 0, -1)
-        im = np.expand_dims(im, 0)
         images.append(im)
     return ModelData(labels=labels, images=images)
 
 GOOGLE_SPEECH_URL = 'https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_test_set_v0.02.tar.gz'
 GOOGLE_SPEECH_SAMPLE_RATE = 16000
 
-def load_data_google_speech(start: int, limit: int, for_onnx=True) -> ModelData:
+def load_data_google_speech(start: int, limit: int) -> ModelData:
     import tensorflow as tf
     import torchaudio
 
@@ -108,27 +106,25 @@ def load_data_google_speech(start: int, limit: int, for_onnx=True) -> ModelData:
         labels.append(new_labels.index(label))
         if limit and idx == limit - 1:
             break
-    if for_onnx:
-        with open(kws_dnn_model(), 'rb') as f:
-            graph_def = tf.compat.v1.GraphDef()
-            graph_def.ParseFromString(f.read())
-            tf.import_graph_def(graph_def)
 
-        mfccs = []
-        with tf.compat.v1.Session() as sess:
-            mfcc_tensor = sess.graph.get_tensor_by_name('Mfcc:0')
-            for decoded_wav in decoded_wavs:
-                mfcc = sess.run(mfcc_tensor, {
-                    'decoded_sample_data:0': decoded_wav,
-                    'decoded_sample_data:1': GOOGLE_SPEECH_SAMPLE_RATE,
-                })
-                mfccs.append(np.expand_dims(mfcc, 0))
+    with open(kws_dnn_model(), 'rb') as f:
+        graph_def = tf.compat.v1.GraphDef()
+        graph_def.ParseFromString(f.read())
+        tf.import_graph_def(graph_def)
 
-        input_mapping = {'wav_data:0': 'Mfcc:0'}
+    mfccs = []
+    with tf.compat.v1.Session() as sess:
+        mfcc_tensor = sess.graph.get_tensor_by_name('Mfcc:0')
+        for decoded_wav in decoded_wavs:
+            mfcc = sess.run(mfcc_tensor, {
+                'decoded_sample_data:0': decoded_wav,
+                'decoded_sample_data:1': GOOGLE_SPEECH_SAMPLE_RATE,
+            })
+            mfccs.append(mfcc[0])
 
-        return ModelData(labels=labels, images=mfccs, input_mapping=input_mapping)
-    else:
-        return ModelData(labels=labels, images=decoded_wavs)
+    input_mapping = {'wav_data:0': 'Mfcc:0'}
+
+    return ModelData(labels=labels, images=mfccs, input_mapping=input_mapping)
 
 def kws_dnn_model():
     return download_file('https://github.com/ARM-software/ML-KWS-for-MCU/raw/master/Pretrained_models/DNN/DNN_S.pb', 'KWS-DNN_S.pb')

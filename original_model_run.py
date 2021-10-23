@@ -4,6 +4,7 @@ import numpy as np
 import onnx
 import onnxruntime
 import onnxruntime.backend as backend
+import onnxoptimizer
 
 from configs import configs
 from utils import change_batch_size, find_tensor_value_info
@@ -16,7 +17,7 @@ def onnxruntime_prepare_model(model):
 
 def onnxruntime_inference(model, images):
     rep = onnxruntime_prepare_model(model)
-    return rep.run(np.concatenate(images).astype(np.float32))
+    return rep.run(np.array(images).astype(np.float32))
 
 def onnxruntime_get_intermediate_tensor(model, images):
     for idx, node in enumerate(model.graph.node):
@@ -29,7 +30,7 @@ def onnxruntime_get_intermediate_tensor(model, images):
         onnx.checker.check_model(tmp_model)
 
         rep = onnxruntime_prepare_model(tmp_model)
-        outputs = rep.run(images[0].astype(np.float32))
+        outputs = rep.run(np.expand_dims(images[0], 0).astype(np.float32))
         yield new_output.name, outputs
 
 def print_float(val):
@@ -85,10 +86,25 @@ def main():
 
     # https://github.com/onnx/onnx/blob/master/docs/PythonAPIOverview.md
     model = onnx.load_model(config['onnx_model'].replace('.onnx', '-opt.onnx'))
+    model_data = config['data_loader'](start=0, limit=args.limit)
+
+    new_inputs = list(model_data.input_mapping.values())
+    for new_input in new_inputs:
+        model.graph.input.append(find_tensor_value_info(model, new_input))
+    for node in model.graph.node:
+        node.input[:] = [model_data.input_mapping.get(inp, inp) for inp in node.input]
+        node.output[:] = [
+            output + '_unused' if output in new_inputs else output
+            for output in node.output
+        ]
+    for idx, inp in enumerate(model.graph.input):
+        if inp.name in model_data.input_mapping.keys():
+            del model.graph.input[idx]
+
+    model = onnxoptimizer.optimize(model, ['eliminate_deadend'])
+
     change_batch_size(model, 'N')
     onnx.checker.check_model(model)
-
-    model_data = config['data_loader'](start=0, limit=args.limit)
 
     # Testing
     if args.limit == 1:

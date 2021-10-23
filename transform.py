@@ -623,17 +623,17 @@ model_parameters_info = outputs['model_parameters_info']
 for params in parameters:
     if params is None:  # input
         # Actual data for test samples are added last
-        _, input_channel, dimX, dimY = model_data.images[0].shape
+        dims = model_data.images[0].shape
         model_parameters_info.write(to_bytes(parameters_slot.offset, size=32))  # params_offset
-        model_parameters_info.write(to_bytes(input_channel* dimX * dimY * 2, size=32))  # A _q15 is 16-bit
+        model_parameters_info.write(to_bytes(np.prod(dims) * 2, size=32))  # A _q15 is 16-bit
         model_parameters_info.write(to_bytes(16, size=8))                # bitwidth
         model_parameters_info.write(to_bytes(Constants.SLOT_TEST_SET, size=8))     # slot
         model_parameters_info.write(to_bytes(0))                     # dummy
         # extend_dims
-        model_parameters_info.write(to_bytes(1))
-        model_parameters_info.write(to_bytes(input_channel))
-        model_parameters_info.write(to_bytes(dimX))
-        model_parameters_info.write(to_bytes(dimY))
+        for _ in range(4 - len(dims)):
+            model_parameters_info.write(to_bytes(1))
+        for dim in dims:
+            model_parameters_info.write(to_bytes(dim))
         model_parameters_info.write(to_bytes(config['input_scale']))     # scale
     else:
         assert len(params.dims) <= 4
@@ -710,10 +710,8 @@ for idx, n in enumerate(nodes):
 
 for idx, im in enumerate(model_data.images):
     # load_data returns NCHW
-    for idx_c in range(im.shape[1]):
-        for idx_h in range(im.shape[2]):
-            for idx_w in range(im.shape[3]):
-                outputs['samples'].write(to_bytes(_Q15(im[0, idx_c, idx_h, idx_w] / config['input_scale'])))
+    for pixel in np.nditer(im):
+        outputs['samples'].write(to_bytes(_Q15(pixel / config['input_scale'])))
     if args.write_images:
         import cv2
         os.makedirs('images', exist_ok=True)
