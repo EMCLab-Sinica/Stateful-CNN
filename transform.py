@@ -630,10 +630,11 @@ for params in parameters:
         model_parameters_info.write(to_bytes(Constants.SLOT_TEST_SET, size=8))     # slot
         model_parameters_info.write(to_bytes(0))                     # dummy
         # extend_dims
-        for _ in range(4 - len(dims)):
-            model_parameters_info.write(to_bytes(1))
+        model_parameters_info.write(to_bytes(1))
         for dim in dims:
             model_parameters_info.write(to_bytes(dim))
+        for _ in range(3 - len(dims)):
+            model_parameters_info.write(to_bytes(0))
         model_parameters_info.write(to_bytes(config['input_scale']))     # scale
     else:
         assert len(params.dims) <= 4
@@ -710,7 +711,7 @@ for idx, n in enumerate(nodes):
 
 for idx, im in enumerate(model_data.images):
     # load_data returns NCHW
-    for pixel in np.nditer(im):
+    for pixel in np.nditer(im, order='C'):  # the default order 'K' may not be NHWC if functions like moveaxis were used
         outputs['samples'].write(to_bytes(_Q15(pixel / config['input_scale'])))
     if args.write_images:
         import cv2
