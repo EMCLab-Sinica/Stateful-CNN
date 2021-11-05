@@ -20,7 +20,7 @@ def onnxruntime_inference(model, images):
     return rep.run(np.array(images).astype(np.float32))
 
 def onnxruntime_get_intermediate_tensor(model, images):
-    for idx, node in enumerate(model.graph.node):
+    for node in model.graph.node:
         # Creating a new model with a given node as the output
         # XXX: Is there a faster way?
         tmp_model = onnx.ModelProto()
@@ -31,7 +31,7 @@ def onnxruntime_get_intermediate_tensor(model, images):
 
         rep = onnxruntime_prepare_model(tmp_model)
         outputs = rep.run(np.expand_dims(images[0], 0).astype(np.float32))
-        yield new_output.name, outputs
+        yield new_output.name, node.op_type, outputs
 
 def print_float(val):
     print('%13.6f' % val, end='')
@@ -73,20 +73,10 @@ def print_tensor(tensor):
     else:
         print(f'Skip: unsupported {dimensions}-dimensional array')
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('config', choices=configs.keys())
-    parser.add_argument('--limit', type=int, default=0)
-    args = parser.parse_args()
-
-    if args.limit == 0:
-        args.limit = None
-
-    config = configs[args.config]
-
+def prepare_model_and_data(config, limit):
     # https://github.com/onnx/onnx/blob/master/docs/PythonAPIOverview.md
     model = onnx.load_model(config['onnx_model'].replace('.onnx', '-opt.onnx'))
-    model_data = config['data_loader'](start=0, limit=args.limit)
+    model_data = config['data_loader'](start=0, limit=limit)
 
     new_inputs = list(model_data.input_mapping.values())
     for new_input in new_inputs:
@@ -106,21 +96,62 @@ def main():
     change_batch_size(model, 'N')
     onnx.checker.check_model(model)
 
+    return model, model_data
+
+def run_model(model, model_data, limit, verbose=True):
     # Testing
-    if args.limit == 1:
-        for layer_name, layer_out in onnxruntime_get_intermediate_tensor(model, model_data.images):
-            print(f'Layer: {layer_name}')
-            print_tensor(layer_out)
+    if limit == 1:
+        last_layer_out = None
+        for layer_name, op_type, layer_out in onnxruntime_get_intermediate_tensor(model, model_data.images):
+            if verbose:
+                print(f'{op_type} layer: {layer_name}')
+                print_tensor(layer_out)
+            # Softmax is not implemented yet - return the layer before Softmax
+            if op_type != 'Softmax':
+                last_layer_out = layer_out
+        return last_layer_out
     else:
         correct = 0
         layer_outs = onnxruntime_inference(model, model_data.images)[0]
         for idx, layer_out in enumerate(layer_outs):
             predicted = np.argmax(layer_out)
             if predicted == model_data.labels[idx]:
-                print(f'Correct at idx={idx}')
+                if verbose:
+                    print(f'Correct at idx={idx}')
                 correct += 1
         total = len(model_data.labels)
-        print(f'correct={correct} total={total} rate={correct/total}')
+        accuracy = correct/total
+        if verbose:
+            print(f'correct={correct} total={total} rate={accuracy}')
+        return accuracy
+
+def compare_configs(config, model, model_data):
+    last_layer_out = run_model(model, model_data, limit=1, verbose=False)
+    recorded_last_layer_out = config['first_sample_outputs']
+    if not np.allclose(last_layer_out, recorded_last_layer_out):
+        raise Exception(f'Computed outputs are different! {last_layer_out} != {recorded_last_layer_out}')
+
+    accuracy = run_model(model, model_data, limit=None, verbose=False)
+    recorded_accuracy = config['fp32_accuracy']
+    if not np.isclose(accuracy, recorded_accuracy):
+        raise Exception(f'Computed accuracies are different! {accuracy} != {recorded_accuracy}')
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('config', choices=configs.keys())
+    parser.add_argument('--limit', type=int, default=0)
+    parser.add_argument('--compare-configs', action='store_true')
+    args = parser.parse_args()
+
+    if args.limit == 0:
+        args.limit = None
+
+    config = configs[args.config]
+    model, model_data = prepare_model_and_data(config, args.limit)
+    if args.compare_configs:
+        compare_configs(config, model, model_data)
+    else:
+        run_model(model, model_data, args.limit)
 
 if __name__ == '__main__':
     main()

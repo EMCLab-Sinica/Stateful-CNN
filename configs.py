@@ -19,7 +19,7 @@ configs = {
         'sample_size': 2 * 28 * 28,
         'op_filters': 4,
         'first_sample_outputs': [ -1.247997, 0.624493, 8.609308, 9.392411, -13.685033, -6.018567, -23.386677, 28.214134, -6.762523, 3.924627 ],
-        'fp32_accuracy': 0.9889,
+        'fp32_accuracy': 0.9890,
     },
     'cifar10': {
         'onnx_model': 'data/squeezenet_cifar10.onnx',
@@ -45,9 +45,7 @@ configs = {
         'sample_size': 2 * 25 * 10,  # MFCC gives 25x10 tensors
         'op_filters': 4,
         'first_sample_outputs': [ -29.228327, 5.429047, 22.146973, 3.142066, -10.448060, -9.513299, 15.832925, -4.655487, -14.588447, -1.577156, -5.864228, -6.609077 ],
-        # Much lower than reported on the paper due to mismatched window_size_ms/window_stride_ms (?)
-        # See: https://github.com/ARM-software/ML-KWS-for-MCU/issues/44
-        'fp32_accuracy': 0.6323,
+        'fp32_accuracy': 0.7983,
     },
 }
 
