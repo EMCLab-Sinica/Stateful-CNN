@@ -47,7 +47,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info,
                            first_unfinished_value_offset, model, output);
-    offset ^= 0x4000;
+    offset = -offset;
 #endif
 
 #endif
@@ -98,9 +98,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                             input_val = lea_buffer[idx];
 #if STATEFUL
                             // assuming input state bits are correct...
-                            if (get_value_state_bit(input_val)) {
-                                input_val -= 0x4000;
-                            }
+                            input_val -= get_value_state_bit(input_val)*0x4000;
 #endif
                             output_val = MAX_VAL(input_val, 0);
                         }
@@ -108,17 +106,16 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         output_idx++;
                     }
 #if STATEFUL
-                    if (offset) {
-                        uint8_t block_size;
-                        if (next_output_turning_point == INVALID_TURNING_POINT) {
-                            block_size = len;
-                        } else {
-                            block_size = MIN_VAL(len, next_output_turning_point - output_offset);
-                        }
-                        my_offset_q15_batched(lea_buffer, offset, lea_buffer, block_size);
-                    } else if (next_output_turning_point < output_offset + len) {
+                    uint8_t block_size;
+                    if (next_output_turning_point == INVALID_TURNING_POINT) {
+                        block_size = len;
+                    } else {
+                        block_size = MIN_VAL(len, next_output_turning_point - output_offset);
+                    }
+                    my_offset_q15_batched(lea_buffer, offset, lea_buffer, block_size);
+                    if (next_output_turning_point < output_offset + len) {
                         int16_t* to_offset = lea_buffer + next_output_turning_point - output_offset;
-                        my_offset_q15_batched(to_offset, 0x4000, to_offset, output_offset + len - next_output_turning_point);
+                        my_offset_q15_batched(to_offset, -offset, to_offset, output_offset + len - next_output_turning_point);
                     }
 #endif
                     my_memcpy_to_param(output, output_offset, lea_buffer, output_idx * sizeof(int16_t), 0);
@@ -156,9 +153,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                 int16_t input_val = get_q15_param(model, X, data_offset);
 #if INDIRECT_RECOVERY
 #if STATEFUL
-                if (get_value_state_bit(input_val)) {
-                    input_val -= 0x4000;
-                }
+                input_val -= get_value_state_bit(input_val)*0x4000;
 #endif
                 check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
 #endif

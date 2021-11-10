@@ -163,8 +163,7 @@ uint64_t get_nvm_writes(void) {
 }
 
 void my_erase() {
-    // initializing as 0xff to match the ext_fram library
-    memset(nvm, 0xff, NVM_SIZE);
+    memset(nvm, 0, NVM_SIZE);
 }
 
 void copy_samples_data(void) {

@@ -27,13 +27,16 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     output->params_len = output_len * upper_gauss(B->dims[0], flags->extra.gemm.tile_channel) * sizeof(int16_t);
 }
 
+struct GemmInputChunkHandlerParams {
+    int16_t* buffer;
+    uint16_t buffer_offset;
+};
+
 void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params) {
-    int16_t* buffer_a = reinterpret_cast<int16_t*>(_params);
+    GemmInputChunkHandlerParams* params = reinterpret_cast<GemmInputChunkHandlerParams*>(_params);
     my_printf_debug("GemmInputChunkHandler offset=%d real_chunk_len=%d state_bit=%d" NEWLINE, offset, real_chunk_len, state_bit);
-    if (state_bit) {
-        int16_t* to_offset = buffer_a + offset;
-        my_offset_q15_batched(to_offset, -0x4000, to_offset, real_chunk_len);
-    }
+    int16_t* to_offset = params->buffer + offset - params->buffer_offset;
+    my_offset_q15_batched(to_offset, -state_bit*0x4000, to_offset, real_chunk_len);
 }
 
 void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
@@ -66,7 +69,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
-    offset ^= 0x4000;
+    offset = -offset;
 #endif
 
 #if JAPARI
@@ -111,7 +114,8 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         }
 
 #if STATEFUL
-        iterate_chunks(model, A, i, tile_channels, GemmInputChunkHandler, buffer_a);
+        GemmInputChunkHandlerParams params{buffer_a, i};
+        iterate_chunks(model, A, i, tile_channels, GemmInputChunkHandler, &params);
 #endif
         buffer_a[tile_channels] = -0x8000;
         buffer_a[tile_channels + 1] = 0;
@@ -189,7 +193,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             MY_ASSERT(tile_width_first <= tile_width);
             my_offset_q15_batched(filter_ptr, -offset, filter_ptr, tile_width_first);
             if (tile_width_first != tile_width) {
-                my_offset_q15_batched(filter_ptr + tile_width_first, -(offset ^ 0x4000), filter_ptr + tile_width_first, tile_width - tile_width_first);
+                my_offset_q15_batched(filter_ptr + tile_width_first, offset, filter_ptr + tile_width_first, tile_width - tile_width_first);
             }
 #endif
 
@@ -248,9 +252,7 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
 #if STATEFUL
         // XXX: use LEA?
         for (uint16_t idx = 0; idx < output_len; idx++) {
-            if (get_value_state_bit(buffer_temp[idx])) {
-                buffer_temp[idx] -= 0x4000;
-            }
+            buffer_temp[idx] -= get_value_state_bit(buffer_temp[idx])*0x4000;
         }
 #endif
         my_add_q15(buffer_gemm, buffer_temp, buffer_gemm, output_len);

@@ -136,9 +136,7 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     if (BATCH_SIZE != 1) {
         for (uint8_t idx = 0; idx < buffer_len; idx++) {
             int16_t val = lea_buffer[idx];
-            if (get_value_state_bit(val)) {
-                lea_buffer[idx] = val - 0x4000;
-            }
+            lea_buffer[idx] = val - get_value_state_bit(val)*0x4000;
         }
     }
 #endif
@@ -282,7 +280,7 @@ static void check_feature_map_states(Model *model, const ParameterInfo* output, 
         int16_t val = get_q15_param(model, output, offset);
         uint8_t cur_state_bit = param_state_bit(model, output, offset);
         if (idx < first_unfinished_job_index) {
-            cur_state_bit ^= 1;
+            cur_state_bit = -cur_state_bit;
         }
         MY_ASSERT(get_value_state_bit(val) == cur_state_bit,
             "Value %d at job index %d (offset %" PRIu32 ") does not have expected state bit %d" NEWLINE, val, idx, offset, cur_state_bit);
@@ -352,7 +350,7 @@ void flip_state_bit(Model *model, const ParameterInfo *output) {
 
     dump_turning_points_debug(model, output);
 
-    cur_slot_info->state_bit ^= 1;
+    cur_slot_info->state_bit = -cur_slot_info->state_bit;
 
     // Use first_unfinished_job_index = 0 here as all values finished and the initial state bit is flipped above
     check_feature_map_states(model, output, 0, output->params_len / sizeof(int16_t), __func__);
@@ -380,7 +378,7 @@ uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offse
     }
     for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
         if (offset >= cur_slot_info->turning_points[idx]) {
-            ret = ret ^ 1;
+            ret = -ret;
         } else {
             break;
         }
@@ -510,7 +508,7 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
     uint32_t cur_end_job_index = end_job_index;
     uint32_t first_unfinished_job_index = 0;
 
-    my_printf_debug("new_output_state_bit for first value = %d" NEWLINE, param_state_bit(model, output, 0) ^ 1);
+    my_printf_debug("new_output_state_bit for first value = %d" NEWLINE, -param_state_bit(model, output, 0));
     dump_turning_points_debug(model, output);
 
     while (1) {

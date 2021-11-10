@@ -124,7 +124,7 @@ uint64_t get_nvm_writes(void) {
 }
 
 void my_erase() {
-    eraseFRAM();
+    eraseFRAM2(0x00);
 }
 
 void copy_samples_data(void) {

@@ -42,9 +42,7 @@ void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_
     int16_t* buffer = reinterpret_cast<int16_t*>(_params);
     int16_t* to_offset = buffer + offset;
 #if STATEFUL
-    if (!state_bit) {
-        my_offset_q15_batched(to_offset, 0x4000, to_offset, real_chunk_len);
-    }
+    my_offset_q15_batched(to_offset, -state_bit*0x4000, to_offset, real_chunk_len);
 #endif
 #if JAPARI
     for (uint16_t idx = BATCH_SIZE; idx < real_chunk_len; idx += BATCH_SIZE + 1) {
@@ -77,8 +75,7 @@ void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t
 #if !STATEFUL
     uint16_t bound = 32768;
 #else
-    // For stateful CNN, values should not reach 8192, or get_value_state_bit() is confused
-    uint16_t bound = 8191;
+    uint16_t bound = 16383;
 #endif
     int16_t max_val, min_val;
     // Apparently TI's compiler does not handle multiplication between
@@ -90,18 +87,16 @@ void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t
     if (!params->buffer) {
         my_memcpy_from_param(params->model, lea_buffer, params->param, offset, real_chunk_len * sizeof(int16_t));
         cur_buffer = lea_buffer;
+#if STATEFUL
+        for (uint16_t idx = 0; idx < real_chunk_len; idx++) {
+            int16_t val = cur_buffer[idx];
+            cur_buffer[idx] = val - get_value_state_bit(val)*0x4000;
+        }
+#endif
     } else {
         cur_buffer = params->buffer + offset;
     }
 
-#if STATEFUL
-    for (uint16_t idx = 0; idx < real_chunk_len; idx++) {
-        int16_t val = cur_buffer[idx];
-        if (get_value_state_bit(val)) {
-            cur_buffer[idx] = val - 0x4000;
-        }
-    }
-#endif
 
     dump_matrix_debug(cur_buffer, real_chunk_len, ValueInfo(params->param));
 
@@ -185,7 +180,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
             turning_point_found = 1;
             break;
         }
-        state_bit ^= 1;
+        state_bit = -state_bit;
     }
     if (!turning_point_found) {
         // no turning points not after start_offset found
@@ -211,7 +206,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
         chunk_handler(offset, cur_chunk_len, state_bit, params);
 #if INDIRECT_RECOVERY
         if (next_state_flipped) {
-            state_bit ^= 1;
+            state_bit = -state_bit;
         }
 #endif
     }
@@ -220,7 +215,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 #if INDIRECT_RECOVERY
 void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, uint16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param) {
     my_printf_debug("Initialize next_turning_point from output offset %d" NEWLINE, initial_value_idx);
-    *p_offset = get_state_bit(model, param->slot) ? 0x4000 : 0;
+    *p_offset = get_state_bit(model, param->slot)*0x4000;
     *p_turning_point_idx = 0;
     *p_next_turning_point = INVALID_TURNING_POINT;
     *p_slot_info = get_slot_info(model, param->slot);
@@ -235,7 +230,7 @@ void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, uin
             next_turning_point_found = 1;
             break;
         }
-        *p_offset ^= 0x4000;
+        *p_offset = -*p_offset;
     }
     if (!next_turning_point_found) {
         *p_next_turning_point = INVALID_TURNING_POINT;
@@ -244,7 +239,7 @@ void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, uin
 }
 
 void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_idx, uint16_t* p_next_turning_point, SlotInfo* slot_info, uint16_t value_idx) {
-    *p_offset ^= 0x4000;
+    *p_offset = -*p_offset;
     uint8_t next_turning_point_found = 0;
     while (*p_turning_point_idx < slot_info->n_turning_points) {
         *p_next_turning_point = slot_info->turning_points[*p_turning_point_idx];
@@ -253,7 +248,7 @@ void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_
             next_turning_point_found = 1;
             break;
         }
-        *p_offset ^= 0x4000;
+        *p_offset = -*p_offset;
     }
     if (!next_turning_point_found) {
         *p_next_turning_point = -1;
@@ -285,18 +280,8 @@ void make_buffer_aligned(int16_t** p_buffer) {
 
 float q15_to_float(int16_t val, const ValueInfo& val_info, uint8_t* p_use_prefix) {
 #if STATEFUL
-    if (val != -0x8000) {
-        if (val < -0x2000) {
-            // happens in the last value of each filter column (state embedding)
-            val += 0x4000;
-            MY_ASSERT(p_use_prefix != nullptr);
-            *p_use_prefix = 1;
-        }
-        if (get_value_state_bit(val)) {
-            // 2^15
-            val -= 0x4000;
-        }
-    }
+    // XXX: handle values without states (ex: inputs)
+    val -= get_value_state_bit(val)*0x4000;
 #endif
     return val_info.scale * static_cast<int32_t>(val) / 32768.0;
 }

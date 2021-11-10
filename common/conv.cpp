@@ -1,5 +1,6 @@
 #include <inttypes.h> // for PRId32
 #include "cnn_common.h"
+#include "data.h"
 #include "my_debug.h"
 #include "op_utils.h"
 #include "intermittent-cnn.h"
@@ -88,7 +89,6 @@ int16_t * const matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
 #if INDIRECT_RECOVERY
 static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filters, uint16_t len, uint8_t first_round) {
     MY_ASSERT(len < OUTPUT_LEN);
-    my_printf_debug("Flipping %d state bits in filters" NEWLINE, len);
 #if STATEFUL
     int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + n_filters * conv_params->filter_offset;
     if (first_round) {
@@ -97,7 +97,9 @@ static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filte
         to_flip_state_bits -= n_filters;
     }
     // need negating filter value here as it will be multiplied with _Q15(-1.0), or -32768
-    int16_t offset = get_value_state_bit(-*(to_flip_state_bits + BATCH_SIZE - 1)) ? 0x4000 : -0x4000;
+    int16_t offset = get_value_state_bit(-*(to_flip_state_bits + BATCH_SIZE - 1))*0x4000;
+    my_printf_debug("Flipping %d state bits in filters; first_round=%d, offset=%d" NEWLINE, len, first_round, offset);
+    my_offset_q15_batched(to_flip_state_bits, offset, to_flip_state_bits, len);
     my_offset_q15_batched(to_flip_state_bits, offset, to_flip_state_bits, len);
 #endif
 #if JAPARI
@@ -183,10 +185,9 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 }
             }
 #if STATEFUL
-            if (((!conv_params->old_output_offset && idx < n_keep_state_bits) || (conv_params->old_output_offset && idx >= n_keep_state_bits)) &&
-                    ((BATCH_SIZE == 1 || ((cur_output_data_offset + idx) % BATCH_SIZE == BATCH_SIZE - 1)))) {
+            if (BATCH_SIZE == 1 || ((cur_output_data_offset + idx) % BATCH_SIZE == BATCH_SIZE - 1)) {
                 my_printf_debug("Adding state bit for newly loaded filter idx=%d" NEWLINE, idx);
-                filter_tmp[conv_params->filter_offset - 1] = -0x4000;
+                filter_tmp[conv_params->filter_offset - 1] = -(idx < n_keep_state_bits ? -conv_params->old_output_offset : conv_params->old_output_offset);
             } else
 #endif
             {
@@ -441,6 +442,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         }
 
 #if STATEFUL
+        if (conv_params->real_conv_input->slot != SLOT_TEST_SET) {
         // stripping states inside the h loop is faster as biases multipliers can be skipped
         int16_t *input_row_end = orig_dest_addr + input_row_len;
         uint8_t start_state = get_value_state_bit(*(orig_dest_addr + BATCH_SIZE - 1));
@@ -448,17 +450,14 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         if (conv_params->flags->extra.conv.input_tile_c >= BATCH_SIZE && start_state == get_value_state_bit(*(input_row_end - 1))) {
             // XXX: a heuristic - assume there is at most one turning points in a row
             my_printf_debug("Using my_offset_q15 for stripping state bits" NEWLINE);
-            if (start_state) {
-                my_offset_q15_batched(orig_dest_addr, -0x4000, orig_dest_addr, input_row_len);
-            }
+            my_offset_q15_batched(orig_dest_addr, -start_state*0x4000, orig_dest_addr, input_row_len);
         } else {
             my_printf_debug("Using a loop for stripping state bits" NEWLINE);
             for (int16_t *dest_ptr = orig_dest_addr; dest_ptr < input_row_end; dest_ptr++) {
                 int16_t val = *dest_ptr;
-                if (get_value_state_bit(val)) {
-                    *dest_ptr = val - 0x4000;
-                }
+                *dest_ptr = val - get_value_state_bit(val)*0x4000;
             }
+        }
         }
 #endif
         dest += conv_params->dest_offset;
@@ -470,13 +469,6 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         float_to_scale_params(&scaleFract, &shift, 1.0f * conv_params->real_conv_input->scale / conv_params->conv_input->scale);
         my_scale_q15(lea_buffer, scaleFract, shift, lea_buffer, inputs_len);
     }
-#if STATEFUL && MY_DEBUG >= 1
-    int16_t *ptr = lea_buffer;
-    for (size_t idx = 0; idx < inputs_len; idx++) {
-        MY_ASSERT(!get_value_state_bit(*ptr), "Input index %d has value with unexpected state: %d" NEWLINE, idx, *ptr);
-        ptr++;
-    }
-#endif
     uint16_t bias_multipler_offset = conv_params->dest_offset - 1;
     while (bias_multipler_offset < inputs_len) {
         lea_buffer[bias_multipler_offset] = -0x8000; // _Q15(-1.0)
@@ -749,9 +741,7 @@ void ConvMergeInputChunkHandler(uint32_t range_offset, uint16_t range_len, uint8
     ConvMergeInputChunkHandlerParams* params = reinterpret_cast<ConvMergeInputChunkHandlerParams*>(_params);
     my_printf_debug("input range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
     int16_t *to_offset = params->to_add + range_offset - params->data_offset;
-    if (state_bit) {
-        my_offset_q15_batched(to_offset, -0x4000, to_offset, range_len);
-    }
+    my_offset_q15_batched(to_offset, -state_bit*0x4000, to_offset, range_len);
 }
 #endif
 
@@ -861,11 +851,10 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 #if INDIRECT_RECOVERY
 
 #if STATEFUL
-        if (!old_output_offset) {
-            my_offset_q15_batched(lea_buffer, 0x4000, lea_buffer, MIN_VAL(next_output_turning_point - tiling_results_offset, real_chunk_len));
-        } else if (next_output_turning_point < tiling_results_offset + real_chunk_len) {
+        my_offset_q15_batched(lea_buffer, -old_output_offset, lea_buffer, MIN_VAL(next_output_turning_point - tiling_results_offset, real_chunk_len));
+        if (next_output_turning_point < tiling_results_offset + real_chunk_len) {
             int16_t* to_offset = lea_buffer + next_output_turning_point - tiling_results_offset;
-            my_offset_q15_batched(to_offset, 0x4000, to_offset, real_chunk_len - (next_output_turning_point - tiling_results_offset));
+            my_offset_q15_batched(to_offset, old_output_offset, to_offset, real_chunk_len - (next_output_turning_point - tiling_results_offset));
         }
         check_next_turning_point(old_output_offset, output_turning_point_idx,
                                  next_output_turning_point, cur_output_slot_info, tiling_results_offset + real_chunk_len);

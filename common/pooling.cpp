@@ -85,10 +85,8 @@ static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
 #endif
                 int16_t val = input_buffer[input_channel_offset];
 #if STATEFUL
-                if (get_value_state_bit(val)) {
-                    // assuming input state bits are correct...
-                    val -= 0x4000;
-                }
+                // assuming input state bits are correct...
+                val -= get_value_state_bit(val)*0x4000;
 #endif
                 // dump_value_debug(model, maxpool_params->data, val_offset);
                 my_printf_debug("% 6d ", val);
@@ -109,7 +107,7 @@ static inline void offset_vector(int16_t* const buffer, int16_t offset, uint8_t 
     int16_t cur_offset = offset;
     for (uint8_t idx = BATCH_SIZE - 1; idx < len; idx += BATCH_SIZE) {
         if (output_offset + idx == next_output_turning_point + BATCH_SIZE - 1) {
-            cur_offset ^= 0x4000;
+            cur_offset = -cur_offset;
         }
         buffer[idx] += cur_offset;
     }
@@ -169,7 +167,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
-    offset ^= 0x4000;
+    offset = -offset;
 #endif
 
     output_offset = first_unfinished_value_offset;
@@ -337,7 +335,7 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, 0 /*TODO: first_unfinished_value_offset*/, model, output);
-    offset ^= 0x4000;
+    offset = -offset;
 #endif
 
     uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
@@ -357,9 +355,7 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
                     // Input is from Conv, which uses NHWC
                     int16_t val = get_q15_param(model, data, h * W * CHANNEL + w * CHANNEL + input_channel);
 #if STATEFUL
-                    if (get_value_state_bit(val)) {
-                        val -= 0x4000;
-                    }
+                    val -= get_value_state_bit(val)*0x4000;
 #endif
                     total += val;
                 }
