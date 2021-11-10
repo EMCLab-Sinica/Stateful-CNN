@@ -88,7 +88,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         int16_t input_val = 0, output_val;
 #if JAPARI
                         if ((c + idx) % (BATCH_SIZE + 1) == BATCH_SIZE) {
-                            output_val = (offset ? 1 : -1);
+                            output_val = (offset > 0? 1 : -1);
                             if (next_output_turning_point != INVALID_TURNING_POINT && (output_offset + idx >= next_output_turning_point)) {
                                 output_val = -output_val;
                             }
@@ -146,7 +146,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if JAPARI
             if (cur_batch_offset == BATCH_SIZE) {
                 cur_batch_offset -= BATCH_SIZE + 1;
-                output_val = (offset ? 1 : -1);
+                output_val = (offset > 0? 1 : -1);
             } else
 #endif
             {

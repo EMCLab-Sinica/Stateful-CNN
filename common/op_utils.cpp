@@ -38,7 +38,7 @@ int16_t upper_gauss(int16_t a, int16_t b) {
 }
 
 #if INDIRECT_RECOVERY
-void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params) {
+void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, int8_t state_bit, void* _params) {
     int16_t* buffer = reinterpret_cast<int16_t*>(_params);
     int16_t* to_offset = buffer + offset;
 #if STATEFUL
@@ -46,7 +46,7 @@ void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_
 #endif
 #if JAPARI
     for (uint16_t idx = BATCH_SIZE; idx < real_chunk_len; idx += BATCH_SIZE + 1) {
-        to_offset[idx] = (state_bit ? -1 : 1);
+        to_offset[idx] = -state_bit;
     }
 #endif
 }
@@ -70,7 +70,7 @@ static inline void reduce_max_multiplier(uint16_t* max_multiplier) {
     }
 }
 
-void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params) {
+void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, int8_t state_bit, void* _params) {
     MaxMultiplierChunkHandlerParams* params = reinterpret_cast<MaxMultiplierChunkHandlerParams*>(_params);
 #if !STATEFUL
     uint16_t bound = 32768;

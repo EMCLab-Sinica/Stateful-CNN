@@ -83,7 +83,7 @@ static_assert(sizeof(ParameterInfo) == 28, "Unexpected size for ParameterInfo");
 
 typedef struct SlotInfo {
 #if INDIRECT_RECOVERY
-    uint8_t state_bit;
+    int8_t state_bit;
     uint8_t n_turning_points;
     uint16_t turning_points[TURNING_POINTS_LEN];
 #endif

@@ -278,7 +278,7 @@ static void check_feature_map_states(Model *model, const ParameterInfo* output, 
             break;
         }
         int16_t val = get_q15_param(model, output, offset);
-        uint8_t cur_state_bit = param_state_bit(model, output, offset);
+        int8_t cur_state_bit = param_state_bit(model, output, offset);
         if (idx < first_unfinished_job_index) {
             cur_state_bit = -cur_state_bit;
         }
@@ -360,7 +360,7 @@ void flip_state_bit(Model *model, const ParameterInfo *output) {
 
 #if INDIRECT_RECOVERY
 
-uint8_t get_state_bit(Model *model, uint8_t slot_id) {
+int8_t get_state_bit(Model *model, uint8_t slot_id) {
     switch (slot_id) {
         case SLOT_PARAMETERS:
         case SLOT_TEST_SET:
@@ -370,8 +370,8 @@ uint8_t get_state_bit(Model *model, uint8_t slot_id) {
     }
 }
 
-uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offset) {
-    uint8_t ret = get_state_bit(model, param->slot);
+int8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offset) {
+    int8_t ret = get_state_bit(model, param->slot);
     SlotInfo *cur_slot_info = get_slot_info(model, param->slot);
     if (!cur_slot_info) {
         return 0;
@@ -399,7 +399,7 @@ uint32_t run_recovery(Model* model, ParameterInfo*) {
 static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_t job_index) {
     uint32_t offset = job_index_to_offset(output, job_index);
     int16_t val = get_q15_param(model, output, offset);
-    int16_t expected_footprint = (param_state_bit(model, output, offset) ? -1 : 1);
+    int16_t expected_footprint = -param_state_bit(model, output, offset);
     check_footprint(val);
     uint8_t ret = (val == expected_footprint);
     my_printf_debug("Footprint %d (expected %d) at job index %d (offset %" PRIu32 ") indicates %s" NEWLINE, val, expected_footprint, job_index, offset, ret ? "finished" : "unfinished");

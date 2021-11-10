@@ -12,9 +12,9 @@ uint8_t run_cnn_tests(uint16_t n_samples);
 
 uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index);
 
-uint8_t get_state_bit(struct Model *model, uint8_t slot_id);
+int8_t get_state_bit(struct Model *model, uint8_t slot_id);
 #if STATEFUL
-static inline uint8_t get_value_state_bit(int16_t val) {
+static inline int8_t get_value_state_bit(int16_t val) {
     return (val >= 0) ? 1 : -1;
 }
 #endif
@@ -25,15 +25,15 @@ static inline void check_footprint(int16_t val) {
               "%d is not a valid footprint" NEWLINE, val);
 }
 
-static inline uint8_t get_value_state_bit(int16_t val) {
+static inline int8_t get_value_state_bit(int16_t val) {
     check_footprint(val);
     // 255 (0xff, 0x00 on little-endian systems) happens when the first byte of -1 (0xff, 0xff) is
     // written over 1 (0x01, 0x00), and it should be considered as -1 not completely written. In
     // other words, the state is still 1.
-    return (val > 0);
+    return (val >= 0) ? 1 : -1;
 }
 #endif
-uint8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offset);
+int8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offset);
 
 uint32_t run_recovery(struct Model *model, struct ParameterInfo *output);
 void flip_state_bit(struct Model *model, const ParameterInfo *output);

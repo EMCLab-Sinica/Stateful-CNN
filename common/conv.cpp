@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <inttypes.h> // for PRId32
 #include "cnn_common.h"
 #include "data.h"
@@ -216,9 +217,9 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
         int16_t* footprint_channels_ptr = conv_params->filter_buffer_addr + n_filters * (conv_params->filter_offset - 1);
         for (int16_t idx = BATCH_SIZE; idx < n_filters; idx += BATCH_SIZE + 1) {
             if (idx < n_keep_state_bits) {
-                *(footprint_channels_ptr + idx) = (conv_params->old_output_offset ? 1 : -1);
+                *(footprint_channels_ptr + idx) = (conv_params->old_output_offset > 0 ? 1 : -1);
             } else {
-                *(footprint_channels_ptr + idx) = (conv_params->old_output_offset ? -1 : 1);
+                *(footprint_channels_ptr + idx) = (conv_params->old_output_offset > 0 ? -1 : 1);
             }
         }
 #endif
@@ -750,13 +751,13 @@ struct ConvMergeOutputChunkHandlerParams {
     uint32_t tiling_results_offset;
 };
 
-void ConvMergeOutputChunkHandler(uint32_t range_offset, uint16_t range_len, uint8_t state_bit, void* _params) {
+void ConvMergeOutputChunkHandler(uint32_t range_offset, uint16_t range_len, int8_t state_bit, void* _params) {
     ConvMergeOutputChunkHandlerParams* params = reinterpret_cast<ConvMergeOutputChunkHandlerParams*>(_params);
     my_printf_debug("output range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
     int16_t *to_offset = lea_buffer + range_offset - params->tiling_results_offset;
     uint16_t n_footprints = (range_len + BATCH_SIZE) / (BATCH_SIZE + 1);
     int16_t* footprint_buffer = lea_buffer + (LEA_BUFFER_SIZE - n_footprints) / 2 * 2;
-    my_fill_q15((state_bit ? -1 : 1), footprint_buffer, n_footprints);
+    my_fill_q15(-state_bit, footprint_buffer, n_footprints);
     my_interleave_q15(footprint_buffer, BATCH_SIZE - (range_offset % (BATCH_SIZE + 1)), BATCH_SIZE + 1, to_offset, n_footprints);
 }
 #endif
