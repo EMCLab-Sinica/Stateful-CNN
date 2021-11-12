@@ -134,7 +134,7 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
 
 #if STATEFUL
     if (BATCH_SIZE != 1) {
-        for (uint8_t idx = 0; idx < buffer_len; idx++) {
+        for (uint8_t idx = BATCH_SIZE - 1; idx < buffer_len; idx += BATCH_SIZE) {
             int16_t val = lea_buffer[idx];
             lea_buffer[idx] = val - get_value_state_bit(val)*0x4000;
         }
@@ -145,12 +145,12 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
         for (uint8_t buffer_idx = 0, ofm_idx = 0; buffer_idx < buffer_len; buffer_idx++) {
             int16_t got_q15 = lea_buffer[buffer_idx];
 #if JAPARI
-            if (buffer_idx % (BATCH_SIZE + 1) == BATCH_SIZE) {
+            if (offset_has_state(buffer_idx)) {
                 check_footprint(got_q15);
             } else
 #endif
             {
-                float got_real = q15_to_float(got_q15, ValueInfo(output_node));
+                float got_real = q15_to_float(got_q15, ValueInfo(output_node), nullptr, false);
                 float expected = first_sample_outputs[ofm_idx];
                 float error = fabs((got_real - expected) / expected);
                 // Errors in CIFAR-10/Stateful are quite large...
@@ -284,13 +284,6 @@ static void check_feature_map_states(Model *model, const ParameterInfo* output, 
         }
         MY_ASSERT(get_value_state_bit(val) == cur_state_bit,
             "Value %d at job index %d (offset %" PRIu32 ") does not have expected state bit %d" NEWLINE, val, idx, offset, cur_state_bit);
-#if STATEFUL
-        for (uint8_t val_idx = 1; val_idx < BATCH_SIZE; val_idx++) {
-            val = get_q15_param(model, output, offset - val_idx);
-            MY_ASSERT(get_value_state_bit(val) == 0,
-                      "Value %d at offset %" PRIu32 " does not have expected state bit 0" NEWLINE, val, offset - val_idx);
-        }
-#endif
     }
 #endif
 }
@@ -512,11 +505,6 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
     dump_turning_points_debug(model, output);
 
     while (1) {
-#if 0
-        uint32_t cur_begin_offset = job_index_to_offset(output, cur_begin_job_index),
-                 cur_end_offset = job_index_to_offset(output, cur_end_job_index);
-        dump_matrix_debug(model, output, cur_begin_offset, cur_end_offset - cur_begin_offset, ValueInfo(output));
-#endif
         if (cur_end_job_index - cur_begin_job_index <= 1) {
             if (!value_finished(model, output, cur_begin_job_index)) {
                 first_unfinished_job_index = 0;

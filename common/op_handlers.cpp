@@ -87,7 +87,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     for (uint16_t idx = 0; idx < len; idx++) {
                         int16_t input_val = 0, output_val;
 #if JAPARI
-                        if ((c + idx) % (BATCH_SIZE + 1) == BATCH_SIZE) {
+                        if (offset_has_state(c + idx)) {
                             output_val = (offset > 0? 1 : -1);
                             if (next_output_turning_point != INVALID_TURNING_POINT && (output_offset + idx >= next_output_turning_point)) {
                                 output_val = -output_val;
@@ -97,8 +97,10 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         {
                             input_val = lea_buffer[idx];
 #if STATEFUL
-                            // assuming input state bits are correct...
-                            input_val -= get_value_state_bit(input_val)*0x4000;
+                            if (offset_has_state(c + idx)) {
+                                // assuming input state bits are correct...
+                                input_val -= get_value_state_bit(input_val)*0x4000;
+                            }
 #endif
                             output_val = MAX_VAL(input_val, 0);
                         }

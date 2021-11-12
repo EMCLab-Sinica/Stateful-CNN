@@ -32,7 +32,7 @@ struct GemmInputChunkHandlerParams {
     uint16_t buffer_offset;
 };
 
-void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, uint8_t state_bit, void* _params) {
+void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, int8_t state_bit, void* _params) {
     GemmInputChunkHandlerParams* params = reinterpret_cast<GemmInputChunkHandlerParams*>(_params);
     my_printf_debug("GemmInputChunkHandler offset=%d real_chunk_len=%d state_bit=%d" NEWLINE, offset, real_chunk_len, state_bit);
     int16_t* to_offset = params->buffer + offset - params->buffer_offset;
@@ -121,7 +121,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         buffer_a[tile_channels + 1] = 0;
 
         my_printf_debug("Tile for A" NEWLINE);
-        dump_matrix2_debug(buffer_a, 1, extended_tile_channels, ValueInfo(A, model));
+        dump_matrix_debug(buffer_a, 1, extended_tile_channels, ValueInfo(A, model));
 
         int16_t output_offset = tile * output_len + j_with_footprints;
 
@@ -198,7 +198,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
             my_printf_debug("Tile for B" NEWLINE);
-            dump_matrix2_debug(buffer_b, extended_tile_channels, full_tile_width, ValueInfo(B, model));
+            dump_matrix_debug(buffer_b, extended_tile_channels, full_tile_width, ValueInfo(B, model));
 
             my_matrix_mpy_q15(1, extended_tile_channels, extended_tile_channels, full_tile_width, buffer_a, buffer_b, buffer_temp,
                               output, output_offset, values_to_preserve);
@@ -251,7 +251,7 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
         my_memcpy_from_param(model, buffer_temp, input[0], tile * output_len, output_len * sizeof(int16_t));
 #if STATEFUL
         // XXX: use LEA?
-        for (uint16_t idx = 0; idx < output_len; idx++) {
+        for (uint16_t idx = BATCH_SIZE - 1; idx < output_len; idx += BATCH_SIZE) {
             buffer_temp[idx] -= get_value_state_bit(buffer_temp[idx])*0x4000;
         }
 #endif

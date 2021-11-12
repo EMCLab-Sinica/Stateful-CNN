@@ -76,7 +76,7 @@ static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
             output_channel_offset = 0;
             for (uint8_t input_channel_offset = 0; input_channel_offset < maxpool_params->n_channels; input_channel_offset++) {
 #if JAPARI
-                if ((maxpool_params->start_channel + input_channel_offset) % (BATCH_SIZE + 1) == BATCH_SIZE) {
+                if (offset_has_state(maxpool_params->start_channel + input_channel_offset)) {
                     // not checking need_nhwc2nchw here - if that is true, input footprint channels should already be skipped
                     // before maxpool_patch is called
                     output_channel_offset++;
@@ -86,7 +86,9 @@ static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
                 int16_t val = input_buffer[input_channel_offset];
 #if STATEFUL
                 // assuming input state bits are correct...
-                val -= get_value_state_bit(val)*0x4000;
+                if (offset_has_state(maxpool_params->start_channel + input_channel_offset)) {
+                    val -= get_value_state_bit(val)*0x4000;
+                }
 #endif
                 // dump_value_debug(model, maxpool_params->data, val_offset);
                 my_printf_debug("% 6d ", val);
@@ -241,7 +243,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
             uint8_t channel_stride = 1;
             for (; c < CHANNEL; c += channel_stride) {
 #if JAPARI
-                if (c % (BATCH_SIZE + 1) == BATCH_SIZE) {
+                if (offset_has_state(c)) {
                     continue;
                 }
 #endif
@@ -254,7 +256,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 #endif
                     for (; output_w < maxpool_params->new_W; output_w++) {
 #if JAPARI
-                        if (output_offset % (BATCH_SIZE + 1) == BATCH_SIZE) {
+                        if (offset_has_state(output_offset)) {
                             check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
                             put_q15_param(output, output_offset, (offset == 0x4000 ? 1 : -1));
                             output_offset++;
@@ -280,7 +282,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                         my_printf_debug("max=% 6d " NEWLINE, lea_buffer[0]);
                         put_q15_param(output, output_offset, lea_buffer[0]);
 #if HAWAII
-                        if (output_offset % BATCH_SIZE == (BATCH_SIZE - 1)) {
+                        if (offset_has_state(output_offset)) {
                             write_hawaii_layer_footprint(model->layer_idx, BATCH_SIZE);
                         }
 #endif
@@ -344,8 +346,8 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
     for (uint16_t input_channel = 0; input_channel < CHANNEL; input_channel++) {
         int16_t output_val;
 #if JAPARI
-        if (input_channel % (BATCH_SIZE + 1) == BATCH_SIZE) {
-            output_val = (param_state_bit(model, output, output_channel) ? -1 : 1);
+        if (offset_has_state(input_channel)) {
+            output_val = -param_state_bit(model, output, output_channel);
         } else
 #endif
         {
@@ -355,7 +357,9 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
                     // Input is from Conv, which uses NHWC
                     int16_t val = get_q15_param(model, data, h * W * CHANNEL + w * CHANNEL + input_channel);
 #if STATEFUL
-                    val -= get_value_state_bit(val)*0x4000;
+                    if (offset_has_state(input_channel)) {
+                        val -= get_value_state_bit(val)*0x4000;
+                    }
 #endif
                     total += val;
                 }

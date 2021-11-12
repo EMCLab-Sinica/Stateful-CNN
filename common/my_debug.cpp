@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <cstring>
 #include <inttypes.h> // for PRId64
 #include <cstdint>
@@ -17,19 +18,19 @@ ValueInfo::ValueInfo(const ParameterInfo *cur_param, Model *model) {
     this->scale = cur_param->scale;
 }
 
-static void print_q15(int16_t val, const ValueInfo& val_info) {
+static void print_q15(int16_t val, const ValueInfo& val_info, bool has_state) {
     if (dump_integer) {
         my_printf("% 6d ", val);
     } else {
         uint8_t use_prefix = 0;
-        float real_value = q15_to_float(val, val_info, &use_prefix);
+        float real_value = q15_to_float(val, val_info, &use_prefix, has_state);
         my_printf(use_prefix ? "   *% 9.6f" : "% 13.6f", real_value);
     }
 }
 
-void dump_value(Model *model, const ParameterInfo *cur_param, size_t offset) {
+void dump_value(Model *model, const ParameterInfo *cur_param, size_t offset, bool has_state) {
     if (cur_param->bitwidth == 16) {
-        print_q15(get_q15_param(model, cur_param, offset), ValueInfo(cur_param, model));
+        print_q15(get_q15_param(model, cur_param, offset), ValueInfo(cur_param, model), has_state);
     } else if (cur_param->bitwidth == 64) {
         my_printf("%" PRId64 " ", get_int64_param(cur_param, offset));
     } else {
@@ -37,21 +38,10 @@ void dump_value(Model *model, const ParameterInfo *cur_param, size_t offset) {
     }
 }
 
-void dump_matrix(const int16_t *mat, size_t len, const ValueInfo& val_info) {
+void dump_matrix(const int16_t *mat, size_t len, const ValueInfo& val_info, bool has_state) {
     my_printf("Scale: %d" NEWLINE, val_info.scale);
     for (size_t j = 0; j < len; j++) {
-        print_q15(mat[j], val_info);
-        if (j && (j % 16 == 15)) {
-            my_printf(NEWLINE);
-        }
-    }
-    my_printf(NEWLINE);
-}
-
-void dump_matrix(Model* model, const ParameterInfo *param, uint16_t offset, uint16_t len, const ValueInfo& val_info) {
-    my_printf("Scale: %d" NEWLINE, val_info.scale);
-    for (size_t j = 0; j < len; j++) {
-        print_q15(get_q15_param(model, param, offset + j), val_info);
+        print_q15(mat[j], val_info, has_state && offset_has_state(j));
         if (j && (j % 16 == 15)) {
             my_printf(NEWLINE);
         }
@@ -104,7 +94,7 @@ void dump_params_nhwc(Model *model, const ParameterInfo *cur_param) {
                         } else {
                             offset2 += h * W * cur_tile_c + w * cur_tile_c + c;
                         }
-                        dump_value(model, cur_param, offset2);
+                        dump_value(model, cur_param, offset2, offset_has_state(offset2));
                     }
                     my_printf(NEWLINE);
                 }
@@ -166,7 +156,7 @@ void dump_params(Model *model, const ParameterInfo *cur_param) {
                 for (uint16_t l = 0; l < W; l++) {
                     // internal format is NCHW
                     size_t offset = i * H * W * CHANNEL + j * H * W + k * W + l;
-                    dump_value(model, cur_param, offset);
+                    dump_value(model, cur_param, offset, offset_has_state(offset));
                 }
                 my_printf(NEWLINE);
             }
@@ -197,20 +187,21 @@ void dump_turning_points(Model *model, const ParameterInfo *output) {
 #endif
 }
 
-void dump_matrix2(int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_info) {
+void dump_matrix(const int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_info, bool has_state) {
     my_printf("Scale: %d", val_info.scale);
     if (rows > cols) {
         my_printf(" (transposed)" NEWLINE);
         for (size_t j = 0; j < cols; j++) {
             for (size_t i = 0; i < rows; i++) {
-                print_q15(mat[i * cols + j], val_info);
+                size_t offset = i * cols + j;
+                print_q15(mat[offset], val_info, has_state && offset_has_state(offset));
             }
             my_printf(NEWLINE);
         }
     } else {
         my_printf(NEWLINE);
         for (size_t j = 0; j < rows * cols; j++) {
-            print_q15(mat[j], val_info);
+            print_q15(mat[j], val_info, has_state && offset_has_state(j));
             if ((j+1) % cols == 0) {
                 my_printf(NEWLINE);
             }

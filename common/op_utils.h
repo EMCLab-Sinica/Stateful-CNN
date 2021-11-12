@@ -47,5 +47,5 @@ void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_
 
 void fix_first_unfinished_value_offset(const Model* model, uint32_t* p_first_unfinished_value_offset);
 void make_buffer_aligned(int16_t** p_buffer);
-float q15_to_float(int16_t val, const ValueInfo& val_info, uint8_t* p_use_prefix = nullptr);
+float q15_to_float(int16_t val, const ValueInfo& val_info, uint8_t* p_use_prefix = nullptr, bool has_state = true);
 void my_offset_q15_batched(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t blockSize);

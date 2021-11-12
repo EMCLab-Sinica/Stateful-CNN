@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "cnn_common.h"
 #include "data.h"
 #include "my_debug.h"
 
@@ -13,6 +14,21 @@ uint8_t run_cnn_tests(uint16_t n_samples);
 uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index);
 
 int8_t get_state_bit(struct Model *model, uint8_t slot_id);
+
+#if HAWAII || STATEFUL
+static inline bool offset_has_state(uint16_t offset) {
+    return offset % BATCH_SIZE == BATCH_SIZE - 1;
+}
+#elif JAPARI
+static inline bool offset_has_state(uint16_t offset) {
+    return offset % (BATCH_SIZE + 1) == BATCH_SIZE;
+}
+#else
+static inline bool offset_has_state(uint16_t) {
+    return false;
+}
+#endif
+
 #if STATEFUL
 static inline int8_t get_value_state_bit(int16_t val) {
     return (val >= 0) ? 1 : -1;

@@ -186,7 +186,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 }
             }
 #if STATEFUL
-            if (BATCH_SIZE == 1 || ((cur_output_data_offset + idx) % BATCH_SIZE == BATCH_SIZE - 1)) {
+            if (offset_has_state(cur_output_data_offset + idx)) {
                 my_printf_debug("Adding state bit for newly loaded filter idx=%d" NEWLINE, idx);
                 filter_tmp[conv_params->filter_offset - 1] = -(idx < n_keep_state_bits ? -conv_params->old_output_offset : conv_params->old_output_offset);
             } else
@@ -270,13 +270,13 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 
     my_printf_debug("input_buffer_addr = lea_buffer + %d" NEWLINE, static_cast<int>(input_buffer_addr - lea_buffer));
     my_printf_debug("input" NEWLINE);
-    dump_matrix2_debug(input_buffer_addr, A_rows, A_cols, ValueInfo(conv_params->conv_input));
+    dump_matrix_debug(input_buffer_addr, A_rows, A_cols, ValueInfo(conv_params->conv_input, nullptr), false);
     my_printf_debug("filter_buffer_addr = lea_buffer + LEA_BUFFER_SIZE - %d" NEWLINE, static_cast<int>(lea_buffer + LEA_BUFFER_SIZE - filter_buffer_addr));
     my_printf_debug("filter" NEWLINE);
-    dump_matrix2_debug(filter_buffer_addr, B_rows, B_cols, ValueInfo(conv_params->conv_filter));
+    dump_matrix_debug(filter_buffer_addr, B_rows, B_cols, ValueInfo(conv_params->conv_filter, nullptr), false);
 
     my_printf_debug("matrix_mpy_results" NEWLINE);
-    dump_matrix2_debug(matrix_mpy_results, A_rows, B_cols, ValueInfo(conv_params->output));
+    dump_matrix_debug(matrix_mpy_results, A_rows, B_cols, ValueInfo(conv_params->output));
     my_printf_debug(NEWLINE);
 
     compare_vm_nvm(matrix_mpy_results, conv_params->model, conv_params->output, cur_output_data_offset, values_to_preserve);
@@ -444,21 +444,16 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
 
 #if STATEFUL
         if (conv_params->real_conv_input->slot != SLOT_TEST_SET) {
-        // stripping states inside the h loop is faster as biases multipliers can be skipped
-        int16_t *input_row_end = orig_dest_addr + input_row_len;
-        uint8_t start_state = get_value_state_bit(*(orig_dest_addr + BATCH_SIZE - 1));
-        // if input_tile_c is smaller than BATCH_SIZE, state bits are not always at offset BATCH_SIZE - 1
-        if (conv_params->flags->extra.conv.input_tile_c >= BATCH_SIZE && start_state == get_value_state_bit(*(input_row_end - 1))) {
-            // XXX: a heuristic - assume there is at most one turning points in a row
-            my_printf_debug("Using my_offset_q15 for stripping state bits" NEWLINE);
-            my_offset_q15_batched(orig_dest_addr, -start_state*0x4000, orig_dest_addr, input_row_len);
-        } else {
+            // stripping states inside the h loop is faster as biases multipliers can be skipped
+            int16_t *input_row_end = orig_dest_addr + input_row_len;
+            // if input_tile_c is smaller than BATCH_SIZE, state bits are not always at offset BATCH_SIZE - 1
             my_printf_debug("Using a loop for stripping state bits" NEWLINE);
             for (int16_t *dest_ptr = orig_dest_addr; dest_ptr < input_row_end; dest_ptr++) {
-                int16_t val = *dest_ptr;
-                *dest_ptr = val - get_value_state_bit(val)*0x4000;
+                if (offset_has_state(dest_ptr - orig_dest_addr)) {
+                    int16_t val = *dest_ptr;
+                    *dest_ptr = val - get_value_state_bit(val)*0x4000;
+                }
             }
-        }
         }
 #endif
         dest += conv_params->dest_offset;
@@ -478,7 +473,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
 
     my_printf_debug("Loaded inputs" NEWLINE);
     // state = 0 as state bits are already removed by my_offset_q15 above
-    dump_matrix_debug(lea_buffer, inputs_len, ValueInfo(conv_params->real_conv_input));
+    dump_matrix_debug(lea_buffer, inputs_len, ValueInfo(conv_params->real_conv_input, nullptr), false);
 
     uint16_t cur_tile_h = MIN_VAL(conv_params->H - conv_params->offset_h - conv_params->input_h, conv_params->tile_h);
     for (uint16_t j = 0; j < cur_tile_h; j += conv_params->stride) {
@@ -738,7 +733,7 @@ struct ConvMergeInputChunkHandlerParams {
     uint16_t data_offset;
 };
 
-void ConvMergeInputChunkHandler(uint32_t range_offset, uint16_t range_len, uint8_t state_bit, void* _params) {
+void ConvMergeInputChunkHandler(uint32_t range_offset, uint16_t range_len, int8_t state_bit, void* _params) {
     ConvMergeInputChunkHandlerParams* params = reinterpret_cast<ConvMergeInputChunkHandlerParams*>(_params);
     my_printf_debug("input range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
     int16_t *to_offset = params->to_add + range_offset - params->data_offset;
