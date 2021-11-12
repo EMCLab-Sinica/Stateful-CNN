@@ -98,8 +98,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                             input_val = lea_buffer[idx];
 #if STATEFUL
                             if (offset_has_state(c + idx)) {
-                                // assuming input state bits are correct...
-                                input_val -= get_value_state_bit(input_val)*0x4000;
+                                strip_state(&input_val);
                             }
 #endif
                             output_val = MAX_VAL(input_val, 0);
@@ -156,7 +155,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if INDIRECT_RECOVERY
 #if STATEFUL
                 if (offset_has_state(data_offset)) {
-                    input_val -= get_value_state_bit(input_val)*0x4000;
+                    strip_state(&input_val);
                 }
 #endif
                 check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);

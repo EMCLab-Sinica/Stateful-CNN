@@ -448,17 +448,14 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
             my_printf_debug("Using a loop for stripping state bits" NEWLINE);
             MY_ASSERT(cur_input_tile_c % BATCH_SIZE == 0 || BATCH_SIZE % cur_input_tile_c == 0);
             if (cur_input_tile_c % BATCH_SIZE == 0) {
-                for (int16_t *dest_ptr = orig_dest_addr; dest_ptr < input_row_end; dest_ptr++) {
-                    if (offset_has_state(dest_ptr - orig_dest_addr)) {
-                        int16_t val = *dest_ptr;
-                        *dest_ptr = val - get_value_state_bit(val)*0x4000;
-                    }
+                for (int16_t *dest_ptr = orig_dest_addr + BATCH_SIZE - 1; dest_ptr < input_row_end; dest_ptr += BATCH_SIZE) {
+                    strip_state(dest_ptr);
                 }
             } else {
                 int16_t offset = BATCH_SIZE - 1 - src_addr % BATCH_SIZE;
                 if (offset < cur_input_tile_c) {
                     for (; offset < input_row_len; offset += cur_input_tile_c) {
-                        *(orig_dest_addr + offset) = *(orig_dest_addr + offset) - get_value_state_bit(*(orig_dest_addr + offset))*0x4000;
+                        strip_state(orig_dest_addr + offset);
                     }
                 }
             }

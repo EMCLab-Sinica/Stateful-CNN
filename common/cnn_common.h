@@ -156,4 +156,3 @@ typedef void (*allocator)(Model *model, const ParameterInfo *input[], ParameterI
 extern const uint8_t expected_inputs_len[];
 extern const handler handlers[];
 extern const allocator allocators[];
-extern uint8_t BATCH_SIZE;

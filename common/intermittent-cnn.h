@@ -33,6 +33,12 @@ static inline bool offset_has_state(uint16_t) {
 static inline int8_t get_value_state_bit(int16_t val) {
     return (val >= 0) ? 1 : -1;
 }
+static inline void strip_state(int16_t* val) {
+    // assuming input state bits are correct...
+    // The following line is equivalient to: *val -= ((*val >= 0) ? 0x4000 : -0x4000));
+    // I use bitwise operations to avoid branches
+    *val -= ((*reinterpret_cast<uint16_t*>(val) & 0x8000) + 0x4000);
+}
 #endif
 #if JAPARI
 static inline void check_footprint(int16_t val) {

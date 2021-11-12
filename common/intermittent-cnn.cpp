@@ -134,8 +134,7 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
 
 #if STATEFUL
     for (uint8_t idx = BATCH_SIZE - 1; idx < buffer_len; idx += BATCH_SIZE) {
-        int16_t val = lea_buffer[idx];
-        lea_buffer[idx] = val - get_value_state_bit(val)*0x4000;
+        strip_state(lea_buffer + idx);
     }
 #endif
 

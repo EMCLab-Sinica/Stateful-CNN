@@ -55,7 +55,7 @@ class Constants:
 
     DEFAULT_TILE_C = 4
     DEFAULT_TILE_H = 8
-    CUR_BATCH_SIZE = 1
+    BATCH_SIZE = 1
     STATEFUL = 0
     HAWAII = 0
     JAPARI = 0
@@ -202,7 +202,7 @@ if args.all_samples:
     Constants.NVM_SIZE += config['n_all_samples'] * config['sample_size']
 model_data = config['data_loader'](start=0, limit=Constants.N_SAMPLES)
 
-Constants.CUR_BATCH_SIZE = args.batch_size
+Constants.BATCH_SIZE = args.batch_size
 if args.stateful:
     Constants.STATEFUL = 1
     Constants.METHOD = "STATEFUL"
@@ -391,7 +391,7 @@ def find_node_by_output(output_name):
             return node
 
 def extend_for_footprints(n):
-    return n + n // Constants.CUR_BATCH_SIZE
+    return n + n // Constants.BATCH_SIZE
 
 def determine_conv_tile_c(n):
     logger.debug('Determine tile size for Conv node %s', n.name)

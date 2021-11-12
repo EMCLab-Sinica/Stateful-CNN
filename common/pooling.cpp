@@ -85,9 +85,8 @@ static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
 #endif
                 int16_t val = input_buffer[input_channel_offset];
 #if STATEFUL
-                // assuming input state bits are correct...
                 if (offset_has_state(maxpool_params->start_channel + input_channel_offset)) {
-                    val -= get_value_state_bit(val)*0x4000;
+                    strip_state(&val);
                 }
 #endif
                 // dump_value_debug(model, maxpool_params->data, val_offset);
@@ -358,7 +357,7 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
                     int16_t val = get_q15_param(model, data, h * W * CHANNEL + w * CHANNEL + input_channel);
 #if STATEFUL
                     if (offset_has_state(input_channel)) {
-                        val -= get_value_state_bit(val)*0x4000;
+                        strip_state(&val);
                     }
 #endif
                     total += val;

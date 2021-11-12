@@ -252,7 +252,7 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
 #if STATEFUL
         // XXX: use LEA?
         for (uint16_t idx = BATCH_SIZE - 1; idx < output_len; idx += BATCH_SIZE) {
-            buffer_temp[idx] -= get_value_state_bit(buffer_temp[idx])*0x4000;
+            strip_state(buffer_temp + idx);
         }
 #endif
         my_add_q15(buffer_gemm, buffer_temp, buffer_gemm, output_len);

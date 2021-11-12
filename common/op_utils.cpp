@@ -89,8 +89,7 @@ void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, int8_t 
         cur_buffer = lea_buffer;
 #if STATEFUL
         for (uint16_t idx = BATCH_SIZE - 1 - offset % BATCH_SIZE; idx < real_chunk_len; idx += BATCH_SIZE) {
-            int16_t val = cur_buffer[idx];
-            cur_buffer[idx] = val - get_value_state_bit(val)*0x4000;
+            strip_state(cur_buffer + idx);
         }
 #endif
     } else {
@@ -281,7 +280,7 @@ void make_buffer_aligned(int16_t** p_buffer) {
 float q15_to_float(int16_t val, const ValueInfo& val_info, uint8_t* p_use_prefix, bool has_state) {
 #if STATEFUL
     if (has_state) {
-        val -= get_value_state_bit(val)*0x4000;
+        strip_state(&val);
     }
 #endif
     return val_info.scale * static_cast<int32_t>(val) / 32768.0;
