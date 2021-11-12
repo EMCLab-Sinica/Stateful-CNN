@@ -292,7 +292,7 @@ void my_offset_q15_batched(const int16_t *pSrc, int16_t offset, int16_t *pDst, u
     if (BATCH_SIZE == 1) {
         my_offset_q15(pSrc, offset, pDst, blockSize);
     } else {
-        for (uint8_t val_idx = BATCH_SIZE - 1; val_idx < blockSize; val_idx += BATCH_SIZE) {
+        for (uint32_t val_idx = BATCH_SIZE - 1; val_idx < blockSize; val_idx += BATCH_SIZE) {
             pDst[val_idx] += offset;
         }
     }

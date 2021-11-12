@@ -133,11 +133,9 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     my_memcpy_from_param(model, lea_buffer, output_node, 0, buffer_len * sizeof(int16_t));
 
 #if STATEFUL
-    if (BATCH_SIZE != 1) {
-        for (uint8_t idx = BATCH_SIZE - 1; idx < buffer_len; idx += BATCH_SIZE) {
-            int16_t val = lea_buffer[idx];
-            lea_buffer[idx] = val - get_value_state_bit(val)*0x4000;
-        }
+    for (uint8_t idx = BATCH_SIZE - 1; idx < buffer_len; idx += BATCH_SIZE) {
+        int16_t val = lea_buffer[idx];
+        lea_buffer[idx] = val - get_value_state_bit(val)*0x4000;
     }
 #endif
 

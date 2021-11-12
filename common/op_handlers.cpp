@@ -155,7 +155,9 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                 int16_t input_val = get_q15_param(model, X, data_offset);
 #if INDIRECT_RECOVERY
 #if STATEFUL
-                input_val -= get_value_state_bit(input_val)*0x4000;
+                if (offset_has_state(data_offset)) {
+                    input_val -= get_value_state_bit(input_val)*0x4000;
+                }
 #endif
                 check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
 #endif
