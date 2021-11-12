@@ -152,7 +152,7 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
                 float expected = first_sample_outputs[ofm_idx];
                 float error = fabs((got_real - expected) / expected);
                 // Errors in CIFAR-10/Stateful are quite large...
-                MY_ASSERT(error <= 0.25,
+                MY_ASSERT(error <= 0.15,
                           "Value error too large at index %d: got=%f, expected=%f" NEWLINE, buffer_idx, got_real, expected);
                 ofm_idx++;
             }

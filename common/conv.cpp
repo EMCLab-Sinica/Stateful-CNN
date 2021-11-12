@@ -225,10 +225,8 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #endif
 
 #if STATEFUL
-        if (conv_params->output_padding &&
-            ((!conv_params->old_output_offset && n_filters - 1 < n_keep_state_bits) ||
-              (conv_params->old_output_offset && n_filters - 1 >= n_keep_state_bits))) {
-            conv_params->filter_buffer_addr[n_filters * conv_params->filter_offset - 1] = -0x4000;
+        if (conv_params->output_padding) {
+            conv_params->filter_buffer_addr[n_filters * conv_params->filter_offset - 1] = -((n_filters - 1 < n_keep_state_bits) ? -conv_params->old_output_offset : conv_params->old_output_offset);
         }
 #endif
 
@@ -448,10 +446,20 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
             int16_t *input_row_end = orig_dest_addr + input_row_len;
             // if input_tile_c is smaller than BATCH_SIZE, state bits are not always at offset BATCH_SIZE - 1
             my_printf_debug("Using a loop for stripping state bits" NEWLINE);
-            for (int16_t *dest_ptr = orig_dest_addr; dest_ptr < input_row_end; dest_ptr++) {
-                if (offset_has_state(dest_ptr - orig_dest_addr)) {
-                    int16_t val = *dest_ptr;
-                    *dest_ptr = val - get_value_state_bit(val)*0x4000;
+            MY_ASSERT(cur_input_tile_c % BATCH_SIZE == 0 || BATCH_SIZE % cur_input_tile_c == 0);
+            if (cur_input_tile_c % BATCH_SIZE == 0) {
+                for (int16_t *dest_ptr = orig_dest_addr; dest_ptr < input_row_end; dest_ptr++) {
+                    if (offset_has_state(dest_ptr - orig_dest_addr)) {
+                        int16_t val = *dest_ptr;
+                        *dest_ptr = val - get_value_state_bit(val)*0x4000;
+                    }
+                }
+            } else {
+                int16_t offset = BATCH_SIZE - 1 - src_addr % BATCH_SIZE;
+                if (offset < cur_input_tile_c) {
+                    for (; offset < input_row_len; offset += cur_input_tile_c) {
+                        *(orig_dest_addr + offset) = *(orig_dest_addr + offset) - get_value_state_bit(*(orig_dest_addr + offset))*0x4000;
+                    }
                 }
             }
         }

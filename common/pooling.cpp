@@ -366,8 +366,10 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
             }
             output_val = total / len;
 #if STATEFUL
-            check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_channel);
-            output_val += offset;
+            if (offset_has_state(output_channel)) {
+                check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_channel);
+                output_val += offset;
+            }
 #endif
         }
         put_q15_param(output, output_channel, output_val);
