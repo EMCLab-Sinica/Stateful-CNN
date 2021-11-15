@@ -200,8 +200,13 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             my_printf_debug("Tile for B" NEWLINE);
             dump_matrix_debug(buffer_b, extended_tile_channels, full_tile_width, ValueInfo(B, model));
 
+#if STATEFUL
             my_matrix_mpy_q15(1, extended_tile_channels, extended_tile_channels, full_tile_width, buffer_a, buffer_b, buffer_temp,
-                              output, output_offset, values_to_preserve);
+                              output, output_offset, values_to_preserve, offset, tile_width_first);
+#else
+            my_matrix_mpy_q15(1, extended_tile_channels, extended_tile_channels, full_tile_width, buffer_a, buffer_b, buffer_temp,
+                              output, output_offset, values_to_preserve, 0, 0);
+#endif
 
             my_printf_debug("matrix_mpy_results" NEWLINE);
             dump_matrix_debug(buffer_temp, full_tile_width, ValueInfo(output, model));
@@ -260,27 +265,8 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
         dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
     }
 
-    my_printf_debug("Find max_multiplier for buffer_gemm" NEWLINE);
-    uint16_t max_multiplier = find_max_multiplier(model, output, buffer_gemm, output_len);
-
-    MY_ASSERT(max_multiplier != 0);
-
-    int16_t scaleFract;
-    uint8_t shift;
-
-    // XXX: reduce calls to find_max_multiplier?
-    float_to_scale_params(&scaleFract, &shift, 1.0f * max_multiplier);
-    my_scale_q15(buffer_gemm, scaleFract, shift, buffer_gemm, output_len);
-
-    output->scale /= max_multiplier;
-
     my_printf_debug("buffer_gemm with bias" NEWLINE);
     dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));
-
-    max_multiplier = find_max_multiplier(model, output, buffer_gemm, output_len);
-    float_to_scale_params(&scaleFract, &shift, 1.0f * max_multiplier);
-    my_scale_q15(buffer_gemm, scaleFract, shift, buffer_gemm, output_len);
-    output->scale /= max_multiplier;
 
     my_printf_debug("buffer_gemm after scaling up" NEWLINE);
     dump_matrix_debug(buffer_gemm, output_len, ValueInfo(output, model));

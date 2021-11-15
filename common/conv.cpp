@@ -186,6 +186,9 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
                 }
             }
 #if STATEFUL
+            if (conv_params->real_conv_input->slot == SLOT_TEST_SET) {
+                my_scale_q15(filter_tmp, 0x4000, 0, filter_tmp, conv_params->filter_offset);
+            }
             if (offset_has_state(cur_output_data_offset + idx)) {
                 my_printf_debug("Adding state bit for newly loaded filter idx=%d" NEWLINE, idx);
                 filter_tmp[conv_params->filter_offset - 1] = -(idx < n_keep_state_bits ? -conv_params->old_output_offset : conv_params->old_output_offset);
@@ -202,7 +205,11 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
 #if !STATEFUL
                 filter_tmp[conv_params->filter_offset - 1] = bias_val;
 #else
-                filter_tmp[conv_params->filter_offset - 1] += bias_val;
+                if (conv_params->real_conv_input->slot == SLOT_TEST_SET) {
+                    filter_tmp[conv_params->filter_offset - 1] += bias_val / 2;
+                } else {
+                    filter_tmp[conv_params->filter_offset - 1] += bias_val;
+                }
 #endif
             }
 
@@ -251,8 +258,14 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     B_cols = n_filters;
     MY_ASSERT(A_rows * B_cols <= OUTPUT_LEN);
     MY_ASSERT(input_buffer_addr + A_rows * A_cols <= filter_buffer_addr);
+#if !STATEFUL
     my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results,
-                      conv_params->output, cur_output_data_offset, values_to_preserve);
+                      conv_params->output, cur_output_data_offset, values_to_preserve, 0, 0);
+#else
+    my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results,
+                      conv_params->output, cur_output_data_offset, values_to_preserve,
+                      -conv_params->old_output_offset, n_keep_state_bits);
+#endif
 
     /* START dump data */
     my_printf_debug("input_h=%d" NEWLINE, conv_params->input_h + offset_h);
@@ -559,6 +572,11 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     output->flags |= TRANSPOSED;
     output->flags &= ~SEPARATE_TILING;
     output->scale = conv_input->scale * conv_filter->scale;
+#if STATEFUL
+    if (conv_input->slot == SLOT_TEST_SET) {
+        output->scale *= 2;
+    }
+#endif
 }
 
 void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
@@ -763,8 +781,6 @@ void ConvMergeOutputChunkHandler(uint32_t range_offset, uint16_t range_len, int8
 #endif
 
 void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct ParameterInfo *output, const NodeFlags*) {
-    // XXX: make this function idempotent
-
     // Do not use conv_params here as its intialization in alloc_conv and
     // handle_conv might be skipped if the Conv node has finished.
     const ParameterInfo *data = input[0];
@@ -819,11 +835,6 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
     my_printf_debug("old_output_offset = %d" NEWLINE, old_output_offset);
 #endif
 
-    float scale_f = 1.0 * find_max_multiplier(model, data) / n_tiles_c;
-    int16_t scaleFract;
-    uint8_t shift;
-    float_to_scale_params(&scaleFract, &shift, scale_f);
-
     // XXX: use iterate_chunks() for the outer loop?
     for (; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
         uint16_t real_chunk_len = MIN_VAL(chunk_len, tiling_results_len - tiling_results_offset);
@@ -836,15 +847,9 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
             ConvMergeInputChunkHandlerParams params({to_add, data_offset});
             iterate_chunks(model, data, data_offset, real_chunk_len, ConvMergeInputChunkHandler, &params);
 #endif
-            // scale up results as in convolution values are scaled down twice (input & weights)
             my_printf_debug("Chunk offset %d, input tile %d" NEWLINE, tiling_results_offset, input_tile_c_index);
-            my_printf_debug("Before my_scale_q15" NEWLINE);
-            ValueInfo val_info_data(data);
-            dump_matrix_debug(to_add, real_chunk_len, val_info_data);
-            my_scale_q15(to_add, scaleFract, shift, to_add, real_chunk_len);
-            my_printf_debug("After my_scale_q15" NEWLINE);
-            val_info_data.scale /= scale_f;
-            dump_matrix_debug(to_add, real_chunk_len, val_info_data);
+            my_printf_debug("Added chunk" NEWLINE);
+            dump_matrix_debug(to_add, real_chunk_len, ValueInfo(data));
             if (input_tile_c_index != 0) {
                 my_add_q15(lea_buffer, to_add, lea_buffer, real_chunk_len);
             }
@@ -852,16 +857,14 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 #if INDIRECT_RECOVERY
 
 #if STATEFUL
-        my_offset_q15_batched(lea_buffer, -old_output_offset, lea_buffer, MIN_VAL(next_output_turning_point - tiling_results_offset, real_chunk_len));
+        my_offset_q15_batched(lea_buffer, -old_output_offset, lea_buffer, MIN_VAL(next_output_turning_point - tiling_results_offset, real_chunk_len), true);
         if (next_output_turning_point < tiling_results_offset + real_chunk_len) {
             int16_t* to_offset = lea_buffer + next_output_turning_point - tiling_results_offset;
-            my_offset_q15_batched(to_offset, old_output_offset, to_offset, real_chunk_len - (next_output_turning_point - tiling_results_offset));
+            my_offset_q15_batched(to_offset, old_output_offset, to_offset, real_chunk_len - (next_output_turning_point - tiling_results_offset), true);
         }
         check_next_turning_point(old_output_offset, output_turning_point_idx,
                                  next_output_turning_point, cur_output_slot_info, tiling_results_offset + real_chunk_len);
-#endif
-
-#if JAPARI
+#elif JAPARI
         ConvMergeOutputChunkHandlerParams params({tiling_results_offset});
         iterate_chunks(model, output, tiling_results_offset, real_chunk_len, ConvMergeOutputChunkHandler, &params);
 #endif
@@ -878,9 +881,7 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 #endif
     }
 
-    my_printf_debug("After scaling up back and merging tiling results" NEWLINE);
-
-    output->scale /= scale_f;
+    my_printf_debug("After merging tiling results" NEWLINE);
 
     flip_state_bit(model, output);
 

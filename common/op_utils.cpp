@@ -42,7 +42,7 @@ void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, int8_t state_b
     int16_t* buffer = reinterpret_cast<int16_t*>(_params);
     int16_t* to_offset = buffer + offset;
 #if STATEFUL
-    my_offset_q15_batched(to_offset, -state_bit*0x4000, to_offset, real_chunk_len);
+    my_offset_q15_batched(to_offset, -state_bit*0x4000, to_offset, real_chunk_len, true);
 #endif
 #if JAPARI
     for (uint16_t idx = BATCH_SIZE; idx < real_chunk_len; idx += BATCH_SIZE + 1) {
@@ -51,97 +51,6 @@ void OutputChunkHandler(uint32_t offset, uint16_t real_chunk_len, int8_t state_b
 #endif
 }
 #endif
-
-struct MaxMultiplierChunkHandlerParams {
-    Model *model;
-    const ParameterInfo *param;
-    // not declaring buffer as const to allow stripping states
-    int16_t* buffer;
-    uint16_t *max_multiplier;
-};
-
-static inline void reduce_max_multiplier(uint16_t* max_multiplier) {
-    // XXX: a heuristic - works when 3 is too large and 2 is OK
-    // as seen in Statefull/KWS
-    if ((*max_multiplier) % 2) {
-        (*max_multiplier)--;
-    } else {
-        (*max_multiplier) /= 2;
-    }
-}
-
-void MaxMultiplierChunkHandler(uint32_t offset, uint16_t real_chunk_len, int8_t state_bit, void* _params) {
-    MaxMultiplierChunkHandlerParams* params = reinterpret_cast<MaxMultiplierChunkHandlerParams*>(_params);
-#if !STATEFUL
-    uint16_t bound = 32768;
-#else
-    uint16_t bound = 16383;
-#endif
-    int16_t max_val, min_val;
-    // Apparently TI's compiler does not handle multiplication between
-    // int16_t and uint16_t correctly. Use unsigned everywhere to fix it.
-    uint32_t u_max_val, u_min_val;
-    uint16_t index;
-
-    int16_t* cur_buffer;
-    if (!params->buffer) {
-        my_memcpy_from_param(params->model, lea_buffer, params->param, offset, real_chunk_len * sizeof(int16_t));
-        cur_buffer = lea_buffer;
-#if STATEFUL
-        for (uint16_t idx = BATCH_SIZE - 1 - offset % BATCH_SIZE; idx < real_chunk_len; idx += BATCH_SIZE) {
-            strip_state(cur_buffer + idx);
-        }
-#endif
-    } else {
-        cur_buffer = params->buffer + offset;
-    }
-
-
-    dump_matrix_debug(cur_buffer, real_chunk_len, ValueInfo(params->param));
-
-    my_max_q15(cur_buffer, real_chunk_len, &max_val, &index);
-    my_printf_debug("Max value %d", max_val);
-    my_printf_debug(" occurs at index %d" NEWLINE, index);
-    u_max_val = abs(max_val);
-    // use > instead of >= as the value may be exactly on the bound
-    while (max_val && u_max_val * (*params->max_multiplier) > bound) {
-        reduce_max_multiplier(params->max_multiplier);
-    }
-
-    my_min_q15(cur_buffer, real_chunk_len, &min_val, &index);
-    my_printf_debug("Min value %d", min_val);
-    my_printf_debug(" occurs at index %d" NEWLINE, index);
-    u_min_val = abs(min_val);
-    while (min_val && u_min_val * (*params->max_multiplier) > bound) {
-        reduce_max_multiplier(params->max_multiplier);
-    }
-    my_printf_debug("Current max_multiplier=%d" NEWLINE, *params->max_multiplier);
-}
-
-uint16_t find_max_multiplier(Model *model, const ParameterInfo *param, int16_t* buffer, uint16_t len) {
-    uint16_t max_multiplier = 0;
-    if (!buffer && sample_idx == 0) {
-        max_multiplier = read_max_multiplier(param);
-        // all bytes are initialized as 0xff on NVM
-        if (max_multiplier && max_multiplier != 0xffff) {
-            return max_multiplier;
-        }
-    }
-    max_multiplier = param->scale;
-
-    MaxMultiplierChunkHandlerParams params({model, param, buffer, &max_multiplier});
-    iterate_chunks(model, param, 0, len, MaxMultiplierChunkHandler, &params);
-
-    my_printf_debug("max_multiplier=%d" NEWLINE, max_multiplier);
-
-    MY_ASSERT(max_multiplier != 0);
-
-    if (!buffer && sample_idx == 0) {
-        write_max_multiplier(param, max_multiplier);
-    }
-
-    return max_multiplier;
-}
 
 void float_to_scale_params(int16_t *scaleFract, uint8_t *shift, float scale) {
     *shift = 0;
@@ -286,13 +195,29 @@ float q15_to_float(int16_t val, const ValueInfo& val_info, uint8_t* p_use_prefix
     return val_info.scale * static_cast<int32_t>(val) / 32768.0;
 }
 
-void my_offset_q15_batched(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t blockSize) {
+void my_offset_q15_batched(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t blockSize, bool enforce_states) {
     MY_ASSERT(pSrc == pDst);
     if (BATCH_SIZE == 1) {
         my_offset_q15(pSrc, offset, pDst, blockSize);
+#if STATEFUL
+        if (enforce_states) {
+            for (uint32_t val_idx = 0; val_idx < blockSize; val_idx++) {
+                if ((offset < 0) ^ (pDst[val_idx] < 0)) {
+                    pDst[val_idx] = -(offset < 0);
+                }
+            }
+        }
+#endif
     } else {
         for (uint32_t val_idx = BATCH_SIZE - 1; val_idx < blockSize; val_idx += BATCH_SIZE) {
             pDst[val_idx] += offset;
+#if STATEFUL
+            if (enforce_states) {
+                if ((offset < 0) ^ (pDst[val_idx] < 0)) {
+                    pDst[val_idx] = -(offset < 0);
+                }
+            }
+#endif
         }
     }
 }

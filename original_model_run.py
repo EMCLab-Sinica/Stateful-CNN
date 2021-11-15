@@ -72,6 +72,7 @@ def print_tensor(tensor):
         print()
     else:
         print(f'Skip: unsupported {dimensions}-dimensional array')
+    print(f'Max={np.max(tensor)}, min={np.min(tensor)}')
 
 def prepare_model_and_data(config, limit):
     # https://github.com/onnx/onnx/blob/master/docs/PythonAPIOverview.md
@@ -102,6 +103,9 @@ def run_model(model, model_data, limit, verbose=True):
     # Testing
     if limit == 1:
         last_layer_out = None
+        if verbose:
+            print('Input')
+            print_tensor(model_data.images[0])
         for layer_name, op_type, layer_out in onnxruntime_get_intermediate_tensor(model, model_data.images):
             if verbose:
                 print(f'{op_type} layer: {layer_name}')

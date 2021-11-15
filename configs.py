@@ -9,8 +9,8 @@ configs = {
     'mnist': {
         # https://github.com/onnx/models/raw/master/vision/classification/mnist/model/mnist-8.onnx
         'onnx_model': 'data/mnist-8.onnx',
-        'scale': 8,
-        'input_scale': 8,
+        'scale': 2,
+        'input_scale': 4,
         'num_slots': 2,
         'intermediate_values_size': 26000,
         'data_loader': load_data_mnist,
@@ -23,8 +23,8 @@ configs = {
     },
     'cifar10': {
         'onnx_model': 'data/squeezenet_cifar10.onnx',
-        'scale': 8,
-        'input_scale': 8,
+        'scale': 2,
+        'input_scale': 1,
         'num_slots': 3,
         'intermediate_values_size': 65000,
         'data_loader': load_data_cifar10,
@@ -36,7 +36,7 @@ configs = {
     },
     'kws': {
         'onnx_model': 'data/KWS-DNN_S.onnx',
-        'scale': 8,
+        'scale': 1,
         'input_scale': 120,
         'num_slots': 2,
         'intermediate_values_size': 20000,

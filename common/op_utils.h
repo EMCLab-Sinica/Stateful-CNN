@@ -13,7 +13,6 @@ typedef void (*ChunkHandler)(uint32_t output_offset, uint16_t output_chunk_len, 
 
 extern int16_t lea_buffer[LEA_BUFFER_SIZE];
 int16_t upper_gauss(int16_t a, int16_t b);
-uint16_t find_max_multiplier(struct Model *model, const ParameterInfo *param, int16_t* buffer = nullptr, uint16_t len = 0);
 void float_to_scale_params(int16_t *scaleFract, uint8_t *shift, float scale);
 void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_offset, uint16_t len, const ChunkHandler& callback, void* params);
 void determine_tile_c(ParameterInfo *param, const ParameterInfo* input, const ParameterInfo *filter = nullptr);
@@ -48,4 +47,4 @@ void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_
 void fix_first_unfinished_value_offset(const Model* model, uint32_t* p_first_unfinished_value_offset);
 void make_buffer_aligned(int16_t** p_buffer);
 float q15_to_float(int16_t val, const ValueInfo& val_info, uint8_t* p_use_prefix = nullptr, bool has_state = true);
-void my_offset_q15_batched(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t blockSize);
+void my_offset_q15_batched(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t blockSize, bool enforce_states = false);

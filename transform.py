@@ -96,7 +96,7 @@ other_flags = [
 def op_flag(flag):
     return 2 ** other_flags.index(flag)
 
-def _Q15(num):
+def _Q15(arr, name):
     """Transform a floating point number to TI's fixed point _q15 format"""
 
     # See DSPLib_1_30_00_02/include/DSPLib_support.h
@@ -104,14 +104,16 @@ def _Q15(num):
     lower = -1
     upper = 32767.0 / 32768.0
 
-    if num < lower or num >= upper:
-        if num != 1.0:
-            warnings.warn(
-                'Number {} goes beyond the range of _q15 ({}, {})'.format(
-                    num, lower, upper))
-        num = max(min(num, upper), lower)
+    overflowed_indices = np.concatenate((
+        np.flatnonzero(np.asarray(arr < lower)),
+        np.flatnonzero(np.asarray(arr > upper))
+    ))
+    for idx in overflowed_indices:
+        warnings.warn(f'{name} value {arr[idx]} goes beyond the range of _q15 ({lower}, {upper})')
 
-    return int(num * 2 ** 15)
+    arr = np.minimum(np.maximum(arr, lower), upper)
+
+    return (arr * 2 ** 15).astype(int)
 
 # https://stackoverflow.com/a/11481471/3786245
 class ConvNodeFlags(ctypes.Structure):
@@ -534,17 +536,18 @@ for params in g.initializer:
 
 pprint.pprint(graph)
 
-def to_bytes(i, size=16):
-    if size == 8:
-        return struct.pack('B', i)  # unsigned char
-    elif size == 16:
-        return struct.pack('h', i)
-    elif size == 32:
-        return struct.pack('i', i)
-    elif size == 64:
-        return struct.pack('q', i)
-    else:
+def to_bytes(arr, size=16):
+    if not np.shape(arr):
+        arr = [arr]
+    FORMAT_CHARS = {
+        8: 'B',  # unsigned char
+        16: 'h',
+        32: 'i',
+        64: 'q'
+    }
+    if size not in FORMAT_CHARS:
         raise ValueError(f'Unsupported size {size}')
+    return struct.pack('%u%c' % (len(arr), FORMAT_CHARS[size]), *arr)
 
 def nchw2nhwc(arr, dims):
     N, C, H, W = dims
@@ -651,9 +654,8 @@ for params in parameters:
             if params.name in conv_param_names:
                 print(f'Reorder conv param {params.name}')
                 float_data, _ = nchw2nhwc(float_data, params.dims)
-            for param in float_data:
-                slot.target.write(to_bytes(_Q15(param / config['scale'])))
-                slot.offset += 2
+            slot.target.write(to_bytes(_Q15(np.array(float_data) / config['scale'], 'Parameter')))
+            slot.offset += 2 * len(float_data)
             model_parameters_info.write(to_bytes(16, size=8)) # bitwidth
         elif params.data_type == onnx.TensorProto.INT64:
             if params.int64_data:
@@ -711,8 +713,8 @@ for idx, n in enumerate(nodes):
 
 for idx, im in enumerate(model_data.images):
     # load_data returns NCHW
-    for pixel in np.nditer(im, order='C'):  # the default order 'K' may not be NHWC if functions like moveaxis were used
-        outputs['samples'].write(to_bytes(_Q15(pixel / config['input_scale'])))
+    # https://stackoverflow.com/a/34794744
+    outputs['samples'].write(to_bytes(_Q15(im.flatten(order='C') / config['input_scale'], 'Input')))
     if args.write_images:
         import cv2
         os.makedirs('images', exist_ok=True)
