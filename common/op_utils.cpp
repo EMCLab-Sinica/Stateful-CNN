@@ -1,3 +1,4 @@
+#include <cstdint>
 #include "op_utils.h"
 #include "data.h"
 #include "intermittent-cnn.h"
@@ -201,10 +202,10 @@ void my_offset_q15_batched(const int16_t *pSrc, int16_t offset, int16_t *pDst, u
         my_offset_q15(pSrc, offset, pDst, blockSize);
 #if STATEFUL
         if (enforce_states) {
-            for (uint32_t val_idx = 0; val_idx < blockSize; val_idx++) {
-                if ((offset < 0) ^ (pDst[val_idx] < 0)) {
-                    pDst[val_idx] = -(offset < 0);
-                }
+            uint16_t mask = offset - 0x4000;
+            int16_t* end = pDst + blockSize;
+            for (int16_t* ptr = pDst; ptr < end; ptr++) {
+                *ptr = (*ptr & 0x7fff) | mask;
             }
         }
 #endif
@@ -213,9 +214,8 @@ void my_offset_q15_batched(const int16_t *pSrc, int16_t offset, int16_t *pDst, u
             pDst[val_idx] += offset;
 #if STATEFUL
             if (enforce_states) {
-                if ((offset < 0) ^ (pDst[val_idx] < 0)) {
-                    pDst[val_idx] = -(offset < 0);
-                }
+                uint16_t mask = offset - 0x4000;
+                pDst[val_idx] = (pDst[val_idx] & 0x7fff) | mask;
             }
 #endif
         }

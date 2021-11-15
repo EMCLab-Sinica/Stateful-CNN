@@ -9,7 +9,7 @@ configs = {
     'mnist': {
         # https://github.com/onnx/models/raw/master/vision/classification/mnist/model/mnist-8.onnx
         'onnx_model': 'data/mnist-8.onnx',
-        'scale': 2,
+        'scale': 4,
         'input_scale': 4,
         'num_slots': 2,
         'intermediate_values_size': 26000,

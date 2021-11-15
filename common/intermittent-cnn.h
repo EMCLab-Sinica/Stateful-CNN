@@ -37,7 +37,7 @@ static inline void strip_state(int16_t* val) {
     // assuming input state bits are correct...
     // The following line is equivalient to: *val -= ((*val >= 0) ? 0x4000 : -0x4000));
     // I use bitwise operations to avoid branches
-    *val -= ((*reinterpret_cast<uint16_t*>(val) & 0x8000) + 0x4000);
+    *val -= (*val & 0x8000) + 0x4000;
 }
 #endif
 #if JAPARI
