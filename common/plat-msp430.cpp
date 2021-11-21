@@ -176,8 +176,9 @@ void IntermittentCNNTest() {
 
         first_run();
 
-        // The first iteration takes longer as it needs to compute layer multipliers
-        for (uint8_t idx = 0; idx < 1 + STABLE_POWER_ITERATIONS; idx++) {
+        notify_model_finished();
+
+        for (uint8_t idx = 0; idx < STABLE_POWER_ITERATIONS; idx++) {
             run_cnn_tests(1);
         }
 

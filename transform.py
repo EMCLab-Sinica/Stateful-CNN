@@ -607,7 +607,6 @@ for node in graph:
         output_nodes.write(to_bytes(0))
     output_nodes.write(to_bytes(node.max_output_id))
     output_nodes.write(to_bytes(list(ops.keys()).index(node.op_type)))
-    output_nodes.write(to_bytes(0))                     # max_multiplier
     output_nodes.write(to_bytes(node.flags.as_bytes, size=64))
     if Constants.HAWAII:
         for _ in range(2):

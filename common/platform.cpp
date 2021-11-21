@@ -162,26 +162,6 @@ void first_run(void) {
     my_printf("Init for " CONFIG "/" METHOD " with batch size=%d" NEWLINE, BATCH_SIZE);
 }
 
-static uint32_t max_multipler_offset(uint16_t layer_idx) {
-    return NODES_OFFSET + layer_idx * sizeof(Node) + offsetof(Node, max_multiplier);
-}
-
-uint16_t read_max_multiplier(const ParameterInfo* param) {
-    uint16_t max_multiplier = 0;
-    if (param->slot < NUM_SLOTS) {
-        uint16_t layer_idx = param->parameter_info_idx - N_INPUT;
-        read_from_nvm(&max_multiplier, max_multipler_offset(layer_idx), sizeof(uint16_t));
-    }
-    return max_multiplier;
-}
-
-void write_max_multiplier(const ParameterInfo* param, uint16_t max_multiplier) {
-    if (param->slot < NUM_SLOTS) {
-        uint16_t layer_idx = param->parameter_info_idx - N_INPUT;
-        write_to_nvm(&max_multiplier, max_multipler_offset(layer_idx), sizeof(uint16_t));
-    }
-}
-
 void write_to_nvm_segmented(const uint8_t* vm_buffer, uint32_t nvm_offset, uint16_t total_len, uint16_t segment_size) {
     for (uint16_t idx = 0; idx < total_len; idx += segment_size) {
         write_to_nvm(vm_buffer + idx, nvm_offset + idx, MIN_VAL(total_len - idx, segment_size));
