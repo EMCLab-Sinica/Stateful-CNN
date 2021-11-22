@@ -26,24 +26,6 @@ Counters *counters() {
 
 #define MY_DMA_CHANNEL DMA_CHANNEL_0
 
-#pragma vector=DMA_VECTOR
-__interrupt void DMA_ISR(void)
-{
-    switch(__even_in_range(DMAIV,16))
-    {
-        case 0: break;
-        case 2: break; // DMA0IFG = DMA Channel 0
-        case 4: break; // DMA1IFG = DMA Channel 1
-        case 6: break; // DMA2IFG = DMA Channel 2
-        case 8: break; // DMA3IFG = DMA Channel 3
-        case 10: break; // DMA4IFG = DMA Channel 4
-        case 12: break; // DMA5IFG = DMA Channel 5
-        case 14: break; // DMA6IFG = DMA Channel 6
-        case 16: break; // DMA7IFG = DMA Channel 7
-        default: break;
-    }
-}
-
 #endif
 
 #ifdef __MSP430__
@@ -117,6 +99,9 @@ void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n, uint16_t
     check_nvm_write_address(nvm_offset, n);
     MY_ASSERT(n <= 1024);
     SPI_WRITE2(&addr, reinterpret_cast<const uint8_t*>(vm_buffer), n, timer_delay);
+    if (!timer_delay) {
+        SPI_WAIT_DMA();
+    }
 }
 
 uint64_t get_nvm_writes(void) {
