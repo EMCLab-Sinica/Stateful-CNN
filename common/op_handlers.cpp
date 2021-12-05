@@ -224,9 +224,24 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
     }
     uint16_t inferred_dim = output->params_len / sizeof(int16_t);
     int8_t auto_idx = -1;
+#if JAPARI
+    uint8_t last_dim_idx;
+    for (uint8_t i = 0; i < 4; i++) {
+        if (output->dims[i]) {
+            last_dim_idx = i;
+        }
+    }
+#endif
     for (uint8_t i = 0; i < 4; i++) {
         if (output->dims[i] != RESHAPE_AUTO_DIM && output->dims[i] != 0) {
-            inferred_dim /= output->dims[i];
+#if JAPARI
+            if (i == last_dim_idx) {
+                inferred_dim /= extend_for_footprints(output->dims[i]);
+            } else
+#endif
+            {
+                inferred_dim /= output->dims[i];
+            }
         } else if (output->dims[i] == RESHAPE_AUTO_DIM) {
             auto_idx = i;
         }
@@ -236,9 +251,7 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
         new_len *= inferred_dim;
     }
 #if JAPARI
-    else {
-        new_len = extend_for_footprints(new_len);
-    }
+    new_len = extend_for_footprints(new_len);
 #endif
     MY_ASSERT(new_len * sizeof(int16_t) == output->params_len);
 }

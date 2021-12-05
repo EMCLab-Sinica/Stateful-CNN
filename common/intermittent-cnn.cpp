@@ -410,12 +410,17 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
 
     const Node* node = get_node(output);
 #ifdef Conv
+    uint8_t is_conv = (node->op_type == Conv);
+#else
+    uint8_t is_conv = 0;
+#endif
+
 #if !JAPARI
-    if (node->op_type != Conv) {
+    if (!is_conv) {
         return (job_index + 1) * BATCH_SIZE - 1;
     }
 #else
-    if (node->op_type != Conv) {
+    if (!is_conv) {
         if (node->op_type == Relu) {
             uint16_t OUTPUT_CHANNEL = output->dims[1];
             if (OUTPUT_CHANNEL % (BATCH_SIZE + 1) != 0) {
@@ -425,7 +430,6 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
         }
         return (job_index + 1) * (BATCH_SIZE + 1) - 1;
     }
-#endif
 #endif
 
     /* BEGIN constants */
