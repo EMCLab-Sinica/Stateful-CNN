@@ -2,12 +2,14 @@ import pathlib
 import sys
 
 import onnx
+import onnx.helper
 import tensorflow as tf
 import tf2onnx
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
-from utils import kws_dnn_model
+from utils import kws_dnn_model, find_tensor_value_info, remap_inputs
+from configs import configs
 
 # Simplied from tf2onnx/convert.py and added code for shape information
 def main():
@@ -25,19 +27,12 @@ def main():
     # Eliminate the Cast node
     onnx_graph = tf2onnx.optimizer.optimize_graph(onnx_graph)
 
-    # Borrow shape information from Tensorflow as some operators (e.g., Mfcc) are
-    # not available in ONNX and thus shape inference does not work.
-    # XXX: The following lines are also pushed to my fork. However, I didn't
-    # submit a pull request as it breaks existing tests.
-    # https://github.com/yan12125/tensorflow-onnx/commit/6263c68b94d8c9e5573583d94b56587b3aac8fd4
-    all_outputs = set()
-    for op in onnx_graph.get_nodes():
-        all_outputs.update(op.output)
-    value_infos = onnx_graph.make_onnx_graph_io(all_outputs)
-
     model_proto = onnx_graph.make_model('KWS-DNN_S')
 
-    model_proto.graph.value_info.extend(value_infos)
+    model_proto = remap_inputs(model_proto, {'wav_data:0': 'Mfcc:0'})
+
+    input_value_info = find_tensor_value_info(model_proto, 'Mfcc:0')
+    input_value_info.CopyFrom(onnx.helper.make_tensor_value_info('Mfcc:0', onnx.TensorProto.FLOAT, [1] + configs['kws']['sample_size']))
 
     onnx.save_model(model_proto, 'data/KWS-DNN_S.onnx')
 

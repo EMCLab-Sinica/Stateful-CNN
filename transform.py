@@ -14,12 +14,13 @@ import warnings
 from typing import List
 
 import onnx
+import onnx.defs
 import onnx.helper
 import onnxoptimizer
 import numpy as np
 
 from configs import configs
-from utils import extract_data, find_initializer
+from utils import extract_data, find_initializer, find_node_by_output, dynamic_shape_inference
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ class Constants:
     TURNING_POINTS_LEN = 8
     MODEL_NODES_LEN = 0
     INPUTS_DATA_LEN = 0
-    NUM_INPUTS = 3
+    NUM_INPUTS = 0  # will be filled during parsing
     N_INPUT = 0
     # Match the size of external FRAM
     NVM_SIZE = 512 * 1024
@@ -64,24 +65,16 @@ class Constants:
     METHOD = "Baseline"
     FIRST_SAMPLE_OUTPUTS = []
 
-# https://github.com/onnx/onnx/blob/master/docs/Operators.md
-# [expected_inputs_len, inplace_update]
-ops = {
-    # Concat actually accepts 1~infinity inputs. Use 2 to fit SqueezeNet
-    'Concat': [2, 0],
-    'Conv': [3, 0],
-    'ConvMerge': [1, 0],
-    'Gemm': [3, 0],
-    'GemmMerge': [1, 0],
-    'GlobalAveragePool': [1, 0],
-    'MaxPool': [1, 0],
-    'Relu': [1, 0],
-    'Reshape': [2, 1],
-    'Softmax': [1, 1],
-    'Squeeze': [1, 1],
-    # XXX: Transpose does nothing as we happens to need NHWC
-    'Transpose': [1, 1],
-}
+# Retrieving information for operators. Inspired by the script for generating
+# https://github.com/onnx/onnx/blob/v1.10.2/docs/Operators.md [1,2]
+# [1] https://github.com/onnx/onnx/blob/v1.10.2/onnx/defs/gen_doc.py
+# [2] https://github.com/onnx/onnx/blob/v1.10.2/onnx/onnx_cpp2py_export/defs.pyi
+ops = set()
+for schema in onnx.defs.get_all_schemas():
+    ops.add(schema.name)
+
+# XXX: Transpose does nothing as we happens to need NHWC
+inplace_update_ops = ['Reshape', 'Softmax', 'Squeeze', 'Transpose']
 
 audio_ops = ['DecodeWav', 'AudioSpectrogram', 'Mfcc']
 
@@ -196,12 +189,15 @@ intermittent_methodology.add_argument('--stateful', action='store_true')
 args = parser.parse_args()
 if args.debug:
     logging.getLogger().setLevel(logging.DEBUG)
+else:
+    logging.getLogger().setLevel(logging.INFO)
 config = configs[args.config]
+config['total_sample_size'] = np.prod(config['sample_size'])
 Constants.CONFIG = args.config
 Constants.FIRST_SAMPLE_OUTPUTS = config['first_sample_outputs']
 if args.all_samples:
     Constants.N_SAMPLES = config['n_all_samples']
-    Constants.NVM_SIZE += config['n_all_samples'] * config['sample_size']
+    Constants.NVM_SIZE += config['n_all_samples'] * 2*config['total_sample_size']  # multiply by 2 for Q15
 model_data = config['data_loader'](start=0, limit=Constants.N_SAMPLES)
 
 Constants.BATCH_SIZE = args.batch_size
@@ -225,11 +221,21 @@ onnx_opt_model_name = config['onnx_model'].replace('.onnx', '-opt.onnx')
 onnx_model = onnx.load(config['onnx_model'])
 # https://zhuanlan.zhihu.com/p/41255090
 onnx_model = onnxoptimizer.optimize(onnx_model, [
+    'extract_constant_to_initializer',
     'fuse_add_bias_into_conv',
     'fuse_matmul_add_bias_into_gemm',
 ])
 
-onnx_model = onnx.shape_inference.infer_shapes(onnx_model)
+ops_with_merge = ['Conv', 'Gemm']
+
+ops = ops.intersection(node.op_type for node in onnx_model.graph.node)
+for op in ops_with_merge:
+    if op in ops:
+        ops.add(op + 'Merge')
+ops = sorted(ops)
+
+dynamic_shape_inference(onnx_model, config['sample_size'])
+
 onnx.save_model(onnx_model, onnx_opt_model_name)
 g = onnx_model.graph
 names = {}
@@ -304,7 +310,7 @@ for idx, n in enumerate(g.node):
         logger.warning('skipping audio operator %s', n.op_type)
         continue
     new_nodes.append(n)
-    if n.op_type in ('Conv', 'Gemm'):
+    if n.op_type in ops_with_merge:
         output_name = n.output[0]
         new_node = onnx.NodeProto()
         new_node.name = (n.name or n.op_type) + ':merge'
@@ -322,10 +328,8 @@ nodes = [ONNXNodeWrapper(n) for n in new_nodes]
 
 conv_param_names = set()
 
-input_mapping = model_data.input_mapping
 for idx, inp in enumerate(g.input):
-    inp_name = input_mapping.get(inp.name, inp.name)
-    names[inp_name] = idx
+    names[inp.name] = idx
 
 # For some ONNX models (e.g., squeezenet-cifar10 converted from Keras), inputs
 # do not include initializers. Merge them here.
@@ -335,7 +339,7 @@ for idx, initializer in enumerate(g.initializer):
         names[initializer.name] = idx + inputs_len
 
 Constants.N_INPUT = len(names.keys())
-print("Constants.N_INPUT = {}".format(Constants.N_INPUT))
+logger.info('Constants.N_INPUT = %d', Constants.N_INPUT)
 
 prev_node = None
 for idx, n in enumerate(nodes):
@@ -343,7 +347,6 @@ for idx, n in enumerate(nodes):
         output = n.output[:1]  # we don't care the second output `mask`
     else:
         output = n.output
-    assert len(output) == 1
     if n.op_type == 'Conv':
         # https://github.com/onnx/onnx/blob/master/docs/Operators.md#conv
         conv_param_names.add(n.input[1])
@@ -366,7 +369,8 @@ for idx, n in enumerate(nodes):
         node_flags.axes = 0
         for axis in axes:
             node_flags.axes |= (1 << axis)
-    names[output[0]] = idx + Constants.N_INPUT
+    for output_ in output:
+        names[output_] = idx + Constants.N_INPUT
     prev_node = n
 
 pprint.pprint(names)
@@ -387,11 +391,6 @@ def find_tensor_value_info(name: str):
             return value_info
     raise ValueError(f'No value_info found for {name}')
 
-def find_node_by_output(output_name):
-    for node in g.node:
-        if node.output[0] == output_name:
-            return node
-
 def extend_for_footprints(n):
     return n + n // Constants.BATCH_SIZE
 
@@ -404,7 +403,7 @@ def determine_conv_tile_c(n):
 
     is_separate_tiling = False
     if not find_initializer(onnx_model, n.input[0]):
-        input_node = find_node_by_output(n.input[0])
+        input_node = find_node_by_output(onnx_model, n.input[0])
         if input_node and input_node.op_type == 'Concat':
             is_separate_tiling = True
 
@@ -450,9 +449,10 @@ def determine_conv_tile_c(n):
                 break
 
         if not input_tile_too_large:
-            params_len = CHANNEL / node_flags.input_tile_c * OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W * 2
+            params_len = math.ceil(CHANNEL / node_flags.input_tile_c) * OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W * 2
             if params_len < config['intermediate_values_size']:
                 break
+            logger.debug(f'params_len={params_len}, too high!')
         node_flags.input_tile_c //= 2
         assert node_flags.input_tile_c
         logger.debug('input_tile_c=%d', node_flags.input_tile_c)
@@ -597,16 +597,19 @@ parameters_slot = ParametersSlot(offset=0, target=outputs['parameters'], slot_id
 
 output_nodes = outputs['nodes']
 for node in graph:
+    Constants.NUM_INPUTS = max(Constants.NUM_INPUTS, len(node.inputs))
+logger.info('Maximum number of inputs = %d', Constants.NUM_INPUTS)
+
+for node in graph:
     node_name = node.name[:Constants.NODE_NAME_LEN]
     output_nodes.write(node_name.encode('ascii') + b'\0' * (Constants.NODE_NAME_LEN - len(node_name)))
     output_nodes.write(to_bytes(len(node.inputs)))
-    assert len(node.inputs) <= Constants.NUM_INPUTS
     for inp in node.inputs:
         output_nodes.write(to_bytes(inp))
     for _ in range(Constants.NUM_INPUTS - len(node.inputs)):
         output_nodes.write(to_bytes(0))
     output_nodes.write(to_bytes(node.max_output_id))
-    output_nodes.write(to_bytes(list(ops.keys()).index(node.op_type)))
+    output_nodes.write(to_bytes(ops.index(node.op_type)))
     output_nodes.write(to_bytes(node.flags.as_bytes, size=64))
     if Constants.HAWAII:
         for _ in range(2):
@@ -651,7 +654,7 @@ for params in parameters:
             model_parameters_info.write(to_bytes(slot.offset, size=32))  # params_offset
             model_parameters_info.write(to_bytes(data_len * 2, size=32))  # A _q15 is 16-bit
             if params.name in conv_param_names:
-                print(f'Reorder conv param {params.name}')
+                logger.info('Reorder conv param %s', params.name)
                 float_data, _ = nchw2nhwc(float_data, params.dims)
             slot.target.write(to_bytes(_Q15(np.array(float_data) / config['scale'], 'Parameter')))
             slot.offset += 2 * len(float_data)
@@ -678,7 +681,7 @@ for params in parameters:
         else:
             channels = 0
         model_parameters_info.write(to_bytes(0, size=16))        # dummy
-        print('dims = {}, length = {}'.format(params.dims, data_len))
+        logger.info('dims = %r, length = %d', params.dims, data_len)
         for dim in params.dims:
             model_parameters_info.write(to_bytes(dim))
         # dims are always 4 uint16_t's in C++
@@ -710,7 +713,8 @@ for idx, n in enumerate(nodes):
     intermediate_parameters_info.write(to_bytes(parameter_info_idx))             # parameter_info_idx
     parameter_info_idx += 1
 
-for idx, im in enumerate(model_data.images):
+for idx in range(model_data.images.shape[0]):
+    im = model_data.images[idx, :]
     # load_data returns NCHW
     # https://stackoverflow.com/a/34794744
     outputs['samples'].write(to_bytes(_Q15(im.flatten(order='C') / config['input_scale'], 'Input')))
@@ -749,7 +753,7 @@ struct NodeFlags;
             val = getattr(Constants, item)
         else:
             val = config[item]
-            if not isinstance(val, (int, float)):
+            if not isinstance(val, (int, float, np.int64)):
                 continue
         # Making it long to avoid overflow for expressions like
         # INTERMEDIATE_VALUES_SIZE * NUM_SLOTS on 16-bit systems
@@ -770,29 +774,28 @@ struct NodeFlags;
 ''')
 
     # ops
-    keys = list(ops.keys())
     output_h.write('\n')
-    for idx, op in enumerate(keys):
+    for idx, op in enumerate(ops):
         output_h.write(f'#define {op} {idx}\n')
 
     output_c.write('const uint8_t expected_inputs_len[] = {')
-    for op in keys:
-        output_c.write(f'{ops[op][0]}, ')
+    for op in ops:
+        output_c.write(f'{op}, ')
     output_c.write('};\n\n')
 
-    for op in keys:
+    for op in ops:
         output_h.write('void alloc_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, const struct NodeFlags* flags);\n'.format(op.lower()))
         output_h.write('void handle_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, const struct NodeFlags* flags);\n'.format(op.lower()))
     output_c.write('const handler handlers[] = {\n')
-    for op in keys:
+    for op in ops:
         output_c.write(f'    handle_{op},\n'.lower())
     output_c.write('};\n')
     output_c.write('const allocator allocators[] = {\n')
-    for op in keys:
+    for op in ops:
         output_c.write(f'    alloc_{op},\n'.lower())
     output_c.write('};\n')
-    for op in keys:
-        if ops[op][1]:
+    for op in ops:
+        if op in inplace_update_ops:
             output_c.write(textwrap.dedent(f'''
                 void alloc_{op.lower()}(struct Model *model, const struct ParameterInfo *[], struct ParameterInfo *output, const struct NodeFlags*) {{
                     SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
@@ -831,7 +834,7 @@ const uint8_t * const {var_name} = _{var_name};
         full_var_name = var_name + '_data'
         data_obj.seek(0)
         if full_var_name == 'samples_data':
-            data = data_obj.read(config['sample_size'])
+            data = data_obj.read(2*config['total_sample_size'])
         else:
             data = data_obj.read()
         define_var(full_var_name, data)

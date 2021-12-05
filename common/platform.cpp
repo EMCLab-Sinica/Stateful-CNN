@@ -57,7 +57,7 @@ void my_memcpy_from_intermediate_values(void *dest, const ParameterInfo *param, 
 }
 
 void read_from_samples(void *dest, uint16_t offset_in_word, size_t n) {
-    read_from_nvm(dest, SAMPLES_OFFSET + (sample_idx % PLAT_LABELS_DATA_LEN) * SAMPLE_SIZE + offset_in_word * sizeof(int16_t), n);
+    read_from_nvm(dest, SAMPLES_OFFSET + (sample_idx % PLAT_LABELS_DATA_LEN) * 2*TOTAL_SAMPLE_SIZE + offset_in_word * sizeof(int16_t), n);
 }
 
 ParameterInfo* get_intermediate_parameter_info(uint8_t i) {

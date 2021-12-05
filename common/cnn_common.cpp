@@ -5,7 +5,7 @@
 
 ParameterInfo intermediate_parameters_info_vm[MODEL_NODES_LEN];
 
-const ParameterInfo* get_parameter_info(uint8_t i) {
+const ParameterInfo* get_parameter_info(uint16_t i) {
     if (i < N_INPUT) {
         return reinterpret_cast<const ParameterInfo*>(model_parameters_info_data) + i;
     } else {

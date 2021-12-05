@@ -22,7 +22,6 @@ static void handle_node(Model *model, uint16_t node_idx) {
 
     int16_t input_id[3];
     const ParameterInfo *input[3];
-    MY_ASSERT(cur_node->inputs_len == expected_inputs_len[cur_node->op_type]);
     for (uint16_t j = 0; j < cur_node->inputs_len; j++) {
         input_id[j] = cur_node->inputs[j];
         my_printf_debug("input_id[%d] = %d" NEWLINE, j, input_id[j]);
@@ -173,14 +172,14 @@ static void print_results(const ParameterInfo *output_node) {
     dump_params(model, output_node);
 
     my_printf("op types:       ");
-    for (uint8_t i = 0; i < MODEL_NODES_LEN; i++) {
+    for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
         my_printf("% 8d", get_node(i)->op_type);
         if (i % 16 == 15) {
             my_printf(NEWLINE);
         }
     }
     my_printf(NEWLINE "ticks:          ");
-    for (uint8_t i = 0; i < MODEL_NODES_LEN; i++) {
+    for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
         my_printf("% 8d", counters()->time_counters[i]);
         if (i % 16 == 15) {
             my_printf(NEWLINE);
@@ -188,19 +187,19 @@ static void print_results(const ParameterInfo *output_node) {
     }
 #if NON_VOLATILE_COUNTERS
     my_printf(NEWLINE "power counters: ");
-    for (uint8_t i = 0; i < MODEL_NODES_LEN; i++) {
+    for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
         my_printf("% 8d", counters()->power_counters[i]);
         if (i % 16 == 15) {
             my_printf(NEWLINE);
         }
     }
     my_printf(NEWLINE "DMA invocations:");
-    for (uint8_t i = 0; i < MODEL_NODES_LEN; i++) {
+    for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
         my_printf("% 8d", counters()->dma_invocations[i]);
     }
     my_printf(NEWLINE "DMA bytes:      ");
     uint32_t total_dma_bytes = 0;
-    for (uint8_t i = 0; i < MODEL_NODES_LEN; i++) {
+    for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
         total_dma_bytes += counters()->dma_bytes[i];
         my_printf("% 8d", counters()->dma_bytes[i]);
     }
@@ -410,6 +409,7 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
 #endif
 
     const Node* node = get_node(output);
+#ifdef Conv
 #if !JAPARI
     if (node->op_type != Conv) {
         return (job_index + 1) * BATCH_SIZE - 1;
@@ -425,6 +425,7 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
         }
         return (job_index + 1) * (BATCH_SIZE + 1) - 1;
     }
+#endif
 #endif
 
     /* BEGIN constants */

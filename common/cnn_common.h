@@ -53,7 +53,7 @@ typedef struct Node {
 #endif
 } Node;
 
-static_assert(sizeof(Node) == 44 + HAWAII * 8, "Unexpected size for Node");
+static_assert(sizeof(Node) == 38 + NUM_INPUTS * 2 + HAWAII * 8, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct ParameterInfo {
@@ -140,7 +140,7 @@ int16_t get_q15_param(Model* model, const ParameterInfo *param, uint16_t offset_
 void put_q15_param(ParameterInfo *param, uint16_t offset_in_word, int16_t val);
 int64_t get_int64_param(const ParameterInfo *param, size_t i);
 uint16_t get_next_slot(Model *model, const ParameterInfo *param);
-const ParameterInfo* get_parameter_info(uint8_t i);
+const ParameterInfo* get_parameter_info(uint16_t i);
 const Node* get_node(size_t i);
 const Node* get_node(const ParameterInfo* param);
 SlotInfo * get_slot_info(Model* model, uint8_t i);
@@ -152,6 +152,5 @@ void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, 
 typedef void (*handler)(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags);
 typedef void (*allocator)(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags);
 // below are defined in ops.c
-extern const uint8_t expected_inputs_len[];
 extern const handler handlers[];
 extern const allocator allocators[];

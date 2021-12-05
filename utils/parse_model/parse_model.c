@@ -7,20 +7,30 @@
 
 static void handle_value_info(Onnx__ValueInfoProto *value_info) {
     size_t i;
+    int64_t mem_usage = 1;
 
-    Onnx__TensorShapeProto *shape = value_info->type->tensor_type->shape;
-    if (!shape || !shape->n_dim) {
-        return;
+    printf("name = %s", value_info->name);
+    Onnx__TypeProto *type = value_info->type;
+    if (!type) {
+        mem_usage = -1;
+        goto no_shape;
     }
-    printf("name = %s, shape = (", value_info->name);
+    Onnx__TensorShapeProto *shape = type->tensor_type->shape;
+    if (!shape || !shape->n_dim) {
+        mem_usage = -1;
+        goto no_shape;
+    }
+    printf(", shape = (");
     for (i = 0; i < shape->n_dim; i++) {
         Onnx__TensorShapeProto__Dimension *d = shape->dim[i];
         switch (d->value_case) {
             case ONNX__TENSOR_SHAPE_PROTO__DIMENSION__VALUE_DIM_VALUE:
                 printf("%" PRId64, d->dim_value);
+                mem_usage *= d->dim_value;
                 break;
             case ONNX__TENSOR_SHAPE_PROTO__DIMENSION__VALUE_DIM_PARAM:
                 printf("%s", d->dim_param);
+                mem_usage = -1;
                 break;
             default:
                 break;
@@ -29,7 +39,14 @@ static void handle_value_info(Onnx__ValueInfoProto *value_info) {
             printf(", ");
         }
     }
-    printf(")\n");
+    printf(")");
+no_shape:
+    printf(", ");
+    if (mem_usage < 0) {
+        printf("mem_usage = (unknown)\n");
+    } else {
+        printf("mem_usage = %" PRId64 "\n", mem_usage);
+    }
 }
 
 static void handle_tensor(Onnx__TensorProto *tensor) {
@@ -46,7 +63,17 @@ static void handle_tensor(Onnx__TensorProto *tensor) {
 
     switch (tensor->data_type) {
         case ONNX__TENSOR_PROTO__DATA_TYPE__INT64:
-            printf("type=INT64");
+            printf("type=INT64, vals=[");
+            for (i = 0; i < tensor->n_int64_data; i++) {
+                printf("%" PRId64, tensor->int64_data[i]);
+                if (i != tensor->n_int64_data - 1) {
+                    printf(", ");
+                }
+            }
+            printf("]");
+            break;
+        case ONNX__TENSOR_PROTO__DATA_TYPE__FLOAT:
+            printf("type=FLOAT");
             break;
         default:
             printf("(Tensor data type %d not implemented)", tensor->data_type);

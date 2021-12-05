@@ -7,18 +7,20 @@ import pickle
 import re
 import struct
 import tarfile
-from typing import Callable, Dict, List, NamedTuple, Optional, Union
+from typing import Callable, Dict, Iterable, List, NamedTuple, Optional
 from urllib.request import urlretrieve
 
 import numpy as np
 import onnx
+import onnxoptimizer
+import onnxruntime
+import onnxruntime.backend as backend
 
 logger = logging.getLogger(__name__)
 
 class ModelData(NamedTuple):
     labels: List[int]
-    images: List[np.array]
-    input_mapping: Dict[str, str] = {}
+    images: np.array
 
 def load_data_mnist(start: int, limit: int) -> ModelData:
     images = []
@@ -49,7 +51,7 @@ def load_data_mnist(start: int, limit: int) -> ModelData:
             if limit is not None and counter >= limit:
                 break
 
-    return ModelData(labels=labels, images=images)
+    return ModelData(labels=labels, images=np.array(images, dtype=np.float32))
 
 def load_data_cifar10(start: int, limit: int) -> ModelData:
     def extract_archive(archive_path):
@@ -77,7 +79,7 @@ def load_data_cifar10(start: int, limit: int) -> ModelData:
         im = im / 256
         im = np.moveaxis(im, 0, -1)
         images.append(im)
-    return ModelData(labels=labels, images=images)
+    return ModelData(labels=labels, images=np.array(images, dtype=np.float32))
 
 GOOGLE_SPEECH_URL = 'https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_test_set_v0.02.tar.gz'
 GOOGLE_SPEECH_SAMPLE_RATE = 16000
@@ -122,9 +124,8 @@ def load_data_google_speech(start: int, limit: int) -> ModelData:
             })
             mfccs.append(mfcc[0])
 
-    input_mapping = {'wav_data:0': 'Mfcc:0'}
 
-    return ModelData(labels=labels, images=mfccs, input_mapping=input_mapping)
+    return ModelData(labels=labels, images=np.array(mfccs, dtype=np.float32))
 
 def kws_dnn_model():
     return download_file('https://github.com/ARM-software/ML-KWS-for-MCU/raw/master/Pretrained_models/DNN/DNN_S.pb', 'KWS-DNN_S.pb')
@@ -200,37 +201,93 @@ def find_tensor_value_info(onnx_model: onnx.ModelProto, name: str) -> onnx.Value
             return value_info
     raise ValueError(f'No value_info found for {name}')
 
-def change_batch_size(onnx_model: onnx.ModelProto, batch_size: Union[str, int]):
-    g = onnx_model.graph
-    initializer_names = set([initializer.name for initializer in g.initializer])
-    constant_names = set([node.output[0] for node in g.node if node.op_type == 'Constant'])
-    for value_info in itertools.chain(g.value_info, g.input, g.output):
-        if value_info.name in initializer_names or value_info.name in constant_names:
+def find_node_by_output(onnx_model: onnx.ModelProto, output_name: str) -> onnx.NodeProto:
+    for node in onnx_model.graph.node:
+        for output in node.output:
+            if output == output_name:
+                return node
+
+def numpy_type_to_onnx_elem_type(numpy_type):
+    if numpy_type == np.float32:
+        return onnx.TensorProto.FLOAT
+    if numpy_type == np.int64:
+        return onnx.TensorProto.INT64
+    if numpy_type == np.bool_:
+        return onnx.TensorProto.BOOL
+    raise Exception(f'Unsupported type {numpy_type}')
+
+def onnxruntime_prepare_model(model):
+    return backend.prepare(onnxruntime.InferenceSession(
+        model.SerializeToString(),
+        providers=["CPUExecutionProvider"],
+    ))
+
+def onnxruntime_get_intermediate_tensor(model, image):
+    # Creating a new model with all nodes as outputs
+    # https://github.com/microsoft/onnxruntime/issues/1455#issuecomment-979901463
+    tmp_model = onnx.ModelProto()
+    tmp_model.CopyFrom(model)
+
+    orig_outputs = list(tmp_model.graph.output)
+    orig_output_names = [node.name for node in orig_outputs]
+    del tmp_model.graph.output[:]
+    for node in tmp_model.graph.node:
+        for output in node.output:
+            if output not in orig_output_names:
+                tmp_model.graph.output.append(onnx.ValueInfoProto(name=output))
+    tmp_model.graph.output.extend(orig_outputs)
+
+    rep = onnxruntime_prepare_model(tmp_model)
+    outputs = rep.run(image)
+    for idx, output in enumerate(outputs):
+        output_name = tmp_model.graph.output[idx].name
+        node = find_node_by_output(tmp_model, output_name)
+        yield output_name, node.op_type, output
+
+def dynamic_shape_inference(onnx_model: onnx.ModelProto, sample_size: Iterable[int]) -> None:
+    for node in itertools.chain(onnx_model.graph.input, onnx_model.graph.output):
+        if not node.type.tensor_type.shape.dim:
             continue
-        shape = value_info.type.tensor_type.shape
-        if shape.dim:
-            if isinstance(batch_size, str):
-                shape.dim[0].dim_param = batch_size
-            else:
-                shape.dim[0].dim_value = batch_size
+        node.type.tensor_type.shape.dim[0].dim_param = 'N'
 
-    if isinstance(batch_size, str):
-        for node in g.node:
-            if node.op_type != 'Reshape':
-                continue
-            if find_initializer(onnx_model, node.input[0]):
-                continue
-            new_shape = find_initializer(onnx_model, node.input[1])
-            if not new_shape:
-                continue
-            new_shape_value = extract_data(new_shape)
-            new_shape_value[0] = 0
-            new_shape.CopyFrom(onnx.helper.make_tensor(
-                name=new_shape.name,
-                data_type=onnx.TensorProto.INT64,
-                dims=np.shape(new_shape_value),
-                vals=new_shape_value,
-            ))
+    del onnx_model.graph.value_info[:]
 
-    # make sure above steps did not break the model
-    onnx.shape_inference.infer_shapes(onnx_model)
+    BATCH_SIZE = 2  # Any number larger than 1 is OK. Here I pick the smallest one for performance considerations
+    dummy_images = [np.expand_dims(np.zeros(sample_size, dtype=np.float32), axis=0)]
+    shapes = {
+        layer_name: np.shape(layer_out)
+        for layer_name, _, layer_out in onnxruntime_get_intermediate_tensor(onnx_model, dummy_images)
+    }
+    dummy_images = [np.repeat(dummy_images[0], repeats=BATCH_SIZE, axis=0)]
+
+    value_infos = []
+    for layer_name, _, layer_out in onnxruntime_get_intermediate_tensor(onnx_model, dummy_images):
+        larger_shape = np.shape(layer_out)
+        smaller_shape = shapes[layer_name]
+        assert larger_shape[1:] == smaller_shape[1:]
+        new_shape = list(larger_shape)
+        if larger_shape and larger_shape[0] != smaller_shape[0]:
+            assert larger_shape[0] == smaller_shape[0] * BATCH_SIZE
+            new_shape[0] = 'N'
+
+        elem_type = numpy_type_to_onnx_elem_type(layer_out.dtype)
+        value_info = onnx.helper.make_tensor_value_info(layer_name, elem_type, new_shape)
+        value_infos.append(value_info)
+
+    onnx_model.graph.value_info.extend(value_infos)
+
+def remap_inputs(model: onnx.ModelProto, input_mapping: Dict[str, str]):
+    new_inputs = list(input_mapping.values())
+    for new_input in new_inputs:
+        model.graph.input.append(onnx.ValueInfoProto(name=new_input))
+    for node in model.graph.node:
+        node.input[:] = [input_mapping.get(inp, inp) for inp in node.input]
+        node.output[:] = [
+            output + '_unused' if output in new_inputs else output
+            for output in node.output
+        ]
+    for idx, inp in enumerate(model.graph.input):
+        if inp.name in input_mapping.keys():
+            del model.graph.input[idx]
+
+    return onnxoptimizer.optimize(model, ['eliminate_deadend'])
