@@ -43,5 +43,5 @@ if [[ ! $CONFIG = *baseline* ]]; then
     cmake_args=${cmake_args/MY_DEBUG=1/MY_DEBUG=2}
     cmake -B build $cmake_args
     make -C build
-    python ./run-intermittently.py --rounds $rounds --interval $power_cycle --suffix $LOG_SUFFIX --compress ./build/intermittent-cnn
+    TMPDIR=/var/tmp python ./run-intermittently.py --rounds $rounds --interval $power_cycle --suffix $LOG_SUFFIX --compress ./build/intermittent-cnn
 fi
