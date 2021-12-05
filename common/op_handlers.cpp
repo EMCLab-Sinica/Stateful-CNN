@@ -1,5 +1,6 @@
 #include <cstdint>
 #include "cnn_common.h"
+#include "data.h"
 #include "op_utils.h"
 #include "my_debug.h"
 #include "intermittent-cnn.h"
@@ -235,7 +236,7 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
     for (uint8_t i = 0; i < 4; i++) {
         if (output->dims[i] != RESHAPE_AUTO_DIM && output->dims[i] != 0) {
 #if JAPARI
-            if (i == last_dim_idx) {
+            if (i == last_dim_idx && data->slot != SLOT_TEST_SET) {
                 inferred_dim /= extend_for_footprints(output->dims[i]);
             } else
 #endif
@@ -251,7 +252,9 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
         new_len *= inferred_dim;
     }
 #if JAPARI
-    new_len = extend_for_footprints(new_len);
+    if (data->slot != SLOT_TEST_SET) {
+        new_len = extend_for_footprints(new_len);
+    }
 #endif
     MY_ASSERT(new_len * sizeof(int16_t) == output->params_len);
 }

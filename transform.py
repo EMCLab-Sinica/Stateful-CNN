@@ -464,7 +464,7 @@ def determine_gemm_tile_sizes(n):
     A = find_tensor_value_info(n.input[0])
     B = find_initializer(onnx_model, n.input[1])
     A_shape = A.type.tensor_type.shape
-    A_rows = A_shape.dim[0].dim_value
+    A_rows = 1  # Not using A_shape.dim[0] here, as it's a symbol "N"
     A_cols = A_shape.dim[1].dim_value
     B_rows = B.dims[0]
     node_flags = n.flags.b.extra.gemm
