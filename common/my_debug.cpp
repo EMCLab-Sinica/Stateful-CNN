@@ -58,6 +58,16 @@ static void dump_params_common(Model* model, const ParameterInfo* cur_param) {
         my_printf("State: %d" NEWLINE, get_slot_info(model, cur_param->slot)->state_bit);
     }
 #endif
+    my_printf("Dims: ");
+    uint8_t has_dims = 0;
+    for (uint8_t j = 0; j < 4; j++) {
+        if (cur_param->dims[j]) {
+            has_dims = 1;
+            my_printf("%d, ", cur_param->dims[j]);
+        }
+    }
+    my_printf(NEWLINE);
+    MY_ASSERT(has_dims);
 }
 
 static int16_t find_real_num(int16_t NUM, int16_t CHANNEL, int16_t H, int16_t W, const ParameterInfo* cur_param) {

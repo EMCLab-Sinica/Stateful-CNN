@@ -270,7 +270,7 @@ static void convTask(uint16_t offset_h, ConvTaskParams *conv_params) {
     /* START dump data */
     my_printf_debug("input_h=%d" NEWLINE, conv_params->input_h + offset_h);
     my_printf_debug("filter_idx=");
-#if MY_DEBUG >= 1
+#if MY_DEBUG >= MY_DEBUG_VERBOSE
     for (uint16_t idx = 0; idx < cur_output_tile_c; idx++) {
         my_printf_debug("%d ", conv_params->filter_idx + idx);
         MY_ASSERT(conv_params->filter_idx + idx < conv_params->N_FILTERS);
@@ -350,7 +350,7 @@ static inline uint16_t load_input_vector(uint32_t src_addr, int16_t* dest_addr, 
     }
 #endif
 
-#if MY_DEBUG >= 1
+#if MY_DEBUG >= MY_DEBUG_VERBOSE
     for (uint16_t idx = 0; idx < loaded_len; idx++) {
         my_printf_debug("%d ", dest_addr[idx]);
     }

@@ -13,12 +13,12 @@
 uint16_t sample_idx;
 
 static void handle_node(Model *model, uint16_t node_idx) {
-    my_printf_debug("Current node: %d, ", node_idx);
-
-    /* schedule it */
     const Node *cur_node = get_node(node_idx);
-    my_printf_debug("name = %.*s, ", NODE_NAME_LEN, cur_node->name);
-    my_printf_debug("op_type = %d" NEWLINE, cur_node->op_type);
+#if MY_DEBUG >= MY_DEBUG_LAYERS
+    my_printf("Current node: %d, ", node_idx);
+    my_printf("name = %.*s, ", NODE_NAME_LEN, cur_node->name);
+    my_printf("op_type = %d" NEWLINE, cur_node->op_type);
+#endif
 
     int16_t input_id[3];
     const ParameterInfo *input[3];
@@ -53,19 +53,7 @@ static void handle_node(Model *model, uint16_t node_idx) {
     my_printf_debug("New output state bit=%d" NEWLINE, get_state_bit(model, output->slot));
 #endif
 
-#if MY_DEBUG >= 1
-    my_printf_debug("output dims: ");
-    uint8_t has_dims = 0;
-    for (uint8_t j = 0; j < 4; j++) {
-        if (output->dims[j]) {
-            has_dims = 1;
-            my_printf_debug("%d, ", output->dims[j]);
-        }
-    }
-    my_printf_debug(NEWLINE);
-    MY_ASSERT(has_dims);
     MY_ASSERT(output->bitwidth);
-#endif
 
     commit_intermediate_parameter_info(node_idx);
 
@@ -75,7 +63,7 @@ static void handle_node(Model *model, uint16_t node_idx) {
     }
 }
 
-#if MY_DEBUG >= 1
+#if MY_DEBUG >= MY_DEBUG_NORMAL
 const float first_sample_outputs[] = FIRST_SAMPLE_OUTPUTS;
 #endif
 
@@ -121,7 +109,7 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     if (output_node_ptr) {
         *output_node_ptr = output_node;
     }
-#if MY_DEBUG >= 1
+#if MY_DEBUG >= MY_DEBUG_NORMAL
     int16_t max = INT16_MIN;
     uint16_t u_ans;
     uint8_t ans_len = sizeof(first_sample_outputs) / sizeof(float);
@@ -165,7 +153,7 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
 #endif
 }
 
-#if MY_DEBUG >= 1
+#if MY_DEBUG >= MY_DEBUG_NORMAL
 static void print_results(const ParameterInfo *output_node) {
     Model *model = get_model();
 
@@ -214,7 +202,7 @@ static void print_results(const ParameterInfo *output_node) {
 uint8_t run_cnn_tests(uint16_t n_samples) {
     int8_t predicted = -1;
     const ParameterInfo *output_node;
-#if MY_DEBUG >= 1
+#if MY_DEBUG >= MY_DEBUG_NORMAL
     int8_t label = -1;
     uint32_t correct = 0, total = 0;
     if (!n_samples) {
@@ -225,7 +213,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
     for (uint16_t i = 0; i < n_samples; i++) {
         sample_idx = i;
         run_model(&predicted, &output_node);
-#if MY_DEBUG >= 1
+#if MY_DEBUG >= MY_DEBUG_NORMAL
         label = labels[i];
         total++;
         if (label == predicted) {
@@ -239,7 +227,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
         my_printf_debug("idx=%d label=%d predicted=%d correct=%d" NEWLINE, i, label, predicted, label == predicted);
 #endif
     }
-#if MY_DEBUG >= 1
+#if MY_DEBUG >= MY_DEBUG_NORMAL
     if (n_samples == 1) {
         print_results(output_node);
     }
@@ -258,7 +246,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
 
 #if INDIRECT_RECOVERY
 static void check_feature_map_states(Model *model, const ParameterInfo* output, uint32_t first_unfinished_job_index, uint32_t len, const char* func) {
-#if MY_DEBUG >= 1
+#if MY_DEBUG >= MY_DEBUG_NORMAL
     my_printf_debug("Running check_feature_map_states..." NEWLINE);
 #if 0
     for (uint32_t idx = 0; idx < len; idx++) {

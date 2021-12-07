@@ -209,7 +209,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                     check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
                     offset_vector(lea_buffer, offset, len, output_offset, next_output_turning_point);
 #endif
-#if MY_DEBUG >= 1
+#if MY_DEBUG >= MY_DEBUG_VERBOSE
                     // need a space as dump_value does not append spaces when DUMP_INTEGERS is not defined
                     my_printf_debug(" max=");
                     for (uint8_t idx = 0; idx < len; idx++) {

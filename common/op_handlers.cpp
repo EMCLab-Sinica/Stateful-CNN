@@ -125,13 +125,13 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     hawaii_record_footprints(model, len);
 #endif
 
+#if MY_DEBUG >= MY_DEBUG_VERBOSE
                     my_printf_debug("output_offset=[% 6d, % 6d), output val=", output_offset, output_offset + output_idx);
-#if MY_DEBUG >= 1
                     for (uint16_t idx = 0; idx < output_idx; idx++) {
                         my_printf_debug("% 6d ", lea_buffer[idx]);
                     }
-#endif
                     my_printf_debug(NEWLINE);
+#endif
                 c = 0;
             }
             output_w = 0;

@@ -6,11 +6,13 @@
 #include "data.h"
 #include "platform.h"
 
-// 0: silent, assertion disabled
-// 1: normal
-// 2: verbose
+#define MY_DEBUG_NO_ASSERT 0
+#define MY_DEBUG_NORMAL 1
+#define MY_DEBUG_LAYERS 2
+#define MY_DEBUG_VERBOSE 3
+
 #ifndef MY_DEBUG
-#define MY_DEBUG 0
+#define MY_DEBUG MY_DEBUG_NO_ASSERT
 #endif
 
 #if defined(__MSP430__) || defined(__MSP432__)
@@ -42,7 +44,7 @@ void my_assert_impl(const char *file, uint16_t line, uint8_t cond, Args... args)
     }
 }
 
-#if MY_DEBUG >= 1
+#if MY_DEBUG >= MY_DEBUG_NORMAL
 #define MY_ASSERT(...) my_assert_impl(__FILE__, __LINE__, __VA_ARGS__)
 #else
 #define MY_ASSERT(...)
@@ -73,12 +75,10 @@ void dump_turning_points(Model *model, const ParameterInfo *output);
 void compare_vm_nvm_impl(int16_t* vm_data, Model* model, const ParameterInfo* output, uint16_t output_offset, uint16_t blockSize);
 void check_nvm_write_address_impl(uint32_t nvm_offset, size_t n);
 
-#if MY_DEBUG >= 2
+#if MY_DEBUG >= MY_DEBUG_VERBOSE
 
 #define dump_value_debug dump_value
 #define dump_matrix_debug dump_matrix
-#define dump_params_debug dump_params
-#define dump_params_nhwc_debug dump_params_nhwc
 #define dump_model_debug dump_model
 #define my_printf_debug my_printf
 #define dump_turning_points_debug dump_turning_points
@@ -88,16 +88,25 @@ void check_nvm_write_address_impl(uint32_t nvm_offset, size_t n);
 #define dump_value_debug(...)
 #define dump_matrix_debug(...)
 #define dump_matrix_debug(...)
-#define dump_params_debug(...)
-#define dump_params_nhwc_debug(...)
 #define dump_model_debug(...)
 #define my_printf_debug(...)
 #define dump_turning_points_debug(...)
 
 #endif
 
+#if MY_DEBUG >= MY_DEBUG_LAYERS
 
-#if MY_DEBUG >= 1
+#define dump_params_debug dump_params
+#define dump_params_nhwc_debug dump_params_nhwc
+
+#else
+
+#define dump_params_debug(...)
+#define dump_params_nhwc_debug(...)
+
+#endif
+
+#if MY_DEBUG >= MY_DEBUG_NORMAL
 
 #define compare_vm_nvm compare_vm_nvm_impl
 #define check_nvm_write_address check_nvm_write_address_impl
