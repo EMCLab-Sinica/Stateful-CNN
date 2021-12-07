@@ -80,9 +80,9 @@ int main(int argc, char* argv[]) {
     }
 
 #if USE_ARM_CMSIS
-    my_printf("Use DSP from ARM CMSIS pack" NEWLINE);
+    my_printf_debug("Use DSP from ARM CMSIS pack" NEWLINE);
 #else
-    my_printf("Use TI DSPLib" NEWLINE);
+    my_printf_debug("Use TI DSPLib" NEWLINE);
 #endif
 
     model = get_model();

@@ -231,7 +231,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
         if (label == predicted) {
             correct++;
         }
-        if (i % 100 == 0) {
+        if (i % 100 == 99) {
             my_printf("Sample %d finished" NEWLINE, sample_idx);
             // stdout is not flushed at \n if it is not a terminal
             my_flush();

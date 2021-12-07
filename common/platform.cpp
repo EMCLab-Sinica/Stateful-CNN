@@ -159,7 +159,7 @@ void first_run(void) {
     get_model(); // refresh model_vm
     commit_model();
 
-    my_printf("Init for " CONFIG "/" METHOD " with batch size=%d" NEWLINE, BATCH_SIZE);
+    my_printf_debug("Init for " CONFIG "/" METHOD " with batch size=%d" NEWLINE, BATCH_SIZE);
 }
 
 void write_to_nvm_segmented(const uint8_t* vm_buffer, uint32_t nvm_offset, uint16_t total_len, uint16_t segment_size) {
