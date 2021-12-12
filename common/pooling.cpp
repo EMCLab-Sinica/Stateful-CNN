@@ -88,10 +88,10 @@ static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
                 if (offset_has_state(maxpool_params->start_channel + input_channel_offset)) {
                     strip_state(&val);
                 }
+                val *= 2;
 #endif
                 // dump_value_debug(model, maxpool_params->data, val_offset);
                 my_printf_debug("% 6d ", val);
-                // XXX: use LEA?
                 if (val > output_buffer[output_channel_offset]) {
                     output_buffer[output_channel_offset] = val;
                 }
@@ -207,6 +207,9 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                     my_printf_debug("output_offset=[% 5d, % 5d) ", output_offset, output_offset + len);
 #if INDIRECT_RECOVERY
                     check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
+#if STATEFUL
+                    my_scale_q15(lea_buffer, 0x4000, 0, lea_buffer, len * sizeof(int16_t));
+#endif
                     offset_vector(lea_buffer, offset, len, output_offset, next_output_turning_point);
 #endif
 #if MY_DEBUG >= MY_DEBUG_VERBOSE
@@ -271,6 +274,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                         }
                         my_printf_debug("output_offset=% 5d ", output_offset);
 #if STATEFUL
+                        lea_buffer[0] /= 2;
                         if (cur_batch_offset == BATCH_SIZE - 1) {
                             check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
                             lea_buffer[0] += offset;
@@ -359,12 +363,14 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
                     if (offset_has_state(input_channel)) {
                         strip_state(&val);
                     }
+                    val *= 2;
 #endif
                     total += val;
                 }
             }
             output_val = total / len;
 #if STATEFUL
+            output_val /= 2;
             if (offset_has_state(output_channel)) {
                 check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_channel);
                 output_val += offset;

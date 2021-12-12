@@ -101,6 +101,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                             if (offset_has_state(c + idx)) {
                                 strip_state(&input_val);
                             }
+                            input_val *= 2;
 #endif
                             output_val = MAX_VAL(input_val, 0);
                         }
@@ -114,6 +115,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     } else {
                         block_size = MIN_VAL(len, next_output_turning_point - output_offset);
                     }
+                    my_scale_q15(lea_buffer, 0x4000, 0, lea_buffer, len * sizeof(int16_t));
                     my_offset_q15_batched(lea_buffer, offset, lea_buffer, block_size);
                     if (next_output_turning_point < output_offset + len) {
                         int16_t* to_offset = lea_buffer + next_output_turning_point - output_offset;
@@ -158,12 +160,14 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                 if (offset_has_state(data_offset)) {
                     strip_state(&input_val);
                 }
+                input_val *= 2;
 #endif
                 check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
 #endif
                 output_val = MAX_VAL(input_val, 0);
             }
 #if STATEFUL
+            output_val /= 2;
             if (cur_batch_offset == BATCH_SIZE - 1) {
                 cur_batch_offset -= BATCH_SIZE;
                 output_val += offset;

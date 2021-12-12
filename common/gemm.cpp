@@ -255,7 +255,6 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
     for (uint16_t tile = 0; tile < n_tiles; tile++) {
         my_memcpy_from_param(model, buffer_temp, input[0], tile * output_len, output_len * sizeof(int16_t));
 #if STATEFUL
-        // XXX: use LEA?
         for (uint16_t idx = BATCH_SIZE - 1; idx < output_len; idx += BATCH_SIZE) {
             strip_state(buffer_temp + idx);
         }
