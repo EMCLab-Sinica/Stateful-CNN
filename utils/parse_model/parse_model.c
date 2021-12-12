@@ -8,6 +8,7 @@
 static void handle_value_info(Onnx__ValueInfoProto *value_info) {
     size_t i;
     int64_t mem_usage = 1;
+    const char* batch_size = NULL;
 
     printf("name = %s", value_info->name);
     Onnx__TypeProto *type = value_info->type;
@@ -30,7 +31,12 @@ static void handle_value_info(Onnx__ValueInfoProto *value_info) {
                 break;
             case ONNX__TENSOR_SHAPE_PROTO__DIMENSION__VALUE_DIM_PARAM:
                 printf("%s", d->dim_param);
-                mem_usage = -1;
+                if (batch_size) {
+                    fprintf(stderr, "Multiple batch sizes not supported!\n");
+                    mem_usage = -1;
+                } else {
+                    batch_size = d->dim_param;
+                }
                 break;
             default:
                 break;
@@ -45,7 +51,11 @@ no_shape:
     if (mem_usage < 0) {
         printf("mem_usage = (unknown)\n");
     } else {
-        printf("mem_usage = %" PRId64 "\n", mem_usage);
+        printf("mem_usage = %" PRId64, mem_usage);
+        if (batch_size) {
+            printf("%s", batch_size);
+        }
+        printf("\n");
     }
 }
 
