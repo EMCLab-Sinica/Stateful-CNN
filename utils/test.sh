@@ -3,7 +3,6 @@ set -x
 
 # preparation
 cmake_args=""
-run_args=""
 
 pushd ARM-CMSIS && ./download-extract-cmsis.sh && popd
 
@@ -28,7 +27,7 @@ rm -vf nvm.bin
 python transform.py $CONFIG
 cmake -B build $cmake_args
 make -C build
-./build/intermittent-cnn $run_args
+./build/intermittent-cnn
 
 # Test intermittent running
 if [[ ! $CONFIG = *baseline* ]]; then
@@ -40,7 +39,7 @@ if [[ ! $CONFIG = *baseline* ]]; then
         python transform.py ${CONFIG/--all-samples/}
     fi
 
-    cmake_args=${cmake_args/MY_DEBUG=1/MY_DEBUG=2}
+    cmake_args=${cmake_args/MY_DEBUG=1/MY_DEBUG=3}
     cmake -B build $cmake_args
     make -C build
     TMPDIR=/var/tmp python ./run-intermittently.py --rounds $rounds --interval $power_cycle --suffix $LOG_SUFFIX --compress ./build/intermittent-cnn
