@@ -4,7 +4,7 @@ import numpy as np
 import onnx
 
 from configs import configs
-from utils import dynamic_shape_inference, onnxruntime_prepare_model, onnxruntime_get_intermediate_tensor
+from utils import dynamic_shape_inference, onnxruntime_prepare_model, onnxruntime_get_intermediate_tensor, load_model
 
 def print_float(val):
     print('%13.6f' % val, end='')
@@ -44,8 +44,7 @@ def print_tensor(tensor):
         print(f'Max={np.max(tensor)}, min={np.min(tensor)}')
 
 def prepare_model_and_data(config, limit):
-    # https://github.com/onnx/onnx/blob/master/docs/PythonAPIOverview.md
-    model = onnx.load_model(config['onnx_model'].replace('.onnx', '-opt.onnx'))
+    model = load_model(config)
     model_data = config['data_loader'](start=0, limit=limit)
 
     dynamic_shape_inference(model, config['sample_size'])

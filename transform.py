@@ -16,11 +16,10 @@ from typing import List
 import onnx
 import onnx.defs
 import onnx.helper
-import onnxoptimizer
 import numpy as np
 
 from configs import configs
-from utils import extract_data, find_initializer, find_node_by_output, dynamic_shape_inference
+from utils import extract_data, find_initializer, find_node_by_output, load_model, get_model_ops, OPS_WITH_MERGE
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -64,14 +63,6 @@ class Constants:
     INDIRECT_RECOVERY = 0
     METHOD = "Baseline"
     FIRST_SAMPLE_OUTPUTS = []
-
-# Retrieving information for operators. Inspired by the script for generating
-# https://github.com/onnx/onnx/blob/v1.10.2/docs/Operators.md [1,2]
-# [1] https://github.com/onnx/onnx/blob/v1.10.2/onnx/defs/gen_doc.py
-# [2] https://github.com/onnx/onnx/blob/v1.10.2/onnx/onnx_cpp2py_export/defs.pyi
-ops = set()
-for schema in onnx.defs.get_all_schemas():
-    ops.add(schema.name)
 
 # XXX: Transpose does nothing as we happens to need NHWC
 inplace_update_ops = ['Reshape', 'Softmax', 'Squeeze', 'Transpose']
@@ -217,26 +208,8 @@ if args.target == 'msp432':
     Constants.USE_ARM_CMSIS = 1
 Constants.LEA_BUFFER_SIZE = lea_buffer_size[args.target]
 
-onnx_opt_model_name = config['onnx_model'].replace('.onnx', '-opt.onnx')
-onnx_model = onnx.load(config['onnx_model'])
-# https://zhuanlan.zhihu.com/p/41255090
-onnx_model = onnxoptimizer.optimize(onnx_model, [
-    'extract_constant_to_initializer',
-    'fuse_add_bias_into_conv',
-    'fuse_matmul_add_bias_into_gemm',
-])
+onnx_model = load_model(config)
 
-ops_with_merge = ['Conv', 'Gemm']
-
-ops = ops.intersection(node.op_type for node in onnx_model.graph.node)
-for op in ops_with_merge:
-    if op in ops:
-        ops.add(op + 'Merge')
-ops = sorted(ops)
-
-dynamic_shape_inference(onnx_model, config['sample_size'])
-
-onnx.save_model(onnx_model, onnx_opt_model_name)
 g = onnx_model.graph
 names = {}
 
@@ -310,7 +283,7 @@ for idx, n in enumerate(g.node):
         logger.warning('skipping audio operator %s', n.op_type)
         continue
     new_nodes.append(n)
-    if n.op_type in ops_with_merge:
+    if n.op_type in OPS_WITH_MERGE:
         output_name = n.output[0]
         new_node = onnx.NodeProto()
         new_node.name = (n.name or n.op_type) + ':merge'
@@ -599,6 +572,8 @@ output_nodes = outputs['nodes']
 for node in graph:
     Constants.NUM_INPUTS = max(Constants.NUM_INPUTS, len(node.inputs))
 logger.info('Maximum number of inputs = %d', Constants.NUM_INPUTS)
+
+ops = get_model_ops(onnx_model)
 
 for node in graph:
     node_name = node.name[:Constants.NODE_NAME_LEN]

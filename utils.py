@@ -18,6 +18,9 @@ import onnxruntime.backend as backend
 
 logger = logging.getLogger(__name__)
 
+OPS_WITH_MERGE = ['Conv', 'Gemm']
+
+
 class ModelData(NamedTuple):
     labels: List[int]
     images: np.array
@@ -215,6 +218,40 @@ def numpy_type_to_onnx_elem_type(numpy_type):
     if numpy_type == np.bool_:
         return onnx.TensorProto.BOOL
     raise Exception(f'Unsupported type {numpy_type}')
+
+def get_model_ops(onnx_model):
+    # Retrieving information for operators. Inspired by the script for generating
+    # https://github.com/onnx/onnx/blob/v1.10.2/docs/Operators.md [1,2]
+    # [1] https://github.com/onnx/onnx/blob/v1.10.2/onnx/defs/gen_doc.py
+    # [2] https://github.com/onnx/onnx/blob/v1.10.2/onnx/onnx_cpp2py_export/defs.pyi
+    ops = set()
+    for schema in onnx.defs.get_all_schemas():
+        ops.add(schema.name)
+
+    ops = ops.intersection(node.op_type for node in onnx_model.graph.node)
+    for op in OPS_WITH_MERGE:
+        if op in ops:
+            ops.add(op + 'Merge')
+    ops = sorted(ops)
+
+    return ops
+
+def load_model(config):
+    # https://github.com/onnx/onnx/blob/master/docs/PythonAPIOverview.md
+    onnx_model = onnx.load_model(config['onnx_model'])
+    # https://zhuanlan.zhihu.com/p/41255090
+    onnx_model = onnxoptimizer.optimize(onnx_model, [
+        'extract_constant_to_initializer',
+        'fuse_add_bias_into_conv',
+        'fuse_matmul_add_bias_into_gemm',
+    ])
+
+    dynamic_shape_inference(onnx_model, config['sample_size'])
+
+    onnx_opt_model_name = config['onnx_model'].replace('.onnx', '-opt.onnx')
+    onnx.save_model(onnx_model, onnx_opt_model_name)
+
+    return onnx_model
 
 def onnxruntime_prepare_model(model):
     return backend.prepare(onnxruntime.InferenceSession(
