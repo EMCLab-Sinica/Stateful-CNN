@@ -33,8 +33,8 @@ else ()
     set (BUILD_MSP432 OFF)
 endif ()
 
-# Keep this list in sync with ARM-CMSIS/create_symlinks.sh
-set(ARM_CMSIS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/ARM-CMSIS)
+# Keep this list in sync with ARM-CMSIS/sync-cmsis.py
+set(ARM_CMSIS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/ARM-CMSIS/CMSIS)
 add_library(arm_cmsis_dsp
     ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_add_q15.c
     ${ARM_CMSIS_PATH}/DSP/Source/BasicMathFunctions/arm_offset_q15.c

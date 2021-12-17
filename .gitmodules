@@ -8,3 +8,6 @@
 [submodule "TI-DSPLib"]
 	path = TI-DSPLib
 	url = ssh://git@github.com/EMCLab-Sinica/DSPLib.git
+[submodule "ARM-CMSIS"]
+	path = ARM-CMSIS
+	url = ssh://git@github.com/EMCLab-Sinica/ARM-CMSIS.git
