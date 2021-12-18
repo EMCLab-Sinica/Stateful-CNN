@@ -16,7 +16,10 @@ def build_and_test(config, suffix, intermittent):
     # somehow a large samples.bin breaks intermittent
     # execution
     if intermittent:
-        config.remove('--all-samples')
+        try:
+            config.remove('--all-samples')
+        except ValueError:
+            pass
         my_debug = 3
     check_call([sys.executable, TOPDIR / 'transform.py', *config])
 
