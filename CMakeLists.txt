@@ -27,10 +27,10 @@ set(COMMON_SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/common)
 file(GLOB CCS_ARM_ROOT $ENV{HOME}/ti/ccs*/ccs/ccs_base/arm)
 if (NOT "${CCS_ARM_ROOT}" STREQUAL "")
     message(STATUS "Found CCS ARM root at ${CCS_ARM_ROOT}")
-    set (BUILD_MSP432 ON)
+    option (BUILD_MSP432 "Build for MSP432" ON)
 else ()
     message(WARNING "No CCS ARM root found. Not building plat-msp432.")
-    set (BUILD_MSP432 OFF)
+    option (BUILD_MSP432 "Build for MSP432" OFF)
 endif ()
 
 # Keep this list in sync with ARM-CMSIS/sync-cmsis.py
@@ -75,11 +75,11 @@ target_include_directories(dsplib
     PRIVATE
         ${COMMON_SRC_PATH}
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_BINARY_DIR}
 )
 
 add_executable(intermittent-cnn
     ${COMMON_SRC_PATH}/intermittent-cnn.cpp
-    ${COMMON_SRC_PATH}/data.cpp
     ${COMMON_SRC_PATH}/op_handlers.cpp
     ${COMMON_SRC_PATH}/op_utils.cpp
     ${COMMON_SRC_PATH}/conv.cpp
@@ -90,14 +90,20 @@ add_executable(intermittent-cnn
     ${COMMON_SRC_PATH}/plat-linux.cpp
     ${COMMON_SRC_PATH}/platform.cpp
     ${COMMON_SRC_PATH}/my_dsplib.cpp
+    ${CMAKE_BINARY_DIR}/data.cpp
 )
 target_link_libraries(intermittent-cnn)
 
 target_compile_definitions(intermittent-cnn
     PRIVATE
-        MY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         POSIX_BUILD
         MY_DEBUG=${MY_DEBUG}
+)
+
+target_include_directories(intermittent-cnn
+    PRIVATE
+        ${COMMON_SRC_PATH}
+        ${CMAKE_BINARY_DIR}
 )
 
 target_link_libraries(intermittent-cnn arm_cmsis_dsp dsplib)

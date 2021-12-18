@@ -60,8 +60,6 @@ int main(int argc, char* argv[]) {
         n_samples = atoi(argv[optind]);
     }
 
-    chdir(MY_SOURCE_DIR);
-
     struct stat stat_buf;
     if (stat("nvm.bin", &stat_buf) != 0) {
         if (errno != ENOENT) {

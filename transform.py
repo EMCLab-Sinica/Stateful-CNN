@@ -7,6 +7,7 @@ import itertools
 import logging
 import math
 import os.path
+import pathlib
 import pprint
 import struct
 import textwrap
@@ -710,7 +711,9 @@ if args.write_images:
     with open('images/ans.txt', 'w') as f:
         f.write(' '.join(map(str, model_data.labels)))
 
-with open('common/data.cpp', 'w') as output_c, open('common/data.h', 'w') as output_h:
+pathlib.Path('build').mkdir(exist_ok=True)
+
+with open('build/data.cpp', 'w') as output_c, open('build/data.h', 'w') as output_h:
     output_h.write('''
 #pragma once
 

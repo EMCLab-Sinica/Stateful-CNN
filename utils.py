@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 OPS_WITH_MERGE = ['Conv', 'Gemm']
 
+TOPDIR = pathlib.Path(__file__).absolute().parent
 
 class ModelData(NamedTuple):
     labels: List[int]
@@ -238,7 +239,7 @@ def get_model_ops(onnx_model):
 
 def load_model(config):
     # https://github.com/onnx/onnx/blob/master/docs/PythonAPIOverview.md
-    onnx_model = onnx.load_model(config['onnx_model'])
+    onnx_model = onnx.load_model(TOPDIR / config['onnx_model'])
     # https://zhuanlan.zhihu.com/p/41255090
     onnx_model = onnxoptimizer.optimize(onnx_model, [
         'extract_constant_to_initializer',
@@ -247,9 +248,6 @@ def load_model(config):
     ])
 
     dynamic_shape_inference(onnx_model, config['sample_size'])
-
-    onnx_opt_model_name = config['onnx_model'].replace('.onnx', '-opt.onnx')
-    onnx.save_model(onnx_model, onnx_opt_model_name)
 
     return onnx_model
 
