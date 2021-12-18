@@ -4,8 +4,6 @@ set -x
 # preparation
 cmake_args=""
 
-pushd ARM-CMSIS && ./download-extract-cmsis.sh && popd
-
 if [[ $LOG_SUFFIX = *baseline_b1_cmsis ]]; then
     model=${LOG_SUFFIX/_*/}
     python original_model_run.py $model --compare-configs

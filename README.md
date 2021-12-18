@@ -16,7 +16,6 @@ If you are using Python 3.6, install one more Python package:
 # Preparation steps for all platforms
 
 * `git submodule update --init --recursive`
-* `pushd ARM-CMSIS && ./download-extract-cmsis.sh && popd` if you want to use ARM CMSIS DSP library
 * `./transform.py --target (msp430|msp432) (--baseline|--hawaii|--japari|--stateful) --batch-size 1 (mnist|cifar10|kws)`
 
 # Building for POSIX-compliant systems
