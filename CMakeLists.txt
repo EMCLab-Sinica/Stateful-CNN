@@ -120,6 +120,7 @@ if (BUILD_MSP432)
     target_include_directories(plat-msp432
         SYSTEM PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/msp432/driverlib/MSP432P4xx
+            ${CMAKE_BINARY_DIR}
             ${CCS_ARM_ROOT}/include
             $<TARGET_PROPERTY:arm_cmsis_dsp,INCLUDE_DIRECTORIES>
     )

@@ -40,9 +40,9 @@
 									<listOptionValue builtIn="false" value="${CCS_BASE_ROOT}/arm/include"/>
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}/driverlib/MSP432P4xx"/>
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}/intermittent-cnn"/>
-									<listOptionValue builtIn="false" value="${PROJECT_LOC}/ARM-CMSIS/Core/Include"/>
-									<listOptionValue builtIn="false" value="${PROJECT_LOC}/ARM-CMSIS/DSP/Include"/>
-									<listOptionValue builtIn="false" value="${PROJECT_LOC}/ARM-CMSIS/DSP/PrivateInclude"/>
+									<listOptionValue builtIn="false" value="${PROJECT_LOC}/ARM-CMSIS/CMSIS/Core/Include"/>
+									<listOptionValue builtIn="false" value="${PROJECT_LOC}/ARM-CMSIS/CMSIS/DSP/Include"/>
+									<listOptionValue builtIn="false" value="${PROJECT_LOC}/ARM-CMSIS/CMSIS/DSP/PrivateInclude"/>
 									<listOptionValue builtIn="false" value="${PROJECT_ROOT}"/>
 									<listOptionValue builtIn="false" value="${CG_TOOL_INCLUDE_PATH}"/>
 								</option>
