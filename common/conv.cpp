@@ -365,7 +365,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     /* copy input data, row by row */
 
     int8_t real_input_index = -1;
-    if (conv_params->conv_input->flags & SEPARATE_TILING) {
+    if (conv_params->conv_input->param_flags & SEPARATE_TILING) {
         real_input_index = (2 * conv_params->input_tile_c_index >= conv_params->n_tiles_c) ? 1 : 0;
         conv_params->real_conv_input = get_parameter_info(conv_params->conv_input->extra_info[real_input_index]);
     } else {
@@ -415,7 +415,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     my_printf_debug("Copying row to lea_buffer + %d" NEWLINE,
                     static_cast<int>(dest - lea_buffer));
     uint16_t cur_input_channel = conv_params->CHANNEL;
-    if (conv_params->conv_input->flags & SEPARATE_TILING) {
+    if (conv_params->conv_input->param_flags & SEPARATE_TILING) {
         cur_input_channel /= 2;
     }
 #if JAPARI
@@ -569,8 +569,8 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     output->dims[1] = OUTPUT_CHANNEL;
     output->dims[2] = conv_params->OUTPUT_H;
     output->dims[3] = conv_params->OUTPUT_W;
-    output->flags |= TRANSPOSED;
-    output->flags &= ~SEPARATE_TILING;
+    output->param_flags |= TRANSPOSED;
+    output->param_flags &= ~SEPARATE_TILING;
     output->scale = conv_input->scale * conv_filter->scale;
 #if STATEFUL
     if (conv_input->slot == SLOT_TEST_SET) {

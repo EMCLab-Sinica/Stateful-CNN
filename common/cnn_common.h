@@ -73,7 +73,7 @@ typedef struct ParameterInfo {
     // uint8_t is not enough. For example, fully connected layer in MNIST has dims 256x1
     uint16_t dims[4];
     uint16_t scale;
-    uint8_t flags;
+    uint8_t param_flags;
     uint8_t extra_info[EXTRA_INFO_LEN];
     uint16_t parameter_info_idx; // must be the last member of this struct
 } ParameterInfo;

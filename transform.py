@@ -666,7 +666,7 @@ for params in parameters:
         model_parameters_info.write(to_bytes(config['scale']))       # scale
 
     # common to input and non-inputs
-    model_parameters_info.write(to_bytes(0, size=8))                 # flags
+    model_parameters_info.write(to_bytes(0, size=8))                 # param_flags
     for _ in range(Constants.EXTRA_INFO_LEN):
         model_parameters_info.write(to_bytes(0, size=8))             # extra_info
     model_parameters_info.write(to_bytes(parameter_info_idx))        # parameter_info_idx
@@ -683,7 +683,7 @@ for idx, n in enumerate(nodes):
     for _ in range(4):  # dims[4]
         intermediate_parameters_info.write(to_bytes(0))
     intermediate_parameters_info.write(to_bytes(config['scale']))   # scale
-    intermediate_parameters_info.write(to_bytes(0, size=8))     # flags
+    intermediate_parameters_info.write(to_bytes(0, size=8))     # param_flags
     for _ in range(Constants.EXTRA_INFO_LEN):
         intermediate_parameters_info.write(to_bytes(0, size=8)) # extra_info
     intermediate_parameters_info.write(to_bytes(parameter_info_idx))             # parameter_info_idx

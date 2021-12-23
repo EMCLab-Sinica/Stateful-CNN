@@ -99,7 +99,7 @@ void dump_params_nhwc(Model *model, const ParameterInfo *cur_param) {
                     for (uint16_t w = 0; w < W; w++) {
                         // internal format is NWHC (transposed) or NHWC
                         size_t offset2 = n * W * H * CHANNEL + W * H * tile_c_base;
-                        if (cur_param->flags & TRANSPOSED) {
+                        if (cur_param->param_flags & TRANSPOSED) {
                             offset2 += w * H * cur_tile_c + h * cur_tile_c + c;
                         } else {
                             offset2 += h * W * cur_tile_c + w * cur_tile_c + c;

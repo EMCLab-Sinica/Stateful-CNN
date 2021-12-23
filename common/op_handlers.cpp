@@ -11,7 +11,7 @@
 void alloc_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
     const ParameterInfo *data = input[0];
     output->slot = get_next_slot(model, data);
-    output->flags &= ~TRANSPOSED;
+    output->param_flags &= ~TRANSPOSED;
 }
 
 void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
@@ -53,7 +53,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
 #endif
 
-    if (X->flags & TRANSPOSED) {
+    if (X->param_flags & TRANSPOSED) {
         // input is in NWHC
         // TODO: state-aware recovery
         uint16_t H = X->dims[2], W = X->dims[3];
@@ -190,7 +190,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     flip_state_bit(model, output);
 
     my_printf_debug("handle_relu output" NEWLINE);
-    if (X->flags & TRANSPOSED) {
+    if (X->param_flags & TRANSPOSED) {
         dump_params_nhwc_debug(model, output);
     } else {
         dump_params_debug(model, output);
@@ -312,7 +312,7 @@ void handle_concat(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     // have the same number of channels.
     MY_ASSERT(A->dims[1] == B->dims[1]);
     output->dims[1] *= 2;
-    output->flags |= SEPARATE_TILING;
+    output->param_flags |= SEPARATE_TILING;
 
     // The one with smaller `scale` (with larger values) is scaled down
     output->scale = MAX_VAL(A->scale, B->scale);
