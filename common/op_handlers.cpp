@@ -191,9 +191,9 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     my_printf_debug("handle_relu output" NEWLINE);
     if (X->param_flags & TRANSPOSED) {
-        dump_params_nhwc_debug(model, output);
+        dump_params_nhwc_debug(model, output, node->output_name);
     } else {
-        dump_params_debug(model, output);
+        dump_params_debug(model, output, node->output_name);
     }
 }
 

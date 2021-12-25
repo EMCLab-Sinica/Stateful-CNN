@@ -6,6 +6,7 @@ import pathlib
 import pickle
 import re
 import struct
+import sys
 import tarfile
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional
 from urllib.request import urlretrieve
@@ -326,3 +327,12 @@ def remap_inputs(model: onnx.ModelProto, input_mapping: Dict[str, str]):
             del model.graph.input[idx]
 
     return onnxoptimizer.optimize(model, ['eliminate_deadend'])
+
+def import_model_output_pb2():
+    try:
+        orig_sys_path = sys.path.copy()
+        sys.path.append(str(pathlib.Path(__file__).resolve().parent / 'build'))
+        import model_output_pb2
+        return model_output_pb2
+    finally:
+        sys.path = orig_sys_path

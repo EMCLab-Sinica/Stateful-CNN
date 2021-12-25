@@ -1,17 +1,14 @@
 #ifdef POSIX_BUILD
 
-#define _POSIX_C_SOURCE 1 // for kill()
-
 #include "intermittent-cnn.h"
 #include "cnn_common.h"
 #include "my_debug.h"
 #include "platform.h"
 #include "platform-private.h"
 #include "data.h"
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
 #include <getopt.h>
 #include <unistd.h>
@@ -22,22 +19,33 @@
 #include <sys/mman.h>
 #include <sys/ptrace.h>
 #include <fstream>
+#include <memory>
+#ifdef USE_PROTOBUF
+#include "model_output.pb.h"
+#endif
 
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
 static uint32_t shutdown_counter = UINT32_MAX;
 static uint64_t nvm_writes = 0;
+static std::ofstream out_file;
 
 Counters *counters() {
     return reinterpret_cast<Counters*>(nvm + COUNTERS_OFFSET);
 }
+
+#ifdef USE_PROTOBUF
+static void save_model_output_data() {
+    model_output_data->SerializeToOstream(&out_file);
+}
+#endif
 
 int main(int argc, char* argv[]) {
     int ret = 0, opt_ch, button_pushed = 0, read_only = 0, n_samples = 0;
     Model *model;
     int nvm_fd = -1;
 
-    while((opt_ch = getopt(argc, argv, "bfrc:")) != -1) {
+    while((opt_ch = getopt(argc, argv, "bfrc:s:")) != -1) {
         switch (opt_ch) {
             case 'b':
                 button_pushed = 1;
@@ -51,8 +59,16 @@ int main(int argc, char* argv[]) {
             case 'c':
                 shutdown_counter = atol(optarg);
                 break;
+            case 's':
+#ifdef USE_PROTOBUF
+                out_file.open(optarg);
+                break;
+#else
+                my_printf("Cannot save outputs as protobuf support is not compiled." NEWLINE);
+                return 1;
+#endif
             default:
-                printf("Usage: %s [-r] [n_samples]\n", argv[0]);
+                my_printf("Usage: %s [-r] [n_samples]" NEWLINE, argv[0]);
                 return 1;
         }
     }
@@ -81,6 +97,13 @@ int main(int argc, char* argv[]) {
     my_printf_debug("Use DSP from ARM CMSIS pack" NEWLINE);
 #else
     my_printf_debug("Use TI DSPLib" NEWLINE);
+#endif
+
+#ifdef USE_PROTOBUF
+    if (out_file.is_open()) {
+        model_output_data = std::make_unique<ModelOutput>();
+        std::atexit(save_model_output_data);
+    }
 #endif
 
     model = get_model();

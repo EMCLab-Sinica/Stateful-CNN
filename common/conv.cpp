@@ -579,7 +579,7 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 #endif
 }
 
-void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node*) {
+void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
     const ParameterInfo *conv_input = input[0], *conv_filter = input[1], *conv_bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 
@@ -736,7 +736,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     flip_state_bit(model, output);
 
     my_printf_debug("handle_conv output" NEWLINE);
-    dump_params_nhwc_debug(model, output);
+    dump_params_nhwc_debug(model, output, node->output_name);
 }
 
 void alloc_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node*) {
@@ -885,5 +885,5 @@ void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct 
 
     flip_state_bit(model, output);
 
-    dump_params_nhwc_debug(model, output);
+    dump_params_nhwc_debug(model, output, node->output_name);
 }

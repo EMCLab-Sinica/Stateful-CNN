@@ -4,7 +4,7 @@ import numpy as np
 import onnx
 
 from configs import configs
-from utils import dynamic_shape_inference, onnxruntime_prepare_model, onnxruntime_get_intermediate_tensor, load_model
+from utils import dynamic_shape_inference, onnxruntime_prepare_model, onnxruntime_get_intermediate_tensor, load_model, import_model_output_pb2
 
 def print_float(val):
     print('%13.6f' % val, end='')
@@ -52,20 +52,37 @@ def prepare_model_and_data(config, limit):
 
     return model, model_data
 
-def run_model(model, model_data, limit, verbose=True):
+def run_model(model, model_data, limit, verbose=True, save_file=None):
     # Testing
     if limit == 1:
         last_layer_out = None
         if verbose:
             print('Input')
             print_tensor(model_data.images)
+        if save_file:
+            model_output_pb2 = import_model_output_pb2()
+            model_output = model_output_pb2.ModelOutput()
         for layer_name, op_type, layer_out in onnxruntime_get_intermediate_tensor(model, model_data.images[0:1]):
             if verbose:
                 print(f'{op_type} layer: {layer_name}')
                 print_tensor(layer_out)
+            if save_file:
+                layer_out_obj = model_output_pb2.LayerOutput()
+                layer_out_obj.name = layer_name
+                layer_out_obj.dims.extend(layer_out.shape)
+                if layer_out.shape:
+                    linear_shape = [np.prod(layer_out.shape)]
+                    layer_out_obj.value.extend(np.reshape(layer_out, linear_shape))
+                else:
+                    # zero-dimension tensor -> scalar
+                    layer_out_obj.value.append(layer_out)
+                model_output.layer_out.append(layer_out_obj)
             # Softmax is not implemented yet - return the layer before Softmax
             if op_type != 'Softmax':
                 last_layer_out = layer_out
+        if save_file:
+            with open(save_file, 'wb') as f:
+                f.write(model_output.SerializeToString())
         return last_layer_out
     else:
         correct = 0
@@ -98,6 +115,7 @@ def main():
     parser.add_argument('config', choices=configs.keys())
     parser.add_argument('--limit', type=int, default=0)
     parser.add_argument('--compare-configs', action='store_true')
+    parser.add_argument('--save-file')
     args = parser.parse_args()
 
     if args.limit == 0:
@@ -108,7 +126,8 @@ def main():
     if args.compare_configs:
         compare_configs(config, model, model_data)
     else:
-        run_model(model, model_data, args.limit)
+        run_model(model, model_data, args.limit,
+                  verbose=not args.save_file, save_file=args.save_file)
 
 if __name__ == '__main__':
     main()

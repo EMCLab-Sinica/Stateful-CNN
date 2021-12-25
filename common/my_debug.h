@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h> // sprintf()
+#include <memory>
 #include "data.h"
 #include "platform.h"
 
@@ -65,11 +66,15 @@ struct ValueInfo {
 
 extern uint8_t dump_integer;
 
-void dump_value(struct Model *model, const ParameterInfo *cur_param, size_t offset, bool has_state = true);
+class ModelOutput;
+class LayerOutput;
+extern std::unique_ptr<ModelOutput> model_output_data;
+
+void dump_value(struct Model *model, const ParameterInfo *cur_param, LayerOutput* layer_out, size_t offset, bool has_state = true);
 void dump_matrix(const int16_t *mat, size_t len, const ValueInfo& val_info, bool has_state = true);
 void dump_matrix(const int16_t *mat, size_t rows, size_t cols, const ValueInfo& val_info, bool has_state = true);
-void dump_params(struct Model *model, const ParameterInfo *cur_param);
-void dump_params_nhwc(struct Model *model, const ParameterInfo *cur_param);
+void dump_params(struct Model *model, const ParameterInfo *cur_param, const char* layer_name = nullptr);
+void dump_params_nhwc(struct Model *model, const ParameterInfo *cur_param, const char* layer_name = nullptr);
 void dump_model(struct Model *model);
 void dump_turning_points(Model *model, const ParameterInfo *output);
 void compare_vm_nvm_impl(int16_t* vm_data, Model* model, const ParameterInfo* output, uint16_t output_offset, uint16_t blockSize);

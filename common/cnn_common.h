@@ -40,6 +40,7 @@ static_assert(sizeof(NodeFlags) == 8, "Unexpected size for NodeFlags");
 
 typedef struct Node {
     char name[NODE_NAME_LEN];
+    char output_name[NODE_NAME_LEN];
     uint16_t inputs_len;
     int16_t inputs[NUM_INPUTS];
     uint16_t max_output_id;
@@ -53,7 +54,7 @@ typedef struct Node {
 #endif
 } Node;
 
-static_assert(sizeof(Node) == 38 + NUM_INPUTS * 2 + HAWAII * 8, "Unexpected size for Node");
+static_assert(sizeof(Node) == NODE_NAME_LEN * 2 + 14 + NUM_INPUTS * 2 + HAWAII * 8, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct ParameterInfo {

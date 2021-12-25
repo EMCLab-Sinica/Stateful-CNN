@@ -20,7 +20,7 @@ import onnx.helper
 import numpy as np
 
 from configs import configs
-from utils import extract_data, find_initializer, find_node_by_output, load_model, get_model_ops, OPS_WITH_MERGE
+from utils import extract_data, find_initializer, find_node_by_output, find_tensor_value_info, load_model, get_model_ops, OPS_WITH_MERGE
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 """
 Goal: Mapping name-based nodes to integer-based ones.
 Indexing policy:
-    0~len(g.input)-1: input nodes
-    len(g.input)~ : other (hidden) nodes
+    0~len(onnx_model.graph.input)-1: input nodes
+    len(onnx_model.graph.input)~ : other (hidden) nodes
 """
 
 class Constants:
@@ -37,7 +37,7 @@ class Constants:
     SLOT_TEST_SET = 0xff
     SLOT_CONSTANTS_MIN = SLOT_PARAMETERS
     SLOT_INTERMEDIATE_VALUES = 0b01
-    NODE_NAME_LEN = 24
+    NODE_NAME_LEN = 40
     EXTRA_INFO_LEN = 3  # for memory alignment
     TURNING_POINTS_LEN = 8
     MODEL_NODES_LEN = 0
@@ -211,7 +211,6 @@ Constants.LEA_BUFFER_SIZE = lea_buffer_size[args.target]
 
 onnx_model = load_model(config)
 
-g = onnx_model.graph
 names = {}
 
 def get_attr(node, attr_name):
@@ -250,7 +249,7 @@ replace_handlers = {
 }
 
 def replace_nodes():
-    for n in g.node:
+    for n in onnx_model.graph.node:
         if n.op_type not in ('Squeeze', 'Reshape'):
             continue
         inp = find_initializer(onnx_model, n.input[0])
@@ -279,7 +278,7 @@ transpose_gemm(onnx_model)
 
 # Split Conv/Gemm into Conv/Gemm and ConvMerge/GemmMerge (for OFM scaling up and merge of OFMs from channel tiling)
 new_nodes = []
-for idx, n in enumerate(g.node):
+for idx, n in enumerate(onnx_model.graph.node):
     if n.op_type in audio_ops:
         logger.warning('skipping audio operator %s', n.op_type)
         continue
@@ -302,13 +301,13 @@ nodes = [ONNXNodeWrapper(n) for n in new_nodes]
 
 conv_param_names = set()
 
-for idx, inp in enumerate(g.input):
+for idx, inp in enumerate(onnx_model.graph.input):
     names[inp.name] = idx
 
 # For some ONNX models (e.g., squeezenet-cifar10 converted from Keras), inputs
 # do not include initializers. Merge them here.
 inputs_len = len(names.keys())
-for idx, initializer in enumerate(g.initializer):
+for idx, initializer in enumerate(onnx_model.graph.initializer):
     if initializer.name not in names:
         names[initializer.name] = idx + inputs_len
 
@@ -352,18 +351,11 @@ pprint.pprint(names)
 @dataclasses.dataclass
 class Node:
     name: str
+    output_name: str
     inputs: List[int]
     op_type: str
     flags: NodeFlags
     max_output_id: int
-
-def find_tensor_value_info(name: str):
-    if name.endswith('_before_merge'):
-        name = name[:-len('_before_merge')]
-    for value_info in g.value_info:
-        if value_info.name == name:
-            return value_info
-    raise ValueError(f'No value_info found for {name}')
 
 def extend_for_footprints(n):
     return n + n // Constants.BATCH_SIZE
@@ -371,7 +363,7 @@ def extend_for_footprints(n):
 def determine_conv_tile_c(n):
     logger.debug('Determine tile size for Conv node %s', n.name)
 
-    output_value_info = find_tensor_value_info(n.output[0])
+    output_value_info = find_tensor_value_info(onnx_model, n.output[0])
     filter_info = find_initializer(onnx_model, n.input[1])
     node_flags = n.flags.b.extra.conv
 
@@ -435,7 +427,7 @@ def determine_conv_tile_c(n):
 def determine_gemm_tile_sizes(n):
     logger.debug('Determine tile size for Gemm node %s', n.name)
 
-    A = find_tensor_value_info(n.input[0])
+    A = find_tensor_value_info(onnx_model, n.input[0])
     B = find_initializer(onnx_model, n.input[1])
     A_shape = A.type.tensor_type.shape
     A_rows = 1  # Not using A_shape.dim[0] here, as it's a symbol "N"
@@ -477,6 +469,7 @@ for n in nodes:
     if n.op_type == 'Gemm':
         determine_gemm_tile_sizes(n)
     graph.append(Node(name=n.name or n.op_type,
+                      output_name=n.output[0],
                       inputs=[names[i] for i in n.input],
                       op_type=n.op_type,
                       flags=n.flags,
@@ -501,7 +494,7 @@ for idx, node in enumerate(graph):
 
 parameters = [None for _ in range(Constants.N_INPUT)]
 
-for params in g.initializer:
+for params in onnx_model.graph.initializer:
     if params.data_type not in (onnx.TensorProto.FLOAT, onnx.TensorProto.INT64):
         raise Exception('unsupported data type {}'.format(params.data_type))
 
@@ -576,9 +569,13 @@ logger.info('Maximum number of inputs = %d', Constants.NUM_INPUTS)
 
 ops = get_model_ops(onnx_model)
 
+def write_str(buffer: io.BytesIO, data: str):
+    assert Constants.NODE_NAME_LEN >= len(data), f'String too long: {data}'
+    buffer.write(data.encode('ascii') + b'\0' * (Constants.NODE_NAME_LEN - len(data)))
+
 for node in graph:
-    node_name = node.name[:Constants.NODE_NAME_LEN]
-    output_nodes.write(node_name.encode('ascii') + b'\0' * (Constants.NODE_NAME_LEN - len(node_name)))
+    write_str(output_nodes, node.name)
+    write_str(output_nodes, node.output_name)
     output_nodes.write(to_bytes(len(node.inputs)))
     for inp in node.inputs:
         output_nodes.write(to_bytes(inp))

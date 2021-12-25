@@ -310,9 +310,9 @@ finished:
 
     my_printf_debug("handle_maxpool output" NEWLINE);
     if (!maxpool_params->need_nhwc2nchw) {
-        dump_params_nhwc_debug(model, output);
+        dump_params_nhwc_debug(model, output, node->output_name);
     } else {
-        dump_params_debug(model, output);
+        dump_params_debug(model, output, node->output_name);
     }
 }
 
@@ -383,5 +383,5 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
 
     flip_state_bit(model, output);
 
-    dump_params_debug(model, output);
+    dump_params_debug(model, output, node->output_name);
 }

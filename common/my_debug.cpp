@@ -2,35 +2,50 @@
 #include <cstring>
 #include <inttypes.h> // for PRId64
 #include <cstdint>
+#include <memory>
 #include "my_debug.h"
 #include "cnn_common.h"
 #include "intermittent-cnn.h"
 #include "my_dsplib.h"
 #include "op_utils.h"
 #include "platform-private.h"
+#ifdef USE_PROTOBUF
+#include "model_output.pb.h"
+#endif
 
 uint8_t dump_integer = 1;
 
 template<>
 void my_printf_wrapper() {}
 
+#ifdef USE_PROTOBUF
+std::unique_ptr<ModelOutput> model_output_data;
+#endif
+
+#define PRINT_NEWLINE_IF_DATA_NOT_SAVED if (!layer_out) { my_printf(NEWLINE); }
+
 ValueInfo::ValueInfo(const ParameterInfo *cur_param, Model *model) {
     this->scale = cur_param->scale;
 }
 
-static void print_q15(int16_t val, const ValueInfo& val_info, bool has_state) {
+static void print_q15(LayerOutput* layer_out, int16_t val, const ValueInfo& val_info, bool has_state) {
+    uint8_t use_prefix = 0;
+    float real_value = q15_to_float(val, val_info, &use_prefix, has_state);
+#ifdef USE_PROTOBUF
+    if (layer_out) {
+        layer_out->add_value(real_value);
+    } else
+#endif
     if (dump_integer) {
         my_printf("% 6d ", val);
     } else {
-        uint8_t use_prefix = 0;
-        float real_value = q15_to_float(val, val_info, &use_prefix, has_state);
         my_printf(use_prefix ? "   *% 9.6f" : "% 13.6f", real_value);
     }
 }
 
-void dump_value(Model *model, const ParameterInfo *cur_param, size_t offset, bool has_state) {
+void dump_value(Model *model, const ParameterInfo *cur_param, LayerOutput* layer_out, size_t offset, bool has_state) {
     if (cur_param->bitwidth == 16) {
-        print_q15(get_q15_param(model, cur_param, offset), ValueInfo(cur_param, model), has_state);
+        print_q15(layer_out, get_q15_param(model, cur_param, offset), ValueInfo(cur_param, model), has_state);
     } else if (cur_param->bitwidth == 64) {
         my_printf("%" PRId64 " ", get_int64_param(cur_param, offset));
     } else {
@@ -41,7 +56,7 @@ void dump_value(Model *model, const ParameterInfo *cur_param, size_t offset, boo
 void dump_matrix(const int16_t *mat, size_t len, const ValueInfo& val_info, bool has_state) {
     my_printf("Scale: %d" NEWLINE, val_info.scale);
     for (size_t j = 0; j < len; j++) {
-        print_q15(mat[j], val_info, has_state && offset_has_state(j));
+        print_q15(nullptr, mat[j], val_info, has_state && offset_has_state(j));
         if (j && (j % 16 == 15)) {
             my_printf(NEWLINE);
         }
@@ -49,7 +64,7 @@ void dump_matrix(const int16_t *mat, size_t len, const ValueInfo& val_info, bool
     my_printf(NEWLINE);
 }
 
-static void dump_params_common(Model* model, const ParameterInfo* cur_param) {
+static void dump_params_common(Model* model, const ParameterInfo* cur_param, const char* layer_name, LayerOutput** p_layer_out) {
     my_printf("Slot: %d" NEWLINE, cur_param->slot);
     my_printf("Scale: %d" NEWLINE, cur_param->scale);
     my_printf("Params len: %" PRId32 NEWLINE, cur_param->params_len);
@@ -68,6 +83,16 @@ static void dump_params_common(Model* model, const ParameterInfo* cur_param) {
     }
     my_printf(NEWLINE);
     MY_ASSERT(has_dims);
+
+#ifdef USE_PROTOBUF
+    if (layer_name && model_output_data.get()) {
+        LayerOutput* layer_out = *p_layer_out = model_output_data->add_layer_out();
+        layer_out->set_name(layer_name);
+        for (uint8_t idx = 0; idx < 4; idx++) {
+            layer_out->add_dims(cur_param->dims[idx]);
+        }
+    }
+#endif
 }
 
 static int16_t find_real_num(int16_t NUM, int16_t CHANNEL, int16_t H, int16_t W, const ParameterInfo* cur_param) {
@@ -78,7 +103,7 @@ static int16_t find_real_num(int16_t NUM, int16_t CHANNEL, int16_t H, int16_t W,
     return NUM;
 }
 
-void dump_params_nhwc(Model *model, const ParameterInfo *cur_param) {
+void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, const char* layer_name) {
     dma_counter_enabled = 0;
     uint16_t NUM, H, W, CHANNEL;
     // tensor
@@ -87,14 +112,17 @@ void dump_params_nhwc(Model *model, const ParameterInfo *cur_param) {
     H = cur_param->dims[2];
     W = cur_param->dims[3];
     NUM = find_real_num(NUM, CHANNEL, H, W, cur_param);
-    dump_params_common(model, cur_param);
+    LayerOutput* layer_out = nullptr;
+    dump_params_common(model, cur_param, layer_name, &layer_out);
     int16_t output_tile_c = cur_param->dims[1];
     for (uint16_t n = 0; n < NUM; n++) {
         my_printf("Matrix %d" NEWLINE, n);
         for (uint16_t tile_c_base = 0; tile_c_base < CHANNEL; tile_c_base += output_tile_c) {
             uint16_t cur_tile_c = MIN_VAL(output_tile_c, CHANNEL - tile_c_base);
             for (uint16_t c = 0; c < cur_tile_c; c++) {
-                my_printf("Channel %d" NEWLINE, tile_c_base + c);
+                if (!layer_out) {
+                    my_printf("Channel %d" NEWLINE, tile_c_base + c);
+                }
                 for (uint16_t h = 0; h < H; h++) {
                     for (uint16_t w = 0; w < W; w++) {
                         // internal format is NWHC (transposed) or NHWC
@@ -104,14 +132,14 @@ void dump_params_nhwc(Model *model, const ParameterInfo *cur_param) {
                         } else {
                             offset2 += h * W * cur_tile_c + w * cur_tile_c + c;
                         }
-                        dump_value(model, cur_param, offset2, offset_has_state(offset2));
+                        dump_value(model, cur_param, layer_out, offset2, offset_has_state(offset2));
                     }
-                    my_printf(NEWLINE);
+                    PRINT_NEWLINE_IF_DATA_NOT_SAVED
                 }
-                my_printf(NEWLINE);
+                PRINT_NEWLINE_IF_DATA_NOT_SAVED
             }
         }
-        my_printf(NEWLINE);
+        PRINT_NEWLINE_IF_DATA_NOT_SAVED
     }
     dma_counter_enabled = 1;
 }
@@ -137,7 +165,7 @@ void dump_model(Model *model) {
 }
 
 // dump in NCHW format
-void dump_params(Model *model, const ParameterInfo *cur_param) {
+void dump_params(Model *model, const ParameterInfo *cur_param, const char* layer_name) {
     dma_counter_enabled = 0;
     uint16_t NUM, H, W, CHANNEL;
     if (cur_param->dims[2] && cur_param->dims[3]) {
@@ -157,22 +185,25 @@ void dump_params(Model *model, const ParameterInfo *cur_param) {
         W = cur_param->dims[0];
     }
     NUM = find_real_num(NUM, CHANNEL, H, W, cur_param);
-    dump_params_common(model, cur_param);
+    LayerOutput* layer_out = nullptr;
+    dump_params_common(model, cur_param, layer_name, &layer_out);
     for (uint16_t i = 0; i < NUM; i++) {
         my_printf("Matrix %d" NEWLINE, i);
         for (uint16_t j = 0; j < CHANNEL; j++) {
-            my_printf("Channel %d" NEWLINE, j);
+            if (!layer_out) {
+                my_printf("Channel %d" NEWLINE, j);
+            }
             for (uint16_t k = 0; k < H; k++) {
                 for (uint16_t l = 0; l < W; l++) {
                     // internal format is NCHW
                     size_t offset = i * H * W * CHANNEL + j * H * W + k * W + l;
-                    dump_value(model, cur_param, offset, offset_has_state(offset));
+                    dump_value(model, cur_param, layer_out, offset, offset_has_state(offset));
                 }
-                my_printf(NEWLINE);
+                PRINT_NEWLINE_IF_DATA_NOT_SAVED
             }
-            my_printf(NEWLINE);
+            PRINT_NEWLINE_IF_DATA_NOT_SAVED
         }
-        my_printf(NEWLINE);
+        PRINT_NEWLINE_IF_DATA_NOT_SAVED
     }
     dma_counter_enabled = 1;
 }
@@ -204,14 +235,14 @@ void dump_matrix(const int16_t *mat, size_t rows, size_t cols, const ValueInfo& 
         for (size_t j = 0; j < cols; j++) {
             for (size_t i = 0; i < rows; i++) {
                 size_t offset = i * cols + j;
-                print_q15(mat[offset], val_info, has_state && offset_has_state(offset));
+                print_q15(nullptr, mat[offset], val_info, has_state && offset_has_state(offset));
             }
             my_printf(NEWLINE);
         }
     } else {
         my_printf(NEWLINE);
         for (size_t j = 0; j < rows * cols; j++) {
-            print_q15(mat[j], val_info, has_state && offset_has_state(j));
+            print_q15(nullptr, mat[j], val_info, has_state && offset_has_state(j));
             if ((j+1) % cols == 0) {
                 my_printf(NEWLINE);
             }

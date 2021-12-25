@@ -4,6 +4,7 @@ project(intermittent-cnn)
 
 set(MY_DEBUG "1" CACHE STRING "Local debug flag. See my_debug.h for details.")
 option(ENABLE_COVERAGE "Enable coverage via gcov." OFF)
+option(USE_PROTOBUF "Use Protobuf to save results" OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -19,7 +20,14 @@ if (ENABLE_COVERAGE)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
 endif ()
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS} -Wstrict-prototypes -std=c11")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -std=c++11 -Wold-style-cast")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -std=c++14 -Wold-style-cast")
+
+if (USE_PROTOBUF)
+    find_package(Protobuf REQUIRED)
+    protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS model_output.proto)
+    protobuf_generate_python(PROTO_PY model_output.proto)
+    add_custom_target(model_output_pb2 ALL DEPENDS ${PROTO_PY})
+endif ()
 
 set(COMMON_SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/common)
 
@@ -78,7 +86,7 @@ target_include_directories(dsplib
         ${CMAKE_BINARY_DIR}
 )
 
-add_executable(intermittent-cnn
+set (intermittent_cnn_SOURCES
     ${COMMON_SRC_PATH}/intermittent-cnn.cpp
     ${COMMON_SRC_PATH}/op_handlers.cpp
     ${COMMON_SRC_PATH}/op_utils.cpp
@@ -92,7 +100,10 @@ add_executable(intermittent-cnn
     ${COMMON_SRC_PATH}/my_dsplib.cpp
     ${CMAKE_BINARY_DIR}/data.cpp
 )
-target_link_libraries(intermittent-cnn)
+if (USE_PROTOBUF)
+    list(APPEND intermittent_cnn_SOURCES ${PROTO_SRCS})
+endif ()
+add_executable(intermittent-cnn ${intermittent_cnn_SOURCES})
 
 target_compile_definitions(intermittent-cnn
     PRIVATE
@@ -107,6 +118,17 @@ target_include_directories(intermittent-cnn
 )
 
 target_link_libraries(intermittent-cnn arm_cmsis_dsp dsplib)
+
+if (USE_PROTOBUF)
+    target_compile_definitions(intermittent-cnn
+        PRIVATE
+            USE_PROTOBUF
+    )
+    target_include_directories(intermittent-cnn
+        PRIVATE ${CMAKE_CURRENT_BINARY_DIR}  # for *.pb.h files
+    )
+    target_link_libraries(intermittent-cnn protobuf::libprotobuf)
+endif ()
 
 # Below is not actually used for the build on PC. I added it here so that
 # clangd can identify platform-dependent codes

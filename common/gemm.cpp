@@ -227,7 +227,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     flip_state_bit(model, output);
 
     my_printf_debug("handle_gemm output" NEWLINE);
-    dump_params_debug(model, output);
+    dump_params_debug(model, output, node->output_name);
 }
 
 void alloc_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const Node*) {
@@ -236,7 +236,7 @@ void alloc_gemmmerge(struct Model *model, const struct ParameterInfo **input, st
     output->params_len = output_len * sizeof(int16_t);
 }
 
-void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const Node*) {
+void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const Node* node) {
     const ParameterInfo *X = input[0];
 
     my_printf_debug("GemmMerge!" NEWLINE);
@@ -280,5 +280,5 @@ void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, s
     flip_state_bit(model, output);
 
     my_printf_debug("handle_gemmmerge output" NEWLINE);
-    dump_params_debug(model, output);
+    dump_params_debug(model, output, node->output_name);
 }
