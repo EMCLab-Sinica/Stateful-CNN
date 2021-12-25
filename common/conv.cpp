@@ -545,7 +545,7 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     conv_params->force_align_footprints = (OUTPUT_CHANNEL % BATCH_SIZE != 0);
     OUTPUT_CHANNEL = extend_for_footprints(OUTPUT_CHANNEL, conv_params->force_align_footprints);
     if (has_footprints(conv_input)) {
-        conv_params->n_tiles_c = CHANNEL / (BATCH_SIZE + 1) * BATCH_SIZE / flags->extra.conv.input_tile_c;
+        conv_params->n_tiles_c = CHANNEL / (BATCH_SIZE + 1) * BATCH_SIZE / conv_params->flags->extra.conv.input_tile_c;
     } else
 #endif
     {
@@ -559,7 +559,7 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     }
     OUTPUT_CHANNEL += conv_params->output_padding;
 #endif
-    my_printf_debug("input_tile_c=%d, output_tile_c=%d" NEWLINE, flags->extra.conv.input_tile_c, flags->extra.conv.output_tile_c);
+    my_printf_debug("input_tile_c=%d, output_tile_c=%d" NEWLINE, conv_params->flags->extra.conv.input_tile_c, conv_params->flags->extra.conv.output_tile_c);
 
     /* XXX: extend flags; assume dilation=(1, 1) for now */
     output->bitwidth = 16;
