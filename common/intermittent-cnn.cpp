@@ -397,8 +397,8 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
 #endif
 
     const Node* node = get_node(output);
-#ifdef Conv
-    uint8_t is_conv = (node->op_type == Conv);
+#ifdef OpConv
+    uint8_t is_conv = (node->op_type == OpConv);
 #else
     uint8_t is_conv = 0;
 #endif

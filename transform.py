@@ -751,7 +751,7 @@ struct Node;
     # ops
     output_h.write('\n')
     for idx, op in enumerate(ops):
-        output_h.write(f'#define {op} {idx}\n')
+        output_h.write(f'#define Op{op} {idx}\n')
 
     output_c.write('const uint8_t expected_inputs_len[] = {')
     for op in ops:
