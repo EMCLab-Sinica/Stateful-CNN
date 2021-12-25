@@ -721,7 +721,7 @@ with open('build/data.cpp', 'w') as output_c, open('build/data.h', 'w') as outpu
 
 struct ParameterInfo;
 struct Model;
-struct NodeFlags;
+struct Node;
 
 ''')
     for item in itertools.chain(dir(Constants), config.keys()):
@@ -762,8 +762,8 @@ struct NodeFlags;
     output_c.write('};\n\n')
 
     for op in ops:
-        output_h.write('void alloc_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, const struct NodeFlags* flags);\n'.format(op.lower()))
-        output_h.write('void handle_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, const struct NodeFlags* flags);\n'.format(op.lower()))
+        output_h.write('void alloc_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, const struct Node* node);\n'.format(op.lower()))
+        output_h.write('void handle_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, const struct Node* node);\n'.format(op.lower()))
     output_c.write('const handler handlers[] = {\n')
     for op in ops:
         output_c.write(f'    handle_{op},\n'.lower())
@@ -775,7 +775,7 @@ struct NodeFlags;
     for op in ops:
         if op in inplace_update_ops:
             output_c.write(textwrap.dedent(f'''
-                void alloc_{op.lower()}(struct Model *model, const struct ParameterInfo *[], struct ParameterInfo *output, const struct NodeFlags*) {{
+                void alloc_{op.lower()}(struct Model *model, const struct ParameterInfo *[], struct ParameterInfo *output, const struct Node*) {{
                     SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
                     if (cur_slot_info) {{
                         cur_slot_info->user = model->layer_idx;

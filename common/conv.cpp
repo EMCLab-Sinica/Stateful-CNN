@@ -502,7 +502,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     }
 }
 
-void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
+void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
     const ParameterInfo *conv_input = input[0], *conv_filter = input[1];
 
     MY_ASSERT(conv_input->bitwidth == 16 && conv_filter->bitwidth == 16);
@@ -519,7 +519,7 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     ConvTaskParams *conv_params = &conv_params_obj;
 
     conv_params->model = model;
-    conv_params->flags = flags;
+    conv_params->flags = &node->flags;
 
     conv_params->kH = conv_filter->dims[2];
     conv_params->kW = conv_filter->dims[3];
@@ -527,8 +527,8 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     MY_ASSERT(conv_params->kH % 2 ==1);
     MY_ASSERT(conv_params->kW % 2 ==1);
 
-    conv_params->stride = flags->stride;
-    if (flags->generic == AUTO_PAD_VALID) {
+    conv_params->stride = conv_params->flags->stride;
+    if (conv_params->flags->generic == AUTO_PAD_VALID) {
         conv_params->offset_h = conv_params->kH / 2;
         conv_params->offset_w = conv_params->kW / 2;
         conv_params->OUTPUT_H = (H - conv_params->kH) / conv_params->stride + 1;
@@ -549,11 +549,11 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     } else
 #endif
     {
-        conv_params->n_tiles_c = CHANNEL / flags->extra.conv.input_tile_c;
+        conv_params->n_tiles_c = CHANNEL / conv_params->flags->extra.conv.input_tile_c;
     }
 #if STATEFUL
-    if (flags->extra.conv.output_tile_c % BATCH_SIZE) {
-        conv_params->output_padding = BATCH_SIZE - flags->extra.conv.output_tile_c % BATCH_SIZE;
+    if (conv_params->flags->extra.conv.output_tile_c % BATCH_SIZE) {
+        conv_params->output_padding = BATCH_SIZE - conv_params->flags->extra.conv.output_tile_c % BATCH_SIZE;
     } else {
         conv_params->output_padding = 0;
     }
@@ -579,7 +579,7 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 #endif
 }
 
-void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
+void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node*) {
     const ParameterInfo *conv_input = input[0], *conv_filter = input[1], *conv_bias = input[2];
     my_printf_debug("Conv!" NEWLINE);
 
@@ -634,7 +634,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     my_printf_debug("old_output_offset = %d" NEWLINE, conv_params->old_output_offset);
 #endif
 
-    uint16_t cur_output_tile_c = flags->extra.conv.output_tile_c;
+    uint16_t cur_output_tile_c = conv_params->flags->extra.conv.output_tile_c;
 #if JAPARI
     cur_output_tile_c = extend_for_footprints(cur_output_tile_c, conv_params->force_align_footprints);
 #endif
@@ -642,11 +642,11 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     conv_params->input_tile_c_index = first_unfinished_value_offset / slice_size_input_channel_tiling;
     // Not extending for JAPARI footprints here as input_tile_c_offset will be extended later
-    conv_params->input_tile_c_offset = conv_params->input_tile_c_index * flags->extra.conv.input_tile_c;
+    conv_params->input_tile_c_offset = conv_params->input_tile_c_index * conv_params->flags->extra.conv.input_tile_c;
     first_unfinished_value_offset %= slice_size_input_channel_tiling;
 
     conv_params->filter_tile_index = (first_unfinished_value_offset % conv_params->OUTPUT_CHANNEL) / cur_output_tile_c;
-    conv_params->filter_idx = conv_params->filter_tile_index * flags->extra.conv.output_tile_c;
+    conv_params->filter_idx = conv_params->filter_tile_index * conv_params->flags->extra.conv.output_tile_c;
 
 #if STATEFUL
     uint8_t filter_offset_in_tile = first_unfinished_value_offset % (cur_output_tile_c + conv_params->output_padding);
@@ -679,8 +679,8 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         input_channels = input_channels / (BATCH_SIZE + 1) * BATCH_SIZE;
     }
 #endif
-    for (; conv_params->input_tile_c_offset < input_channels; conv_params->input_tile_c_offset += flags->extra.conv.input_tile_c) {
-        conv_params->cur_input_tile_c = MIN_VAL(flags->extra.conv.input_tile_c, input_channels - conv_params->input_tile_c_offset);
+    for (; conv_params->input_tile_c_offset < input_channels; conv_params->input_tile_c_offset += conv_params->flags->extra.conv.input_tile_c) {
+        conv_params->cur_input_tile_c = MIN_VAL(conv_params->flags->extra.conv.input_tile_c, input_channels - conv_params->input_tile_c_offset);
         conv_params->cur_filter_tile_c = conv_params->cur_input_tile_c;
 #if JAPARI
         conv_params->input_tile_c_offset_with_footprints = extend_for_footprints(conv_params->input_tile_c_offset);
@@ -709,10 +709,10 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             }
             conv_params->input_w = conv_params->offset_w;
             conv_params->filter_tile_index++;
-            if (conv_params->filter_tile_index * flags->extra.conv.output_tile_c >= conv_params->N_FILTERS) {
+            if (conv_params->filter_tile_index * conv_params->flags->extra.conv.output_tile_c >= conv_params->N_FILTERS) {
                 break;
             }
-            conv_params->filter_idx = conv_params->filter_tile_index * flags->extra.conv.output_tile_c;
+            conv_params->filter_idx = conv_params->filter_tile_index * conv_params->flags->extra.conv.output_tile_c;
 #if INDIRECT_RECOVERY
             uint32_t new_output_offset = conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W;
 #if JAPARI
@@ -739,7 +739,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     dump_params_nhwc_debug(model, output);
 }
 
-void alloc_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
+void alloc_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node*) {
     const ParameterInfo *data = input[0];
 
     uint16_t OUTPUT_CHANNEL = data->dims[1],
@@ -780,7 +780,7 @@ void ConvMergeOutputChunkHandler(uint32_t range_offset, uint16_t range_len, int8
 }
 #endif
 
-void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct ParameterInfo *output, const NodeFlags*) {
+void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct ParameterInfo *output, const Node* node) {
     // Do not use conv_params here as its intialization in alloc_conv and
     // handle_conv might be skipped if the Conv node has finished.
     const ParameterInfo *data = input[0];

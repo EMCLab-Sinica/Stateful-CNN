@@ -149,8 +149,8 @@ void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, 
 /**********************************
  *       Operation handlers       *
  **********************************/
-typedef void (*handler)(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags);
-typedef void (*allocator)(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags);
+typedef void (*handler)(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node);
+typedef void (*allocator)(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node);
 // below are defined in ops.c
 extern const handler handlers[];
 extern const allocator allocators[];

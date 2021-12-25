@@ -35,7 +35,7 @@ static void handle_node(Model *model, uint16_t node_idx) {
     ParameterInfo *output = get_intermediate_parameter_info(node_idx);
     my_memcpy(output, input[0], sizeof(ParameterInfo) - sizeof(uint16_t)); // don't overwrite parameter_info_idx
     output->params_offset = 0;
-    allocators[cur_node->op_type](model, input, output, &cur_node->flags);
+    allocators[cur_node->op_type](model, input, output, cur_node);
     my_printf_debug("Needed mem = %d" NEWLINE, output->params_len);
     MY_ASSERT(output->params_len < INTERMEDIATE_VALUES_SIZE);
     if (output->slot == SLOT_INTERMEDIATE_VALUES) {
@@ -45,7 +45,7 @@ static void handle_node(Model *model, uint16_t node_idx) {
 #if STATEFUL
     my_printf_debug("Old output state bit=%d" NEWLINE, get_state_bit(model, output->slot));
 #endif
-    handlers[cur_node->op_type](model, input, output, &cur_node->flags);
+    handlers[cur_node->op_type](model, input, output, cur_node);
     // For some operations (e.g., ConvMerge), scale is determined in the handlers
     my_printf_debug("Output scale = %d" NEWLINE, output->scale);
     MY_ASSERT(output->scale > 0);  // fail when overflow

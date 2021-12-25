@@ -7,7 +7,7 @@
 #include "my_dsplib.h"
 #include "intermittent-cnn.h"
 
-void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
+void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
     const ParameterInfo *A = input[0], *B = input[1];
 
     MY_ASSERT(A->dims[0] == 1);
@@ -24,7 +24,7 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 
     uint16_t output_len = output->dims[0] * output->dims[1];
 
-    output->params_len = output_len * upper_gauss(B->dims[0], flags->extra.gemm.tile_channel) * sizeof(int16_t);
+    output->params_len = output_len * upper_gauss(B->dims[0], node->flags.extra.gemm.tile_channel) * sizeof(int16_t);
 }
 
 struct GemmInputChunkHandlerParams {
@@ -39,8 +39,9 @@ void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, int8_t stat
     my_offset_q15_batched(to_offset, -state_bit*0x4000, to_offset, real_chunk_len);
 }
 
-void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
+void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
     const ParameterInfo *A = input[0], *B = input[1], *C = input[2];
+    const NodeFlags* flags = &node->flags;
 
     my_printf_debug("Gemm! A: (%dx%d), B: (%dx%d)" NEWLINE,
               A->dims[0], A->dims[1], B->dims[0], B->dims[1]);
@@ -229,13 +230,13 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     dump_params_debug(model, output);
 }
 
-void alloc_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const struct NodeFlags *flags) {
+void alloc_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const Node*) {
     output->slot = get_next_slot(model, input[0]);
     int16_t output_len = output->dims[0] * output->dims[1];
     output->params_len = output_len * sizeof(int16_t);
 }
 
-void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const struct NodeFlags *flags) {
+void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const Node*) {
     const ParameterInfo *X = input[0];
 
     my_printf_debug("GemmMerge!" NEWLINE);

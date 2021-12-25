@@ -8,13 +8,13 @@
 
 #define RESHAPE_AUTO_DIM static_cast<uint16_t>(-1)
 
-void alloc_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
+void alloc_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node*) {
     const ParameterInfo *data = input[0];
     output->slot = get_next_slot(model, data);
     output->param_flags &= ~TRANSPOSED;
 }
 
-void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
+void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
     my_printf_debug("ReLu!" NEWLINE);
 
     const ParameterInfo *X = input[0];
@@ -197,7 +197,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     }
 }
 
-void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
+void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node*) {
     my_printf_debug("Reshape!" NEWLINE);
 
     const ParameterInfo *data = input[0], *shape = input[1];
@@ -263,7 +263,7 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
     MY_ASSERT(new_len * sizeof(int16_t) == output->params_len);
 }
 
-void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags* flags) {
+void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
     my_printf_debug("Squeeze!" NEWLINE);
 
     const ParameterInfo *data = input[0];
@@ -275,7 +275,7 @@ void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *o
     if (cur_slot_info) {
         cur_slot_info->user = model->layer_idx;
     }
-    uint8_t axes = flags->extra.squeeze.axes;
+    uint8_t axes = node->flags.extra.squeeze.axes;
     // If axes is not provided, all the single dimensions will be removed from the shape.
     // https://github.com/onnx/onnx/blob/master/docs/Operators.md#squeeze
     uint8_t j = 0;
@@ -301,10 +301,10 @@ void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *o
     }
 }
 
-void alloc_concat(Model *, const ParameterInfo *[], ParameterInfo*, const NodeFlags*) {
+void alloc_concat(Model *, const ParameterInfo *[], ParameterInfo*, const Node*) {
 }
 
-void handle_concat(Model *model, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
+void handle_concat(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node*) {
     my_printf_debug("Concat!" NEWLINE);
 
     const ParameterInfo *A = input[0], *B = input[1];
@@ -326,12 +326,12 @@ void handle_concat(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     dump_params_nhwc_debug(model, B);
 }
 
-void handle_softmax(Model*, const ParameterInfo*[], ParameterInfo*, const NodeFlags*) {
+void handle_softmax(Model*, const ParameterInfo*[], ParameterInfo*, const Node*) {
     // Do nothing - softmax does not change the relative order of values.
     // Just let run_model determine the max value
 }
 
-void handle_transpose(Model*, const ParameterInfo *input[], ParameterInfo *output, const NodeFlags*) {
+void handle_transpose(Model*, const ParameterInfo *input[], ParameterInfo *output, const Node*) {
     my_printf_debug("Transpose!" NEWLINE);
 
     const ParameterInfo *X = input[0];
