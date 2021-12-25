@@ -37,7 +37,7 @@ class Constants:
     SLOT_TEST_SET = 0xff
     SLOT_CONSTANTS_MIN = SLOT_PARAMETERS
     SLOT_INTERMEDIATE_VALUES = 0b01
-    NODE_NAME_LEN = 40
+    NODE_NAME_LEN = 60
     EXTRA_INFO_LEN = 3  # for memory alignment
     TURNING_POINTS_LEN = 8
     MODEL_NODES_LEN = 0
