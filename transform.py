@@ -753,11 +753,6 @@ struct Node;
     for idx, op in enumerate(ops):
         output_h.write(f'#define Op{op} {idx}\n')
 
-    output_c.write('const uint8_t expected_inputs_len[] = {')
-    for op in ops:
-        output_c.write(f'{op}, ')
-    output_c.write('};\n\n')
-
     for op in ops:
         output_h.write('void alloc_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, const struct Node* node);\n'.format(op.lower()))
         output_h.write('void handle_{}(struct Model *model, const struct ParameterInfo *input[], struct ParameterInfo *output, const struct Node* node);\n'.format(op.lower()))
