@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 #include "cnn_common.h"
 #include "data.h"
 #include "my_debug.h"
@@ -13,7 +13,7 @@ uint8_t run_cnn_tests(uint16_t n_samples);
 
 uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index);
 
-int8_t get_state_bit(struct Model *model, uint8_t slot_id);
+int8_t get_state_bit(Model *model, uint8_t slot_id);
 
 #if HAWAII || STATEFUL
 static inline bool offset_has_state(uint16_t offset) {
@@ -57,5 +57,5 @@ static inline int8_t get_value_state_bit(int16_t val) {
 #endif
 int8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offset);
 
-uint32_t run_recovery(struct Model *model, struct ParameterInfo *output);
-void flip_state_bit(struct Model *model, const ParameterInfo *output);
+uint32_t run_recovery(Model *model, ParameterInfo *output);
+void flip_state_bit(Model *model, const ParameterInfo *output);

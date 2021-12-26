@@ -1,6 +1,6 @@
 #include <cstddef>
 #include <cstring>
-#include <inttypes.h> // for PRId64
+#include <cinttypes> // for PRId64
 #include <cstdint>
 #include <memory>
 #include "my_debug.h"

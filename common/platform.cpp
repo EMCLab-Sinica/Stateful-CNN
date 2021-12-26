@@ -1,4 +1,4 @@
-#include <string.h>
+#include <cstring>
 #include "platform.h"
 #include "platform-private.h"
 #include "cnn_common.h"
@@ -44,7 +44,7 @@ const char* datatype_name<Model>(void) {
     return "model";
 }
 
-void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, const void *src, size_t n, uint16_t timer_delay) {
+void my_memcpy_to_param(ParameterInfo *param, uint16_t offset_in_word, const void *src, size_t n, uint16_t timer_delay) {
     MY_ASSERT(param->bitwidth == 16);
     MY_ASSERT(param->slot < SLOT_CONSTANTS_MIN);
     uint32_t total_offset = param->params_offset + offset_in_word * sizeof(int16_t);

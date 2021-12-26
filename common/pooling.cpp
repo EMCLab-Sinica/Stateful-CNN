@@ -1,4 +1,4 @@
-#include <stdint.h>
+#include <cstdint>
 #include "data.h"
 #include "cnn_common.h"
 #include "my_debug.h"

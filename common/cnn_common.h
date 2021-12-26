@@ -1,7 +1,7 @@
 #pragma once
 
-#include <stddef.h> /* size_t, see https://stackoverflow.com/a/26413264 */
-#include <stdint.h>
+#include <cstddef> /* size_t, see https://stackoverflow.com/a/26413264 */
+#include <cstdint>
 #include "data.h"
 
 /**********************************

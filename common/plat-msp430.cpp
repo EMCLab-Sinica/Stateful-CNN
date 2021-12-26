@@ -6,7 +6,7 @@
 #include <msp432.h>
 #endif
 #include <cstdint>
-#include <string.h>
+#include <cstring>
 #include "intermittent-cnn.h"
 #include "cnn_common.h"
 #include "platform.h"

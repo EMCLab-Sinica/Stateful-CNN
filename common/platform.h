@@ -1,7 +1,7 @@
 #pragma once
 
-#include <stdint.h>
-#include <stdlib.h>
+#include <cstdint>
+#include <cstdlib>
 
 #if defined(__MSP430__) || defined(__MSP432__)
 #  include "plat-msp430.h"
@@ -9,26 +9,18 @@
 #  include "plat-linux.h"
 #endif
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 struct ParameterInfo;
 struct Model;
 extern uint8_t dma_counter_enabled;
 
-#ifdef __cplusplus
 [[ noreturn ]] void ERROR_OCCURRED(void);
-#else
-_Noreturn void ERROR_OCCURRED(void);
-#endif
 void my_memcpy(void* dest, const void* src, size_t n);
-void my_memcpy_to_param(struct ParameterInfo *param, uint16_t offset_in_word, const void *src, size_t n, uint16_t timer_delay);
-void my_memcpy_from_intermediate_values(void *dest, const struct ParameterInfo *param, uint16_t offset_in_word, size_t n);
+void my_memcpy_to_param(ParameterInfo *param, uint16_t offset_in_word, const void *src, size_t n, uint16_t timer_delay);
+void my_memcpy_from_intermediate_values(void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n);
 void read_from_samples(void *dest, uint16_t offset_in_word, size_t n);
-struct ParameterInfo* get_intermediate_parameter_info(uint8_t i);
+ParameterInfo* get_intermediate_parameter_info(uint8_t i);
 void commit_intermediate_parameter_info(uint8_t i);
-struct Model* get_model(void);
+Model* get_model(void);
 void commit_model(void);
 void first_run(void);
 void notify_model_finished(void);
@@ -37,8 +29,4 @@ uint64_t get_nvm_writes(void);
 void write_hawaii_layer_footprint(uint16_t layer_idx, int16_t n_jobs);
 uint16_t read_hawaii_layer_footprint(uint16_t layer_idx);
 void reset_hawaii_layer_footprint(uint16_t layer_idx);
-#endif
-
-#ifdef __cplusplus
-}
 #endif

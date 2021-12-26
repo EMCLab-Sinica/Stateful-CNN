@@ -1,5 +1,4 @@
-#include <stdint.h>
-
+#include <cstdint>
 #include "cnn_common.h"
 #include "platform.h"
 #include "my_debug.h"
@@ -230,13 +229,13 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     dump_params_debug(model, output, node->output_name);
 }
 
-void alloc_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const Node*) {
+void alloc_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node*) {
     output->slot = get_next_slot(model, input[0]);
     int16_t output_len = output->dims[0] * output->dims[1];
     output->params_len = output_len * sizeof(int16_t);
 }
 
-void handle_gemmmerge(struct Model *model, const struct ParameterInfo **input, struct ParameterInfo *output, const Node* node) {
+void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
     const ParameterInfo *X = input[0];
 
     my_printf_debug("GemmMerge!" NEWLINE);

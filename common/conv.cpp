@@ -1,5 +1,5 @@
 #include <cstdint>
-#include <inttypes.h> // for PRId32
+#include <cinttypes> // for PRId32
 #include "cnn_common.h"
 #include "data.h"
 #include "my_debug.h"
@@ -780,7 +780,7 @@ void ConvMergeOutputChunkHandler(uint32_t range_offset, uint16_t range_len, int8
 }
 #endif
 
-void handle_convmerge(struct Model *model, const ParameterInfo *input[], struct ParameterInfo *output, const Node* node) {
+void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
     // Do not use conv_params here as its intialization in alloc_conv and
     // handle_conv might be skipped if the Conv node has finished.
     const ParameterInfo *data = input[0];
