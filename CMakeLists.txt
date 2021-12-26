@@ -57,6 +57,8 @@ target_include_directories(arm_cmsis_dsp
     PUBLIC
         ${ARM_CMSIS_PATH}/Core/Include
         ${ARM_CMSIS_PATH}/DSP/Include
+    PRIVATE
+        ${CMAKE_BINARY_DIR}
 )
 target_compile_definitions(arm_cmsis_dsp
     PRIVATE

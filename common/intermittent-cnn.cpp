@@ -1,7 +1,7 @@
-#include <stdint.h>
-#include <string.h>
-#include <inttypes.h> // for PRId32
-#include <math.h>
+#include <cstdint>
+#include <cstring>
+#include <cinttypes> // for PRId32
+#include <cmath>
 
 #include "intermittent-cnn.h"
 #include "cnn_common.h"
@@ -409,7 +409,7 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
     }
 #else
     if (!is_conv) {
-        if (node->op_type == Relu) {
+        if (node->op_type == OpRelu) {
             uint16_t OUTPUT_CHANNEL = output->dims[1];
             if (OUTPUT_CHANNEL % (BATCH_SIZE + 1) != 0) {
                 uint8_t jobs_in_a_tile = OUTPUT_CHANNEL / (BATCH_SIZE + 1);
