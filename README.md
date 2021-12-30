@@ -20,9 +20,9 @@ If you are using Python 3.6, install one more Python package:
 
 # Building for POSIX-compliant systems
 
-* `cmake .`
-* `make`
-* `./intermittent-cnn`
+* `cmake -B build -S .`
+* `make -C build`
+* `./build/intermittent-cnn`
 
 # Building for MSP430FR5994
 
