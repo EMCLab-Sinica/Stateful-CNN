@@ -24,4 +24,11 @@
 		<nature>org.eclipse.cdt.core.ccnature</nature>
 		<nature>org.eclipse.cdt.managedbuilder.core.ScannerConfigNature</nature>
 	</natures>
+	<linkedResources>
+		<link>
+			<name>data.cpp</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/build/data.cpp</locationURI>
+		</link>
+	</linkedResources>
 </projectDescription>

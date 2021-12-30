@@ -195,10 +195,10 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
     arm_mat_init_q15(&B, B_rows, B_cols, pSrcB);
     arm_mat_init_q15(&C, A_rows, B_cols, pDst);
 #ifdef __MSP432__
-    arm_status status = arm_mat_mult_fast_q15(&A, &B, &C, pState, param, offset_in_word, values_to_preserve, mask, n_keep_state_bits);
+    arm_status status = arm_mat_mult_fast_q15(&A, &B, &C, pState, my_memcpy_to_param, param, offset_in_word, values_to_preserve, mask, n_keep_state_bits);
     MY_ASSERT(status == ARM_MATH_SUCCESS);
 #else
-    arm_status status = arm_mat_mult_fast_q15(&A, &B, &C, pState, NULL, 0, 0, mask, n_keep_state_bits);
+    arm_status status = arm_mat_mult_fast_q15(&A, &B, &C, pState, my_memcpy_to_param, NULL, 0, 0, mask, n_keep_state_bits);
     MY_ASSERT(status == ARM_MATH_SUCCESS);
     if (param) {
         my_memcpy_to_param(param, offset_in_word, pDst, values_to_preserve * sizeof(int16_t), 0);

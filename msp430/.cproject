@@ -53,6 +53,7 @@
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}/intermittent-cnn"/>
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}/TI-DSPLib/include"/>
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}/driverlib/MSP430FR5xx_6xx"/>
+									<listOptionValue builtIn="false" value="${PROJECT_LOC}/../build"/>
 									<listOptionValue builtIn="false" value="${CCS_BASE_ROOT}/msp430/include"/>
 									<listOptionValue builtIn="false" value="${CG_TOOL_ROOT}/include"/>
 								</option>
