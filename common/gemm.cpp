@@ -239,7 +239,10 @@ void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
 
     int16_t output_len = X->dims[0] * X->dims[1];
 
-    uint8_t output_tile_size = node->flags.extra.gemmmerge.tile_length || output_len;
+    uint8_t output_tile_size = node->flags.extra.gemmmerge.tile_length;
+    if (!output_tile_size) {
+        output_tile_size = output_len;
+    }
 #if JAPARI
     output_tile_size = extend_for_footprints(output_tile_size);
 #endif

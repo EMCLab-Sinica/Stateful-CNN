@@ -1,4 +1,5 @@
 #include <cstring>
+#include "data.h"
 #include "platform.h"
 #include "platform-private.h"
 #include "cnn_common.h"
@@ -192,6 +193,7 @@ void write_hawaii_layer_footprint(uint16_t layer_idx, int16_t n_jobs) {
     MY_ASSERT(footprint_vm->value < INTERMEDIATE_VALUES_SIZE);
     commit_versioned_data<Node::Footprint>(layer_idx);
     my_printf_debug("Write HAWAII layer footprint %d for layer %d" NEWLINE, footprint_vm->value, layer_idx);
+    MY_ASSERT(footprint_vm->value % BATCH_SIZE == 0);
 }
 
 uint16_t read_hawaii_layer_footprint(uint16_t layer_idx) {
