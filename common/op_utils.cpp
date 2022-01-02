@@ -12,9 +12,11 @@
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
 #if HAWAII
+static int16_t non_recorded_jobs = 0;
 void hawaii_record_footprints(Model* model, uint16_t vector_len) {
-    for (int16_t non_recorded_jobs = vector_len; non_recorded_jobs >= 0; non_recorded_jobs -= BATCH_SIZE) {
-        write_hawaii_layer_footprint(model->layer_idx, MIN_VAL(BATCH_SIZE, non_recorded_jobs));
+    non_recorded_jobs += vector_len;
+    for (; non_recorded_jobs >= BATCH_SIZE; non_recorded_jobs -= BATCH_SIZE) {
+        write_hawaii_layer_footprint(model->layer_idx, BATCH_SIZE);
     }
 }
 #endif
