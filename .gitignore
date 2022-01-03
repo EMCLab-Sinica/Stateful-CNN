@@ -11,7 +11,6 @@
 /samples.bin
 /images/
 /data/others.txt
-/data/*-opt*.onnx
 
 # CCS-generated files
 .launches/
