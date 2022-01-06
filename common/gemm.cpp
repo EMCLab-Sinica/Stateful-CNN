@@ -267,7 +267,7 @@ void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
         for (uint16_t tile = 0; tile < n_tiles; tile++) {
             my_memcpy_from_param(model, buffer_temp, input[0], tile * output_len + merge_offset, cur_tile_size * sizeof(int16_t));
 #if STATEFUL
-            for (uint16_t idx = BATCH_SIZE - 1; idx < output_len; idx += BATCH_SIZE) {
+            for (uint16_t idx = BATCH_SIZE - 1; idx < cur_tile_size; idx += BATCH_SIZE) {
                 strip_state(buffer_temp + idx);
             }
 #endif
