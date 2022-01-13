@@ -4,6 +4,8 @@
 #include <cstdint>
 #include "data.h"
 
+#define ENABLE_COUNTERS 0
+
 /**********************************
  *        Data structures         *
  **********************************/
@@ -106,21 +108,28 @@ typedef struct Model {
 
 static_assert(sizeof(Model) == 8 + NUM_SLOTS * (2 + INDIRECT_RECOVERY * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
 
-#define COUNTERS_LEN 64
-typedef struct {
-    uint16_t time_counters[COUNTERS_LEN];
-    uint16_t power_counters[COUNTERS_LEN];
-    uint32_t dma_invocations[COUNTERS_LEN];
-    uint32_t dma_bytes[COUNTERS_LEN];
-} Counters;
-
-// Keep the following coefficients synced with transform.py
-static_assert(sizeof(Counters) == 12 * COUNTERS_LEN, "Unexpected size of Counters");
-
 /**********************************
  *          Global data           *
  **********************************/
-Counters *counters(void);
+#define COUNTERS_LEN (MODEL_NODES_LEN+1)
+struct Counters {
+    uint32_t power_counters;
+    uint32_t dma_invocations;
+    uint32_t dma_bytes;
+
+    uint32_t embedding;
+    uint32_t stripping;
+    uint32_t overflow_handling;
+
+    uint32_t state_query;
+    uint32_t table_updates;
+    uint32_t table_preservation;
+    uint32_t table_loading;
+
+    uint32_t progress_seeking;
+};
+
+Counters *counters(uint16_t idx);
 extern ParameterInfo intermediate_parameters_info_vm[MODEL_NODES_LEN];
 
 

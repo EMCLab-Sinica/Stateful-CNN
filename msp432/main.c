@@ -9,15 +9,12 @@
  */
 
 static void prvSetupHardware( void );
-static void timerinit(void);
 
 void main(void)
 {
 	WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;		// stop watchdog timer
 
     setFrequency(FreqLevel);
-    // XXX: disabled - timer intterupts appear to interfere DMA read for external FRAM
-    // timerinit();
 
     prvSetupHardware();
 
@@ -62,15 +59,3 @@ static const Timer_A_UpModeConfig upConfig = {
     .captureCompareInterruptEnable_CCR0_CCIE = TIMER_A_CCIE_CCR0_INTERRUPT_ENABLE,
     .timerClear = TIMER_A_DO_CLEAR
 };
-
-void timerinit(void) {
-    /* Configuring Timer_A1 for Up Mode */
-    MAP_Timer_A_configureUpMode(TIMER_A1_BASE, &upConfig);
-
-    /* Enabling interrupts and starting the timer */
-    MAP_Interrupt_enableInterrupt(INT_TA1_0);
-    MAP_Timer_A_startCounter(TIMER_A1_BASE, TIMER_A_UP_MODE);
-
-    /* Enabling MASTER interrupts */
-    MAP_Interrupt_enableMaster();
-}

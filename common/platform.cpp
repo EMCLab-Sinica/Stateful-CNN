@@ -1,4 +1,5 @@
 #include <cstring>
+#include "c_callbacks.h"
 #include "data.h"
 #include "platform.h"
 #include "platform-private.h"
@@ -131,15 +132,24 @@ void commit_versioned_data(uint16_t data_idx) {
     my_printf_debug("Committing version %d to %s copy %d" NEWLINE, vm_ptr->version, datatype_name<T>(), older_copy_id);
 }
 
+Model* load_model_from_nvm(void) {
+    start_cpu_counter();
+    Model* ret = get_versioned_data<Model>(0);
+    stop_cpu_counter(&Counters::table_loading);
+    return ret;
+}
+
 Model* get_model(void) {
-    return get_versioned_data<Model>(0);
+    return &model_vm;
 }
 
 void commit_model(void) {
+    start_cpu_counter();
     if (!model_vm.running) {
         notify_model_finished();
     }
-    return commit_versioned_data<Model>(0);
+    commit_versioned_data<Model>(0);
+    stop_cpu_counter(&Counters::table_preservation);
 }
 
 void first_run(void) {
@@ -147,9 +157,6 @@ void first_run(void) {
     my_printf_debug("First run, resetting everything..." NEWLINE);
     my_erase();
     copy_samples_data();
-#if NON_VOLATILE_COUNTERS
-    memset(counters(), 0, sizeof(Counters));
-#endif
 
     write_to_nvm_segmented(intermediate_parameters_info_data, intermediate_parameters_info_addr(0),
                            INTERMEDIATE_PARAMETERS_INFO_DATA_LEN, sizeof(ParameterInfo));
@@ -157,7 +164,7 @@ void first_run(void) {
     write_to_nvm(model_data, nvm_addr<Model>(1, 0), MODEL_DATA_LEN);
     dma_counter_enabled = 1;
 
-    get_model(); // refresh model_vm
+    load_model_from_nvm(); // refresh model_vm
     commit_model();
 
     my_printf_debug("Init for " CONFIG "/" METHOD " with batch size=%d" NEWLINE, BATCH_SIZE);
@@ -167,6 +174,10 @@ void write_to_nvm_segmented(const uint8_t* vm_buffer, uint32_t nvm_offset, uint1
     for (uint16_t idx = 0; idx < total_len; idx += segment_size) {
         write_to_nvm(vm_buffer + idx, nvm_offset + idx, MIN_VAL(total_len - idx, segment_size));
     }
+}
+
+void record_overflow_handling_overhead(uint32_t cycles) {
+    counters(get_model()->layer_idx)->overflow_handling += cycles;
 }
 
 #if HAWAII

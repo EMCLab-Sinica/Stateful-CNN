@@ -30,8 +30,9 @@ static uint32_t shutdown_counter = UINT32_MAX;
 static uint64_t nvm_writes = 0;
 static std::ofstream out_file;
 
-Counters *counters() {
-    return reinterpret_cast<Counters*>(nvm + COUNTERS_OFFSET);
+static Counters counters_data[COUNTERS_LEN];
+Counters *counters(uint16_t idx) {
+    return counters_data + idx;
 }
 
 #ifdef USE_PROTOBUF
@@ -106,7 +107,7 @@ int main(int argc, char* argv[]) {
     }
 #endif
 
-    model = get_model();
+    model = load_model_from_nvm();
 
     // emulating button_pushed - treating as a fresh run
     if (button_pushed) {
@@ -119,11 +120,6 @@ int main(int argc, char* argv[]) {
     }
 
     ret = run_cnn_tests(n_samples);
-
-    for (uint16_t counter_idx = 0; counter_idx < COUNTERS_LEN; counter_idx++) {
-        counters()->dma_invocations[counter_idx] = 0;
-        counters()->dma_bytes[counter_idx] = 0;
-    }
 
 exit:
     close(nvm_fd);
@@ -145,9 +141,11 @@ void my_memcpy_ex(void* dest, const void* src, size_t n, uint8_t write_to_nvm) {
         return;
     }
 
+#if ENABLE_COUNTERS
     Model* model = &model_vm;
-    counters()->dma_invocations[model->layer_idx]++;
-    counters()->dma_bytes[model->layer_idx] += n;
+    counters(model->layer_idx)->dma_invocations++;
+    counters(model->layer_idx)->dma_bytes += n;
+#endif
     // Not using memcpy here so that it is more likely that power fails during
     // memcpy, which is the case for external FRAM
     uint8_t *dest_u = reinterpret_cast<uint8_t*>(dest);
@@ -208,6 +206,11 @@ void notify_model_finished(void) {}
 
 [[ noreturn ]] void ERROR_OCCURRED(void) {
     exit_with_status(1);
+}
+
+void start_cpu_counter(void) {}
+void stop_cpu_counter(uint32_t Counters::* mem_ptr) {
+    counters(get_model()->layer_idx)->*mem_ptr += 1;
 }
 
 #endif // POSIX_BUILD

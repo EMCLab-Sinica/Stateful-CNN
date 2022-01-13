@@ -4,6 +4,7 @@
 #include "intermittent-cnn.h"
 #include "my_dsplib.h"
 #include "cnn_common.h"
+#include "platform.h"
 
 // Not using DSPLIB_DATA here as it does not work under C++ (?)
 #ifdef __MSP430__
@@ -76,6 +77,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 
     uint16_t cur_chunk_len;
 #if INDIRECT_RECOVERY
+    start_cpu_counter();
     dump_turning_points_debug(model, param);
 
     state_bit = get_state_bit(model, param->slot);
@@ -97,10 +99,12 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
         // no turning points not after start_offset found
         next_turning_point = INVALID_TURNING_POINT;
     }
+    stop_cpu_counter(&Counters::state_query);
 #endif
     for (uint32_t offset = start_offset; offset < params_len; offset += cur_chunk_len) {
         cur_chunk_len = MIN_VAL(chunk_len, params_len - offset);
 #if INDIRECT_RECOVERY
+        start_cpu_counter();
         uint8_t next_state_flipped = 0;
         // Use <= here as turning_point_idx is actually index for the _next_ turning point
         if (next_turning_point != INVALID_TURNING_POINT && turning_point_idx <= cur_slot_info->n_turning_points) {
@@ -112,19 +116,23 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
             }
             cur_chunk_len = chunk_len_before_turning_point;
         }
+        stop_cpu_counter(&Counters::state_query);
 #endif
         MY_ASSERT(cur_chunk_len != 0);
         chunk_handler(offset, cur_chunk_len, state_bit, params);
 #if INDIRECT_RECOVERY
+        start_cpu_counter();
         if (next_state_flipped) {
             state_bit = -state_bit;
         }
+        stop_cpu_counter(&Counters::state_query);
 #endif
     }
 }
 
 #if INDIRECT_RECOVERY
 void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, uint16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param) {
+    start_cpu_counter();
     my_printf_debug("Initialize next_turning_point from output offset %d" NEWLINE, initial_value_idx);
     *p_offset = get_state_bit(model, param->slot)*0x4000;
     *p_turning_point_idx = 0;
@@ -147,24 +155,32 @@ void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, uin
         *p_next_turning_point = INVALID_TURNING_POINT;
     }
     my_printf_debug("next_turning_point = %d" NEWLINE, *p_next_turning_point);
+    stop_cpu_counter(&Counters::state_query);
 }
 
-void check_next_turning_point_inner(int16_t* p_offset, uint8_t* p_turning_point_idx, uint16_t* p_next_turning_point, SlotInfo* slot_info, uint16_t value_idx) {
-    *p_offset = -*p_offset;
+void check_next_turning_point(int16_t& offset, uint8_t& turning_point_idx, uint16_t& next_turning_point, SlotInfo* slot_info, uint16_t value_idx) {
+    start_cpu_counter();
     uint8_t next_turning_point_found = 0;
-    while (*p_turning_point_idx < slot_info->n_turning_points) {
-        *p_next_turning_point = slot_info->turning_points[*p_turning_point_idx];
-        (*p_turning_point_idx)++;
-        if (*p_next_turning_point != INVALID_TURNING_POINT && *p_next_turning_point >= value_idx) {
+    if (next_turning_point == INVALID_TURNING_POINT || value_idx < next_turning_point) {
+        goto exit;
+    }
+    my_printf_debug("Checking next turning point after %d" NEWLINE, value_idx);
+    offset = -offset;
+    while (turning_point_idx < slot_info->n_turning_points) {
+        next_turning_point = slot_info->turning_points[turning_point_idx];
+        turning_point_idx++;
+        if (next_turning_point != INVALID_TURNING_POINT && next_turning_point >= value_idx) {
             next_turning_point_found = 1;
             break;
         }
-        *p_offset = -*p_offset;
+        offset = -offset;
     }
     if (!next_turning_point_found) {
-        *p_next_turning_point = -1;
+        next_turning_point = -1;
     }
-    my_printf_debug("new offset=%d" NEWLINE, *p_offset);
+    my_printf_debug("new offset=%d" NEWLINE, offset);
+exit:
+    stop_cpu_counter(&Counters::state_query);
 }
 #endif
 

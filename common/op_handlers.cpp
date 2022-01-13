@@ -5,6 +5,7 @@
 #include "my_debug.h"
 #include "intermittent-cnn.h"
 #include "my_dsplib.h"
+#include "platform.h"
 
 #define RESHAPE_AUTO_DIM static_cast<uint16_t>(-1)
 
@@ -92,10 +93,12 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         {
                             input_val = lea_buffer[idx];
 #if STATEFUL
+                            start_cpu_counter();
                             if (offset_has_state(c + idx)) {
                                 strip_state(&input_val);
                             }
                             input_val *= 2;
+                            stop_cpu_counter(&Counters::stripping);
 #endif
                             output_val = MAX_VAL(input_val, 0);
                         }
@@ -103,6 +106,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         output_idx++;
                     }
 #if STATEFUL
+                    start_cpu_counter();
                     uint8_t block_size;
                     if (next_output_turning_point == INVALID_TURNING_POINT) {
                         block_size = len;
@@ -115,6 +119,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                         int16_t* to_offset = lea_buffer + next_output_turning_point - output_offset;
                         my_offset_q15_batched(to_offset, -offset, to_offset, output_offset + len - next_output_turning_point);
                     }
+                    stop_cpu_counter(&Counters::embedding);
 #endif
                     my_memcpy_to_param(output, output_offset, lea_buffer, output_idx * sizeof(int16_t), 0);
 #if HAWAII
@@ -151,21 +156,25 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                 int16_t input_val = get_q15_param(model, X, data_offset);
 #if INDIRECT_RECOVERY
 #if STATEFUL
+                start_cpu_counter();
                 if (offset_has_state(data_offset)) {
                     strip_state(&input_val);
                 }
                 input_val *= 2;
+                stop_cpu_counter(&Counters::stripping);
 #endif
                 check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
 #endif
                 output_val = MAX_VAL(input_val, 0);
             }
 #if STATEFUL
+            start_cpu_counter();
             output_val /= 2;
             if (cur_batch_offset == BATCH_SIZE - 1) {
                 cur_batch_offset -= BATCH_SIZE;
                 output_val += offset;
             }
+            stop_cpu_counter(&Counters::embedding);
 #endif
             my_printf_debug("output_offset=%d output_val=%d" NEWLINE, output_offset, output_val);
             put_q15_param(output, output_offset, output_val);

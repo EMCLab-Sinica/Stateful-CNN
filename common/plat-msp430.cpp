@@ -1,6 +1,7 @@
 #include <driverlib.h>
 #ifdef __MSP430__
 #include <msp430.h>
+#include <DSPLib.h>
 #include "main.h"
 #elif defined(__MSP432__)
 #include <msp432.h>
@@ -17,9 +18,12 @@
 #include "Tools/our_misc.h"
 #include "Tools/dvfs.h"
 
-static Counters counters_data;
-Counters *counters() {
-    return &counters_data;
+#ifdef __MSP430__
+#pragma DATA_SECTION(".nvm2")
+#endif
+static Counters counters_data[COUNTERS_LEN];
+Counters *counters(uint16_t idx) {
+    return counters_data + idx;
 }
 
 #ifdef __MSP430__
@@ -27,24 +31,6 @@ Counters *counters() {
 #define MY_DMA_CHANNEL DMA_CHANNEL_0
 
 #endif
-
-#ifdef __MSP430__
-#pragma vector=configTICK_VECTOR
-__interrupt void vTimerHandler( void )
-#elif defined(__MSP432__)
-extern "C" void TA1_0_IRQHandler(void)
-#endif
-{
-    // one tick is configured as roughly 1 millisecond
-    // See vApplicationSetupTimerInterrupt() in main.h and FreeRTOSConfig.h
-    counters()->time_counters[model_vm.layer_idx]++;
-#ifdef __MSP432__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wold-style-cast" // the macro TIMER_A1_BASE ends up with an old-style cast
-    MAP_Timer_A_clearCaptureCompareInterrupt(TIMER_A1_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_0);
-#pragma GCC diagnostic pop
-#endif
-}
 
 void my_memcpy(void* dest, const void* src, size_t n) {
 #ifdef __MSP430__
@@ -153,7 +139,7 @@ void IntermittentCNNTest() {
         WDTCTL = 0;
     }
 
-    Model* model = get_model();
+    Model* model = load_model_from_nvm();
     if (!GPIO_getInputPinValue(GPIO_RESET_PORT, GPIO_RESET_PIN)) {
         uartinit();
 
@@ -184,4 +170,16 @@ void button_pushed(uint16_t button1_status, uint16_t button2_status) {
 void notify_model_finished(void) {
     my_printf("." NEWLINE);
     GPIO_toggleOutputOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
+}
+
+void start_cpu_counter(void) {
+#if defined(__MSP430__) && ENABLE_COUNTERS
+    msp_benchmarkStart(MSP_BENCHMARK_BASE, 1);
+#endif
+}
+
+void stop_cpu_counter(uint32_t Counters::* mem_ptr) {
+#if defined(__MSP430__) && ENABLE_COUNTERS
+    counters(get_model()->layer_idx)->*mem_ptr += msp_benchmarkStop(MSP_BENCHMARK_BASE);
+#endif
 }

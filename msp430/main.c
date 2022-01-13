@@ -6,7 +6,6 @@
 
 #include <Tools/myuart.h>
 #include <Tools/dvfs.h>
-#include <Tools/ext_fram/extfram.h> // for EXTFRAM_USE_DMA
 
 #include "plat-msp430.h"
 
@@ -20,9 +19,6 @@ functionality in an interrupt. */
  * Configure the hardware as necessary.
  */
 static void prvSetupHardware( void );
-#ifndef EXTFRAM_USE_DMA
-static void vApplicationSetupTimerInterrupt( void );
-#endif
 
 /*-----------------------------------------------------------*/
 
@@ -33,10 +29,6 @@ int main( void )
 
     GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN0);
 
-    // XXX: disabled - timer intterupts appear to interfere DMA read for external FRAM
-#ifndef EXTFRAM_USE_DMA
-    vApplicationSetupTimerInterrupt();
-#endif
     IntermittentCNNTest();
 
 	return 0;
@@ -136,37 +128,4 @@ __interrupt void Port_5(void)
     GPIO_clearInterrupt(GPIO_PORT_P5, GPIO_PIN5);
 }
 
-#ifndef EXTFRAM_USE_DMA
-/* The MSP430X port uses this callback function to configure its tick interrupt.
-This allows the application to choose the tick interrupt source.
-configTICK_VECTOR must also be set in FreeRTOSConfig.h to the correct
-interrupt vector for the chosen tick interrupt source.  This implementation of
-vApplicationSetupTimerInterrupt() generates the tick from timer A0, so in this
-case configTICK_VECTOR is set to TIMER0_A0_VECTOR. */
-static void vApplicationSetupTimerInterrupt( void )
-{
-const unsigned short usACLK_Frequency_Hz = 32768;
-
-    /* Ensure the timer is stopped. */
-    TA0CTL = 0;
-
-    /* Run the timer from the ACLK. */
-    TA0CTL = TASSEL_1;
-
-    /* Clear everything to start with. */
-    TA0CTL |= TACLR;
-
-    /* Set the compare match value according to the tick rate we want. */
-    TA0CCR0 = usACLK_Frequency_Hz / configTICK_RATE_HZ;
-
-    /* Enable the interrupts. */
-    TA0CCTL0 = CCIE;
-
-    /* Start up clean. */
-    TA0CTL |= TACLR;
-
-    /* Up mode. */
-    TA0CTL |= MC_1;
-}
-#endif
 /*-----------------------------------------------------------*/

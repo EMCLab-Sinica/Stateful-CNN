@@ -9,6 +9,7 @@
 #include "my_debug.h"
 #include "my_dsplib.h"
 #include "op_utils.h"
+#include "platform.h"
 
 uint16_t sample_idx;
 
@@ -83,14 +84,16 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
             reset_hawaii_layer_footprint(node_idx);
         }
 #endif
-        for (uint16_t counter_idx = 0; counter_idx < COUNTERS_LEN; counter_idx++) {
-            counters()->time_counters[counter_idx] = 0;
-        }
         model->running = 1;
         commit_model();
+#if ENABLE_COUNTERS
+        memset(counters(0), 0, sizeof(Counters) * COUNTERS_LEN);
+#endif
     }
 
-    counters()->power_counters[model->layer_idx]++;
+#if ENABLE_COUNTERS
+    counters(model->layer_idx)->power_counters++;
+#endif
 
     dump_model_debug(model);
 
@@ -120,9 +123,11 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     my_memcpy_from_param(model, lea_buffer, output_node, 0, buffer_len * sizeof(int16_t));
 
 #if STATEFUL
+    start_cpu_counter();
     for (uint8_t idx = BATCH_SIZE - 1; idx < buffer_len; idx += BATCH_SIZE) {
         strip_state(lea_buffer + idx);
     }
+    stop_cpu_counter(&Counters::stripping);
 #endif
 
     if (sample_idx == 0) {
@@ -153,46 +158,51 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
 #endif
 }
 
-#if MY_DEBUG >= MY_DEBUG_NORMAL
+template<uint32_t Counters::* MemPtr>
+static uint32_t print_counters() {
+    uint32_t total = 0;
+    for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
+        total += counters(i)->*MemPtr;
+        my_printf("%8" PRIu32, counters(i)->*MemPtr);
+        if (i % 16 == 15) {
+            my_printf(NEWLINE);
+        }
+    }
+    my_printf(" total=%8" PRIu32, total);
+    return total;
+}
+
+#if (MY_DEBUG >= MY_DEBUG_NORMAL) || ENABLE_COUNTERS
 static void print_results(const ParameterInfo *output_node) {
     Model *model = get_model();
 
     dump_params(model, output_node);
 
-    my_printf("op types:       ");
+    my_printf("op types:            ");
     for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
         my_printf("% 8d", get_node(i)->op_type);
         if (i % 16 == 15) {
             my_printf(NEWLINE);
         }
     }
-    my_printf(NEWLINE "ticks:          ");
-    for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
-        my_printf("% 8d", counters()->time_counters[i]);
-        if (i % 16 == 15) {
-            my_printf(NEWLINE);
-        }
-    }
-#if NON_VOLATILE_COUNTERS
-    my_printf(NEWLINE "power counters: ");
-    for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
-        my_printf("% 8d", counters()->power_counters[i]);
-        if (i % 16 == 15) {
-            my_printf(NEWLINE);
-        }
-    }
-    my_printf(NEWLINE "DMA invocations:");
-    for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
-        my_printf("% 8d", counters()->dma_invocations[i]);
-    }
-    my_printf(NEWLINE "DMA bytes:      ");
-    uint32_t total_dma_bytes = 0;
-    for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
-        total_dma_bytes += counters()->dma_bytes[i];
-        my_printf("% 8d", counters()->dma_bytes[i]);
-    }
+    uint32_t total_dma_bytes = 0, total_overhead = 0;
+    my_printf(NEWLINE "Power counters:      "); print_counters<&Counters::power_counters>();
+    my_printf(NEWLINE "DMA invocations:     "); print_counters<&Counters::dma_invocations>();
+    my_printf(NEWLINE "DMA bytes:           "); total_dma_bytes = print_counters<&Counters::dma_bytes>();
+    // state-embedding overheads
+    my_printf(NEWLINE "Embeddings:          "); total_overhead += print_counters<&Counters::embedding>();
+    my_printf(NEWLINE "Strippings:          "); total_overhead += print_counters<&Counters::stripping>();
+    my_printf(NEWLINE "Overflow handling:   "); total_overhead += print_counters<&Counters::overflow_handling>();
+    // state-assignment overheads
+    my_printf(NEWLINE "State queries:       "); total_overhead += print_counters<&Counters::state_query>();
+    my_printf(NEWLINE "Table updates:       "); total_overhead += print_counters<&Counters::table_updates>();
+    my_printf(NEWLINE "Table preservation:  "); total_overhead += print_counters<&Counters::table_preservation>();
+    my_printf(NEWLINE "Table loading:       "); total_overhead += print_counters<&Counters::table_loading>();
+    // recovery overheads
+    my_printf(NEWLINE "Progress seeking:    "); total_overhead += print_counters<&Counters::progress_seeking>();
+
     my_printf(NEWLINE "Total DMA bytes: %d", total_dma_bytes);
-#endif
+    my_printf(NEWLINE "Total overhead: %" PRIu32, total_overhead);
     my_printf(NEWLINE "run_counter: %d" NEWLINE, model->run_counter);
 
     my_printf("NVM writes: %ld" NEWLINE, get_nvm_writes());
@@ -202,7 +212,7 @@ static void print_results(const ParameterInfo *output_node) {
 uint8_t run_cnn_tests(uint16_t n_samples) {
     int8_t predicted = -1;
     const ParameterInfo *output_node;
-#if MY_DEBUG >= MY_DEBUG_NORMAL
+#if (MY_DEBUG >= MY_DEBUG_NORMAL) || ENABLE_COUNTERS
     int8_t label = -1;
     uint32_t correct = 0, total = 0;
     if (!n_samples) {
@@ -213,7 +223,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
     for (uint16_t i = 0; i < n_samples; i++) {
         sample_idx = i;
         run_model(&predicted, &output_node);
-#if MY_DEBUG >= MY_DEBUG_NORMAL
+#if (MY_DEBUG >= MY_DEBUG_NORMAL) || ENABLE_COUNTERS
         label = labels[i];
         total++;
         if (label == predicted) {
@@ -227,7 +237,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
         my_printf_debug("idx=%d label=%d predicted=%d correct=%d" NEWLINE, i, label, predicted, label == predicted);
 #endif
     }
-#if MY_DEBUG >= MY_DEBUG_NORMAL
+#if (MY_DEBUG >= MY_DEBUG_NORMAL) || ENABLE_COUNTERS
     if (n_samples == 1) {
         print_results(output_node);
     }
@@ -286,6 +296,7 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
 
 void flip_state_bit(Model *model, const ParameterInfo *output) {
 #if INDIRECT_RECOVERY
+    start_cpu_counter();
 
 #if JAPARI
     MY_ASSERT(has_footprints(output));
@@ -332,6 +343,7 @@ void flip_state_bit(Model *model, const ParameterInfo *output) {
     // Use first_unfinished_job_index = 0 here as all values finished and the initial state bit is flipped above
     check_feature_map_states(model, output, 0, output->params_len / sizeof(int16_t), __func__);
 
+    stop_cpu_counter(&Counters::table_updates);
 #endif // INDIRECT_RECOVERY
 }
 
@@ -385,6 +397,7 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
 #endif
 
 uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
+    start_cpu_counter();
 #if STATEFUL
     if (job_index >= output->params_len / sizeof(int16_t)) {
         return job_index;
@@ -469,6 +482,7 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
         // TODO
         ERROR_OCCURRED();
     }
+    stop_cpu_counter(&Counters::progress_seeking);
     return offset;
 }
 
@@ -488,6 +502,8 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
     if (!after_recovery) {
         return 0;
     }
+
+    start_cpu_counter();
 
     // recovery from state bits
     uint32_t end_job_index = output->params_len / 2;
@@ -538,6 +554,8 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
     }
 
     check_feature_map_states(model, output, first_unfinished_job_index, output->params_len / 2, __func__);
+
+    stop_cpu_counter(&Counters::progress_seeking);
 
     return first_unfinished_job_index;
 }
