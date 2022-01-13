@@ -528,16 +528,9 @@ def to_bytes(arr, size=16):
     return struct.pack('%u%c' % (len(arr), FORMAT_CHARS[size]), *arr)
 
 def nchw2nhwc(arr, dims):
-    N, C, H, W = dims
-    ret = [0] * (N * C * H * W)
-    for n in range(N):
-        for c in range(C):
-            for h in range(H):
-                for w in range(W):
-                    old_idx = n * C * H * W + c * H * W + h * W + w
-                    new_idx = n * H * W * C + h * W * C + w * C + c
-                    ret[new_idx] = arr[old_idx]
-    return ret, (N, H, W, C)
+    arr = np.reshape(arr, dims)  # Change flattened to 4-D
+    arr = np.transpose(arr, axes=(0, 2, 3, 1))  # NCHW -> NHWC
+    return arr.flatten()  # Change it back to flattened
 
 outputs = {
     'parameters': io.BytesIO(),
@@ -639,7 +632,7 @@ for params in parameters:
             model_parameters_info.write(to_bytes(data_len * 2, size=32))  # A _q15 is 16-bit
             if params.name in conv_param_names:
                 logger.info('Reorder conv param %s', params.name)
-                float_data, _ = nchw2nhwc(float_data, params.dims)
+                float_data = nchw2nhwc(float_data, params.dims)
             slot.target.write(to_bytes(_Q15(np.array(float_data) / config['scale'], 'Parameter')))
             slot.offset += 2 * len(float_data)
             model_parameters_info.write(to_bytes(16, size=8)) # bitwidth
