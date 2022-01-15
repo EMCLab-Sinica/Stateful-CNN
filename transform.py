@@ -140,7 +140,7 @@ class NodeFlags_bits(ctypes.LittleEndianStructure):
 class NodeFlags(ctypes.Union):
     _fields_ = [
         ("b", NodeFlags_bits),
-        ("as_bytes", ctypes.c_uint64),
+        ("as_bytes", ctypes.c_int32),
     ]
 
     def __repr__(self):

@@ -298,7 +298,7 @@ void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
     MY_ASSERT(n_tiles);
 
     for (; merge_offset < output_len; merge_offset += output_tile_size) {
-        uint8_t cur_tile_size = MIN_VAL(output_tile_size, output_len - merge_offset);
+        int16_t cur_tile_size = MIN_VAL(output_tile_size, output_len - merge_offset);
         my_fill_q15(0, buffer_gemm, cur_tile_size);
 
         for (uint16_t tile = 0; tile < n_tiles; tile++) {
