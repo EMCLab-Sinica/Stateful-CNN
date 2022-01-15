@@ -20,7 +20,8 @@ if (ENABLE_COVERAGE)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
 endif ()
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS} -Wstrict-prototypes -std=c11")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -std=c++17 -Wold-style-cast")
+# Don't use something that require C++17 or newer, which are not supported by MSP-CGT yet
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -std=c++14 -Wold-style-cast")
 
 if (USE_PROTOBUF)
     find_package(Protobuf REQUIRED)

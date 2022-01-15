@@ -40,25 +40,27 @@ void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, int8_t stat
 }
 
 // https://tjsw.medium.com/86f06ac768da
-template<uint8_t move_from, uint8_t batch_offset>
+template<uint8_t move_from, uint8_t batch_offset, std::enable_if_t<move_from < BATCH_SIZE>* = nullptr>
+static inline void move_filter(int16_t*) {}
+
+template<uint8_t move_from, uint8_t batch_offset, std::enable_if_t<move_from >= BATCH_SIZE>* = nullptr>
 static inline void move_filter(int16_t* filter) {
-    if constexpr (move_from < OP_FILTERS) {
-        const uint8_t move_to = move_from/BATCH_SIZE*(BATCH_SIZE+1)+batch_offset;
-        filter[move_to] = filter[move_from];
-    }
-    if constexpr (batch_offset >= 1) {
-        move_filter<move_from-1, batch_offset-1>(filter);
-    } else if constexpr (move_from > BATCH_SIZE) {
-        move_filter<move_from-1, BATCH_SIZE-1>(filter);
-    }
+    const uint8_t move_to = move_from/BATCH_SIZE*(BATCH_SIZE+1)+batch_offset;
+    filter[move_to] = filter[move_from];
+    move_filter<move_from-1, (batch_offset >= 1) ? (batch_offset-1) : (BATCH_SIZE-1)>(filter);
 }
 
 template<uint8_t offset>
 static inline void clear_filter(int16_t* filter) {
     filter[offset] = 0;
-    if constexpr (offset >= BATCH_SIZE+1) {
+    if (offset >= BATCH_SIZE+1) {
         clear_filter<offset-(BATCH_SIZE+1)>(filter);
     }
+}
+
+template<>
+inline void clear_filter<BATCH_SIZE>(int16_t* filter) {
+    filter[BATCH_SIZE] = 0;
 }
 
 void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
