@@ -17,7 +17,6 @@ struct ConvNodeFlags {
 
 struct GemmNodeFlags {
     uint16_t tile_channel;
-    uint16_t tile_width;
 };
 
 struct GemmMergeNodeFlags {
@@ -40,10 +39,9 @@ struct NodeFlags {
     uint8_t kernel_size : 4;    // used in MaxPool
     uint8_t stride : 4;         // used in Conv and MaxPool
     ExtraNodeFlags extra;
-    uint16_t dummy;
 };
 
-static_assert(sizeof(NodeFlags) == 8, "Unexpected size for NodeFlags");
+static_assert(sizeof(NodeFlags) == 4, "Unexpected size for NodeFlags");
 
 typedef struct Node {
     char name[NODE_NAME_LEN];
@@ -61,7 +59,7 @@ typedef struct Node {
 #endif
 } Node;
 
-static_assert(sizeof(Node) == NODE_NAME_LEN * 2 + 14 + NUM_INPUTS * 2 + HAWAII * 8, "Unexpected size for Node");
+static_assert(sizeof(Node) == NODE_NAME_LEN * 2 + 10 + NUM_INPUTS * 2 + HAWAII * 8, "Unexpected size for Node");
 
 /* ParameterInfo may indicate data from the model (parameters) or intermediate values */
 typedef struct ParameterInfo {

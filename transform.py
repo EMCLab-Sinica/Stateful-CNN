@@ -54,7 +54,6 @@ class Constants:
     USE_ARM_CMSIS = 0
     CONFIG = None
 
-    DEFAULT_TILE_C = 4
     DEFAULT_TILE_H = 8
     BATCH_SIZE = 1
     STATEFUL = 0
@@ -110,7 +109,6 @@ class ConvNodeFlags(ctypes.Structure):
 class GemmNodeFlags(ctypes.Structure):
     _fields_ = [
         ("tile_channel", ctypes.c_uint16, 16),
-        ("tile_width", ctypes.c_uint16, 16),
     ]
 
 class GemmMergeNodeFlags(ctypes.Structure):
@@ -176,7 +174,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('config', choices=configs.keys())
 parser.add_argument('--all-samples', action='store_true')
 parser.add_argument('--write-images', action='store_true')
-parser.add_argument('--batch-size', type=int, default=Constants.DEFAULT_TILE_C)
+parser.add_argument('--batch-size', type=int, default=1)
 parser.add_argument('--target', choices=('msp430', 'msp432'), required=True)
 parser.add_argument('--debug', action='store_true')
 intermittent_methodology = parser.add_mutually_exclusive_group(required=True)
@@ -448,14 +446,11 @@ def determine_gemm_tile_sizes(n):
     # writing a batch at a time is simpler and faster
     tile_size_unit = config['op_filters']
 
-    node_flags.tile_width = tile_size_unit
-
     while True:
-        logger.debug("tile_width=%d", node_flags.tile_width)
         # LEA wants addresses to be 4 byte-aligned, or 2 Q15-aligned
-        node_flags.tile_channel = min([(Constants.ARM_PSTATE_LEN / node_flags.tile_width) / 2 * 2 - 2, B_rows,
+        node_flags.tile_channel = min([(Constants.ARM_PSTATE_LEN / tile_size_unit) / 2 * 2 - 2, B_rows,
                                        (config['gemm_tile_length'] or float('inf'))]) // tile_size_unit * tile_size_unit
-        full_tile_width = (extend_for_footprints(node_flags.tile_width)+1)/2*2
+        full_tile_width = (extend_for_footprints(tile_size_unit)+1)/2*2
         while node_flags.tile_channel > 0:
             tmp = int(math.ceil(B_rows / node_flags.tile_channel))
             needed_mem = (A_rows * A_cols + 2) + (node_flags.tile_channel + 2) * full_tile_width + A_rows * full_tile_width
@@ -466,12 +461,8 @@ def determine_gemm_tile_sizes(n):
         logger.debug("tile_channel = %d", node_flags.tile_channel)
         if node_flags.tile_channel > 0:
             break
-        assert node_flags.tile_width % tile_size_unit == 0
-        node_flags.tile_width += tile_size_unit
 
-    while node_flags.tile_width * (node_flags.tile_channel + 2) > Constants.ARM_PSTATE_LEN:
-        assert node_flags.tile_width > tile_size_unit
-        node_flags.tile_width -= tile_size_unit
+    assert tile_size_unit * (node_flags.tile_channel + 2) <= Constants.ARM_PSTATE_LEN
 
 graph = []
 for n in nodes:
@@ -587,7 +578,7 @@ for node in graph:
         output_nodes.write(to_bytes(0))
     output_nodes.write(to_bytes(node.max_output_id))
     output_nodes.write(to_bytes(ops.index(node.op_type)))
-    output_nodes.write(to_bytes(node.flags.as_bytes, size=64))
+    output_nodes.write(to_bytes(node.flags.as_bytes, size=32))
     if Constants.HAWAII:
         for _ in range(2):
             output_nodes.write(to_bytes(0, size=32))  # Node::Footprint

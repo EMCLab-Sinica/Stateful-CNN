@@ -39,6 +39,28 @@ void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, int8_t stat
     my_offset_q15_batched(to_offset, -state_bit*0x4000, to_offset, real_chunk_len);
 }
 
+// https://tjsw.medium.com/86f06ac768da
+template<uint8_t move_from, uint8_t batch_offset>
+static inline void move_filter(int16_t* filter) {
+    if constexpr (move_from < OP_FILTERS) {
+        const uint8_t move_to = move_from/BATCH_SIZE*(BATCH_SIZE+1)+batch_offset;
+        filter[move_to] = filter[move_from];
+    }
+    if constexpr (batch_offset >= 1) {
+        move_filter<move_from-1, batch_offset-1>(filter);
+    } else if constexpr (move_from > BATCH_SIZE) {
+        move_filter<move_from-1, BATCH_SIZE-1>(filter);
+    }
+}
+
+template<uint8_t offset>
+static inline void clear_filter(int16_t* filter) {
+    filter[offset] = 0;
+    if constexpr (offset >= BATCH_SIZE+1) {
+        clear_filter<offset-(BATCH_SIZE+1)>(filter);
+    }
+}
+
 void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
     const ParameterInfo *A = input[0], *B = input[1], *C = input[2];
     const NodeFlags* flags = &node->flags;
@@ -53,9 +75,9 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             *buffer_temp = buffer_a + A_len;
 #if JAPARI
             buffer_temp += 2;
-    int16_t* buffer_b = buffer_temp + extend_for_footprints(flags->extra.gemm.tile_width);
+    int16_t* buffer_b = buffer_temp + extend_for_footprints(OP_FILTERS);
 #else
-    int16_t* buffer_b = buffer_temp + flags->extra.gemm.tile_width;
+    int16_t* buffer_b = buffer_temp + OP_FILTERS;
 #endif
     make_buffer_aligned(&buffer_b);
 
@@ -89,10 +111,6 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
 #endif
 
-#if INDIRECT_RECOVERY
-    MY_ASSERT(flags->extra.gemm.tile_width >= BATCH_SIZE);
-#endif
-
     for (; i < B->dims[0]; i += flags->extra.gemm.tile_channel, tile++) {
         const uint16_t tile_channels = MIN_VAL(flags->extra.gemm.tile_channel, B->dims[0] - i);
         const uint16_t extended_tile_channels = tile_channels + 2;
@@ -124,8 +142,15 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
         int16_t output_offset = tile * output_len + j_with_footprints;
 
-        for (; j < B->dims[1]; j += flags->extra.gemm.tile_width) {
-            int16_t tile_width = MIN_VAL(flags->extra.gemm.tile_width, B->dims[1] - j);
+        for (; j < B->dims[1]; j += OP_FILTERS) {
+            int16_t tile_width;
+            uint8_t incomplete_tile = 0;
+            if (OP_FILTERS > B->dims[1] - j) {
+                tile_width = B->dims[1] - j;
+                incomplete_tile = 1;
+            } else {
+                tile_width = OP_FILTERS;
+            }
             int16_t values_to_preserve = tile_width,
                     full_tile_width = tile_width;
 #if JAPARI
@@ -141,17 +166,23 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #if JAPARI
                 // move loaded filters around to create zeros for footprint kernels
                 start_cpu_counter();
-                int8_t move_offset = values_to_preserve - tile_width;
-                int8_t cur_remaining = values_to_preserve % (BATCH_SIZE + 1);
-                for (int8_t move_dest = values_to_preserve - 1; move_dest >= 0; move_dest--) {
-                    if (cur_remaining == 0) {
-                        filter_ptr[move_dest] = 0;
-                        move_offset--;
-                        cur_remaining = BATCH_SIZE;
-                        continue;
+                if (incomplete_tile) {
+                    int8_t move_offset = values_to_preserve - tile_width;
+                    int8_t cur_remaining = values_to_preserve % (BATCH_SIZE + 1);
+                    for (int8_t move_dest = values_to_preserve - 1; move_dest >= 0; move_dest--) {
+                        if (cur_remaining == 0) {
+                            filter_ptr[move_dest] = 0;
+                            move_offset--;
+                            cur_remaining = BATCH_SIZE;
+                            continue;
+                        }
+                        filter_ptr[move_dest] = filter_ptr[move_dest - move_offset];
+                        cur_remaining--;
                     }
-                    filter_ptr[move_dest] = filter_ptr[move_dest - move_offset];
-                    cur_remaining--;
+                } else {
+                    const uint8_t last_elem = OP_FILTERS-1;
+                    move_filter<last_elem, last_elem % BATCH_SIZE>(filter_ptr);
+                    clear_filter<last_elem/(BATCH_SIZE+1)*(BATCH_SIZE+1)+BATCH_SIZE>(filter_ptr);
                 }
                 stop_cpu_counter(&Counters::embedding);
 #endif
@@ -245,7 +276,7 @@ void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
 
     int16_t output_len = X->dims[0] * X->dims[1];
 
-    uint8_t output_tile_size = node->flags.extra.gemmmerge.tile_length;
+    int16_t output_tile_size = node->flags.extra.gemmmerge.tile_length;
     if (!output_tile_size) {
         output_tile_size = output_len;
     }
