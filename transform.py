@@ -391,7 +391,7 @@ def determine_conv_tile_c(n):
 
     max_continuous_channels = CHANNEL
     if is_separate_tiling:
-        max_continuous_channels /= 2
+        max_continuous_channels //= 2
     node_flags.input_tile_c = max_continuous_channels
 
     logger.debug('Initial input_tile_c=%d', node_flags.input_tile_c)
