@@ -392,12 +392,7 @@ def determine_conv_tile_c(n):
     max_continuous_channels = CHANNEL
     if is_separate_tiling:
         max_continuous_channels /= 2
-    if max_continuous_channels % 2:
-        node_flags.input_tile_c = max_continuous_channels
-    else:
-        node_flags.input_tile_c = 1
-        while max_continuous_channels % (node_flags.input_tile_c * 2) == 0 and node_flags.input_tile_c < 128:
-            node_flags.input_tile_c *= 2
+    node_flags.input_tile_c = max_continuous_channels
 
     logger.debug('Initial input_tile_c=%d', node_flags.input_tile_c)
 
@@ -427,8 +422,8 @@ def determine_conv_tile_c(n):
             if params_len < config['intermediate_values_size']:
                 break
             logger.debug(f'params_len={params_len}, too high!')
+        assert node_flags.input_tile_c / 2 * 2 == node_flags.input_tile_c
         node_flags.input_tile_c //= 2
-        assert node_flags.input_tile_c
         logger.debug('input_tile_c=%d', node_flags.input_tile_c)
     node_flags.output_tile_c = output_tile_c
 
