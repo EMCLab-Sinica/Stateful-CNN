@@ -39,6 +39,7 @@ void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, int8_t stat
     my_offset_q15_batched(to_offset, -state_bit*0x4000, to_offset, real_chunk_len);
 }
 
+#if JAPARI
 // https://tjsw.medium.com/86f06ac768da
 template<uint8_t move_from, uint8_t batch_offset, std::enable_if_t<move_from < BATCH_SIZE>* = nullptr>
 static inline void move_filter(int16_t*) {}
@@ -53,15 +54,14 @@ static inline void move_filter(int16_t* filter) {
 template<uint8_t offset>
 static inline void clear_filter(int16_t* filter) {
     filter[offset] = 0;
-    if (offset >= BATCH_SIZE+1) {
-        clear_filter<offset-(BATCH_SIZE+1)>(filter);
-    }
+    clear_filter<offset-(BATCH_SIZE+1)>(filter);
 }
 
 template<>
 inline void clear_filter<BATCH_SIZE>(int16_t* filter) {
     filter[BATCH_SIZE] = 0;
 }
+#endif
 
 void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
     const ParameterInfo *A = input[0], *B = input[1], *C = input[2];
