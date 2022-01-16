@@ -764,6 +764,17 @@ struct Node;
                     }}
                 }}
             '''))
+        else:
+            output_c.write(textwrap.dedent(f'''
+                void __attribute__((weak)) alloc_{op.lower()}(struct Model *model, const struct ParameterInfo *[], struct ParameterInfo *output, const struct Node*) {{
+                    ERROR_OCCURRED();
+                }}
+            '''))
+        output_c.write(textwrap.dedent(f'''
+            void __attribute__((weak)) handle_{op.lower()}(struct Model *model, const struct ParameterInfo *[], struct ParameterInfo *output, const struct Node*) {{
+                ERROR_OCCURRED();
+            }}
+        '''))
 
     # data
     for idx, name in enumerate(other_flags):
