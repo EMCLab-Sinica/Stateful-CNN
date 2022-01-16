@@ -1,4 +1,5 @@
 import fcntl
+import functools
 import itertools
 import logging
 import os.path
@@ -8,6 +9,7 @@ import re
 import struct
 import sys
 import tarfile
+import zipfile
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional
 from urllib.request import urlretrieve
 
@@ -26,6 +28,19 @@ TOPDIR = pathlib.Path(__file__).absolute().parent
 class ModelData(NamedTuple):
     labels: List[int]
     images: np.array
+
+def extract_archive(archive_path: pathlib.Path, subdir: str):
+    archive_dir = archive_path.with_name(subdir)
+    if not archive_dir.exists():
+        if '.tar' in str(archive_path):
+            with tarfile.open(archive_path) as tar:
+                members = [member for member in tar.getmembers() if member.name.startswith(subdir)]
+                tar.extractall(archive_path.parent, members=members)
+        elif str(archive_path).endswith('.zip'):
+            with zipfile.ZipFile(archive_path) as zip_f:
+                members = [member for member in zip_f.namelist() if member.startswith(subdir)]
+                zip_f.extractall(archive_path.parent, members=members)
+    return archive_dir
 
 def load_data_mnist(start: int, limit: int) -> ModelData:
     images = []
@@ -59,15 +74,8 @@ def load_data_mnist(start: int, limit: int) -> ModelData:
     return ModelData(labels=labels, images=np.array(images, dtype=np.float32))
 
 def load_data_cifar10(start: int, limit: int) -> ModelData:
-    def extract_archive(archive_path):
-        archive_dir = archive_path.with_name('cifar-10-batches-py')
-        if not archive_dir.exists():
-            with tarfile.open(archive_path) as tar:
-                tar.extractall(archive_path.parent)
-        return archive_dir
-
     archive_dir = download_file('https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz',
-                                'cifar-10-python.tar.gz', extract_archive)
+                                'cifar-10-python.tar.gz', functools.partial(extract_archive, subdir='cifar-10-batches-py'))
 
     with open(archive_dir / 'test_batch', 'rb') as f:
         test_data = pickle.load(f, encoding='bytes')
@@ -134,6 +142,20 @@ def load_data_google_speech(start: int, limit: int) -> ModelData:
 
 def kws_dnn_model():
     return download_file('https://github.com/ARM-software/ML-KWS-for-MCU/raw/master/Pretrained_models/DNN/DNN_S.pb', 'KWS-DNN_S.pb')
+
+def load_har(start: int, limit: int):
+    try:
+        orig_sys_path = sys.path.copy()
+        sys.path.append(str(TOPDIR / 'data' / 'deep-learning-HAR' / 'utils'))
+        from utilities import read_data, standardize
+
+        archive_dir = download_file('https://archive.ics.uci.edu/ml/machine-learning-databases/00240/UCI%20HAR%20Dataset.zip',
+                                    filename='UCI HAR Dataset.zip', post_processor=functools.partial(extract_archive, subdir='UCI HAR Dataset'))
+        X_test, labels_test, _ = read_data(archive_dir, split='test')
+        _, X_test = standardize(np.random.rand(*X_test.shape), X_test)
+        return ModelData(labels=labels_test[:limit]-1, images=X_test[:limit, :, :].astype(np.float32))
+    finally:
+        sys.path = orig_sys_path
 
 def download_file(url: str, filename: str, post_processor: Optional[Callable] = None) -> os.PathLike:
     xdg_cache_home = pathlib.Path(os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache')))
