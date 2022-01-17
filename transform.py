@@ -70,7 +70,6 @@ inplace_update_ops = ['Reshape', 'Softmax', 'Squeeze', 'Transpose']
 audio_ops = ['DecodeWav', 'AudioSpectrogram', 'Mfcc']
 
 other_flags = [
-    'AUTO_PAD_VALID',
     'NHWC2NCHW',
     'TRANSPOSED',
     # Tiles in different channels are actually in different slots
@@ -104,6 +103,7 @@ class ConvNodeFlags(ctypes.Structure):
     _fields_ = [
         ("input_tile_c", ctypes.c_uint8, 8),
         ("output_tile_c", ctypes.c_uint8, 8),
+        ("pads", ctypes.c_uint8 * 4),
     ]
 
 class GemmNodeFlags(ctypes.Structure):
@@ -140,7 +140,7 @@ class NodeFlags_bits(ctypes.LittleEndianStructure):
 class NodeFlags(ctypes.Union):
     _fields_ = [
         ("b", NodeFlags_bits),
-        ("as_bytes", ctypes.c_int32),
+        ("as_bytes", ctypes.c_uint64),
     ]
 
     def __repr__(self):
@@ -320,6 +320,22 @@ for idx, initializer in enumerate(onnx_model.graph.initializer):
 Constants.N_INPUT = len(names.keys())
 logger.info('Constants.N_INPUT = %d', Constants.N_INPUT)
 
+def infer_auto_pad(node):
+    # https://github.com/onnx/onnx/blob/master/docs/Operators.md#conv
+    conv_flags = node.flags.b.extra.conv
+    auto_pad = get_attr(node, 'auto_pad')
+    pads = get_attr(node ,'pads')
+    if pads:
+        assert len(pads) <= 4
+        # https://stackoverflow.com/questions/4145775/how-do-i-convert-a-python-list-into-a-c-array-by-using-ctypes
+        conv_flags.pads = (ctypes.c_uint8 * 4)(*pads)
+    if auto_pad in (b'SAME_UPPER', b'SAME_LOWER'):
+        kernel_shape = get_attr(node, 'kernel_shape')
+        conv_flags.pads[0] = conv_flags.pads[2] = kernel_shape[0] // 2
+        conv_flags.pads[1] = conv_flags.pads[3] = kernel_shape[1] // 2
+        if conv_flags.pads[0]*2+1 != kernel_shape[0] or conv_flags.pads[1]*2+1 != kernel_shape[1]:
+            raise NotImplementedError
+
 prev_node = None
 for idx, n in enumerate(nodes):
     if n.op_type == 'Dropout':
@@ -327,12 +343,8 @@ for idx, n in enumerate(nodes):
     else:
         output = n.output
     if n.op_type == 'Conv':
-        # https://github.com/onnx/onnx/blob/master/docs/Operators.md#conv
         conv_param_names.add(n.input[1])
-        auto_pad = get_attr(n, 'auto_pad')
-        pads = get_attr(n ,'pads')
-        if auto_pad == b'VALID' or auto_pad is None and pads is None:
-            n.flags.b.generic += op_flag('AUTO_PAD_VALID')
+        infer_auto_pad(n)
     if n.op_type == 'MaxPool':
         kernel_shape = get_attr(n, 'kernel_shape')
         if kernel_shape is not None:
@@ -573,7 +585,7 @@ for node in graph:
         output_nodes.write(to_bytes(0))
     output_nodes.write(to_bytes(node.max_output_id))
     output_nodes.write(to_bytes(ops.index(node.op_type)))
-    output_nodes.write(to_bytes(node.flags.as_bytes, size=32))
+    output_nodes.write(to_bytes(node.flags.as_bytes, size=64))
     if Constants.HAWAII:
         for _ in range(2):
             output_nodes.write(to_bytes(0, size=32))  # Node::Footprint
