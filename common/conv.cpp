@@ -573,7 +573,6 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     output->dims[1] = OUTPUT_CHANNEL;
     output->dims[2] = conv_params->OUTPUT_H;
     output->dims[3] = conv_params->OUTPUT_W;
-    output->param_flags |= TRANSPOSED;
     output->param_flags &= ~SEPARATE_TILING;
     output->scale = conv_input->scale * conv_filter->scale;
 #if STATEFUL
@@ -752,13 +751,13 @@ void alloc_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo *
 #if STATEFUL
 struct ConvMergeInputChunkHandlerParams {
     int16_t *to_add;
-    uint16_t data_offset;
+    uint16_t input_offset;
 };
 
 void ConvMergeInputChunkHandler(uint32_t range_offset, uint16_t range_len, int8_t state_bit, void* _params) {
     ConvMergeInputChunkHandlerParams* params = reinterpret_cast<ConvMergeInputChunkHandlerParams*>(_params);
     my_printf_debug("input range_offset=%d range_len=%d state_bit=%d" NEWLINE, range_offset, range_len, state_bit);
-    int16_t *to_offset = params->to_add + range_offset - params->data_offset;
+    int16_t *to_offset = params->to_add + range_offset - params->input_offset;
     my_offset_q15_batched(to_offset, -state_bit*0x4000, to_offset, range_len);
 }
 #endif
@@ -795,93 +794,106 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
 
     uint32_t tiling_results_len = OUTPUT_CHANNEL * OUTPUT_H * OUTPUT_W;
 
-    // Not using the largest size to avoid non-termination under frequent power failures
-    // uint16_t chunk_len = LIMIT_DMA_SIZE((LEA_BUFFER_SIZE - 1) / n_tiles_c / 2 * 2);
     uint16_t chunk_len = OUTPUT_CHANNEL;
-    if (chunk_len <= BATCH_SIZE + 1) {
-        // make sure there are at least two chunks, as required by JAPARI (see assertions below)
-        chunk_len *= 2;
-    }
-    uint32_t tiling_results_offset = 0;
+    uint16_t output_h = 0, output_w = 0, chunk_offset = 0;
 #if INTERMITTENT
     uint32_t first_unfinished_job_index = run_recovery(model, output);
 
-#if JAPARI
-    uint16_t n_chunks = chunk_len / (BATCH_SIZE + 1) / 2 * 2;
-    chunk_len = n_chunks * (BATCH_SIZE + 1);
-#endif
     MY_ASSERT(chunk_len % 2 == 0);
     MY_ASSERT(chunk_len * n_tiles_c < LEA_BUFFER_SIZE);
 
-    tiling_results_offset = first_unfinished_job_index;
+    // job index = output_h * OUTPUT_W * batches_per_chunk + output_w * batches_per_chunk + chunk_offset / batches_per_chunk;
 #if JAPARI
-    tiling_results_offset *= (BATCH_SIZE + 1);
+    uint16_t batches_per_chunk = chunk_len / (BATCH_SIZE + 1);
 #else
-    tiling_results_offset *= BATCH_SIZE;
+    uint16_t batches_per_chunk = chunk_len / BATCH_SIZE;
+#endif
+    chunk_offset = first_unfinished_job_index % batches_per_chunk * BATCH_SIZE;
+    first_unfinished_job_index /= batches_per_chunk;
+    output_w = first_unfinished_job_index % OUTPUT_W;
+    first_unfinished_job_index /= OUTPUT_W;
+    output_h = first_unfinished_job_index;
+#if JAPARI
+    chunk_offset = extend_for_footprints(chunk_offset);
 #endif
 
 #endif
+
+    // Here IFM and OFM have different data layouts as I do the conversion in this handler
+    uint32_t input_offset = output_w * OUTPUT_H * OUTPUT_CHANNEL +
+                            output_h * OUTPUT_CHANNEL +
+                            chunk_offset; // NWHC
+    uint32_t output_offset = output_h * OUTPUT_W * OUTPUT_CHANNEL +
+                             output_w * OUTPUT_CHANNEL +
+                             chunk_offset; // NHWC
 
 #if INDIRECT_RECOVERY
-    int16_t old_output_offset;
+    int16_t old_embedding_offset;
     uint8_t output_turning_point_idx;
     uint16_t next_output_turning_point;
     SlotInfo *cur_output_slot_info;
 
-    find_initial_state_bit(&old_output_offset, &output_turning_point_idx, &next_output_turning_point,
-                           &cur_output_slot_info, job_index_to_offset(output, first_unfinished_job_index), model, output);
+    find_initial_state_bit(&old_embedding_offset, &output_turning_point_idx, &next_output_turning_point,
+                           &cur_output_slot_info, output_offset, model, output);
 
-    my_printf_debug("old_output_offset = %d" NEWLINE, old_output_offset);
+    my_printf_debug("old_embedding_offset = %d" NEWLINE, old_embedding_offset);
 #endif
 
-    // XXX: use iterate_chunks() for the outer loop?
-    for (; tiling_results_offset < tiling_results_len; tiling_results_offset += chunk_len) {
-        uint16_t real_chunk_len = MIN_VAL(chunk_len, tiling_results_len - tiling_results_offset);
-        my_printf_debug("real_chunk_len = %d" NEWLINE, real_chunk_len);
-        for (uint16_t input_tile_c_index = 0; input_tile_c_index < n_tiles_c; input_tile_c_index++) {
-            int16_t *to_add = lea_buffer + input_tile_c_index * chunk_len;
-            uint16_t data_offset = input_tile_c_index * tiling_results_len + tiling_results_offset;
-            my_memcpy_from_param(model, to_add, data, data_offset, real_chunk_len * sizeof(int16_t));
+    for (; output_h < OUTPUT_H;) {
+        for (; output_w < OUTPUT_W; output_w++) {
+            uint16_t real_chunk_len = chunk_len - chunk_offset;
+            my_printf_debug("real_chunk_len = %d" NEWLINE, real_chunk_len);
+            for (uint16_t input_tile_c_index = 0; input_tile_c_index < n_tiles_c; input_tile_c_index++) {
+                int16_t *to_add = lea_buffer + input_tile_c_index * chunk_len;
+                uint16_t cur_input_offset = input_tile_c_index * tiling_results_len + input_offset;
+                my_memcpy_from_param(model, to_add, data, cur_input_offset, real_chunk_len * sizeof(int16_t));
 #if STATEFUL
-            start_cpu_counter();
-            ConvMergeInputChunkHandlerParams params({to_add, data_offset});
-            iterate_chunks(model, data, data_offset, real_chunk_len, ConvMergeInputChunkHandler, &params);
-            stop_cpu_counter(&Counters::stripping);
+                start_cpu_counter();
+                ConvMergeInputChunkHandlerParams params({to_add, cur_input_offset});
+                iterate_chunks(model, data, cur_input_offset, real_chunk_len, ConvMergeInputChunkHandler, &params);
+                stop_cpu_counter(&Counters::stripping);
 #endif
-            my_printf_debug("Chunk offset %d, input tile %d" NEWLINE, tiling_results_offset, input_tile_c_index);
-            my_printf_debug("Added chunk" NEWLINE);
-            dump_matrix_debug(to_add, real_chunk_len, ValueInfo(data));
-            if (input_tile_c_index != 0) {
-                my_add_q15(lea_buffer, to_add, lea_buffer, real_chunk_len);
+                my_printf_debug(NEWLINE "Input offset %d, input tile %d, output offset %d" NEWLINE, cur_input_offset, input_tile_c_index, output_offset);
+                my_printf_debug("Added chunk" NEWLINE);
+                dump_matrix_debug(to_add, real_chunk_len, ValueInfo(data));
+                if (input_tile_c_index != 0) {
+                    my_add_q15(lea_buffer, to_add, lea_buffer, real_chunk_len);
+                }
             }
-        }
 #if INDIRECT_RECOVERY
 
 #if STATEFUL
-        start_cpu_counter();
-        my_offset_q15_batched(lea_buffer, -old_output_offset, lea_buffer, MIN_VAL(next_output_turning_point - tiling_results_offset, real_chunk_len), true);
-        if (next_output_turning_point < tiling_results_offset + real_chunk_len) {
-            int16_t* to_offset = lea_buffer + next_output_turning_point - tiling_results_offset;
-            my_offset_q15_batched(to_offset, old_output_offset, to_offset, real_chunk_len - (next_output_turning_point - tiling_results_offset), true);
-        }
-        stop_cpu_counter(&Counters::embedding); // check_next_turning_point has another CPU counter
-        check_next_turning_point(old_output_offset, output_turning_point_idx,
-                                 next_output_turning_point, cur_output_slot_info, tiling_results_offset + real_chunk_len);
+            start_cpu_counter();
+            my_offset_q15_batched(lea_buffer, -old_embedding_offset, lea_buffer, MIN_VAL(next_output_turning_point - output_offset, real_chunk_len), true);
+            if (next_output_turning_point < output_offset + real_chunk_len) {
+                int16_t* to_offset = lea_buffer + next_output_turning_point - output_offset;
+                my_offset_q15_batched(to_offset, old_embedding_offset, to_offset, real_chunk_len - (next_output_turning_point - output_offset), true);
+            }
+            stop_cpu_counter(&Counters::embedding); // check_next_turning_point has another CPU counter
+            check_next_turning_point(old_embedding_offset, output_turning_point_idx,
+                                     next_output_turning_point, cur_output_slot_info, output_offset + real_chunk_len);
 #elif JAPARI
-        ConvMergeOutputChunkHandlerParams params({tiling_results_offset});
-        iterate_chunks(model, output, tiling_results_offset, real_chunk_len, ConvMergeOutputChunkHandler, &params);
+            ConvMergeOutputChunkHandlerParams params({output_offset});
+            iterate_chunks(model, output, output_offset, real_chunk_len, ConvMergeOutputChunkHandler, &params);
 #endif
 
-        my_printf_debug("After writing state bits in [%d, %d)" NEWLINE, tiling_results_offset, tiling_results_offset + real_chunk_len);
-        dump_matrix_debug(lea_buffer, real_chunk_len, ValueInfo(output));
+            my_printf_debug("After writing state bits in [%d, %d)" NEWLINE, output_offset, output_offset + real_chunk_len);
+            dump_matrix_debug(lea_buffer, real_chunk_len, ValueInfo(output));
 #endif
 
 #if JAPARI
 #endif
-        my_memcpy_to_param(output, tiling_results_offset, lea_buffer, real_chunk_len * sizeof(int16_t), 0);
+            my_memcpy_to_param(output, output_offset, lea_buffer, real_chunk_len * sizeof(int16_t), 0);
 #if HAWAII
-        hawaii_record_footprints(model, real_chunk_len);
+            hawaii_record_footprints(model, real_chunk_len);
 #endif
+            output_offset += real_chunk_len;
+            input_offset += OUTPUT_H * OUTPUT_CHANNEL - chunk_offset; // NWHC
+            chunk_offset = 0;
+        }
+        output_w = 0;
+        output_h++;
+        input_offset = output_h * OUTPUT_CHANNEL; // NWHC, where only output_h is nonzero at this point
     }
 
     my_printf_debug("After merging tiling results" NEWLINE);
