@@ -799,7 +799,6 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
 #if INTERMITTENT
     uint32_t first_unfinished_job_index = run_recovery(model, output);
 
-    MY_ASSERT(chunk_len % 2 == 0);
     MY_ASSERT(chunk_len * n_tiles_c < LEA_BUFFER_SIZE);
 
     // job index = output_h * OUTPUT_W * batches_per_chunk + output_w * batches_per_chunk + chunk_offset / batches_per_chunk;

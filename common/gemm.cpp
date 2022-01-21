@@ -146,7 +146,8 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
         for (; j < B->dims[1]; j += OP_FILTERS) {
             int16_t tile_width;
-            uint8_t incomplete_tile = 0;
+            // this variable is used only for JAPARI. Don't use [[maybe_unused]] until TI CGT support C++17.
+            uint8_t incomplete_tile __attribute__((unused)) = 0;
             if (OP_FILTERS > B->dims[1] - j) {
                 tile_width = B->dims[1] - j;
                 incomplete_tile = 1;

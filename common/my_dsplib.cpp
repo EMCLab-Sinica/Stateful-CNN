@@ -22,19 +22,10 @@ void check_buffer_address(const int16_t* addr, uint32_t blockSize) {
 }
 
 void my_add_q15(const int16_t *pSrcA, const int16_t *pSrcB, int16_t *pDst, uint32_t blockSize) {
-    check_buffer_address(pSrcA, blockSize);
-    check_buffer_address(pSrcB, blockSize);
-    check_buffer_address(pDst, blockSize);
 #if !USE_ARM_CMSIS
-    uint32_t blockSizeForLEA = blockSize / 2 * 2;
-    if (blockSizeForLEA) {
-        msp_add_q15_params add_params;
-        add_params.length = blockSizeForLEA;
-        msp_status status = msp_add_q15(&add_params, pSrcA, pSrcB, pDst);
-        my_checkStatus(status);
-    }
-    if (blockSize % 2) {
-        pDst[blockSize - 1] = pSrcA[blockSize - 1] + pSrcB[blockSize - 1];
+    // XXX Not using LEA as pSrcA and pSrcB may not be 4-byte aligned (e.g., cifar10 with JAPARI/B=2)
+    while (blockSize--) {
+        *pDst++ = (*pSrcA++) + (*pSrcB++);
     }
 #else
     arm_add_q15(pSrcA, pSrcB, pDst, blockSize);
