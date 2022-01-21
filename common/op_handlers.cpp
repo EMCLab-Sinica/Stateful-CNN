@@ -12,16 +12,12 @@
 void alloc_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node*) {
     const ParameterInfo *data = input[0];
     output->slot = get_next_slot(model, data);
-    output->param_flags &= ~TRANSPOSED;
 }
 
 void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
     my_printf_debug("ReLu!" NEWLINE);
 
     const ParameterInfo *X = input[0];
-
-    uint16_t CHANNEL = X->dims[1];
-    uint16_t OUTPUT_CHANNEL = output->dims[1];
 
     /* XXX: use LEA? */
     uint16_t bitwidth = X->bitwidth;
@@ -48,96 +44,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
 #endif
 
-    if (X->param_flags & TRANSPOSED) {
-        // input is in NWHC
-        // TODO: state-aware recovery
-        uint16_t H = X->dims[2], W = X->dims[3];
-        uint16_t output_h = 0, output_w = 0, c = 0;
-#if INTERMITTENT
-        output_h = first_unfinished_value_offset / (W * CHANNEL);
-        first_unfinished_value_offset %= (W * CHANNEL);
-        output_w = first_unfinished_value_offset / CHANNEL;
-        c = first_unfinished_value_offset % CHANNEL;
-        my_printf_debug("initial output_h = %d, ", output_h);
-        my_printf_debug("initial output_w = %d, ", output_w);
-        my_printf_debug("initial c = %d" NEWLINE, c);
-#endif
-
-        for (; output_h < H; output_h++) {
-            for (; output_w < W; output_w++) {
-                    int16_t val_offset = output_w * H * CHANNEL + output_h * CHANNEL + c;
-                    output_offset = output_h * W * OUTPUT_CHANNEL + output_w * OUTPUT_CHANNEL + c;
-#if INDIRECT_RECOVERY
-                    check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
-#endif
-                    uint16_t len = CHANNEL - c;
-                    my_memcpy_from_param(model, lea_buffer, X, val_offset, len * sizeof(int16_t));
-
-                    my_printf_debug("output_h=% 3d, output_w=% 3d, c=[% 3d, % 3d), val_offset=[% 6d, % 6d), input val=",
-                                    output_h, output_w, c, c + len, val_offset, val_offset + len);
-                    for (uint16_t idx = 0; idx < len; idx++) {
-                        my_printf_debug("% 6d ", lea_buffer[idx]);
-                    }
-
-                    uint16_t output_idx = 0;
-                    for (uint16_t idx = 0; idx < len; idx++) {
-                        int16_t input_val = 0, output_val;
-#if JAPARI
-                        if (offset_has_state(c + idx)) {
-                            output_val = (offset > 0? 1 : -1);
-                            if (next_output_turning_point != INVALID_TURNING_POINT && (output_offset + idx >= next_output_turning_point)) {
-                                output_val = -output_val;
-                            }
-                        } else
-#endif
-                        {
-                            input_val = lea_buffer[idx];
-#if STATEFUL
-                            start_cpu_counter();
-                            if (offset_has_state(c + idx)) {
-                                strip_state(&input_val);
-                            }
-                            input_val *= 2;
-                            stop_cpu_counter(&Counters::stripping);
-#endif
-                            output_val = MAX_VAL(input_val, 0);
-                        }
-                        lea_buffer[output_idx] = output_val;
-                        output_idx++;
-                    }
-#if STATEFUL
-                    start_cpu_counter();
-                    uint8_t block_size;
-                    if (next_output_turning_point == INVALID_TURNING_POINT) {
-                        block_size = len;
-                    } else {
-                        block_size = MIN_VAL(len, next_output_turning_point - output_offset);
-                    }
-                    my_scale_q15(lea_buffer, 0x4000, 0, lea_buffer, len * sizeof(int16_t));
-                    my_offset_q15_batched(lea_buffer, offset, lea_buffer, block_size);
-                    if (next_output_turning_point < output_offset + len) {
-                        int16_t* to_offset = lea_buffer + next_output_turning_point - output_offset;
-                        my_offset_q15_batched(to_offset, -offset, to_offset, output_offset + len - next_output_turning_point);
-                    }
-                    stop_cpu_counter(&Counters::embedding);
-#endif
-                    my_memcpy_to_param(output, output_offset, lea_buffer, output_idx * sizeof(int16_t), 0);
-#if HAWAII
-                    hawaii_record_footprints(model, len);
-#endif
-
-#if MY_DEBUG >= MY_DEBUG_VERBOSE
-                    my_printf_debug("output_offset=[% 6d, % 6d), output val=", output_offset, output_offset + output_idx);
-                    for (uint16_t idx = 0; idx < output_idx; idx++) {
-                        my_printf_debug("% 6d ", lea_buffer[idx]);
-                    }
-                    my_printf_debug(NEWLINE);
-#endif
-                c = 0;
-            }
-            output_w = 0;
-        }
-    } else {
+    {
         uint16_t i = output_offset;
 #if JAPARI
         uint8_t cur_batch_offset = i % (BATCH_SIZE + 1);
@@ -193,11 +100,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     flip_state_bit(model, output);
 
     my_printf_debug("handle_relu output" NEWLINE);
-    if (X->param_flags & TRANSPOSED) {
-        dump_params_nhwc_debug(model, output, node->output_name);
-    } else {
-        dump_params_debug(model, output, node->output_name);
-    }
+    dump_params_debug(model, output, node->output_name);
 }
 
 void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node*) {

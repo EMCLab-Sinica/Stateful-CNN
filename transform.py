@@ -71,7 +71,6 @@ audio_ops = ['DecodeWav', 'AudioSpectrogram', 'Mfcc']
 
 other_flags = [
     'NHWC2NCHW',
-    'TRANSPOSED',
     # Tiles in different channels are actually in different slots
     'SEPARATE_TILING',
 ]
