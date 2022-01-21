@@ -797,25 +797,17 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
     uint16_t chunk_len = OUTPUT_CHANNEL;
     uint16_t output_h = 0, output_w = 0, chunk_offset = 0;
 #if INTERMITTENT
-    uint32_t first_unfinished_job_index = run_recovery(model, output);
+    uint32_t first_unfinished_job_idx = run_recovery(model, output);
+    uint32_t first_unfinished_value_offset = batch_start(job_index_to_offset(output, first_unfinished_job_idx));
 
     MY_ASSERT(chunk_len * n_tiles_c < LEA_BUFFER_SIZE);
 
-    // job index = output_h * OUTPUT_W * batches_per_chunk + output_w * batches_per_chunk + chunk_offset / batches_per_chunk;
-#if JAPARI
-    uint16_t batches_per_chunk = chunk_len / (BATCH_SIZE + 1);
-#else
-    uint16_t batches_per_chunk = chunk_len / BATCH_SIZE;
-#endif
-    chunk_offset = first_unfinished_job_index % batches_per_chunk * BATCH_SIZE;
-    first_unfinished_job_index /= batches_per_chunk;
-    output_w = first_unfinished_job_index % OUTPUT_W;
-    first_unfinished_job_index /= OUTPUT_W;
-    output_h = first_unfinished_job_index;
-#if JAPARI
-    chunk_offset = extend_for_footprints(chunk_offset);
-#endif
-
+    // value offset = output_h * OUTPUT_W * chunk_len + output_w * chunk_len + chunk_offset;
+    chunk_offset = first_unfinished_value_offset % chunk_len;
+    first_unfinished_value_offset /= chunk_len;
+    output_w = first_unfinished_value_offset % OUTPUT_W;
+    first_unfinished_value_offset /= OUTPUT_W;
+    output_h = first_unfinished_value_offset;
 #endif
 
     // Here IFM and OFM have different data layouts as I do the conversion in this handler
