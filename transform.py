@@ -105,6 +105,12 @@ class ConvNodeFlags(ctypes.Structure):
         ("pads", ctypes.c_uint8 * 4),
     ]
 
+class MaxPoolFlags(ctypes.Structure):
+    _fields_ = [
+        ("kernel_shape", ctypes.c_uint8 * 2),
+        ("strides", ctypes.c_uint8 * 2),
+    ]
+
 class GemmNodeFlags(ctypes.Structure):
     _fields_ = [
         ("tile_channel", ctypes.c_uint16, 16),
@@ -123,6 +129,7 @@ class SqueezeNodeFlags(ctypes.Structure):
 class ExtraNodeFlags(ctypes.Union):
     _fields_ = [
         ("conv", ConvNodeFlags),
+        ("maxpool", MaxPoolFlags),
         ("gemm", GemmNodeFlags),
         ("gemmmerge", GemmMergeNodeFlags),
         ("squeeze", SqueezeNodeFlags),
@@ -345,9 +352,16 @@ for idx, n in enumerate(nodes):
         conv_param_names.add(n.input[1])
         infer_auto_pad(n)
     if n.op_type == 'MaxPool':
-        kernel_shape = get_attr(n, 'kernel_shape')
-        if kernel_shape is not None:
-            n.flags.b.kernel_size = kernel_shape[0]
+        kernel_shape = get_attr(n, 'kernel_shape')  # this field is required
+        assert len(kernel_shape) == 2
+        n.flags.b.extra.maxpool.kernel_shape = (ctypes.c_uint8*2)(*kernel_shape)
+        strides = get_attr(n, 'strides')
+        if strides is not None:
+            n.flags.b.extra.maxpool.strides = (ctypes.c_uint8*2)(*strides)
+        else:
+            # "If not present, the stride defaults to 1 along each spatial axis."
+            # https://github.com/onnx/onnx/blob/main/docs/Operators.md#maxpool
+            n.flags.b.extra.maxpool.strides = (ctypes.c_uint8*2)(1, 1)
     if n.op_type in ('MaxPool', 'Conv'):
         stride = get_attr(n, 'strides')[0]
         n.flags.b.stride = stride

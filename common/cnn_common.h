@@ -16,6 +16,11 @@ struct ConvNodeFlags {
     uint8_t pads[4];
 };
 
+struct MaxPoolFlags {
+    uint8_t kernel_shape[2];
+    uint8_t strides[2];
+};
+
 struct GemmNodeFlags {
     uint16_t tile_channel;
 };
@@ -30,6 +35,7 @@ struct SqueezeNodeFlags {
 
 union ExtraNodeFlags {
     ConvNodeFlags conv;
+    MaxPoolFlags maxpool;
     GemmNodeFlags gemm;
     GemmMergeNodeFlags gemmmerge;
     SqueezeNodeFlags squeeze;
