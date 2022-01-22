@@ -65,7 +65,7 @@ class Constants:
     FIRST_SAMPLE_OUTPUTS = []
 
 # XXX: Transpose does nothing as we happens to need NHWC
-inplace_update_ops = ['Reshape', 'Softmax', 'Squeeze', 'Transpose']
+inplace_update_ops = ['Reshape', 'Softmax', 'Squeeze', 'Transpose', 'Unsqueeze']
 
 audio_ops = ['DecodeWav', 'AudioSpectrogram', 'Mfcc']
 
@@ -126,7 +126,7 @@ class GemmMergeNodeFlags(ctypes.Structure):
 
 class SqueezeNodeFlags(ctypes.Structure):
     _fields_ = [
-        ("axes", ctypes.c_uint8, 8),  # a bitmap for axes to squeeze
+        ("axes", ctypes.c_uint8, 8),  # a bitmap for axes to squeeze/unsqueeze
     ]
 
 class ExtraNodeFlags(ctypes.Union):
@@ -373,7 +373,7 @@ for idx, n in enumerate(nodes):
             prev_node = find_node_by_output(nodes, prev_node.input[0])
         if prev_node and prev_node.op_type == 'MaxPool':
             prev_node.flags.b.generic += op_flag('NHWC2NCHW')
-    if n.op_type in 'Squeeze':
+    if n.op_type in ('Squeeze', 'Unsqueeze'):
         axes = get_attr(n, 'axes') or []
         node_flags = n.flags.b.extra.squeeze
         node_flags.axes = 0

@@ -194,6 +194,22 @@ void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *o
     }
 }
 
+void handle_unsqueeze(Model* model, const ParameterInfo* input[], ParameterInfo* output, const Node* node) {
+    my_printf_debug("Unsqueeze!" NEWLINE);
+    uint8_t axes = node->flags.extra.squeeze.axes;
+    uint8_t input_dim_offset = 0, output_dim_offset = 0;
+    for (uint8_t i = 0; i < 4; i++) {
+        if (axes & (1 << i)) {
+            output->dims[output_dim_offset] = 1;
+            output_dim_offset++;
+        } else {
+            output->dims[output_dim_offset] = input[0]->dims[input_dim_offset];
+            input_dim_offset++;
+            output_dim_offset++;
+        }
+    }
+}
+
 void alloc_concat(Model *, const ParameterInfo *[], ParameterInfo*, const Node*) {
 }
 
