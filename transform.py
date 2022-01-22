@@ -70,9 +70,12 @@ inplace_update_ops = ['Reshape', 'Softmax', 'Squeeze', 'Transpose']
 audio_ops = ['DecodeWav', 'AudioSpectrogram', 'Mfcc']
 
 other_flags = [
+    # node flags
     'NHWC2NCHW',
-    # Tiles in different channels are actually in different slots
-    'SEPARATE_TILING',
+
+    # parameter flags
+    'CHANNEL_FIRST',
+    'SEPARATE_TILING',  # Tiles in different channels are actually in different slots
 ]
 
 def op_flag(flag):
@@ -342,7 +345,6 @@ def infer_auto_pad(node):
         if conv_flags.pads[0]*2+1 != kernel_shape[0] or conv_flags.pads[1]*2+1 != kernel_shape[1]:
             raise NotImplementedError
 
-prev_node = None
 for idx, n in enumerate(nodes):
     if n.op_type == 'Dropout':
         output = n.output[:1]  # we don't care the second output `mask`
@@ -365,9 +367,13 @@ for idx, n in enumerate(nodes):
     if n.op_type in ('MaxPool', 'Conv'):
         stride = get_attr(n, 'strides')[0]
         n.flags.b.stride = stride
-    if n.op_type == 'Reshape' and prev_node and prev_node.op_type == 'MaxPool':
-        prev_node.flags.b.generic += op_flag('NHWC2NCHW')
-    if n.op_type == 'Squeeze':
+    if n.op_type == 'Reshape':
+        prev_node = n
+        while prev_node and prev_node.op_type in inplace_update_ops:
+            prev_node = find_node_by_output(nodes, prev_node.input[0])
+        if prev_node and prev_node.op_type == 'MaxPool':
+            prev_node.flags.b.generic += op_flag('NHWC2NCHW')
+    if n.op_type in 'Squeeze':
         axes = get_attr(n, 'axes') or []
         node_flags = n.flags.b.extra.squeeze
         node_flags.axes = 0
@@ -377,7 +383,6 @@ for idx, n in enumerate(nodes):
         n.flags.b.extra.gemmmerge.tile_length = config['gemm_tile_length']
     for output_ in output:
         names[output_] = idx + Constants.N_INPUT
-    prev_node = n
 
 pprint.pprint(names)
 
@@ -402,7 +407,7 @@ def determine_conv_tile_c(n):
 
     is_separate_tiling = False
     if not find_initializer(onnx_model, n.input[0]):
-        input_node = find_node_by_output(onnx_model, n.input[0])
+        input_node = find_node_by_output(onnx_model.graph.node, n.input[0])
         if input_node and input_node.op_type == 'Concat':
             is_separate_tiling = True
 

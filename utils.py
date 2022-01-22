@@ -228,8 +228,8 @@ def find_tensor_value_info(onnx_model: onnx.ModelProto, name: str) -> onnx.Value
             return value_info
     raise ValueError(f'No value_info found for {name}')
 
-def find_node_by_output(onnx_model: onnx.ModelProto, output_name: str) -> onnx.NodeProto:
-    for node in onnx_model.graph.node:
+def find_node_by_output(nodes: List[onnx.NodeProto], output_name: str) -> onnx.NodeProto:
+    for node in nodes:
         for output in node.output:
             if output == output_name:
                 return node
@@ -299,7 +299,7 @@ def onnxruntime_get_intermediate_tensor(model, image):
     outputs = rep.run(image)
     for idx, output in enumerate(outputs):
         output_name = tmp_model.graph.output[idx].name
-        node = find_node_by_output(tmp_model, output_name)
+        node = find_node_by_output(tmp_model.graph.node, output_name)
         yield output_name, node.op_type, output
 
 def dynamic_shape_inference(onnx_model: onnx.ModelProto, sample_size: Iterable[int]) -> None:
