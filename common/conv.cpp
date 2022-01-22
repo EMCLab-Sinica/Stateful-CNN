@@ -210,7 +210,10 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
             if (conv_params->input_tile_c_index == 0) {
                 // convert int16_t to int32_t first as on MSP430, registers are 20 bit while there are only 16 bits when int16_t is converted to uint16_t
                 // If the dividend is negative, the quotient is wrong
-                int16_t bias_val = -static_cast<int32_t>(get_q15_param(conv_params->model, conv_params->conv_bias, conv_params->filter_idx + idx)) / conv_params->conv_input->scale;
+                int16_t bias_val = 0;
+                if (conv_params->conv_bias) {
+                    bias_val = -static_cast<int32_t>(get_q15_param(conv_params->model, conv_params->conv_bias, conv_params->filter_idx + idx)) / conv_params->conv_input->scale;
+                }
 #if !STATEFUL
                 filter_tmp[conv_params->filter_offset - 1] = bias_val;
 #else
@@ -583,7 +586,7 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 }
 
 void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
-    const ParameterInfo *conv_input = input[0], *conv_filter = input[1], *conv_bias = input[2];
+    const ParameterInfo *conv_input = input[0], *conv_filter = input[1], *conv_bias = (node->inputs_len == 3) ? input[2] : nullptr;
     my_printf_debug("Conv!" NEWLINE);
 
     /* input: N x C x H x W, filter: M x C x kH x kW */
