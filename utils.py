@@ -263,6 +263,12 @@ def get_model_ops(onnx_model):
 def load_model(config):
     # https://github.com/onnx/onnx/blob/master/docs/PythonAPIOverview.md
     onnx_model = onnx.load_model(TOPDIR / config['onnx_model'])
+
+    # onnxoptimizer requires known dimensions, so set the batch size=1.
+    # The batch size will be changed to a variable after dynamic_shape_inference, anyway.
+    # https://github.com/onnx/optimizer/blob/v0.2.6/onnxoptimizer/passes/fuse_matmul_add_bias_into_gemm.h#L60
+    change_batch_size(onnx_model)
+
     # https://zhuanlan.zhihu.com/p/41255090
     onnx_model = onnxoptimizer.optimize(onnx_model, [
         'extract_constant_to_initializer',
@@ -301,6 +307,20 @@ def onnxruntime_get_intermediate_tensor(model, image):
         output_name = tmp_model.graph.output[idx].name
         node = find_node_by_output(tmp_model.graph.node, output_name)
         yield output_name, node.op_type, output
+
+def change_batch_size(onnx_model: onnx.ModelProto):
+    g = onnx_model.graph
+    initializer_names = set([initializer.name for initializer in g.initializer])
+    constant_names = set([node.output[0] for node in g.node if node.op_type == 'Constant'])
+    for value_info in itertools.chain(g.value_info, g.input, g.output):
+        if value_info.name in initializer_names or value_info.name in constant_names:
+            continue
+        shape = value_info.type.tensor_type.shape
+        if shape.dim and shape.dim[0].dim_param:
+            shape.dim[0].dim_value = 1
+
+    # make sure above steps did not break the model
+    onnx.shape_inference.infer_shapes(onnx_model)
 
 def dynamic_shape_inference(onnx_model: onnx.ModelProto, sample_size: Iterable[int]) -> None:
     for node in itertools.chain(onnx_model.graph.input, onnx_model.graph.output):
