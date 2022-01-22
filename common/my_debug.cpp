@@ -95,23 +95,47 @@ static void dump_params_common(Model* model, const ParameterInfo* cur_param, con
 #endif
 }
 
-static int16_t find_real_num(int16_t NUM, int16_t CHANNEL, int16_t H, int16_t W, const ParameterInfo* cur_param) {
-    if (NUM * CHANNEL * H * W * sizeof(int16_t) != cur_param->params_len) {
-        MY_ASSERT(NUM == 1);
-        return cur_param->params_len / sizeof(int16_t) / (CHANNEL * H * W);
+static void extract_dimensions(const ParameterInfo* cur_param, uint16_t* NUM, uint16_t* H, uint16_t* W, uint16_t* CHANNEL) {
+    if (cur_param->dims[3]) {
+        // 4-D tensor, NCHW
+        *NUM = cur_param->dims[0];
+        *CHANNEL = cur_param->dims[1];
+        *H = cur_param->dims[2];
+        *W = cur_param->dims[3];
+    } else if (cur_param->dims[2]) {
+        // 3-D tensor, NCW
+        *NUM = cur_param->dims[0];
+        *CHANNEL = cur_param->dims[1];
+        *H = 1;
+        *W = cur_param->dims[2];
+    } else if (cur_param->dims[1]) {
+        // matrix, HW
+        *NUM = *CHANNEL = 1;
+        *H = cur_param->dims[0];
+        *W = cur_param->dims[1];
+    } else {
+        // vector, W
+        *NUM = *CHANNEL = *H = 1;
+        *W = cur_param->dims[0];
     }
-    return NUM;
+
+    // find real num
+    uint32_t expected_params_len = sizeof(int16_t);
+    for (uint8_t idx = 0; idx < 4; idx++) {
+        if (cur_param->dims[idx]) {
+            expected_params_len *= cur_param->dims[idx];
+        }
+    }
+    if (expected_params_len != cur_param->params_len) {
+        MY_ASSERT(cur_param->dims[0] == 1);
+        *NUM = cur_param->params_len / expected_params_len;
+    }
 }
 
 void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, const char* layer_name) {
     dma_counter_enabled = 0;
     uint16_t NUM, H, W, CHANNEL;
-    // tensor
-    NUM = cur_param->dims[0];
-    CHANNEL = cur_param->dims[1];
-    H = cur_param->dims[2];
-    W = cur_param->dims[3];
-    NUM = find_real_num(NUM, CHANNEL, H, W, cur_param);
+    extract_dimensions(cur_param, &NUM, &H, &W, &CHANNEL);
     LayerOutput* layer_out = nullptr;
     dump_params_common(model, cur_param, layer_name, &layer_out);
     int16_t output_tile_c = cur_param->dims[1];
@@ -163,23 +187,7 @@ void dump_model(Model *model) {
 void dump_params(Model *model, const ParameterInfo *cur_param, const char* layer_name) {
     dma_counter_enabled = 0;
     uint16_t NUM, H, W, CHANNEL;
-    if (cur_param->dims[2] && cur_param->dims[3]) {
-        // tensor
-        NUM = cur_param->dims[0];
-        CHANNEL = cur_param->dims[1];
-        H = cur_param->dims[2];
-        W = cur_param->dims[3];
-    } else if (cur_param->dims[1]) {
-        // matrix
-        NUM = CHANNEL = 1;
-        H = cur_param->dims[0];
-        W = cur_param->dims[1];
-    } else {
-        // vector
-        NUM = CHANNEL = H = 1;
-        W = cur_param->dims[0];
-    }
-    NUM = find_real_num(NUM, CHANNEL, H, W, cur_param);
+    extract_dimensions(cur_param, &NUM, &H, &W, &CHANNEL);
     LayerOutput* layer_out = nullptr;
     dump_params_common(model, cur_param, layer_name, &layer_out);
     for (uint16_t i = 0; i < NUM; i++) {

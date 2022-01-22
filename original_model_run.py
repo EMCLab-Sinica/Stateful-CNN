@@ -23,6 +23,16 @@ def print_tensor(tensor):
                     print_float(tensor[0, c, h, w])
                 print()
             print()
+    elif dimensions == 3:
+        N, C, W = shape
+        for n in range(N):
+            for c in range(C):
+                print(f'Channel {c}')
+                for w in range(W):
+                    print_float(tensor[n, c, w])
+                print()
+                print()
+            print()
     elif dimensions == 2:
         H, W = shape
         for h in range(H):
@@ -107,7 +117,7 @@ def compare_configs(config, model, model_data):
 
     accuracy = run_model(model, model_data, limit=None, verbose=False)
     recorded_accuracy = config['fp32_accuracy']
-    if not np.isclose(accuracy, recorded_accuracy):
+    if not np.isclose(accuracy, recorded_accuracy, rtol=1e-4):
         raise Exception(f'Computed accuracies are different! {accuracy} != {recorded_accuracy}')
 
 def main():

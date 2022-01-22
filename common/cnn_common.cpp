@@ -44,7 +44,11 @@ const uint8_t* get_param_base_pointer(const ParameterInfo *param, uint32_t *limi
 
 int16_t get_q15_param(Model* model, const ParameterInfo *param, uint16_t i) {
     MY_ASSERT(param->bitwidth == 16);
-    if (param->slot >= SLOT_CONSTANTS_MIN) {
+    if (param->slot == SLOT_TEST_SET) {
+        int16_t ret;
+        read_from_samples(&ret, i, sizeof(int16_t));
+        return ret;
+    } else if (param->slot >= SLOT_CONSTANTS_MIN) {
         uint32_t limit;
         const uint8_t *baseptr = get_param_base_pointer(param, &limit);
         const int16_t *ret = reinterpret_cast<const int16_t*>(baseptr + param->params_offset) + i;
