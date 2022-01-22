@@ -107,10 +107,6 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
     my_printf_debug("Reshape!" NEWLINE);
 
     const ParameterInfo *data = input[0], *shape = input[1];
-    SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
-    if (cur_slot_info) {
-        cur_slot_info->user = model->layer_idx;
-    }
     MY_ASSERT(shape->bitwidth == 64);
     /*
      * At most one dimension of the new shape can be -1. In this case, the
@@ -172,15 +168,6 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
 void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
     my_printf_debug("Squeeze!" NEWLINE);
 
-    const ParameterInfo *data = input[0];
-    output->params_offset = data->params_offset;
-    output->params_len = data->params_len;
-    output->bitwidth = data->bitwidth;
-    output->slot = data->slot;
-    SlotInfo *cur_slot_info = get_slot_info(model, output->slot);
-    if (cur_slot_info) {
-        cur_slot_info->user = model->layer_idx;
-    }
     uint8_t axes = node->flags.extra.squeeze.axes;
     // If axes is not provided, all the single dimensions will be removed from the shape.
     // https://github.com/onnx/onnx/blob/master/docs/Operators.md#squeeze
