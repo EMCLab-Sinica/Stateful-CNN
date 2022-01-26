@@ -103,8 +103,8 @@ def _Q15(arr, name):
 # https://stackoverflow.com/a/11481471/3786245
 class ConvNodeFlags(ctypes.Structure):
     _fields_ = [
-        ("input_tile_c", ctypes.c_uint8, 8),
-        ("output_tile_c", ctypes.c_uint8, 8),
+        ("input_tile_c", ctypes.c_uint16),
+        ("output_tile_c", ctypes.c_uint16),
         ("pads", ctypes.c_uint8 * 4),
     ]
 
@@ -149,7 +149,7 @@ class NodeFlags_bits(ctypes.LittleEndianStructure):
 class NodeFlags(ctypes.Union):
     _fields_ = [
         ("b", NodeFlags_bits),
-        ("as_bytes", ctypes.c_uint64),
+        ("as_bytes", ctypes.c_uint8 * 10),
     ]
 
     def __repr__(self):
@@ -603,7 +603,9 @@ for node in graph:
         output_nodes.write(to_bytes(0))
     output_nodes.write(to_bytes(node.max_output_id))
     output_nodes.write(to_bytes(ops.index(node.op_type)))
-    output_nodes.write(to_bytes(node.flags.as_bytes, size=64))
+    assert ctypes.sizeof(node.flags.as_bytes) == ctypes.sizeof(node.flags.b)
+    for idx in range(ctypes.sizeof(node.flags.as_bytes)):
+        output_nodes.write(to_bytes(node.flags.as_bytes[idx], size=8))
     if Constants.HAWAII:
         for _ in range(2):
             output_nodes.write(to_bytes(0, size=32))  # Node::Footprint
