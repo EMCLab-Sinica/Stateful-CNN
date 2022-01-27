@@ -342,22 +342,33 @@ def dynamic_shape_inference(onnx_model: onnx.ModelProto, sample_size: Iterable[i
     del onnx_model.graph.value_info[:]
 
     BATCH_SIZE = 2  # Any number larger than 1 is OK. Here I pick the smallest one for performance considerations
-    dummy_images = [np.expand_dims(np.zeros(sample_size, dtype=np.float32), axis=0)]
+
+    dummy_images = np.expand_dims(np.zeros(sample_size, dtype=np.float32), axis=0)
     shapes = {
         layer_name: np.shape(layer_out)
         for layer_name, _, layer_out in onnxruntime_get_intermediate_tensor(onnx_model, dummy_images)
     }
-    dummy_images = [np.repeat(dummy_images[0], repeats=BATCH_SIZE, axis=0)]
+    dummy_images = np.concatenate([
+        np.expand_dims(np.random.rand(*sample_size).astype(np.float32), axis=0) for _ in range(BATCH_SIZE)
+    ], axis=0)
 
     value_infos = []
-    for layer_name, _, layer_out in onnxruntime_get_intermediate_tensor(onnx_model, dummy_images):
+    for layer_name, layer_type, layer_out in onnxruntime_get_intermediate_tensor(onnx_model, dummy_images):
         larger_shape = np.shape(layer_out)
         smaller_shape = shapes[layer_name]
-        assert larger_shape[1:] == smaller_shape[1:]
+        if larger_shape[1:] != smaller_shape[1:]:
+            logger.info('Skipping OFM %s for %s node with mismatched shapes: %r, %r', layer_name, layer_type, larger_shape, smaller_shape)
+            continue
+
         new_shape = list(larger_shape)
-        if larger_shape and larger_shape[0] != smaller_shape[0]:
-            assert larger_shape[0] == smaller_shape[0] * BATCH_SIZE
-            new_shape[0] = 'N'
+        if larger_shape:
+            if larger_shape[0] == smaller_shape[0] * BATCH_SIZE:
+                new_shape[0] = 'N'
+            elif larger_shape[0] == smaller_shape[0]:
+                pass
+            else:
+                logger.info('Skipping OFM %s for %s node with mismatched batch sizes: %d, %d', layer_name, layer_type, larger_shape[0], smaller_shape[0])
+                continue
 
         elem_type = numpy_type_to_onnx_elem_type(layer_out.dtype)
         value_info = onnx.helper.make_tensor_value_info(layer_name, elem_type, new_shape)
