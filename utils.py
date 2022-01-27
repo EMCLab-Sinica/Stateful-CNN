@@ -1,3 +1,4 @@
+import enum
 import fcntl
 import functools
 import itertools
@@ -25,9 +26,17 @@ OPS_WITH_MERGE = ['Conv', 'Gemm']
 
 TOPDIR = pathlib.Path(__file__).absolute().parent
 
+class DataLayout(enum.Enum):
+    NEUTRAL = 0
+    NCW = 1
+    NWC = 2
+    NCHW = 3
+    NHWC = 4
+
 class ModelData(NamedTuple):
     labels: List[int]
     images: np.array
+    data_layout: DataLayout
 
 def extract_archive(archive_path: pathlib.Path, subdir: str):
     archive_dir = archive_path.with_name(subdir)
@@ -71,7 +80,7 @@ def load_data_mnist(start: int, limit: int) -> ModelData:
             if limit is not None and counter >= limit:
                 break
 
-    return ModelData(labels=labels, images=np.array(images, dtype=np.float32))
+    return ModelData(labels=labels, images=np.array(images, dtype=np.float32), data_layout=DataLayout.NCHW)
 
 def load_data_cifar10(start: int, limit: int) -> ModelData:
     archive_dir = download_file('https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz',
@@ -92,7 +101,8 @@ def load_data_cifar10(start: int, limit: int) -> ModelData:
         im = im / 256
         im = np.moveaxis(im, 0, -1)
         images.append(im)
-    return ModelData(labels=labels, images=np.array(images, dtype=np.float32))
+    # XXX: the actual data layout is NCHW, while the first node is Transpose - take the resultant
+    return ModelData(labels=labels, images=np.array(images, dtype=np.float32), data_layout=DataLayout.NHWC)
 
 GOOGLE_SPEECH_URL = 'https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_test_set_v0.02.tar.gz'
 GOOGLE_SPEECH_SAMPLE_RATE = 16000
@@ -138,7 +148,7 @@ def load_data_google_speech(start: int, limit: int) -> ModelData:
             mfccs.append(mfcc[0])
 
 
-    return ModelData(labels=labels, images=np.array(mfccs, dtype=np.float32))
+    return ModelData(labels=labels, images=np.array(mfccs, dtype=np.float32), data_layout=DataLayout.NEUTRAL)
 
 def kws_dnn_model():
     return download_file('https://github.com/ARM-software/ML-KWS-for-MCU/raw/master/Pretrained_models/DNN/DNN_S.pb', 'KWS-DNN_S.pb')
@@ -153,7 +163,7 @@ def load_har(start: int, limit: int):
                                     filename='UCI HAR Dataset.zip', post_processor=functools.partial(extract_archive, subdir='UCI HAR Dataset'))
         X_test, labels_test, _ = read_data(archive_dir, split='test')
         _, X_test = standardize(np.random.rand(*X_test.shape), X_test)
-        return ModelData(labels=labels_test[:limit]-1, images=X_test[:limit, :, :].astype(np.float32))
+        return ModelData(labels=labels_test[:limit]-1, images=X_test[:limit, :, :].astype(np.float32), data_layout=DataLayout.NCW)
     finally:
         sys.path = orig_sys_path
 
@@ -271,6 +281,7 @@ def load_model(config):
 
     # https://zhuanlan.zhihu.com/p/41255090
     onnx_model = onnxoptimizer.optimize(onnx_model, [
+        'eliminate_nop_dropout',
         'extract_constant_to_initializer',
         'fuse_add_bias_into_conv',
         'fuse_matmul_add_bias_into_gemm',

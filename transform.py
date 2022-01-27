@@ -20,7 +20,7 @@ import onnx.helper
 import numpy as np
 
 from configs import configs
-from utils import extract_data, find_initializer, find_node_by_output, find_tensor_value_info, load_model, get_model_ops, OPS_WITH_MERGE
+from utils import extract_data, find_initializer, find_node_by_output, find_tensor_value_info, load_model, get_model_ops, OPS_WITH_MERGE, DataLayout
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -708,8 +708,19 @@ for idx, n in enumerate(nodes):
     intermediate_parameters_info.write(to_bytes(parameter_info_idx))             # parameter_info_idx
     parameter_info_idx += 1
 
+def ensure_channel_last(images, data_layout):
+    if data_layout in (DataLayout.NEUTRAL, DataLayout.NHWC, DataLayout.NWC):
+        return images
+    elif data_layout == DataLayout.NCW:
+        return np.transpose(images, axes=(0, 2, 1))  # NCW => NWC
+    elif data_layout == DataLayout.NCHW:
+        return np.transpose(images, axes=(0, 2, 3, 1))  # NCHW => NHWC
+    else:
+        raise NotImplementedError
+
+images = ensure_channel_last(model_data.images, model_data.data_layout)
 for idx in range(model_data.images.shape[0]):
-    im = model_data.images[idx, :]
+    im = images[idx, :]
     # load_data returns NCHW
     # https://stackoverflow.com/a/34794744
     outputs['samples'].write(to_bytes(_Q15(im.flatten(order='C') / config['input_scale'], 'Input')))

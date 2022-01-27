@@ -250,3 +250,29 @@ void handle_transpose(Model*, const ParameterInfo *input[], ParameterInfo *outpu
     output->dims[2] = X->dims[1];
     output->dims[3] = X->dims[2];
 }
+
+void alloc_add(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node *node) {
+    output->slot = get_next_slot(model, input[0]);
+}
+
+void handle_add(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node *node) {
+    my_printf_debug("Add!" NEWLINE);
+
+    const ParameterInfo *X = input[0], *Y = input[1];
+    uint16_t buffer_size = X->dims[1];
+    int16_t *buffer_a = lea_buffer,
+            *buffer_b = buffer_a + buffer_size;
+    my_memcpy_from_param(model, buffer_b, Y, 0, buffer_size * sizeof(int16_t));
+
+    int16_t scaleFract;
+    uint8_t shift;
+    float_to_scale_params(&scaleFract, &shift, 1.0f*Y->scale/X->scale);
+    my_scale_q15(buffer_b, scaleFract, shift, buffer_b, buffer_size);
+
+    for (uint16_t idx = 0; idx < X->dims[2]; idx++) {
+        my_memcpy_from_param(model, buffer_a, X, idx*buffer_size, buffer_size * sizeof(int16_t));
+        my_add_q15(buffer_a, buffer_b, buffer_a, buffer_size);
+        my_memcpy_to_param(output, idx*buffer_size, buffer_a, buffer_size * sizeof(int16_t), 0);
+    }
+    dump_params_nhwc_debug(model, output, node->output_name);
+}
