@@ -637,6 +637,7 @@ for params in parameters:
             model_parameters_info.write(to_bytes(0))
         model_parameters_info.write(to_bytes(config['input_scale']))     # scale
     else:
+        param_scale = 0
         assert len(params.dims) <= 4
         if params.data_type == onnx.TensorProto.FLOAT:
             if params.float_data:
@@ -651,7 +652,8 @@ for params in parameters:
             if params.name in conv_param_names:
                 logger.info('Reorder conv param %s', params.name)
                 float_data = nchw2nhwc(float_data, params.dims)
-            slot.target.write(to_bytes(_Q15(np.array(float_data) / config['scale'], 'Parameter')))
+            param_scale = config['scale']
+            slot.target.write(to_bytes(_Q15(np.array(float_data) / param_scale, 'Parameter')))
             slot.offset += 2 * len(float_data)
             model_parameters_info.write(to_bytes(16, size=8)) # bitwidth
         elif params.data_type == onnx.TensorProto.INT64:
@@ -682,7 +684,7 @@ for params in parameters:
         # dims are always 4 uint16_t's in C++
         for _ in range(4 - len(params.dims)):
             model_parameters_info.write(to_bytes(0))
-        model_parameters_info.write(to_bytes(config['scale']))       # scale
+        model_parameters_info.write(to_bytes(param_scale))       # scale
 
     # common to input and non-inputs
     model_parameters_info.write(to_bytes(0, size=8))                 # param_flags
@@ -701,7 +703,7 @@ for idx, n in enumerate(nodes):
     intermediate_parameters_info.write(to_bytes(0))         # dummy
     for _ in range(4):  # dims[4]
         intermediate_parameters_info.write(to_bytes(0))
-    intermediate_parameters_info.write(to_bytes(config['scale']))   # scale
+    intermediate_parameters_info.write(to_bytes(0))   # scale
     intermediate_parameters_info.write(to_bytes(0, size=8))     # param_flags
     for _ in range(Constants.EXTRA_INFO_LEN):
         intermediate_parameters_info.write(to_bytes(0, size=8)) # extra_info
