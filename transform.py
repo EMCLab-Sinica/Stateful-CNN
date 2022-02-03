@@ -70,6 +70,7 @@ audio_ops = ['DecodeWav', 'AudioSpectrogram', 'Mfcc']
 other_flags = [
     # node flags
     'NHWC2NCHW',
+    'MAXPOOL_CEIL',
 
     # parameter flags
     'CHANNEL_FIRST',
@@ -365,6 +366,10 @@ for idx, n in enumerate(nodes):
     if n.op_type in ('MaxPool', 'Conv'):
         stride = get_attr(n, 'strides')[0]
         n.flags.b.stride = stride
+    if n.op_type == 'MaxPool':
+        ceil_mode = get_attr(n, 'ceil_mode')
+        if ceil_mode:
+            n.flags.b.generic += op_flag('MAXPOOL_CEIL')
     if n.op_type == 'Reshape':
         prev_node = n
         while prev_node and prev_node.op_type in inplace_update_ops:

@@ -11,8 +11,13 @@ struct MaxPoolParams {
     uint16_t output_h;
     uint16_t output_w;
     uint16_t start_channel;
-    uint8_t n_channels;
+    uint16_t n_channels;
     uint8_t need_nhwc2nchw;
+    uint8_t ceil_mode;
+    uint8_t stride_h;
+    uint8_t stride_w;
+    uint16_t H;
+    uint16_t W;
     uint16_t new_H;
     uint16_t new_W;
     const MaxPoolFlags* flags;
@@ -33,15 +38,24 @@ void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *ou
 
     const ParameterInfo *data = input[0];
 
-    const uint16_t H = data->dims[2], W = data->dims[3];
     uint16_t CHANNEL = data->dims[1];
 
     MaxPoolParams* maxpool_params = &maxpool_params_obj;
     maxpool_params->flags = &(node->flags.extra.maxpool);
 
-    maxpool_params->new_H = H / maxpool_params->flags->strides[STRIDE_H];
-    maxpool_params->new_W = W / maxpool_params->flags->strides[STRIDE_W];
-    maxpool_params->need_nhwc2nchw = (node->flags.generic == NHWC2NCHW);
+    maxpool_params->H = data->dims[2];
+    maxpool_params->W = data->dims[3];
+    maxpool_params->stride_h = maxpool_params->flags->strides[STRIDE_H];
+    maxpool_params->stride_w = maxpool_params->flags->strides[STRIDE_W];
+    maxpool_params->ceil_mode = (node->flags.generic & MAXPOOL_CEIL);
+    if (!maxpool_params->ceil_mode) {
+        maxpool_params->new_H = maxpool_params->H / maxpool_params->stride_h;
+        maxpool_params->new_W = maxpool_params->W / maxpool_params->stride_w;
+    } else {
+        maxpool_params->new_H = (maxpool_params->H + maxpool_params->stride_h - 1) / maxpool_params->stride_h;
+        maxpool_params->new_W = (maxpool_params->W + maxpool_params->stride_w - 1) / maxpool_params->stride_w;
+    }
+    maxpool_params->need_nhwc2nchw = (node->flags.generic & NHWC2NCHW);
 
 #if JAPARI
     if (maxpool_params->need_nhwc2nchw) {
@@ -61,7 +75,7 @@ void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     }
 }
 
-static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
+static uint16_t maxpool_patch(MaxPoolParams *maxpool_params) {
     const uint16_t CHANNEL = maxpool_params->data->dims[1], W = maxpool_params->data->dims[3];
 
     int16_t offset_h, offset_w;
@@ -78,15 +92,19 @@ static uint8_t maxpool_patch(MaxPoolParams *maxpool_params) {
 
     // explicitly initialize this as -Wmaybe-uninitialized may be triggered with -O3
     // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=60165
-    uint8_t output_channel_offset = 0;
+    uint16_t output_channel_offset = 0;
 
     for (uint16_t sH = 0; sH < maxpool_params->flags->kernel_shape[KERNEL_SHAPE_H]; sH++) {
         for (uint16_t sW = 0; sW < maxpool_params->flags->kernel_shape[KERNEL_SHAPE_W]; sW++) {
-            uint16_t val_offset = (maxpool_params->output_h*maxpool_params->flags->strides[STRIDE_H]+sH) * offset_h +
-                                  (maxpool_params->output_w*maxpool_params->flags->strides[STRIDE_W]+sW) * offset_w + maxpool_params->start_channel;
+            uint16_t input_h = maxpool_params->output_h*maxpool_params->stride_h+sH,
+                     input_w = maxpool_params->output_w*maxpool_params->stride_w+sW;
+            if (input_h >= maxpool_params->H || input_w >= maxpool_params->W) {
+                continue;
+            }
+            uint16_t val_offset = input_h * offset_h + input_w * offset_w + maxpool_params->start_channel;
             my_memcpy_from_param(maxpool_params->model, input_buffer, maxpool_params->data, val_offset, maxpool_params->n_channels * sizeof(int16_t));
             output_channel_offset = 0;
-            for (uint8_t input_channel_offset = 0; input_channel_offset < maxpool_params->n_channels; input_channel_offset++) {
+            for (uint16_t input_channel_offset = 0; input_channel_offset < maxpool_params->n_channels; input_channel_offset++) {
 #if JAPARI
                 if (offset_has_state(maxpool_params->start_channel + input_channel_offset)) {
                     // not checking need_nhwc2nchw here - if that is true, input footprint channels should already be skipped
@@ -202,7 +220,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
             for (; output_h < maxpool_params->new_H; output_h++) {
                 maxpool_params->output_h = output_h;
                 for (; output_w < maxpool_params->new_W; output_w++) {
-                    uint8_t len = OUTPUT_CHANNEL - c;
+                    uint16_t len = OUTPUT_CHANNEL - c;
                     maxpool_params->output_w = output_w;
                     maxpool_params->n_channels = len;
                     maxpool_params->start_channel = c;
@@ -272,7 +290,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 #endif
                         maxpool_params->start_channel = c;
                         maxpool_params->n_channels = 1;
-                        uint8_t len = maxpool_patch(maxpool_params);
+                        uint16_t len = maxpool_patch(maxpool_params);
                         if (!len) {
                             my_printf_debug(NEWLINE);
                             continue;
