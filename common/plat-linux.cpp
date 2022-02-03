@@ -165,7 +165,7 @@ void my_memcpy(void* dest, const void* src, size_t n) {
     my_memcpy_ex(dest, src, n, 0);
 }
 
-void my_memcpy_from_parameters(void *dest, const ParameterInfo *param, uint16_t offset_in_bytes, size_t n) {
+void my_memcpy_from_parameters(void *dest, const ParameterInfo *param, uint32_t offset_in_bytes, size_t n) {
     MY_ASSERT(offset_in_bytes + n <= PARAMETERS_DATA_LEN);
     my_memcpy(dest, parameters_data + param->params_offset + offset_in_bytes, n);
 }

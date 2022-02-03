@@ -18,7 +18,8 @@ extern uint8_t dma_counter_enabled;
 void my_memcpy(void* dest, const void* src, size_t n);
 void my_memcpy_to_param(ParameterInfo *param, uint16_t offset_in_word, const void *src, size_t n, uint16_t timer_delay);
 void my_memcpy_from_intermediate_values(void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n);
-void my_memcpy_from_parameters(void *dest, const ParameterInfo *param, uint16_t offset_in_bytes, size_t n);
+// offset_in_bytes may go beyond 64K after being multiplied with sizeof(T)
+void my_memcpy_from_parameters(void *dest, const ParameterInfo *param, uint32_t offset_in_bytes, size_t n);
 void read_from_samples(void *dest, uint16_t offset_in_word, size_t n);
 ParameterInfo* get_intermediate_parameter_info(uint8_t i);
 void commit_intermediate_parameter_info(uint8_t i);
