@@ -1,4 +1,5 @@
 #include "cnn_common.h"
+#include "data.h"
 #include "my_debug.h"
 #include "platform.h"
 #include "intermittent-cnn.h"
@@ -24,10 +25,8 @@ const Node* get_node(const ParameterInfo* param) {
 SlotInfo* get_slot_info(Model* model, uint8_t i) {
     if (i < NUM_SLOTS) {
         return model->slots_info + i;
-    } else if (i >= SLOT_CONSTANTS_MIN) {
-        return nullptr;
     } else {
-        ERROR_OCCURRED();
+        return nullptr;
     }
 }
 
@@ -48,7 +47,7 @@ int16_t get_q15_param(Model* model, const ParameterInfo *param, uint16_t i) {
         int16_t ret;
         read_from_samples(&ret, i, sizeof(int16_t));
         return ret;
-    } else if (param->slot >= SLOT_CONSTANTS_MIN) {
+    } else if (param->slot == SLOT_PARAMETERS) {
         uint32_t limit;
         const uint8_t *baseptr = get_param_base_pointer(param, &limit);
         const int16_t *ret = reinterpret_cast<const int16_t*>(baseptr + param->params_offset) + i;
@@ -114,11 +113,10 @@ uint16_t get_next_slot(Model *model, const ParameterInfo *param) {
 void my_memcpy_from_param(Model* model, void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n) {
     if (param->slot == SLOT_TEST_SET) {
         read_from_samples(dest, offset_in_word, n);
-    } else if (param->slot >= SLOT_CONSTANTS_MIN) {
-        uint32_t limit;
-        const uint8_t *baseptr = get_param_base_pointer(param, &limit);
+    } else if (param->slot == SLOT_PARAMETERS) {
+        const uint8_t *baseptr = parameters_data;
         uint32_t total_offset = param->params_offset + offset_in_word * sizeof(int16_t);
-        MY_ASSERT(total_offset + n <= limit);
+        MY_ASSERT(total_offset + n <= PARAMETERS_DATA_LEN);
         my_memcpy(dest, baseptr + total_offset, n);
     } else {
         my_memcpy_from_intermediate_values(dest, param, offset_in_word, n);

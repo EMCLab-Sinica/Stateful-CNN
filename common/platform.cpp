@@ -48,7 +48,7 @@ const char* datatype_name<Model>(void) {
 
 void my_memcpy_to_param(ParameterInfo *param, uint16_t offset_in_word, const void *src, size_t n, uint16_t timer_delay) {
     MY_ASSERT(param->bitwidth == 16);
-    MY_ASSERT(param->slot < SLOT_CONSTANTS_MIN);
+    MY_ASSERT(param->slot < NUM_SLOTS);
     uint32_t total_offset = param->params_offset + offset_in_word * sizeof(int16_t);
     MY_ASSERT(total_offset + n <= param->params_len);
     write_to_nvm(src, intermediate_values_offset(param->slot) + total_offset, n, timer_delay);

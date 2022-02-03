@@ -79,7 +79,7 @@ typedef struct ParameterInfo {
      */
     uint8_t bitwidth;
     /* A flag to indicate where the data are. Possible values are SLOT_TEST_SET,
-     * SLOT_PARAMETERS and SLOT_INTERMEDIATE_VALUES.
+     * SLOT_PARAMETERS and a value in [0, NUM_SLOTS-1].
      */
     uint8_t slot;
     uint16_t dummy;
