@@ -77,7 +77,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 
     uint16_t cur_chunk_len;
 #if INDIRECT_RECOVERY
-    start_cpu_counter();
+    start_cpu_counter(&Counters::state_query);
     dump_turning_points_debug(model, param);
 
     state_bit = get_state_bit(model, param->slot);
@@ -99,12 +99,12 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
         // no turning points not after start_offset found
         next_turning_point = INVALID_TURNING_POINT;
     }
-    stop_cpu_counter(&Counters::state_query);
+    stop_cpu_counter();
 #endif
     for (uint32_t offset = start_offset; offset < params_len; offset += cur_chunk_len) {
         cur_chunk_len = MIN_VAL(chunk_len, params_len - offset);
 #if INDIRECT_RECOVERY
-        start_cpu_counter();
+        start_cpu_counter(&Counters::state_query);
         uint8_t next_state_flipped = 0;
         // Use <= here as turning_point_idx is actually index for the _next_ turning point
         if (next_turning_point != INVALID_TURNING_POINT && turning_point_idx <= cur_slot_info->n_turning_points) {
@@ -116,23 +116,23 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
             }
             cur_chunk_len = chunk_len_before_turning_point;
         }
-        stop_cpu_counter(&Counters::state_query);
+        stop_cpu_counter();
 #endif
         MY_ASSERT(cur_chunk_len != 0);
         chunk_handler(offset, cur_chunk_len, state_bit, params);
 #if INDIRECT_RECOVERY
-        start_cpu_counter();
+        start_cpu_counter(&Counters::state_query);
         if (next_state_flipped) {
             state_bit = -state_bit;
         }
-        stop_cpu_counter(&Counters::state_query);
+        stop_cpu_counter();
 #endif
     }
 }
 
 #if INDIRECT_RECOVERY
 void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, uint16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param) {
-    start_cpu_counter();
+    start_cpu_counter(&Counters::state_query);
     my_printf_debug("Initialize next_turning_point from output offset %d" NEWLINE, initial_value_idx);
     *p_offset = get_state_bit(model, param->slot)*0x4000;
     *p_turning_point_idx = 0;
@@ -155,11 +155,11 @@ void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, uin
         *p_next_turning_point = INVALID_TURNING_POINT;
     }
     my_printf_debug("next_turning_point = %d" NEWLINE, *p_next_turning_point);
-    stop_cpu_counter(&Counters::state_query);
+    stop_cpu_counter();
 }
 
 void check_next_turning_point(int16_t& offset, uint8_t& turning_point_idx, uint16_t& next_turning_point, SlotInfo* slot_info, uint16_t value_idx) {
-    start_cpu_counter();
+    start_cpu_counter(&Counters::state_query);
     uint8_t next_turning_point_found = 0;
     if (next_turning_point == INVALID_TURNING_POINT || value_idx < next_turning_point) {
         goto exit;
@@ -180,7 +180,7 @@ void check_next_turning_point(int16_t& offset, uint8_t& turning_point_idx, uint1
     }
     my_printf_debug("new offset=%d" NEWLINE, offset);
 exit:
-    stop_cpu_counter(&Counters::state_query);
+    stop_cpu_counter();
 }
 #endif
 

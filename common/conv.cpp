@@ -90,7 +90,7 @@ int16_t * const matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
 
 #if INDIRECT_RECOVERY
 static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filters, uint16_t len, uint8_t first_round) {
-    start_cpu_counter();
+    start_cpu_counter(&Counters::embedding);
     MY_ASSERT(len < OUTPUT_LEN);
 #if STATEFUL
     int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + n_filters * conv_params->filter_offset;
@@ -120,7 +120,7 @@ static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filte
         }
     }
 #endif
-    stop_cpu_counter(&Counters::embedding);
+    stop_cpu_counter();
 }
 #endif
 
@@ -191,7 +191,7 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
                 }
             }
 #if STATEFUL
-            start_cpu_counter();
+            start_cpu_counter(&Counters::embedding);
             if (conv_params->real_conv_input->slot == SLOT_TEST_SET) {
                 my_scale_q15(filter_tmp, 0x4000, 0, filter_tmp, conv_params->filter_offset);
             }
@@ -200,7 +200,7 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
                 my_printf_debug("Adding state bit for newly loaded filter idx=%d" NEWLINE, idx);
                 filter_tmp[conv_params->filter_offset - 1] = -(idx < n_keep_state_bits ? -conv_params->old_output_offset : conv_params->old_output_offset);
             }
-            stop_cpu_counter(&Counters::embedding);
+            stop_cpu_counter();
             if (!has_state)
 #endif
             {
@@ -464,7 +464,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         }
 
 #if STATEFUL
-        start_cpu_counter();
+        start_cpu_counter(&Counters::stripping);
         if (conv_params->real_conv_input->slot != SLOT_TEST_SET) {
             // stripping states inside the h loop is faster as biases multipliers can be skipped
             int16_t *input_row_end = orig_dest_addr + input_row_len;
@@ -484,7 +484,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
                 }
             }
         }
-        stop_cpu_counter(&Counters::stripping);
+        stop_cpu_counter();
 #endif
         dest += conv_params->dest_offset;
         input_src_offset += conv_params->W * cur_input_channel;
@@ -842,10 +842,10 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
                 uint16_t cur_input_offset = input_tile_c_index * tiling_results_len + input_offset;
                 my_memcpy_from_param(model, to_add, data, cur_input_offset, real_chunk_len * sizeof(int16_t));
 #if STATEFUL
-                start_cpu_counter();
+                start_cpu_counter(&Counters::stripping);
                 ConvMergeInputChunkHandlerParams params({to_add, cur_input_offset});
                 iterate_chunks(model, data, cur_input_offset, real_chunk_len, ConvMergeInputChunkHandler, &params);
-                stop_cpu_counter(&Counters::stripping);
+                stop_cpu_counter();
 #endif
                 my_printf_debug(NEWLINE "Input offset %d, input tile %d, output offset %d" NEWLINE, cur_input_offset, input_tile_c_index, output_offset);
                 my_printf_debug("Added chunk" NEWLINE);
@@ -857,13 +857,13 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
 #if INDIRECT_RECOVERY
 
 #if STATEFUL
-            start_cpu_counter();
+            start_cpu_counter(&Counters::embedding);
             my_offset_q15_batched(lea_buffer, -old_embedding_offset, lea_buffer, MIN_VAL(next_output_turning_point - output_offset, real_chunk_len), true);
             if (next_output_turning_point < output_offset + real_chunk_len) {
                 int16_t* to_offset = lea_buffer + next_output_turning_point - output_offset;
                 my_offset_q15_batched(to_offset, old_embedding_offset, to_offset, real_chunk_len - (next_output_turning_point - output_offset), true);
             }
-            stop_cpu_counter(&Counters::embedding); // check_next_turning_point has another CPU counter
+            stop_cpu_counter(); // check_next_turning_point has another CPU counter
             check_next_turning_point(old_embedding_offset, output_turning_point_idx,
                                      next_output_turning_point, cur_output_slot_info, output_offset + real_chunk_len);
 #elif JAPARI

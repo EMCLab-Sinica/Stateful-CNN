@@ -177,14 +177,12 @@ void notify_model_finished(void) {
     GPIO_toggleOutputOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
 }
 
-void start_cpu_counter(void) {
-#if defined(__MSP430__) && ENABLE_COUNTERS
+#ifdef __MSP430__
+void plat_start_cpu_counter(void) {
     msp_benchmarkStart(MSP_BENCHMARK_BASE, 1);
-#endif
 }
 
-void stop_cpu_counter(uint32_t Counters::* mem_ptr) {
-#if defined(__MSP430__) && ENABLE_COUNTERS
-    counters(get_model()->layer_idx)->*mem_ptr += msp_benchmarkStop(MSP_BENCHMARK_BASE);
-#endif
+uint32_t plat_stop_cpu_counter(void) {
+    return msp_benchmarkStop(MSP_BENCHMARK_BASE);
 }
+#endif

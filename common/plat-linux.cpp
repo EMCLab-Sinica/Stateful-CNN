@@ -213,9 +213,4 @@ void notify_model_finished(void) {}
     exit_with_status(1);
 }
 
-void start_cpu_counter(void) {}
-void stop_cpu_counter(uint32_t Counters::* mem_ptr) {
-    counters(get_model()->layer_idx)->*mem_ptr += 1;
-}
-
 #endif // POSIX_BUILD

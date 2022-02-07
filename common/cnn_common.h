@@ -4,8 +4,6 @@
 #include <cstdint>
 #include "data.h"
 
-#define ENABLE_COUNTERS 0
-
 /**********************************
  *        Data structures         *
  **********************************/

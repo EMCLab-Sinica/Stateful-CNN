@@ -63,25 +63,25 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                 int16_t input_val = get_q15_param(model, X, data_offset);
 #if INDIRECT_RECOVERY
 #if STATEFUL
-                start_cpu_counter();
+                start_cpu_counter(&Counters::stripping);
                 if (offset_has_state(data_offset)) {
                     strip_state(&input_val);
                 }
                 input_val *= 2;
-                stop_cpu_counter(&Counters::stripping);
+                stop_cpu_counter();
 #endif
                 check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
 #endif
                 output_val = MAX_VAL(input_val, 0);
             }
 #if STATEFUL
-            start_cpu_counter();
+            start_cpu_counter(&Counters::embedding);
             output_val /= 2;
             if (cur_batch_offset == BATCH_SIZE - 1) {
                 cur_batch_offset -= BATCH_SIZE;
                 output_val += offset;
             }
-            stop_cpu_counter(&Counters::embedding);
+            stop_cpu_counter();
 #endif
             my_printf_debug("output_offset=%d output_val=%d" NEWLINE, output_offset, output_val);
             put_q15_param(output, output_offset, output_val);

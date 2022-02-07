@@ -228,12 +228,12 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                     my_printf_debug("output_offset=[% 5d, % 5d) ", output_offset, output_offset + len);
 #if INDIRECT_RECOVERY
                     check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
-                    start_cpu_counter();
+                    start_cpu_counter(&Counters::embedding);
 #if STATEFUL
                     my_scale_q15(lea_buffer, 0x4000, 0, lea_buffer, len * sizeof(int16_t));
 #endif
                     offset_vector(lea_buffer, offset, len, output_offset, next_output_turning_point);
-                    stop_cpu_counter(&Counters::embedding);
+                    stop_cpu_counter();
 #endif
 #if MY_DEBUG >= MY_DEBUG_VERBOSE
                     // need a space as dump_value does not append spaces when DUMP_INTEGERS is not defined
@@ -383,12 +383,12 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
                     // Input is from Conv, which uses NHWC
                     int16_t val = get_q15_param(model, data, h * W * CHANNEL + w * CHANNEL + input_channel);
 #if STATEFUL
-                    start_cpu_counter();
+                    start_cpu_counter(&Counters::stripping);
                     if (offset_has_state(input_channel)) {
                         strip_state(&val);
                     }
                     val *= 2;
-                    stop_cpu_counter(&Counters::stripping);
+                    stop_cpu_counter();
 #endif
                     total += val;
                 }

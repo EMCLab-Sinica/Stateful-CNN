@@ -120,11 +120,11 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     my_memcpy_from_param(model, lea_buffer, output_node, 0, buffer_len * sizeof(int16_t));
 
 #if STATEFUL
-    start_cpu_counter();
+    start_cpu_counter(&Counters::stripping);
     for (uint8_t idx = BATCH_SIZE - 1; idx < buffer_len; idx += BATCH_SIZE) {
         strip_state(lea_buffer + idx);
     }
-    stop_cpu_counter(&Counters::stripping);
+    stop_cpu_counter();
 #endif
 
     if (sample_idx == 0) {
@@ -293,7 +293,7 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
 
 void flip_state_bit(Model *model, const ParameterInfo *output) {
 #if INDIRECT_RECOVERY
-    start_cpu_counter();
+    start_cpu_counter(&Counters::table_updates);
 
 #if JAPARI
     MY_ASSERT(has_footprints(output));
@@ -340,7 +340,7 @@ void flip_state_bit(Model *model, const ParameterInfo *output) {
     // Use first_unfinished_job_index = 0 here as all values finished and the initial state bit is flipped above
     check_feature_map_states(model, output, 0, output->params_len / sizeof(int16_t), __func__);
 
-    stop_cpu_counter(&Counters::table_updates);
+    stop_cpu_counter();
 #endif // INDIRECT_RECOVERY
 }
 
@@ -394,7 +394,7 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
 #endif
 
 uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
-    start_cpu_counter();
+    start_cpu_counter(&Counters::progress_seeking);
 #if STATEFUL
     if (job_index >= output->params_len / sizeof(int16_t)) {
         return job_index;
@@ -479,7 +479,7 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
         // TODO
         ERROR_OCCURRED();
     }
-    stop_cpu_counter(&Counters::progress_seeking);
+    stop_cpu_counter();
     return offset;
 }
 
@@ -500,7 +500,7 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
         return 0;
     }
 
-    start_cpu_counter();
+    start_cpu_counter(&Counters::progress_seeking);
 
     // recovery from state bits
     uint32_t end_job_index = output->params_len / 2;
@@ -552,7 +552,7 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
 
     check_feature_map_states(model, output, first_unfinished_job_index, output->params_len / 2, __func__);
 
-    stop_cpu_counter(&Counters::progress_seeking);
+    stop_cpu_counter();
 
     return first_unfinished_job_index;
 }

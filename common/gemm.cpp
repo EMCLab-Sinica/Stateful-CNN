@@ -131,10 +131,10 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         }
 
 #if STATEFUL
-        start_cpu_counter();
+        start_cpu_counter(&Counters::stripping);
         GemmInputChunkHandlerParams params{buffer_a, i};
         iterate_chunks(model, A, i, tile_channels, GemmInputChunkHandler, &params);
-        stop_cpu_counter(&Counters::stripping);
+        stop_cpu_counter();
 #endif
         buffer_a[tile_channels] = -0x8000;
         buffer_a[tile_channels + 1] = 0;
@@ -168,7 +168,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                           tile_width * sizeof(uint16_t));
 #if JAPARI
                 // move loaded filters around to create zeros for footprint kernels
-                start_cpu_counter();
+                start_cpu_counter(&Counters::embedding);
                 if (incomplete_tile) {
                     int8_t move_offset = values_to_preserve - tile_width;
                     int8_t cur_remaining = values_to_preserve % (BATCH_SIZE + 1);
@@ -187,7 +187,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     move_filter<last_elem, last_elem % BATCH_SIZE>(filter_ptr);
                     clear_filter<last_elem/(BATCH_SIZE+1)*(BATCH_SIZE+1)+BATCH_SIZE>(filter_ptr);
                 }
-                stop_cpu_counter(&Counters::embedding);
+                stop_cpu_counter();
 #endif
                 filter_ptr += full_tile_width;
             }
@@ -219,7 +219,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
 #if STATEFUL
-            start_cpu_counter();
+            start_cpu_counter(&Counters::embedding);
             uint16_t tile_width_first = tile_width;
             if (next_output_turning_point != INVALID_TURNING_POINT) {
                 my_printf_debug("next_output_turning_point=%d output_offset=%d" NEWLINE, next_output_turning_point, output_offset);
@@ -231,7 +231,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             if (tile_width_first != tile_width) {
                 my_offset_q15_batched(filter_ptr + tile_width_first, offset, filter_ptr + tile_width_first, tile_width - tile_width_first);
             }
-            stop_cpu_counter(&Counters::embedding);
+            stop_cpu_counter();
 #endif
 
             my_printf_debug("Tile for B" NEWLINE);
@@ -307,11 +307,11 @@ void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
         for (uint16_t tile = 0; tile < n_tiles; tile++) {
             my_memcpy_from_param(model, buffer_temp, input[0], tile * output_len + merge_offset, cur_tile_size * sizeof(int16_t));
 #if STATEFUL
-            start_cpu_counter();
+            start_cpu_counter(&Counters::stripping);
             for (uint16_t idx = BATCH_SIZE - 1; idx < cur_tile_size; idx += BATCH_SIZE) {
                 strip_state(buffer_temp + idx);
             }
-            stop_cpu_counter(&Counters::stripping);
+            stop_cpu_counter();
 #endif
             my_add_q15(buffer_gemm, buffer_temp, buffer_gemm, cur_tile_size);
             my_printf_debug("accumulated buffer_gemm" NEWLINE);
@@ -319,12 +319,12 @@ void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
         }
 
 #if INDIRECT_RECOVERY
-        start_cpu_counter();
+        start_cpu_counter(&Counters::embedding);
         OutputChunkHandlerParams params;
         params.buffer = buffer_gemm;
         params.buffer_offset = merge_offset;
         iterate_chunks(model, output, merge_offset, cur_tile_size, OutputChunkHandler, &params);
-        stop_cpu_counter(&Counters::embedding);
+        stop_cpu_counter();
 #endif
         my_printf_debug("buffer_gemm after adjusting states; merge_offset=%d" NEWLINE, merge_offset);
         dump_matrix_debug(buffer_gemm, cur_tile_size, ValueInfo(output, model));

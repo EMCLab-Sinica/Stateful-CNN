@@ -133,9 +133,9 @@ void commit_versioned_data(uint16_t data_idx) {
 }
 
 Model* load_model_from_nvm(void) {
-    start_cpu_counter();
+    start_cpu_counter(&Counters::table_loading);
     Model* ret = get_versioned_data<Model>(0);
-    stop_cpu_counter(&Counters::table_loading);
+    stop_cpu_counter();
     return ret;
 }
 
@@ -144,12 +144,12 @@ Model* get_model(void) {
 }
 
 void commit_model(void) {
-    start_cpu_counter();
+    start_cpu_counter(&Counters::table_preservation);
     if (!model_vm.running) {
         notify_model_finished();
     }
     commit_versioned_data<Model>(0);
-    stop_cpu_counter(&Counters::table_preservation);
+    stop_cpu_counter();
 }
 
 void first_run(void) {
@@ -179,6 +179,27 @@ void write_to_nvm_segmented(const uint8_t* vm_buffer, uint32_t nvm_offset, uint1
 void record_overflow_handling_overhead(uint32_t cycles) {
     counters(get_model()->layer_idx)->overflow_handling += cycles;
 }
+
+void __attribute__((weak)) plat_start_cpu_counter(void) {}
+uint32_t __attribute__((weak)) plat_stop_cpu_counter(void) {
+    return 1;
+}
+
+#if ENABLE_COUNTERS
+static uint32_t Counters::* current_counter = nullptr;
+
+void start_cpu_counter(uint32_t Counters::* mem_ptr) {
+    current_counter = mem_ptr;
+    plat_start_cpu_counter();
+}
+
+void stop_cpu_counter(void) {
+    if (current_counter) {
+        counters(get_model()->layer_idx)->*current_counter += plat_stop_cpu_counter();
+        current_counter = nullptr;
+    }
+}
+#endif
 
 #if HAWAII
 Node::Footprint footprints_vm[MODEL_NODES_LEN];
