@@ -176,7 +176,7 @@ void check_next_turning_point(int16_t& offset, uint8_t& turning_point_idx, uint1
         offset = -offset;
     }
     if (!next_turning_point_found) {
-        next_turning_point = -1;
+        next_turning_point = static_cast<uint16_t>(-1);
     }
     my_printf_debug("new offset=%d" NEWLINE, offset);
 exit:

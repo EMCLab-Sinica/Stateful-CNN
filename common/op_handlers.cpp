@@ -116,14 +116,10 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
      * A dimension could also be 0, in which case the actual dimension value
      * is unchanged (i.e. taken from the input tensor).
      * */
-    uint32_t new_len = 1;
     for (uint8_t i = 0; i < 4 && i < shape->dims[0]; i++) {
         output->dims[i] = get_int64_param(shape, i);
         if (!output->dims[i]) {
             output->dims[i] = data->dims[i];
-        }
-        if (output->dims[i] != RESHAPE_AUTO_DIM) {
-            new_len *= output->dims[i];
         }
     }
     for (uint8_t i = shape->dims[0]; i < 4; i++) {
@@ -155,14 +151,7 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
     }
     if (auto_idx != -1) {
         output->dims[auto_idx] = inferred_dim;
-        new_len *= inferred_dim;
     }
-#if JAPARI
-    if (data->slot != SLOT_TEST_SET) {
-        new_len = extend_for_footprints(new_len);
-    }
-#endif
-    MY_ASSERT(new_len * sizeof(int16_t) == output->params_len);
 }
 
 void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {

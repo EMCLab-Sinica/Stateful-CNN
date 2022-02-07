@@ -12,7 +12,14 @@
 #include "op_utils.h"
 
 #if !USE_ARM_CMSIS
-#define my_checkStatus(status) MY_ASSERT(status == MSP_SUCCESS, "Error from TI-DSPLib: %d" NEWLINE, status)
+#if MY_DEBUG >= MY_DEBUG_NORMAL
+#define my_checkStatus(expr) do { \
+    msp_status status = (expr); \
+    MY_ASSERT(status == MSP_SUCCESS, "Error from TI-DSPLib: %d" NEWLINE, status); \
+} while (0);
+#else
+#define my_checkStatus(expr) (expr)
+#endif
 #endif
 
 void check_buffer_address(const int16_t* addr, uint32_t blockSize) {
@@ -40,8 +47,7 @@ void my_fill_q15(int16_t value, int16_t *pDst, uint32_t blockSize) {
         msp_fill_q15_params fill_params;
         fill_params.length = blockSizeForLEA;
         fill_params.value = value;
-        msp_status status = msp_fill_q15(&fill_params, pDst);
-        my_checkStatus(status);
+        my_checkStatus(msp_fill_q15(&fill_params, pDst));
     }
     if (blockSize % 2) {
         pDst[blockSize - 1] = value;
@@ -71,8 +77,7 @@ void my_offset_q15(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t 
         msp_offset_q15_params offset_params;
         offset_params.length = block_size_for_lea;
         offset_params.offset = offset;
-        msp_status status = msp_offset_q15(&offset_params, pSrc, pDst);
-        my_checkStatus(status);
+        my_checkStatus(msp_offset_q15(&offset_params, pSrc, pDst));
     }
     if (blockSize % 2) {
         pDst[blockSize - 1] = pSrc[blockSize - 1] + offset;
@@ -95,8 +100,7 @@ void my_max_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint1
     if (blockSizeForLEA) {
         msp_max_q15_params max_params;
         max_params.length = blockSizeForLEA;
-        msp_status status = msp_max_q15(&max_params, pSrc, pResult, pIndex);
-        my_checkStatus(status);
+        my_checkStatus(msp_max_q15(&max_params, pSrc, pResult, pIndex));
     }
     if (blockSize % 2) {
         if (*pResult < pSrc[blockSize - 1]) {
@@ -133,8 +137,7 @@ void my_min_q15(const int16_t *pSrc, uint32_t blockSize, int16_t *pResult, uint1
     if (blockSizeForLEA) {
         msp_min_q15_params min_params;
         min_params.length = blockSizeForLEA;
-        msp_status status = msp_min_q15(&min_params, pSrc, pResult, pIndex);
-        my_checkStatus(status);
+        my_checkStatus(msp_min_q15(&min_params, pSrc, pResult, pIndex));
     }
     if (blockSize % 2) {
         if (*pResult > pSrc[blockSize - 1]) {
@@ -178,8 +181,7 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
     matrix_mpy_params.srcACols = A_cols;
     matrix_mpy_params.srcBRows = B_rows;
     matrix_mpy_params.srcBCols = B_cols;
-    msp_status status = msp_matrix_mpy_q15(&matrix_mpy_params, pSrcA, pSrcB, pDst, my_memcpy_to_param, param, offset_in_word, values_to_preserve, mask, n_keep_state_bits);
-    my_checkStatus(status);
+    my_checkStatus(msp_matrix_mpy_q15(&matrix_mpy_params, pSrcA, pSrcB, pDst, my_memcpy_to_param, param, offset_in_word, values_to_preserve, mask, n_keep_state_bits));
 #else
     arm_matrix_instance_q15 A, B, C;
     arm_mat_init_q15(&A, A_rows, A_cols, pSrcA);
@@ -206,8 +208,7 @@ void my_scale_q15(const int16_t *pSrc, int16_t scaleFract, uint8_t shift, int16_
         scale_params.length = blockSizeForLEA;
         scale_params.scale = scaleFract;
         scale_params.shift = shift;
-        msp_status status = msp_scale_q15(&scale_params, pSrc, pDst);
-        my_checkStatus(status);
+        my_checkStatus(msp_scale_q15(&scale_params, pSrc, pDst));
     }
     if (blockSize % 2) {
         pDst[blockSize - 1] = (pSrc[blockSize - 1] * scaleFract) >> (15 - shift);

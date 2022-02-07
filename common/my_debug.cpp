@@ -74,15 +74,12 @@ static void dump_params_common(Model* model, const ParameterInfo* cur_param, con
     }
 #endif
     my_printf("Dims: ");
-    uint8_t has_dims = 0;
     for (uint8_t j = 0; j < 4; j++) {
         if (cur_param->dims[j]) {
-            has_dims = 1;
             my_printf("%d, ", cur_param->dims[j]);
         }
     }
     my_printf(NEWLINE);
-    MY_ASSERT(has_dims);
 
 #ifdef USE_PROTOBUF
     if (layer_name && model_output_data.get()) {
@@ -220,12 +217,9 @@ void dump_turning_points(Model *model, const ParameterInfo *output) {
     }
     my_printf("Initial state bit for slot %d: %d" NEWLINE, output->slot, cur_slot_info->state_bit);
     my_printf("%d turning point(s) for slot %d: ", cur_slot_info->n_turning_points, output->slot);
-    uint16_t last_turning_point = 0;
     for (uint8_t idx = 0; idx < cur_slot_info->n_turning_points; idx++) {
         uint16_t cur_turning_point = cur_slot_info->turning_points[idx];
-        MY_ASSERT(cur_turning_point > last_turning_point);
         my_printf("%d ", cur_turning_point);
-        last_turning_point = cur_turning_point;
     }
     my_printf(NEWLINE);
 #endif
