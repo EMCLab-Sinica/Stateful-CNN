@@ -157,6 +157,9 @@ void first_run(void) {
     my_printf_debug("First run, resetting everything..." NEWLINE);
     my_erase();
     copy_samples_data();
+#if ENABLE_COUNTERS
+    memset(counters(0), 0, sizeof(Counters) * COUNTERS_LEN);
+#endif
 
     write_to_nvm_segmented(intermediate_parameters_info_data, intermediate_parameters_info_addr(0),
                            INTERMEDIATE_PARAMETERS_INFO_DATA_LEN, sizeof(ParameterInfo));

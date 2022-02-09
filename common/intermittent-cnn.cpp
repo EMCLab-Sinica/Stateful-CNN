@@ -83,9 +83,6 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
 #endif
         model->running = 1;
         commit_model();
-#if ENABLE_COUNTERS
-        memset(counters(0), 0, sizeof(Counters) * COUNTERS_LEN);
-#endif
     }
 
 #if ENABLE_COUNTERS
@@ -169,12 +166,8 @@ static uint32_t print_counters() {
     return total;
 }
 
-#if (MY_DEBUG >= MY_DEBUG_NORMAL) || ENABLE_COUNTERS
-static void print_results(const ParameterInfo *output_node) {
-    Model *model = get_model();
 
-    dump_params(model, output_node);
-
+void print_all_counters() {
     my_printf("op types:            ");
     for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
         my_printf("% 8d", get_node(i)->op_type);
@@ -200,16 +193,15 @@ static void print_results(const ParameterInfo *output_node) {
 
     my_printf(NEWLINE "Total DMA bytes: %d", total_dma_bytes);
     my_printf(NEWLINE "Total overhead: %" PRIu32, total_overhead);
-    my_printf(NEWLINE "run_counter: %d" NEWLINE, model->run_counter);
+    my_printf(NEWLINE "run_counter: %d" NEWLINE, get_model()->run_counter);
 
     my_printf("NVM writes: %ld" NEWLINE, get_nvm_writes());
 }
-#endif
 
 uint8_t run_cnn_tests(uint16_t n_samples) {
     int8_t predicted = -1;
     const ParameterInfo *output_node;
-#if (MY_DEBUG >= MY_DEBUG_NORMAL) || ENABLE_COUNTERS
+#if MY_DEBUG >= MY_DEBUG_NORMAL
     int8_t label = -1;
     uint32_t correct = 0, total = 0;
     if (!n_samples) {
@@ -220,7 +212,7 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
     for (uint16_t i = 0; i < n_samples; i++) {
         sample_idx = i;
         run_model(&predicted, &output_node);
-#if (MY_DEBUG >= MY_DEBUG_NORMAL) || ENABLE_COUNTERS
+#if MY_DEBUG >= MY_DEBUG_NORMAL
         label = labels[i];
         total++;
         if (label == predicted) {
@@ -234,9 +226,9 @@ uint8_t run_cnn_tests(uint16_t n_samples) {
         my_printf_debug("idx=%d label=%d predicted=%d correct=%d" NEWLINE, i, label, predicted, label == predicted);
 #endif
     }
-#if (MY_DEBUG >= MY_DEBUG_NORMAL) || ENABLE_COUNTERS
+#if MY_DEBUG >= MY_DEBUG_NORMAL
     if (n_samples == 1) {
-        print_results(output_node);
+        dump_params(get_model(), output_node);
     }
     my_printf("correct=%" PRId32 " ", correct);
     my_printf("total=%" PRId32 " ", total);
@@ -393,8 +385,7 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
 }
 #endif
 
-uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
-    start_cpu_counter(&Counters::progress_seeking);
+static uint32_t job_index_to_offset_inner(const ParameterInfo* output, uint16_t job_index) {
 #if STATEFUL
     if (job_index >= output->params_len / sizeof(int16_t)) {
         return job_index;
@@ -479,8 +470,15 @@ uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index) {
         // TODO
         ERROR_OCCURRED();
     }
-    stop_cpu_counter();
     return offset;
+}
+
+uint32_t job_index_to_offset(const ParameterInfo *output, uint16_t job_index) {
+    uint32_t ret;
+    start_cpu_counter(&Counters::progress_seeking);
+    ret = job_index_to_offset_inner(output, job_index);
+    stop_cpu_counter();
+    return ret;
 }
 
 uint32_t batch_start(uint32_t batch_end_offset) {

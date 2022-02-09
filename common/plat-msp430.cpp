@@ -144,11 +144,11 @@ void IntermittentCNNTest() {
         WDTCTL = 0;
     }
 
-    Model* model = load_model_from_nvm();
+    load_model_from_nvm();
     if (!GPIO_getInputPinValue(GPIO_RESET_PORT, GPIO_RESET_PIN)) {
         uartinit();
 
-        my_printf(NEWLINE "run_counter = %d" NEWLINE, model->run_counter);
+        print_all_counters();
 
         first_run();
 
