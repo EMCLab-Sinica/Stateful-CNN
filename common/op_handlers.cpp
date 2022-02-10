@@ -9,6 +9,9 @@
 
 #define RESHAPE_AUTO_DIM static_cast<uint16_t>(-1)
 
+const uint8_t RELU_TILE_SIZE = 16;
+static_assert(RELU_TILE_SIZE % BATCH_SIZE == 0, "Incorrect tile size for ReLU");
+
 void alloc_relu(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node*) {
     const ParameterInfo *data = input[0];
     output->slot = get_next_slot(model, data);
@@ -19,17 +22,14 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     const ParameterInfo *X = input[0];
 
-    /* XXX: use LEA? */
     uint16_t bitwidth = X->bitwidth;
     MY_ASSERT(bitwidth == 16);
     int16_t data_len = X->params_len / (bitwidth / 8);
 
-    uint16_t data_offset = 0;
     uint16_t output_offset = 0;
 #if INTERMITTENT
 
     uint32_t first_unfinished_value_offset = batch_start(job_index_to_offset(output, run_recovery(model, output)));
-    data_offset += first_unfinished_value_offset;
     output_offset += first_unfinished_value_offset;
 
 #if INDIRECT_RECOVERY
@@ -44,63 +44,76 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
 #endif
 
-    {
-        uint16_t i = output_offset;
+    int16_t vals[32];
+    uint16_t i = output_offset;
 #if JAPARI
-        uint8_t cur_batch_offset = i % (BATCH_SIZE + 1);
+    const uint8_t real_relu_tile_size = extend_for_footprints(RELU_TILE_SIZE);
 #else
-        uint8_t cur_batch_offset = i % BATCH_SIZE;
+    const uint8_t real_relu_tile_size = RELU_TILE_SIZE;
 #endif
-        for (; i < data_len; i++) {
-            int16_t output_val;
-#if JAPARI
-            if (cur_batch_offset == BATCH_SIZE) {
-                cur_batch_offset -= BATCH_SIZE + 1;
-                output_val = (offset > 0? 1 : -1);
-            } else
-#endif
-            {
-                int16_t input_val = get_q15_param(model, X, data_offset);
-#if INDIRECT_RECOVERY
+    for (; i < data_len; i += real_relu_tile_size) {
+        uint8_t cur_tile_size = MIN_VAL(real_relu_tile_size, data_len - i);
+        my_memcpy_from_param(model, vals, X, output_offset, cur_tile_size*sizeof(int16_t));
+
 #if STATEFUL
-                start_cpu_counter(&Counters::stripping);
-                if (offset_has_state(data_offset)) {
-                    strip_state(&input_val);
-                }
-                input_val *= 2;
-                stop_cpu_counter();
-#endif
-                check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
-#endif
-                output_val = MAX_VAL(input_val, 0);
+        start_cpu_counter(&Counters::stripping);
+        for (uint8_t j = 0; j < cur_tile_size; j++) {
+            if (offset_has_state(output_offset+j)) {
+                strip_state(&vals[j]);
             }
-#if STATEFUL
-            start_cpu_counter(&Counters::embedding);
-            output_val /= 2;
-            if (cur_batch_offset == BATCH_SIZE - 1) {
-                cur_batch_offset -= BATCH_SIZE;
-                output_val += offset;
-            }
-            stop_cpu_counter();
-#endif
-            my_printf_debug("output_offset=%d output_val=%d" NEWLINE, output_offset, output_val);
-            put_q15_param(output, output_offset, output_val);
-#if HAWAII
-            if (cur_batch_offset == BATCH_SIZE - 1) {
-                write_hawaii_layer_footprint(model->layer_idx, BATCH_SIZE);
-                cur_batch_offset -= BATCH_SIZE;
-            }
-#endif
-            data_offset++;
-            output_offset++;
-            cur_batch_offset++;
+            vals[j] *= 2;
         }
+        stop_cpu_counter();
+#endif
+
+        for (uint8_t j = 0; j < cur_tile_size; j++) {
+            vals[j] = MAX_VAL(vals[j], 0);
+        }
+
+#if INDIRECT_RECOVERY
+        start_cpu_counter(&Counters::embedding);
+#if STATEFUL
+        const uint8_t embedding_shift = BATCH_SIZE;
+#else
+        const uint8_t embedding_shift = BATCH_SIZE + 1;
+#endif
+        for (uint8_t j = 0; j < cur_tile_size; j += embedding_shift) {
+            uint8_t tile_last = j + embedding_shift - 1;
+            check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset + tile_last);
+#if STATEFUL
+            for (uint8_t k = j; k < tile_last; k++) {
+                vals[k] /= 2;
+            }
+            vals[tile_last] = vals[tile_last] / 2 + offset;
+#else
+            vals[tile_last] = (offset > 0 ? 1 : -1);
+#endif
+        }
+        stop_cpu_counter();
+#endif
+
+#if MY_DEBUG >= MY_DEBUG_VERBOSE
+        my_printf_debug("output_offset=[% 6d, % 6d), output_val=", output_offset, output_offset+cur_tile_size);
+        for (uint8_t j = 0; j < cur_tile_size; j++) {
+            my_printf_debug("% 6d", vals[j]);
+            if (j != cur_tile_size - 1) {
+                my_printf_debug(", ");
+            }
+        }
+        my_printf_debug(NEWLINE);
+#endif
+
+        my_memcpy_to_param(output, output_offset, vals, cur_tile_size*sizeof(int16_t), 0);
+        output_offset += cur_tile_size;
+#if HAWAII
+        write_hawaii_layer_footprint(model->layer_idx, cur_tile_size);
+#endif
     }
 
     flip_state_bit(model, output);
 
     my_printf_debug("handle_relu output" NEWLINE);
-    dump_params_debug(model, output, node->output_name);
+    dump_params_nhwc_debug(model, output, node->output_name);
 }
 
 void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node*) {
