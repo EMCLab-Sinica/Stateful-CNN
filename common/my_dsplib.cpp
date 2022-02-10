@@ -6,6 +6,7 @@
 #include <arm_math.h>
 #endif
 
+#include "cnn_common.h"
 #include "my_dsplib.h"
 #include "platform.h"
 #include "my_debug.h"
@@ -197,6 +198,9 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
         my_memcpy_to_param(param, offset_in_word, pDst, values_to_preserve * sizeof(int16_t), 0);
     }
 #endif
+#endif
+#if ENABLE_COUNTERS
+    counters(get_model()->layer_idx)->macs += A_rows * B_cols * A_cols;
 #endif
 }
 

@@ -119,6 +119,7 @@ struct Counters {
     uint32_t power_counters;
     uint32_t dma_invocations;
     uint32_t dma_bytes;
+    uint32_t macs;
 
     uint32_t embedding;
     uint32_t stripping;

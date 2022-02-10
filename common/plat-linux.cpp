@@ -121,6 +121,8 @@ int main(int argc, char* argv[]) {
 
     ret = run_cnn_tests(n_samples);
 
+    print_all_counters();
+
 exit:
     close(nvm_fd);
     return ret;
