@@ -125,6 +125,10 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
 #endif
 
     if (sample_idx == 0) {
+        float output_max = 0;
+        for (uint8_t buffer_idx = 0; buffer_idx < ans_len; buffer_idx++) {
+            output_max = MAX_VAL(std::fabs(first_sample_outputs[buffer_idx]), output_max);
+        }
         for (uint8_t buffer_idx = 0, ofm_idx = 0; buffer_idx < buffer_len; buffer_idx++) {
             int16_t got_q15 = lea_buffer[buffer_idx];
 #if JAPARI
@@ -135,9 +139,9 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
             {
                 float got_real = q15_to_float(got_q15, ValueInfo(output_node), nullptr, false);
                 float expected = first_sample_outputs[ofm_idx];
-                float error = fabs((got_real - expected) / expected);
+                float error = fabs((got_real - expected) / output_max);
                 // Errors in CIFAR-10/Stateful are quite large...
-                MY_ASSERT(error <= 0.15,
+                MY_ASSERT(error <= 0.1,
                           "Value error too large at index %d: got=%f, expected=%f" NEWLINE, buffer_idx, got_real, expected);
                 ofm_idx++;
             }

@@ -476,7 +476,7 @@ def determine_gemm_tile_sizes(n):
 
     while True:
         # LEA wants addresses to be 4 byte-aligned, or 2 Q15-aligned
-        node_flags.tile_channel = min([(Constants.ARM_PSTATE_LEN / tile_size_unit) / 2 * 2 - 2, B_rows,
+        node_flags.tile_channel = min([(Constants.ARM_PSTATE_LEN // (tile_size_unit * 2)) // 2 * 2 - 2, B_rows,
                                        (config['gemm_tile_length'] or float('inf'))]) // tile_size_unit * tile_size_unit
         full_tile_width = (extend_for_footprints(tile_size_unit)+1)/2*2
         while node_flags.tile_channel > 0:
@@ -490,7 +490,7 @@ def determine_gemm_tile_sizes(n):
         if node_flags.tile_channel > 0:
             break
 
-    assert tile_size_unit * (node_flags.tile_channel + 2) <= Constants.ARM_PSTATE_LEN
+    assert (tile_size_unit * 2) * (node_flags.tile_channel + 2) <= Constants.ARM_PSTATE_LEN
 
 graph = []
 for n in nodes:
