@@ -857,13 +857,7 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
 #if INDIRECT_RECOVERY
 
 #if STATEFUL
-            start_cpu_counter(&Counters::embedding);
-            my_offset_q15_batched(lea_buffer, -old_embedding_offset, lea_buffer, MIN_VAL(next_output_turning_point - output_offset, real_chunk_len), true);
-            if (next_output_turning_point < output_offset + real_chunk_len) {
-                int16_t* to_offset = lea_buffer + next_output_turning_point - output_offset;
-                my_offset_q15_batched(to_offset, old_embedding_offset, to_offset, real_chunk_len - (next_output_turning_point - output_offset), true);
-            }
-            stop_cpu_counter(); // check_next_turning_point has another CPU counter
+            update_states(lea_buffer, real_chunk_len, output_offset, old_embedding_offset, next_output_turning_point, true);
             check_next_turning_point(old_embedding_offset, output_turning_point_idx,
                                      next_output_turning_point, cur_output_slot_info, output_offset + real_chunk_len);
 #elif JAPARI

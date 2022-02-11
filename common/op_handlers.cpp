@@ -184,7 +184,9 @@ void handle_squeeze(Model *model, const ParameterInfo *input[], ParameterInfo *o
     } else {
         for (uint8_t i = 0; i < 4; i++) {
             if (axes & (1 << i)) {
+#if !JAPARI
                 MY_ASSERT(input[0]->dims[i] == 1);
+#endif
             } else {
                 output->dims[j] = input[0]->dims[i];
                 j++;
@@ -261,20 +263,69 @@ void handle_add(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     my_printf_debug("Add!" NEWLINE);
 
     const ParameterInfo *X = input[0], *Y = input[1];
+
+    uint32_t data_offset = 0;
+#if INTERMITTENT
+    uint32_t first_unfinished_job_idx = run_recovery(model, output);
+    data_offset = batch_start(job_index_to_offset(output, first_unfinished_job_idx));
+
+#if INDIRECT_RECOVERY
+    uint16_t next_input_turning_point, next_output_turning_point;
+    int16_t input_offset, output_offset;
+    uint8_t input_turning_point_idx, output_turning_point_idx;
+    SlotInfo *input_slot_info, *output_slot_info;
+    find_initial_state_bit(&input_offset, &input_turning_point_idx, &next_input_turning_point, &input_slot_info,
+                           data_offset, model, X);
+    find_initial_state_bit(&output_offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info,
+                           data_offset, model, output);
+#endif
+
+#endif
+
     uint16_t buffer_size = X->dims[1];
     int16_t *buffer_a = lea_buffer,
             *buffer_b = buffer_a + buffer_size;
     my_memcpy_from_param(model, buffer_b, Y, 0, buffer_size * sizeof(int16_t));
+#if JAPARI
+    move_weights(buffer_b, false, extend_for_footprints(buffer_size), buffer_size);
+#endif
+    my_printf_debug("weights" NEWLINE);
+    dump_matrix_debug(buffer_b, buffer_size, ValueInfo(Y), false);
 
     int16_t scaleFract;
     uint8_t shift;
     float_to_scale_params(&scaleFract, &shift, 1.0f*Y->scale/X->scale);
     my_scale_q15(buffer_b, scaleFract, shift, buffer_b, buffer_size);
 
-    for (uint16_t idx = 0; idx < X->dims[2]; idx++) {
-        my_memcpy_from_param(model, buffer_a, X, idx*buffer_size, buffer_size * sizeof(int16_t));
+    for (uint16_t idx = data_offset / buffer_size; idx < X->dims[2]; idx++) {
+        my_printf_debug("data_offset=%d" NEWLINE, data_offset);
+        my_memcpy_from_param(model, buffer_a, X, data_offset, buffer_size * sizeof(int16_t));
+#if STATEFUL
+        check_next_turning_point(input_offset, input_turning_point_idx, next_input_turning_point, input_slot_info, data_offset);
+        update_states(buffer_a, buffer_size, data_offset, input_offset, next_input_turning_point, false);
+        my_printf_debug("After strip states" NEWLINE);
+        dump_matrix_debug(buffer_a, buffer_size, ValueInfo(output), false);
+#endif
+
         my_add_q15(buffer_a, buffer_b, buffer_a, buffer_size);
-        my_memcpy_to_param(output, idx*buffer_size, buffer_a, buffer_size * sizeof(int16_t), 0);
+        my_printf_debug("After add" NEWLINE);
+        dump_matrix_debug(buffer_a, buffer_size, ValueInfo(output), false);
+
+#if INDIRECT_RECOVERY
+        check_next_turning_point(output_offset, output_turning_point_idx, next_output_turning_point, output_slot_info, data_offset);
+        update_states(buffer_a, buffer_size, data_offset, output_offset, next_output_turning_point, true);
+        my_printf_debug("After embedding states" NEWLINE);
+        dump_matrix_debug(buffer_a, buffer_size, ValueInfo(output), true);
+#endif
+
+        my_memcpy_to_param(output, data_offset, buffer_a, buffer_size * sizeof(int16_t), 0);
+        data_offset += buffer_size;
+#if HAWAII
+        write_hawaii_layer_footprint(model->layer_idx, buffer_size/BATCH_SIZE*BATCH_SIZE);
+#endif
     }
+
+    flip_state_bit(model, output);
+
     dump_params_nhwc_debug(model, output, node->output_name);
 }

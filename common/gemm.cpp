@@ -39,30 +39,6 @@ void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, int8_t stat
     my_offset_q15_batched(to_offset, -state_bit*0x4000, to_offset, real_chunk_len);
 }
 
-#if JAPARI
-// https://tjsw.medium.com/86f06ac768da
-template<uint8_t move_from, uint8_t batch_offset, std::enable_if_t<move_from < BATCH_SIZE>* = nullptr>
-static inline void move_filter(int16_t*) {}
-
-template<uint8_t move_from, uint8_t batch_offset, std::enable_if_t<move_from >= BATCH_SIZE>* = nullptr>
-static inline void move_filter(int16_t* filter) {
-    const uint8_t move_to = move_from/BATCH_SIZE*(BATCH_SIZE+1)+batch_offset;
-    filter[move_to] = filter[move_from];
-    move_filter<move_from-1, (batch_offset >= 1) ? (batch_offset-1) : (BATCH_SIZE-1)>(filter);
-}
-
-template<uint8_t offset>
-static inline void clear_filter(int16_t* filter) {
-    filter[offset] = 0;
-    clear_filter<offset-(BATCH_SIZE+1)>(filter);
-}
-
-template<>
-inline void clear_filter<BATCH_SIZE>(int16_t* filter) {
-    filter[BATCH_SIZE] = 0;
-}
-#endif
-
 void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
     const ParameterInfo *A = input[0], *B = input[1], *C = input[2];
     const NodeFlags* flags = &node->flags;
@@ -147,10 +123,10 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         for (; j < B->dims[1]; j += OP_FILTERS) {
             int16_t tile_width;
             // this variable is used only for JAPARI. Don't use [[maybe_unused]] until TI CGT support C++17.
-            uint8_t incomplete_tile __attribute__((unused)) = 0;
+            bool exact_tile __attribute__((unused)) = true;
             if (OP_FILTERS > B->dims[1] - j) {
                 tile_width = B->dims[1] - j;
-                incomplete_tile = 1;
+                exact_tile = true;
             } else {
                 tile_width = OP_FILTERS;
             }
@@ -167,27 +143,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                           B, (i + row) * B->dims[1] + j,
                           tile_width * sizeof(uint16_t));
 #if JAPARI
-                // move loaded filters around to create zeros for footprint kernels
-                start_cpu_counter(&Counters::embedding);
-                if (incomplete_tile) {
-                    int8_t move_offset = values_to_preserve - tile_width;
-                    int8_t cur_remaining = values_to_preserve % (BATCH_SIZE + 1);
-                    for (int8_t move_dest = values_to_preserve - 1; move_dest >= 0; move_dest--) {
-                        if (cur_remaining == 0) {
-                            filter_ptr[move_dest] = 0;
-                            move_offset--;
-                            cur_remaining = BATCH_SIZE;
-                            continue;
-                        }
-                        filter_ptr[move_dest] = filter_ptr[move_dest - move_offset];
-                        cur_remaining--;
-                    }
-                } else {
-                    const uint8_t last_elem = OP_FILTERS-1;
-                    move_filter<last_elem, last_elem % BATCH_SIZE>(filter_ptr);
-                    clear_filter<last_elem/(BATCH_SIZE+1)*(BATCH_SIZE+1)+BATCH_SIZE>(filter_ptr);
-                }
-                stop_cpu_counter();
+                move_weights(filter_ptr, exact_tile, values_to_preserve, tile_width);
 #endif
                 filter_ptr += full_tile_width;
             }
@@ -219,19 +175,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
 #if STATEFUL
-            start_cpu_counter(&Counters::embedding);
-            uint16_t tile_width_first = tile_width;
-            if (next_output_turning_point != INVALID_TURNING_POINT) {
-                my_printf_debug("next_output_turning_point=%d output_offset=%d" NEWLINE, next_output_turning_point, output_offset);
-                tile_width_first = MIN_VAL(next_output_turning_point - output_offset, tile_width);
-            }
-            my_printf_debug("tile_width_first=%d" NEWLINE, tile_width_first);
-            MY_ASSERT(tile_width_first <= tile_width);
-            my_offset_q15_batched(filter_ptr, -offset, filter_ptr, tile_width_first);
-            if (tile_width_first != tile_width) {
-                my_offset_q15_batched(filter_ptr + tile_width_first, offset, filter_ptr + tile_width_first, tile_width - tile_width_first);
-            }
-            stop_cpu_counter();
+            uint16_t tile_width_first = update_states(filter_ptr, tile_width, output_offset, offset, next_output_turning_point, false);
 #endif
 
             my_printf_debug("Tile for B" NEWLINE);

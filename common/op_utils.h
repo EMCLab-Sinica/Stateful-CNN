@@ -45,3 +45,9 @@ void fix_first_unfinished_value_offset(const Model* model, uint32_t* p_first_unf
 void make_buffer_aligned(int16_t** p_buffer);
 float q15_to_float(int16_t val, const ValueInfo& val_info, uint8_t* p_use_prefix = nullptr, bool has_state = true);
 void my_offset_q15_batched(const int16_t *pSrc, int16_t offset, int16_t *pDst, uint32_t blockSize, bool enforce_states = false);
+#if INDIRECT_RECOVERY
+uint16_t update_states(int16_t* buffer, uint16_t buffer_size, uint32_t offset, int16_t embedding_offset, uint16_t next_turning_point, bool enforce_states);
+#endif
+#if JAPARI
+void move_weights(int16_t* filter_ptr, bool exact_tile, int16_t values_to_preserve, int16_t tile_width);
+#endif

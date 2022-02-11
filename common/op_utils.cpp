@@ -1,4 +1,5 @@
 #include <cstdint>
+#include "my_debug.h"
 #include "op_utils.h"
 #include "data.h"
 #include "intermittent-cnn.h"
@@ -133,7 +134,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 #if INDIRECT_RECOVERY
 void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, uint16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param) {
     start_cpu_counter(&Counters::state_query);
-    my_printf_debug("Initialize next_turning_point from output offset %d" NEWLINE, initial_value_idx);
+    my_printf_debug("Initialize next_turning_point from data offset %d" NEWLINE, initial_value_idx);
     *p_offset = get_state_bit(model, param->slot)*0x4000;
     *p_turning_point_idx = 0;
     *p_next_turning_point = INVALID_TURNING_POINT;
@@ -239,3 +240,78 @@ void my_offset_q15_batched(const int16_t *pSrc, int16_t offset, int16_t *pDst, u
         }
     }
 }
+
+#if INDIRECT_RECOVERY
+uint16_t update_states(int16_t* buffer, uint16_t buffer_size, uint32_t offset, int16_t embedding_offset, uint16_t next_turning_point, bool enforce_states) {
+    start_cpu_counter(&Counters::embedding);
+    uint16_t buffer_size_first = MIN_VAL(next_turning_point - offset, buffer_size);
+    MY_ASSERT(buffer_size_first <= buffer_size);
+#if STATEFUL
+    my_offset_q15_batched(buffer, -embedding_offset, buffer, buffer_size_first, enforce_states);
+#else
+    for (uint16_t j = BATCH_SIZE; j < buffer_size; j += BATCH_SIZE + 1) {
+        buffer[j] = (-embedding_offset > 0) ? 1 : -1;
+    }
+#endif
+    if (buffer_size_first != buffer_size) {
+        int16_t* to_offset = buffer + buffer_size_first;
+#if STATEFUL
+        my_offset_q15_batched(to_offset, embedding_offset, to_offset, buffer_size - buffer_size_first, enforce_states);
+#else
+        for (uint16_t j = BATCH_SIZE; j < buffer_size - buffer_size_first; j += BATCH_SIZE + 1) {
+            to_offset[j] = (embedding_offset > 0) ? 1 : -1;
+        }
+#endif
+    }
+    stop_cpu_counter();
+    return buffer_size_first;
+}
+#endif
+
+#if JAPARI
+// https://tjsw.medium.com/86f06ac768da
+template<uint8_t move_from, uint8_t batch_offset, std::enable_if_t<move_from < BATCH_SIZE>* = nullptr>
+static inline void move_filter(int16_t*) {}
+
+template<uint8_t move_from, uint8_t batch_offset, std::enable_if_t<move_from >= BATCH_SIZE>* = nullptr>
+static inline void move_filter(int16_t* filter) {
+    const uint8_t move_to = move_from/BATCH_SIZE*(BATCH_SIZE+1)+batch_offset;
+    filter[move_to] = filter[move_from];
+    move_filter<move_from-1, (batch_offset >= 1) ? (batch_offset-1) : (BATCH_SIZE-1)>(filter);
+}
+
+template<uint8_t offset>
+static inline void clear_filter(int16_t* filter) {
+    filter[offset] = 0;
+    clear_filter<offset-(BATCH_SIZE+1)>(filter);
+}
+
+template<>
+inline void clear_filter<BATCH_SIZE>(int16_t* filter) {
+    filter[BATCH_SIZE] = 0;
+}
+
+void move_weights(int16_t* filter_ptr, bool exact_tile, int16_t values_to_preserve, int16_t tile_width) {
+    // move loaded filters around to create zeros for footprint kernels
+    start_cpu_counter(&Counters::embedding);
+    if (!exact_tile) {
+        int16_t move_offset = values_to_preserve - tile_width;
+        int16_t cur_remaining = values_to_preserve % (BATCH_SIZE + 1);
+        for (int16_t move_dest = values_to_preserve - 1; move_dest >= 0; move_dest--) {
+            if (cur_remaining == 0) {
+                filter_ptr[move_dest] = 0;
+                move_offset--;
+                cur_remaining = BATCH_SIZE;
+                continue;
+            }
+            filter_ptr[move_dest] = filter_ptr[move_dest - move_offset];
+            cur_remaining--;
+        }
+    } else {
+        const uint8_t last_elem = OP_FILTERS-1;
+        move_filter<last_elem, last_elem % BATCH_SIZE>(filter_ptr);
+        clear_filter<last_elem/(BATCH_SIZE+1)*(BATCH_SIZE+1)+BATCH_SIZE>(filter_ptr);
+    }
+    stop_cpu_counter();
+}
+#endif
