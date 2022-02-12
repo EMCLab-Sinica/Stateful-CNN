@@ -48,14 +48,3 @@ void PORT1_IRQHandler(void)
 
     button_pushed(status & GPIO_PIN1, status & GPIO_PIN4);
 }
-
-/* Timer_A UpMode Configuration Parameter */
-static const Timer_A_UpModeConfig upConfig = {
-    .clockSource = TIMER_A_CLOCKSOURCE_SMCLK,
-    .clockSourceDivider = TIMER_A_CLOCKSOURCE_DIVIDER_32,
-    // SMCLK is 12MHz (from CS_getSMCLK()), so 1ms has 12M / 32 / 1000 = 375 ticks
-    .timerPeriod = TIMER_PERIOD,
-    .timerInterruptEnable_TAIE = TIMER_A_TAIE_INTERRUPT_DISABLE,
-    .captureCompareInterruptEnable_CCR0_CCIE = TIMER_A_CCIE_CCR0_INTERRUPT_ENABLE,
-    .timerClear = TIMER_A_DO_CLEAR
-};
