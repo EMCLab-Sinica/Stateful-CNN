@@ -297,8 +297,9 @@ void handle_add(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     float_to_scale_params(&scaleFract, &shift, 1.0f*Y->scale/X->scale);
     my_scale_q15(buffer_b, scaleFract, shift, buffer_b, buffer_size);
 
-    for (uint16_t idx = data_offset / buffer_size; idx < X->dims[2]; idx++) {
-        uint16_t cur_buffer_size = MIN_VAL(buffer_size, X->dims[1] * X->dims[2] - data_offset);
+    uint16_t idx = data_offset / buffer_size;
+    uint16_t cur_buffer_size = buffer_size - (data_offset - idx * buffer_size);
+    for (; idx < X->dims[2]; idx++) {
         my_printf_debug("data_offset=%d" NEWLINE, data_offset);
         my_memcpy_from_param(model, buffer_a, X, data_offset, cur_buffer_size * sizeof(int16_t));
 #if STATEFUL
@@ -310,7 +311,7 @@ void handle_add(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
         dump_matrix_debug(buffer_a, cur_buffer_size, ValueInfo(output), false);
 #endif
 
-        my_add_q15(buffer_a, buffer_b, buffer_a, cur_buffer_size);
+        my_add_q15(buffer_a, buffer_b + (buffer_size - cur_buffer_size), buffer_a, cur_buffer_size);
         my_printf_debug("After add" NEWLINE);
         dump_matrix_debug(buffer_a, cur_buffer_size, ValueInfo(output), false);
 
@@ -326,6 +327,7 @@ void handle_add(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 #if HAWAII
         write_hawaii_layer_footprint(model->layer_idx, cur_buffer_size/BATCH_SIZE*BATCH_SIZE);
 #endif
+        cur_buffer_size = buffer_size;
     }
 
     flip_state_bit(model, output);
