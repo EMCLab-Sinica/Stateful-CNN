@@ -81,6 +81,7 @@ void my_memcpy_from_parameters(void *dest, const ParameterInfo *param, uint32_t 
 void read_from_nvm(void* vm_buffer, uint32_t nvm_offset, size_t n) {
     SPI_ADDR addr;
     addr.L = nvm_offset;
+    MY_ASSERT(n <= 1024);
     SPI_READ(&addr, reinterpret_cast<uint8_t*>(vm_buffer), n);
 }
 

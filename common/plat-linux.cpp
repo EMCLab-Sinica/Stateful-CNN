@@ -173,10 +173,12 @@ void my_memcpy_from_parameters(void *dest, const ParameterInfo *param, uint32_t 
 }
 
 void read_from_nvm(void *vm_buffer, uint32_t nvm_offset, size_t n) {
+    MY_ASSERT(n <= 1024);
     my_memcpy_ex(vm_buffer, nvm + nvm_offset, n, 0);
 }
 
 void write_to_nvm(const void *vm_buffer, uint32_t nvm_offset, size_t n, uint16_t timer_delay) {
+    MY_ASSERT(n <= 1024);
     check_nvm_write_address(nvm_offset, n);
     my_memcpy_ex(nvm + nvm_offset, vm_buffer, n, 1);
     if (dma_counter_enabled) {
