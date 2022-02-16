@@ -109,6 +109,8 @@ int main(void) {
     return 1;
   }
 
+  printf("ir version %" PRId64 "\n", msg->ir_version);
+
   for (i = 0; i < msg->n_opset_import; i++) {
       Onnx__OperatorSetIdProto *opset_import = msg->opset_import[i];
       if (!strlen(opset_import->domain)) {
