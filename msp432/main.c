@@ -18,6 +18,9 @@ void main(void)
 
     prvSetupHardware();
 
+    MAP_GPIO_setAsOutputPin( GPIO_PORT_P1, GPIO_PIN0 );
+    MAP_GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN0);
+
     IntermittentCNNTest();
 }
 
