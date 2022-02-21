@@ -106,7 +106,9 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         my_memcpy_to_param(output, output_offset, vals, cur_tile_size*sizeof(int16_t), 0);
         output_offset += cur_tile_size;
 #if HAWAII
-        write_hawaii_layer_footprint(model->layer_idx, cur_tile_size/BATCH_SIZE*BATCH_SIZE);
+        for (int8_t to_record = cur_tile_size; to_record > 0; to_record -= BATCH_SIZE) {
+            write_hawaii_layer_footprint(model->layer_idx, BATCH_SIZE);
+        }
 #endif
     }
 
