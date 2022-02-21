@@ -6,6 +6,7 @@
 #include "my_dsplib.h"
 #include "cnn_common.h"
 #include "platform.h"
+#include "counters.h"
 
 // Not using DSPLIB_DATA here as it does not work under C++ (?)
 #ifdef __MSP430__
@@ -78,7 +79,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 
     uint16_t cur_chunk_len;
 #if INDIRECT_RECOVERY
-    start_cpu_counter(&Counters::state_query);
+    start_cpu_counter(offsetof(Counters, state_query));
     dump_turning_points_debug(model, param);
 
     state_bit = get_state_bit(model, param->slot);
@@ -105,7 +106,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
     for (uint32_t offset = start_offset; offset < params_len; offset += cur_chunk_len) {
         cur_chunk_len = MIN_VAL(chunk_len, params_len - offset);
 #if INDIRECT_RECOVERY
-        start_cpu_counter(&Counters::state_query);
+        start_cpu_counter(offsetof(Counters, state_query));
         uint8_t next_state_flipped = 0;
         // Use <= here as turning_point_idx is actually index for the _next_ turning point
         if (next_turning_point != INVALID_TURNING_POINT && turning_point_idx <= cur_slot_info->n_turning_points) {
@@ -122,7 +123,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
         MY_ASSERT(cur_chunk_len != 0);
         chunk_handler(offset, cur_chunk_len, state_bit, params);
 #if INDIRECT_RECOVERY
-        start_cpu_counter(&Counters::state_query);
+        start_cpu_counter(offsetof(Counters, state_query));
         if (next_state_flipped) {
             state_bit = -state_bit;
         }
@@ -133,7 +134,7 @@ void iterate_chunks(Model *model, const ParameterInfo *param, uint16_t start_off
 
 #if INDIRECT_RECOVERY
 void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, uint16_t* p_next_turning_point, SlotInfo** p_slot_info, uint32_t initial_value_idx, Model* model, const ParameterInfo* param) {
-    start_cpu_counter(&Counters::state_query);
+    start_cpu_counter(offsetof(Counters, state_query));
     my_printf_debug("Initialize next_turning_point from data offset %d" NEWLINE, initial_value_idx);
     *p_offset = get_state_bit(model, param->slot)*0x4000;
     *p_turning_point_idx = 0;
@@ -160,7 +161,7 @@ void find_initial_state_bit(int16_t* p_offset, uint8_t* p_turning_point_idx, uin
 }
 
 void check_next_turning_point(int16_t& offset, uint8_t& turning_point_idx, uint16_t& next_turning_point, SlotInfo* slot_info, uint16_t value_idx) {
-    start_cpu_counter(&Counters::state_query);
+    start_cpu_counter(offsetof(Counters, state_query));
     uint8_t next_turning_point_found = 0;
     if (next_turning_point == INVALID_TURNING_POINT || value_idx < next_turning_point) {
         goto exit;
@@ -243,7 +244,7 @@ void my_offset_q15_batched(const int16_t *pSrc, int16_t offset, int16_t *pDst, u
 
 #if INDIRECT_RECOVERY
 uint16_t update_states(int16_t* buffer, uint16_t buffer_size, uint32_t offset, int16_t embedding_offset, uint16_t next_turning_point, bool enforce_states) {
-    start_cpu_counter(&Counters::embedding);
+    start_cpu_counter(offsetof(Counters, embedding));
     uint16_t buffer_size_first = MIN_VAL(next_turning_point - offset, buffer_size);
     MY_ASSERT(buffer_size_first <= buffer_size);
 #if STATEFUL
@@ -293,7 +294,7 @@ inline void clear_filter<BATCH_SIZE>(int16_t* filter) {
 
 void move_weights(int16_t* filter_ptr, bool exact_tile, int16_t values_to_preserve, int16_t tile_width) {
     // move loaded filters around to create zeros for footprint kernels
-    start_cpu_counter(&Counters::embedding);
+    start_cpu_counter(offsetof(Counters, embedding));
     if (!exact_tile) {
         int16_t move_offset = values_to_preserve - tile_width;
         int16_t cur_remaining = values_to_preserve % (BATCH_SIZE + 1);

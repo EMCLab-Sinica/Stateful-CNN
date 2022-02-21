@@ -6,6 +6,17 @@
 
 #define PLAT_LABELS_DATA_LEN 1
 
+#ifdef __MSP430__
+#include <DSPLib.h>
+static inline void plat_start_cpu_counter(void) {
+    msp_benchmarkStart(MSP_BENCHMARK_BASE, 1);
+}
+
+static inline uint32_t plat_stop_cpu_counter(void) {
+    return msp_benchmarkStop(MSP_BENCHMARK_BASE);
+}
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

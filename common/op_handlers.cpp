@@ -1,5 +1,7 @@
+#include <cstddef>
 #include <cstdint>
 #include "cnn_common.h"
+#include "counters.h"
 #include "data.h"
 #include "op_utils.h"
 #include "my_debug.h"
@@ -56,7 +58,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         my_memcpy_from_param(model, vals, X, output_offset, cur_tile_size*sizeof(int16_t));
 
 #if STATEFUL
-        start_cpu_counter(&Counters::stripping);
+        start_cpu_counter(offsetof(Counters, stripping));
         for (uint8_t j = 0; j < cur_tile_size; j++) {
             if (offset_has_state(output_offset+j)) {
                 strip_state(&vals[j]);
@@ -71,7 +73,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         }
 
 #if INDIRECT_RECOVERY
-        start_cpu_counter(&Counters::embedding);
+        start_cpu_counter(offsetof(Counters, embedding));
 #if STATEFUL
         const uint8_t embedding_shift = BATCH_SIZE;
 #else

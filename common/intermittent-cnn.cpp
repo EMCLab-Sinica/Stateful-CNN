@@ -5,6 +5,7 @@
 
 #include "intermittent-cnn.h"
 #include "cnn_common.h"
+#include "counters.h"
 #include "data.h"
 #include "my_debug.h"
 #include "my_dsplib.h"
@@ -117,7 +118,7 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     my_memcpy_from_param(model, lea_buffer, output_node, 0, buffer_len * sizeof(int16_t));
 
 #if STATEFUL
-    start_cpu_counter(&Counters::stripping);
+    start_cpu_counter(offsetof(Counters, stripping));
     for (uint8_t idx = BATCH_SIZE - 1; idx < buffer_len; idx += BATCH_SIZE) {
         strip_state(lea_buffer + idx);
     }
@@ -163,6 +164,8 @@ static uint32_t print_counters() {
         total += counters(i)->*MemPtr;
 #if MY_DEBUG >= MY_DEBUG_LAYERS
         my_printf("%12" PRIu32, counters(i)->*MemPtr);
+#else
+        break;
 #endif
     }
     my_printf(" total=%12" PRIu32, total);
@@ -291,7 +294,7 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
 
 void flip_state_bit(Model *model, const ParameterInfo *output) {
 #if INDIRECT_RECOVERY
-    start_cpu_counter(&Counters::table_updates);
+    start_cpu_counter(offsetof(Counters, table_updates));
 
 #if JAPARI
     MY_ASSERT(has_footprints(output));
@@ -481,7 +484,7 @@ static uint32_t job_index_to_offset_inner(const ParameterInfo* output, uint16_t 
 
 uint32_t job_index_to_offset(const ParameterInfo *output, uint16_t job_index) {
     uint32_t ret;
-    start_cpu_counter(&Counters::progress_seeking);
+    start_cpu_counter(offsetof(Counters, progress_seeking));
     ret = job_index_to_offset_inner(output, job_index);
     stop_cpu_counter();
     return ret;
@@ -504,7 +507,7 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
         return 0;
     }
 
-    start_cpu_counter(&Counters::progress_seeking);
+    start_cpu_counter(offsetof(Counters, progress_seeking));
 
     // recovery from state bits
     uint32_t end_job_index = output->params_len / 2;

@@ -9,8 +9,6 @@
 #  include "plat-linux.h"
 #endif
 
-#define ENABLE_COUNTERS 0
-
 struct ParameterInfo;
 struct Model;
 struct Counters;
@@ -35,14 +33,4 @@ uint64_t get_nvm_writes(void);
 void write_hawaii_layer_footprint(uint16_t layer_idx, int16_t n_jobs);
 uint16_t read_hawaii_layer_footprint(uint16_t layer_idx);
 void reset_hawaii_layer_footprint(uint16_t layer_idx);
-#endif
-void plat_start_cpu_counter(void);
-uint32_t plat_stop_cpu_counter(void);
-#if ENABLE_COUNTERS
-// pointer to member https://stackoverflow.com/questions/670734/pointer-to-class-data-member
-void start_cpu_counter(uint32_t Counters::* mem_ptr);
-void stop_cpu_counter(void);
-#else
-#define start_cpu_counter(mem_ptr)
-#define stop_cpu_counter()
 #endif

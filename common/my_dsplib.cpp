@@ -7,6 +7,7 @@
 #endif
 
 #include "cnn_common.h"
+#include "counters.h"
 #include "my_dsplib.h"
 #include "platform.h"
 #include "my_debug.h"

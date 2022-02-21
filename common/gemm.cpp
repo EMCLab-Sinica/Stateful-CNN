@@ -1,5 +1,6 @@
 #include <cstdint>
 #include "cnn_common.h"
+#include "counters.h"
 #include "data.h"
 #include "platform.h"
 #include "my_debug.h"
@@ -40,7 +41,7 @@ void GemmInputChunkHandler(uint32_t offset, uint16_t real_chunk_len, int8_t stat
 }
 
 void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
-    const ParameterInfo *A = input[0], *B = input[1], *C = input[2];
+    const ParameterInfo *A = input[0], *B = input[1], *matC = input[2];
     const NodeFlags* flags = &node->flags;
 
     my_printf_debug("Gemm! A: (%dx%d), B: (%dx%d)" NEWLINE,
@@ -107,7 +108,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         }
 
 #if STATEFUL
-        start_cpu_counter(&Counters::stripping);
+        start_cpu_counter(offsetof(Counters, stripping));
         GemmInputChunkHandlerParams params{buffer_a, i};
         iterate_chunks(model, A, i, tile_channels, GemmInputChunkHandler, &params);
         stop_cpu_counter();
@@ -156,7 +157,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     filter_ptr[idx] = param_state_bit(model, output, output_offset);
                 } else {
                     if (tile == 0) {
-                        filter_ptr[idx] = -static_cast<int32_t>(get_q15_param(model, C, bias_offset + j)) / A->scale;
+                        filter_ptr[idx] = -static_cast<int32_t>(get_q15_param(model, matC, bias_offset + j)) / A->scale;
                     }
                     bias_offset++;
                     processed_biases++;
@@ -165,7 +166,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #else
             if (tile == 0) {
                 for (uint16_t idx = 0; idx < values_to_preserve; idx++) {
-                    filter_ptr[idx] = -static_cast<int32_t>(get_q15_param(model, C, idx + j)) / A->scale;
+                    filter_ptr[idx] = -static_cast<int32_t>(get_q15_param(model, matC, idx + j)) / A->scale;
                 }
             }
 #endif
@@ -251,7 +252,7 @@ void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
         for (uint16_t tile = 0; tile < n_tiles; tile++) {
             my_memcpy_from_param(model, buffer_temp, input[0], tile * output_len + merge_offset, cur_tile_size * sizeof(int16_t));
 #if STATEFUL
-            start_cpu_counter(&Counters::stripping);
+            start_cpu_counter(offsetof(Counters, stripping));
             for (uint16_t idx = BATCH_SIZE - 1; idx < cur_tile_size; idx += BATCH_SIZE) {
                 strip_state(buffer_temp + idx);
             }
@@ -263,7 +264,7 @@ void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
         }
 
 #if INDIRECT_RECOVERY
-        start_cpu_counter(&Counters::embedding);
+        start_cpu_counter(offsetof(Counters, embedding));
         OutputChunkHandlerParams params;
         params.buffer = buffer_gemm;
         params.buffer_offset = merge_offset;

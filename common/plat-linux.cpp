@@ -2,6 +2,7 @@
 
 #include "intermittent-cnn.h"
 #include "cnn_common.h"
+#include "counters.h"
 #include "my_debug.h"
 #include "platform.h"
 #include "platform-private.h"
@@ -32,7 +33,11 @@ static std::ofstream out_file;
 
 static Counters counters_data[COUNTERS_LEN];
 Counters *counters(uint16_t idx) {
+#if MY_DEBUG >= MY_DEBUG_LAYERS
     return counters_data + idx;
+#else
+    return counters_data;
+#endif
 }
 
 #ifdef USE_PROTOBUF

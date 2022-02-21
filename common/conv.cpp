@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <cinttypes> // for PRId32
 #include "cnn_common.h"
+#include "counters.h"
 #include "data.h"
 #include "my_debug.h"
 #include "op_utils.h"
@@ -90,7 +91,7 @@ int16_t * const matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
 
 #if INDIRECT_RECOVERY
 static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filters, uint16_t len, uint8_t first_round) {
-    start_cpu_counter(&Counters::embedding);
+    start_cpu_counter(offsetof(Counters, embedding));
     MY_ASSERT(len < OUTPUT_LEN);
 #if STATEFUL
     int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + n_filters * conv_params->filter_offset;
@@ -191,7 +192,7 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
                 }
             }
 #if STATEFUL
-            start_cpu_counter(&Counters::embedding);
+            start_cpu_counter(offsetof(Counters, embedding));
             if (conv_params->real_conv_input->slot == SLOT_TEST_SET) {
                 my_scale_q15(filter_tmp, 0x4000, 0, filter_tmp, conv_params->filter_offset);
             }
@@ -464,7 +465,7 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         }
 
 #if STATEFUL
-        start_cpu_counter(&Counters::stripping);
+        start_cpu_counter(offsetof(Counters, stripping));
         if (conv_params->real_conv_input->slot != SLOT_TEST_SET) {
             // stripping states inside the h loop is faster as biases multipliers can be skipped
             int16_t *input_row_end = orig_dest_addr + input_row_len;
@@ -842,7 +843,7 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
                 uint16_t cur_input_offset = input_tile_c_index * tiling_results_len + input_offset;
                 my_memcpy_from_param(model, to_add, data, cur_input_offset, real_chunk_len * sizeof(int16_t));
 #if STATEFUL
-                start_cpu_counter(&Counters::stripping);
+                start_cpu_counter(offsetof(Counters, stripping));
                 ConvMergeInputChunkHandlerParams params({to_add, cur_input_offset});
                 iterate_chunks(model, data, cur_input_offset, real_chunk_len, ConvMergeInputChunkHandler, &params);
                 stop_cpu_counter();

@@ -19,11 +19,15 @@
 #include "Tools/dvfs.h"
 
 #ifdef __MSP430__
-#pragma DATA_SECTION(".nvm2")
+#pragma DATA_SECTION(".nvm")
 #endif
 static Counters counters_data[COUNTERS_LEN];
 Counters *counters(uint16_t idx) {
+#if MY_DEBUG >= MY_DEBUG_LAYERS
     return counters_data + idx;
+#else
+    return counters_data;
+#endif
 }
 
 #ifdef __MSP430__
@@ -177,13 +181,3 @@ void notify_model_finished(void) {
     my_printf("." NEWLINE);
     GPIO_toggleOutputOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
 }
-
-#ifdef __MSP430__
-void plat_start_cpu_counter(void) {
-    msp_benchmarkStart(MSP_BENCHMARK_BASE, 1);
-}
-
-uint32_t plat_stop_cpu_counter(void) {
-    return msp_benchmarkStop(MSP_BENCHMARK_BASE);
-}
-#endif

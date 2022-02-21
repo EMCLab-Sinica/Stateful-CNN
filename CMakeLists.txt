@@ -95,6 +95,7 @@ set (intermittent_cnn_SOURCES
     ${COMMON_SRC_PATH}/op_handlers.cpp
     ${COMMON_SRC_PATH}/op_utils.cpp
     ${COMMON_SRC_PATH}/conv.cpp
+    ${COMMON_SRC_PATH}/counters.cpp
     ${COMMON_SRC_PATH}/gemm.cpp
     ${COMMON_SRC_PATH}/pooling.cpp
     ${COMMON_SRC_PATH}/cnn_common.cpp
