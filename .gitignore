@@ -10,7 +10,7 @@
 /nvm.bin
 /samples.bin
 /images/
-/data/others.txt
+/data/*.txt
 
 # CCS-generated files
 .launches/
