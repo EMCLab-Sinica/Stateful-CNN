@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <cstdint>
 #include <cinttypes> // for PRId32
 #include "cnn_common.h"
@@ -91,7 +92,6 @@ int16_t * const matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
 
 #if INDIRECT_RECOVERY
 static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filters, uint16_t len, uint8_t first_round) {
-    start_cpu_counter(offsetof(Counters, embedding));
     MY_ASSERT(len < OUTPUT_LEN);
 #if STATEFUL
     int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + n_filters * conv_params->filter_offset;
@@ -121,7 +121,6 @@ static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filte
         }
     }
 #endif
-    stop_cpu_counter();
 }
 #endif
 
@@ -141,10 +140,12 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
     channel_offset_c = extend_for_footprints(channel_offset_c);
 #endif
 #if STATEFUL
+    start_cpu_counter(offsetof(Counters, memory_layout));
     if (conv_params->output_padding) {
         values_to_preserve += conv_params->output_padding;
         n_filters = padding_for_lea(values_to_preserve);
     }
+    stop_cpu_counter();
 #endif
     uint16_t output_h = (cur_input_h - conv_params->input_h_first) / conv_params->stride,
              output_w = (conv_params->input_w - conv_params->input_w_first) / conv_params->stride;
@@ -156,6 +157,7 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
              channel_offset_c;                                                                                                  // c
 
 #if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, embedding));
     SlotInfo *cur_slot_info = conv_params->cur_slot_info;
     int16_t n_keep_state_bits = n_filters;
     if (conv_params->turning_point_idx <= cur_slot_info->n_turning_points && conv_params->next_turning_point != INVALID_TURNING_POINT) {
@@ -167,6 +169,7 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
     }
     my_printf_debug("n_keep_state_bits = %d" NEWLINE, n_keep_state_bits);
     MY_ASSERT(n_keep_state_bits >= 0);
+    stop_cpu_counter();
 #endif
 
     /* copy filter data */
@@ -215,15 +218,14 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
                 if (conv_params->conv_bias) {
                     bias_val = -static_cast<int32_t>(get_q15_param(conv_params->model, conv_params->conv_bias, conv_params->filter_idx + idx)) / conv_params->conv_input->scale;
                 }
-#if !STATEFUL
-                filter_tmp[conv_params->filter_offset - 1] = bias_val;
-#else
+#if STATEFUL
+                start_cpu_counter(offsetof(Counters, embedding));
                 if (conv_params->real_conv_input->slot == SLOT_TEST_SET) {
-                    filter_tmp[conv_params->filter_offset - 1] += bias_val / 2;
-                } else {
-                    filter_tmp[conv_params->filter_offset - 1] += bias_val;
+                    bias_val /= 2;
                 }
+                stop_cpu_counter();
 #endif
+                filter_tmp[conv_params->filter_offset - 1] += bias_val;
             }
 
             uint16_t channel = idx;
@@ -245,19 +247,23 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
 #endif
 
 #if STATEFUL
+        start_cpu_counter(offsetof(Counters, memory_layout));
         if (conv_params->output_padding) {
             conv_params->filter_buffer_addr[n_filters * conv_params->filter_offset - 1] = -((n_filters - 1 < n_keep_state_bits) ? -conv_params->old_output_offset : conv_params->old_output_offset);
         }
+        stop_cpu_counter();
 #endif
 
         conv_params->cached_filter_idx = conv_params->filter_idx;
         conv_params->cached_input_tile_c_offset = conv_params->input_tile_c_offset;
     } else {
 #if INDIRECT_RECOVERY
+        start_cpu_counter(offsetof(Counters, embedding));
         if (n_keep_state_bits != n_filters) {
             int16_t n_flip_state_bits = n_filters - n_keep_state_bits;
             flip_filter_state_bits(conv_params, n_filters, n_flip_state_bits, 1);
         }
+        stop_cpu_counter();
 #endif
     }
 
@@ -274,6 +280,9 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
 #if !STATEFUL
     my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results,
                       conv_params->output, cur_output_data_offset, values_to_preserve, 0, 0);
+#if JAPARI
+    counters(conv_params->model->layer_idx)->preservation += (values_to_preserve-n_filters)*(4*8);
+#endif
 #else
     my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results,
                       conv_params->output, cur_output_data_offset, values_to_preserve,
@@ -313,13 +322,17 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
 #endif
 
 #if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, embedding));
     if (n_keep_state_bits != n_filters) {
+        start_cpu_counter(offsetof(Counters, state_query));
         check_next_turning_point(conv_params->old_output_offset, conv_params->turning_point_idx,
                                  conv_params->next_turning_point, conv_params->cur_slot_info, cur_output_data_offset + conv_params->OUTPUT_CHANNEL);
+        stop_cpu_counter();
         my_printf_debug("old_output_offset flipped to %d" NEWLINE, conv_params->old_output_offset);
 
         flip_filter_state_bits(conv_params, n_filters, n_keep_state_bits, 0);
     }
+    stop_cpu_counter();
 #endif
 }
 
@@ -332,6 +345,7 @@ static inline uint16_t load_input_vector(uint32_t src_addr, int16_t* dest_addr, 
     MY_ASSERT(len != 0);
 
 #if JAPARI
+    counters(conv_params->model->layer_idx)->preservation += (len/2)*(4*8);
     if (conv_params->conv_input_has_footprints) {
         memcpy_dest_addr = input_buffer_with_footprints;
     } else
@@ -345,6 +359,7 @@ static inline uint16_t load_input_vector(uint32_t src_addr, int16_t* dest_addr, 
         conv_params->real_conv_input, src_addr,
         len * sizeof(int16_t));
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, stripping));
     if (conv_params->conv_input_has_footprints) {
         // Use nested loops as skipping footprints by `% (BATCH_SIZE)` is quite slow on boards
         int16_t *dest_ptr = dest_addr,
@@ -359,6 +374,7 @@ static inline uint16_t load_input_vector(uint32_t src_addr, int16_t* dest_addr, 
         }
         loaded_len = dest_ptr - dest_addr;
     }
+    stop_cpu_counter();
 #endif
 
 #if MY_DEBUG >= MY_DEBUG_VERBOSE
@@ -430,10 +446,12 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
         cur_input_channel /= 2;
     }
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, embedding));
     if (conv_params->conv_input_has_footprints) {
         cur_input_tile_c = extend_for_footprints(cur_input_tile_c);
         cur_input_channel = extend_for_footprints(cur_input_channel);
     }
+    stop_cpu_counter();
 #endif
     int16_t input_src_offset = h_start * conv_params->W * cur_input_channel + w_start * cur_input_channel;
 #if JAPARI
@@ -550,22 +568,28 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     conv_params->OUTPUT_W = (conv_params->input_w_last - conv_params->input_w_first) / conv_params->stride + 1;
 
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, stripping));
     conv_params->force_align_footprints = (OUTPUT_CHANNEL % BATCH_SIZE != 0);
     OUTPUT_CHANNEL = extend_for_footprints(OUTPUT_CHANNEL, conv_params->force_align_footprints);
-    if (has_footprints(conv_input)) {
+    bool need_skipping = has_footprints(conv_input);
+    if (need_skipping) {
         conv_params->n_tiles_c = CHANNEL / (BATCH_SIZE + 1) * BATCH_SIZE / conv_params->flags->extra.conv.input_tile_c;
-    } else
+    }
+    stop_cpu_counter();
+    if (!need_skipping)
 #endif
     {
         conv_params->n_tiles_c = CHANNEL / conv_params->flags->extra.conv.input_tile_c;
     }
 #if STATEFUL
+    start_cpu_counter(offsetof(Counters, memory_layout));
     if (conv_params->flags->extra.conv.output_tile_c % BATCH_SIZE) {
         conv_params->output_padding = BATCH_SIZE - conv_params->flags->extra.conv.output_tile_c % BATCH_SIZE;
     } else {
         conv_params->output_padding = 0;
     }
     OUTPUT_CHANNEL += conv_params->output_padding;
+    stop_cpu_counter();
 #endif
     my_printf_debug("input_tile_c=%d, output_tile_c=%d" NEWLINE, conv_params->flags->extra.conv.input_tile_c, conv_params->flags->extra.conv.output_tile_c);
 
@@ -580,9 +604,11 @@ void alloc_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
     output->param_flags &= ~SEPARATE_TILING;
     output->scale = conv_input->scale * conv_filter->scale;
 #if STATEFUL
+    start_cpu_counter(offsetof(Counters, embedding));
     if (conv_input->slot == SLOT_TEST_SET) {
         output->scale *= 2;
     }
+    stop_cpu_counter();
 #endif
 }
 
@@ -609,7 +635,9 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     conv_params->H = H;
     conv_params->W = W;
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, stripping));
     conv_params->conv_input_has_footprints = has_footprints(conv_input);
+    stop_cpu_counter();
 #endif
 
     conv_params->CHANNEL = CHANNEL;
@@ -623,22 +651,26 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     conv_params->filter_tile_index = 0;
     conv_params->filter_idx = 0;
 #if INTERMITTENT
-
+    start_cpu_counter(offsetof(Counters, progress_seeking));
     uint32_t first_unfinished_job_idx = run_recovery(model, output);
     uint32_t first_unfinished_value_offset = batch_start(job_index_to_offset(output, first_unfinished_job_idx));
 
     fix_first_unfinished_value_offset(model, &first_unfinished_value_offset);
 
 #if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, state_query));
     find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point,
                            &conv_params->cur_slot_info, job_index_to_offset(output, first_unfinished_job_idx), model, output);
+    stop_cpu_counter();
 
     my_printf_debug("old_output_offset = %d" NEWLINE, conv_params->old_output_offset);
 #endif
 
     uint16_t cur_output_tile_c = conv_params->flags->extra.conv.output_tile_c;
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, embedding));
     cur_output_tile_c = extend_for_footprints(cur_output_tile_c, conv_params->force_align_footprints);
+    stop_cpu_counter();
 #endif
     uint16_t slice_size_input_channel_tiling = conv_params->OUTPUT_W * conv_params->OUTPUT_H * conv_params->OUTPUT_CHANNEL;
 
@@ -651,13 +683,17 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     conv_params->filter_idx = conv_params->filter_tile_index * conv_params->flags->extra.conv.output_tile_c;
 
 #if STATEFUL
+    start_cpu_counter(offsetof(Counters, memory_layout));
     uint8_t filter_offset_in_tile = first_unfinished_value_offset % (cur_output_tile_c + conv_params->output_padding);
+    stop_cpu_counter();
 #else
     uint8_t filter_offset_in_tile = first_unfinished_value_offset % cur_output_tile_c;
 #endif
 
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, embedding));
     filter_offset_in_tile = filter_offset_in_tile / (BATCH_SIZE + 1) * BATCH_SIZE;
+    stop_cpu_counter();
 #endif
     conv_params->filter_idx += filter_offset_in_tile;
     first_unfinished_value_offset /= conv_params->OUTPUT_CHANNEL;
@@ -673,19 +709,24 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     my_printf_debug("initial output C = %d" NEWLINE, conv_params->filter_idx);
     // = happens when all values are finished
     MY_ASSERT(conv_params->input_tile_c_index <= conv_params->n_tiles_c);
+    stop_cpu_counter();
 #endif
 
     int16_t input_channels = conv_input->dims[1];
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, stripping));
     if (conv_params->conv_input_has_footprints) {
         input_channels = input_channels / (BATCH_SIZE + 1) * BATCH_SIZE;
     }
+    stop_cpu_counter();
 #endif
     for (; conv_params->input_tile_c_offset < input_channels; conv_params->input_tile_c_offset += conv_params->flags->extra.conv.input_tile_c) {
         conv_params->cur_input_tile_c = MIN_VAL(conv_params->flags->extra.conv.input_tile_c, input_channels - conv_params->input_tile_c_offset);
         conv_params->cur_filter_tile_c = conv_params->cur_input_tile_c;
 #if JAPARI
+        start_cpu_counter(offsetof(Counters, embedding));
         conv_params->input_tile_c_offset_with_footprints = extend_for_footprints(conv_params->input_tile_c_offset);
+        stop_cpu_counter();
 #endif
         my_printf_debug("cur_input_tile_c = %d" NEWLINE, conv_params->cur_input_tile_c);
         conv_params->dest_offset = conv_params->kW * conv_params->cur_input_tile_c;
@@ -716,26 +757,36 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             }
             conv_params->filter_idx = conv_params->filter_tile_index * conv_params->flags->extra.conv.output_tile_c;
 #if INDIRECT_RECOVERY
+            start_cpu_counter(offsetof(Counters, state_query));
             uint32_t new_output_offset = conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W;
 #if JAPARI
+            start_cpu_counter(offsetof(Counters, embedding));
             new_output_offset += extend_for_footprints(conv_params->filter_idx);
+            stop_cpu_counter();
 #else
             new_output_offset += conv_params->filter_idx;
 #endif
             find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point, &conv_params->cur_slot_info,
                                    new_output_offset, model, output);
+            stop_cpu_counter();
 #endif
         }
         conv_params->filter_idx = conv_params->filter_tile_index = 0;
 
         conv_params->input_tile_c_index++;
 #if INDIRECT_RECOVERY
+        start_cpu_counter(offsetof(Counters, state_query));
         find_initial_state_bit(&conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point, &conv_params->cur_slot_info,
                                conv_params->input_tile_c_index * conv_params->OUTPUT_CHANNEL * conv_params->OUTPUT_H * conv_params->OUTPUT_W, model, output);
+        stop_cpu_counter();
 #endif
     }
 
+#if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, table_updates));
     flip_state_bit(model, output);
+    stop_cpu_counter();
+#endif
 
     my_printf_debug("handle_conv output" NEWLINE);
     dump_params_nhwc_debug(model, output, node->output_name);
@@ -801,6 +852,7 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
     uint16_t chunk_len = OUTPUT_CHANNEL;
     uint16_t output_h = 0, output_w = 0, chunk_offset = 0;
 #if INTERMITTENT
+    start_cpu_counter(offsetof(Counters, progress_seeking));
     uint32_t first_unfinished_job_idx = run_recovery(model, output);
     uint32_t first_unfinished_value_offset = batch_start(job_index_to_offset(output, first_unfinished_job_idx));
 
@@ -812,6 +864,7 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
     output_w = first_unfinished_value_offset % OUTPUT_W;
     first_unfinished_value_offset /= OUTPUT_W;
     output_h = first_unfinished_value_offset;
+    stop_cpu_counter();
 #endif
 
     // Here IFM and OFM have different data layouts as I do the conversion in this handler
@@ -823,6 +876,7 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
                              chunk_offset; // NHWC
 
 #if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, state_query));
     int16_t old_embedding_offset;
     uint8_t output_turning_point_idx;
     uint16_t next_output_turning_point;
@@ -832,6 +886,7 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
                            &cur_output_slot_info, output_offset, model, output);
 
     my_printf_debug("old_embedding_offset = %d" NEWLINE, old_embedding_offset);
+    stop_cpu_counter();
 #endif
 
     for (; output_h < OUTPUT_H;) {
@@ -842,6 +897,9 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
                 int16_t *to_add = lea_buffer + input_tile_c_index * chunk_len;
                 uint16_t cur_input_offset = input_tile_c_index * tiling_results_len + input_offset;
                 my_memcpy_from_param(model, to_add, data, cur_input_offset, real_chunk_len * sizeof(int16_t));
+#if JAPARI
+                counters(model->layer_idx)->data_loading += (real_chunk_len/2)*(4*8);
+#endif
 #if STATEFUL
                 start_cpu_counter(offsetof(Counters, stripping));
                 ConvMergeInputChunkHandlerParams params({to_add, cur_input_offset});
@@ -858,9 +916,14 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
 #if INDIRECT_RECOVERY
 
 #if STATEFUL
+            start_cpu_counter(offsetof(Counters, embedding));
             update_states(lea_buffer, real_chunk_len, output_offset, old_embedding_offset, next_output_turning_point, true);
+            stop_cpu_counter();
+
+            start_cpu_counter(offsetof(Counters, state_query));
             check_next_turning_point(old_embedding_offset, output_turning_point_idx,
                                      next_output_turning_point, cur_output_slot_info, output_offset + real_chunk_len);
+            stop_cpu_counter();
 #elif JAPARI
             ConvMergeOutputChunkHandlerParams params({output_offset});
             iterate_chunks(model, output, output_offset, real_chunk_len, ConvMergeOutputChunkHandler, &params);
@@ -870,9 +933,10 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
             dump_matrix_debug(lea_buffer, real_chunk_len, ValueInfo(output));
 #endif
 
-#if JAPARI
-#endif
             my_memcpy_to_param(output, output_offset, lea_buffer, real_chunk_len * sizeof(int16_t), 0);
+#if JAPARI
+            counters(model->layer_idx)->preservation += (real_chunk_len/2)*(4*8);
+#endif
 #if HAWAII
             hawaii_record_footprints(model, real_chunk_len);
 #endif
@@ -887,7 +951,11 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
 
     my_printf_debug("After merging tiling results" NEWLINE);
 
+#if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, table_updates));
     flip_state_bit(model, output);
+    stop_cpu_counter();
+#endif
 
     dump_params_nhwc_debug(model, output, node->output_name);
 }

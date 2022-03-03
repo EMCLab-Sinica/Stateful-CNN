@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <cstdint>
 #include "data.h"
 #include "cnn_common.h"
@@ -116,10 +117,12 @@ static uint16_t maxpool_patch(MaxPoolParams *maxpool_params) {
 #endif
                 int16_t val = input_buffer[input_channel_offset];
 #if STATEFUL
+                start_cpu_counter(offsetof(Counters, stripping));
                 if (offset_has_state(maxpool_params->start_channel + input_channel_offset)) {
                     strip_state(&val);
                 }
                 val *= 2;
+                stop_cpu_counter();
 #endif
                 // dump_value_debug(model, maxpool_params->data, val_offset);
                 my_printf_debug("% 6d ", val);
@@ -176,6 +179,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     uint16_t output_offset = 0;
 
 #if INTERMITTENT
+    start_cpu_counter(offsetof(Counters, progress_seeking));
     uint32_t first_unfinished_value_offset = batch_start(job_index_to_offset(output, run_recovery(model, output)));
     if (first_unfinished_value_offset * sizeof(int16_t) == output->params_len) {
         // give up early, or initial_real_tile_c may be zero and results in SIGFPE
@@ -185,12 +189,14 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     uint16_t initial_c, initial_h, initial_w;
 
 #if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, state_query));
     int16_t offset;
     uint16_t next_output_turning_point;
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
     offset = -offset;
+    stop_cpu_counter();
 #endif
 
     output_offset = first_unfinished_value_offset;
@@ -213,6 +219,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
     my_printf_debug("initial_h = %d" NEWLINE, initial_h);
     my_printf_debug("initial_w = %d" NEWLINE, initial_w);
     my_printf_debug("initial_c = %d" NEWLINE, initial_c);
+    stop_cpu_counter();
 #endif
 
     {
@@ -228,7 +235,9 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                     len = maxpool_patch(maxpool_params);
                     my_printf_debug("output_offset=[% 5d, % 5d) ", output_offset, output_offset + len);
 #if INDIRECT_RECOVERY
+                    start_cpu_counter(offsetof(Counters, state_query));
                     check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
+                    stop_cpu_counter();
                     start_cpu_counter(offsetof(Counters, embedding));
 #if STATEFUL
                     my_scale_q15(lea_buffer, 0x4000, 0, lea_buffer, len * sizeof(int16_t));
@@ -263,7 +272,9 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 #endif
 
 #if STATEFUL
+            start_cpu_counter(offsetof(Counters, memory_layout));
             uint8_t cur_batch_offset = output_offset % BATCH_SIZE;
+            stop_cpu_counter();
 #endif
 
             uint8_t channel_stride = 1;
@@ -283,7 +294,9 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                     for (; output_w < maxpool_params->new_W; output_w++) {
 #if JAPARI
                         if (offset_has_state(output_offset)) {
+                            start_cpu_counter(offsetof(Counters, state_query));
                             check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
+                            stop_cpu_counter();
                             put_q15_param(output, output_offset, (offset == 0x4000 ? 1 : -1));
                             output_offset++;
                             continue;
@@ -298,13 +311,17 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                         }
                         my_printf_debug("output_offset=% 5d ", output_offset);
 #if STATEFUL
+                        start_cpu_counter(offsetof(Counters, embedding));
                         lea_buffer[0] /= 2;
                         if (cur_batch_offset == BATCH_SIZE - 1) {
+                            start_cpu_counter(offsetof(Counters, state_query));
                             check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
+                            stop_cpu_counter();
                             lea_buffer[0] += offset;
                             cur_batch_offset -= BATCH_SIZE;
                         }
                         cur_batch_offset++;
+                        stop_cpu_counter();
 #endif
                         my_printf_debug("max=% 6d " NEWLINE, lea_buffer[0]);
                         put_q15_param(output, output_offset, lea_buffer[0]);
@@ -329,7 +346,12 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 
 #if INTERMITTENT
 finished:
+#endif
+
+#if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, table_updates));
     flip_state_bit(model, output);
+    stop_cpu_counter();
 #endif
 
     my_printf_debug("handle_maxpool output" NEWLINE);
@@ -359,12 +381,14 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
     const ParameterInfo *data = input[0];
 
 #if STATEFUL
+    start_cpu_counter(offsetof(Counters, state_query));
     int16_t offset;
     uint16_t next_output_turning_point;
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, 0 /*TODO: first_unfinished_value_offset*/, model, output);
     offset = -offset;
+    stop_cpu_counter();
 #endif
 
     uint16_t CHANNEL = data->dims[1], H = data->dims[2], W = data->dims[3];
@@ -396,18 +420,26 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
             }
             output_val = total / len;
 #if STATEFUL
+            start_cpu_counter(offsetof(Counters, embedding));
             output_val /= 2;
             if (offset_has_state(output_channel)) {
+                start_cpu_counter(offsetof(Counters, state_query));
                 check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_channel);
+                stop_cpu_counter();
                 output_val += offset;
             }
+            stop_cpu_counter();
 #endif
         }
         put_q15_param(output, output_channel, output_val);
         output_channel++;
     }
 
+#if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, table_updates));
     flip_state_bit(model, output);
+    stop_cpu_counter();
+#endif
 
     dump_params_debug(model, output, node->output_name);
 }

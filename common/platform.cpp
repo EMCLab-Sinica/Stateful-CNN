@@ -148,10 +148,14 @@ Model* get_model(void) {
 
 void commit_model(void) {
     start_cpu_counter(offsetof(Counters, table_preservation));
+    commit_versioned_data<Model>(0);
+    // send finish signals only after the whole network has really finished
+#if ENABLE_COUNTERS
+    counters(model_vm.layer_idx)->power_counters++;
+#endif
     if (!model_vm.running) {
         notify_model_finished();
     }
-    commit_versioned_data<Model>(0);
     stop_cpu_counter();
 }
 

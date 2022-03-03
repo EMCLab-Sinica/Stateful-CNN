@@ -60,4 +60,6 @@ static inline int8_t get_value_state_bit(int16_t val) {
 int8_t param_state_bit(Model *model, const ParameterInfo *param, uint16_t offset);
 
 uint32_t run_recovery(Model *model, ParameterInfo *output);
+#if INDIRECT_RECOVERY
 void flip_state_bit(Model *model, const ParameterInfo *output);
+#endif

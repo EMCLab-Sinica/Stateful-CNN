@@ -10,6 +10,7 @@
 #include <cstring>
 #include "intermittent-cnn.h"
 #include "cnn_common.h"
+#include "counters.h"
 #include "platform.h"
 #include "platform-private.h"
 #include "data.h"
@@ -23,12 +24,15 @@
 #endif
 static Counters counters_data[COUNTERS_LEN];
 Counters *counters(uint16_t idx) {
-#if MY_DEBUG >= MY_DEBUG_LAYERS
+#if ENABLE_PER_LAYER_COUNTERS
     return counters_data + idx;
 #else
     return counters_data;
 #endif
 }
+#ifdef __MSP432__
+uint32_t last_cyccnt = 0;
+#endif
 
 #ifdef __MSP430__
 
@@ -135,6 +139,9 @@ void IntermittentCNNTest() {
     GPIO_setOutputLowOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
     GPIO_setAsInputPinWithPullUpResistor(GPIO_RESET_PORT, GPIO_RESET_PIN);
 
+    GPIO_setAsOutputPin( GPIO_PORT_P1, GPIO_PIN0 );
+    GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN0);
+
     // sleep to wait for external FRAM
     // 5ms / (1/f)
     our_delay_cycles(5E-3 * getFrequency(FreqLevel));
@@ -153,6 +160,7 @@ void IntermittentCNNTest() {
     if (!GPIO_getInputPinValue(GPIO_RESET_PORT, GPIO_RESET_PIN)) {
         uartinit();
 
+        // To get counters in NVM after intermittent tests
         print_all_counters();
 
         first_run();
@@ -164,6 +172,9 @@ void IntermittentCNNTest() {
         }
 
         my_printf("Done testing run" NEWLINE);
+
+        // For platforms where counters are recorded in VM (ex: MSP432)
+        print_all_counters();
 
         while (1);
     }
@@ -179,5 +190,8 @@ void button_pushed(uint16_t button1_status, uint16_t button2_status) {
 
 void notify_model_finished(void) {
     my_printf("." NEWLINE);
-    GPIO_toggleOutputOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
+    // Trigger a short peak so that multiple inferences in long power cycles are correctly recorded
+    GPIO_setOutputHighOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
+    our_delay_cycles(5E-3 * getFrequency(FreqLevel));
+    GPIO_setOutputLowOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
 }

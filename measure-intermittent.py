@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import sys
 import time
 import warnings
@@ -22,16 +23,17 @@ class DataHandler:
         self.verbose = verbose
 
     @staticmethod
-    def report(data):
+    def report(data, prefix=''):
         with_recharging, without_recharging, power_failures = data
-        print(f'With recharging: {with_recharging/1000:.4f}, without recharging: {without_recharging/1000:.4f}, power failures: {power_failures:.1f}')
+        # Recording timestamps for easier debugging of fluctuating experimental results (ex: comparing results with minicom)
+        print(f'[{datetime.datetime.now()}] {prefix}With recharging: {with_recharging:.4f}, without recharging: {without_recharging:.4f}, power failures: {power_failures:.1f}')
 
     def feed(self, data):
         cmd, arg = data[0], data[1:]
         if cmd == 'I':
             if self.verbose:
                 print(data)
-            with_recharging = int(arg)
+            with_recharging = int(arg)/1000
             if with_recharging < self.recharging:
                 # FIXME: why this occurs!?
                 warnings.warn(f'Incorrect recharging time! {with_recharging} < {self.recharging}')
@@ -39,21 +41,32 @@ class DataHandler:
                 self.power_failures = 0
                 return
             without_recharging = with_recharging - self.recharging
+
             last_one = (with_recharging, without_recharging, self.power_failures)
             self.report(last_one)
+
+            if len(self.last_n) >= 2:
+                _, without_recharging_mean, _ = np.mean(self.last_n, axis=0)
+                # Sometimes "inference complete" signals are missed (after state table for the last
+                # layer is updated and before the signal is sent), resulting in double or higher
+                # inference latency - ignore it
+                if without_recharging >= 1.5 * without_recharging_mean:
+                    warnings.warn('Detected an abnormal value (>= 1.5 avg)')
+                    self.recharging = 0
+                    self.power_failures = 0
+                    return
 
             self.last_n.append(last_one)
             if len(self.last_n) > self.N:
                 self.last_n.pop(0)
-            print(f'Average of last {len(self.last_n)}: ', end='')
-            self.report(np.mean(self.last_n, axis=0))
+            self.report(np.mean(self.last_n, axis=0), prefix=f'Average of last {len(self.last_n)}: ')
 
             self.recharging = 0
             self.power_failures = 0
         elif cmd == 'R':
             if self.verbose:
                 print(data, end=' ', flush=True)
-            self.recharging += int(data[1:])
+            self.recharging += int(data[1:])/1000
             self.power_failures += 1
 
 def read_from_port(ser, verbose):

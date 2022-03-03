@@ -27,8 +27,6 @@ int main( void )
     /* Configure the hardware ready to run the demo. */
     prvSetupHardware();
 
-    GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN0);
-
     IntermittentCNNTest();
 
 	return 0;

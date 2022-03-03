@@ -63,15 +63,18 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     uint16_t i = 0, tile = 0, j = 0, j_with_footprints = 0;
 
 #if INTERMITTENT
+    start_cpu_counter(offsetof(Counters, progress_seeking));
     uint32_t first_unfinished_value_offset = job_index_to_offset(output, run_recovery(model, output));
 
 #if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, state_query));
     int16_t offset;
     uint16_t next_output_turning_point;
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
     offset = -offset;
+    stop_cpu_counter();
 #endif
 
     first_unfinished_value_offset = batch_start(first_unfinished_value_offset);
@@ -88,6 +91,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     j = j_with_footprints;
 #endif
 
+    stop_cpu_counter();
 #endif
 
     for (; i < B->dims[0]; i += flags->extra.gemm.tile_channel, tile++) {
@@ -144,7 +148,9 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                           B, (i + row) * B->dims[1] + j,
                           tile_width * sizeof(uint16_t));
 #if JAPARI
+                start_cpu_counter(offsetof(Counters, embedding));
                 move_weights(filter_ptr, exact_tile, values_to_preserve, tile_width);
+                stop_cpu_counter();
 #endif
                 filter_ptr += full_tile_width;
             }
@@ -172,11 +178,15 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
 #if INDIRECT_RECOVERY
+            start_cpu_counter(offsetof(Counters, state_query));
             check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
+            stop_cpu_counter();
 #endif
 
 #if STATEFUL
+            start_cpu_counter(offsetof(Counters, embedding));
             uint16_t tile_width_first = update_states(filter_ptr, tile_width, output_offset, offset, next_output_turning_point, false);
+            stop_cpu_counter();
 #endif
 
             my_printf_debug("Tile for B" NEWLINE);
@@ -205,7 +215,11 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         j = j_with_footprints = 0;
     }
 
+#if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, table_updates));
     flip_state_bit(model, output);
+    stop_cpu_counter();
+#endif
 
     my_printf_debug("handle_gemm output" NEWLINE);
     dump_params_debug(model, output, node->output_name);
@@ -234,7 +248,9 @@ void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
 
     uint16_t merge_offset = 0;
 #if INTERMITTENT
+    start_cpu_counter(offsetof(Counters, progress_seeking));
     merge_offset = batch_start(job_index_to_offset(output, run_recovery(model, output)));
+    stop_cpu_counter();
 #endif
 
     int16_t *buffer_temp = lea_buffer,
@@ -280,7 +296,11 @@ void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
 #endif
     }
 
+#if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, table_updates));
     flip_state_bit(model, output);
+    stop_cpu_counter();
+#endif
 
     my_printf_debug("handle_gemmmerge output" NEWLINE);
     dump_params_debug(model, output, node->output_name);

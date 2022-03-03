@@ -30,11 +30,12 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
     uint16_t output_offset = 0;
 #if INTERMITTENT
-
+    start_cpu_counter(offsetof(Counters, progress_seeking));
     uint32_t first_unfinished_value_offset = batch_start(job_index_to_offset(output, run_recovery(model, output)));
     output_offset += first_unfinished_value_offset;
 
 #if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, state_query));
     uint16_t next_output_turning_point;
     int16_t offset;
     uint8_t output_turning_point_idx;
@@ -42,8 +43,9 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info,
                            first_unfinished_value_offset, model, output);
     offset = -offset;
+    stop_cpu_counter();
 #endif
-
+    stop_cpu_counter();
 #endif
 
     int16_t vals[32];
@@ -56,6 +58,9 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     for (; i < data_len; i += real_relu_tile_size) {
         uint8_t cur_tile_size = MIN_VAL(real_relu_tile_size, data_len - i);
         my_memcpy_from_param(model, vals, X, output_offset, cur_tile_size*sizeof(int16_t));
+#if JAPARI
+        counters(model->layer_idx)->data_loading += (cur_tile_size/2)*(4*8);
+#endif
 
 #if STATEFUL
         start_cpu_counter(offsetof(Counters, stripping));
@@ -81,12 +86,16 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
         for (uint8_t j = 0; j < cur_tile_size; j += embedding_shift) {
             uint8_t tile_last = j + embedding_shift - 1;
+            start_cpu_counter(offsetof(Counters, state_query));
             check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset + tile_last);
+            stop_cpu_counter();
 #if STATEFUL
+            start_cpu_counter(offsetof(Counters, embedding));
             for (uint8_t k = j; k < tile_last; k++) {
                 vals[k] /= 2;
             }
             vals[tile_last] = vals[tile_last] / 2 + offset;
+            stop_cpu_counter();
 #else
             vals[tile_last] = (offset > 0 ? 1 : -1);
 #endif
@@ -106,6 +115,9 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
         my_memcpy_to_param(output, output_offset, vals, cur_tile_size*sizeof(int16_t), 0);
+#if JAPARI
+        counters(model->layer_idx)->preservation += (cur_tile_size/2)*(4*8);
+#endif
         output_offset += cur_tile_size;
 #if HAWAII
         for (int8_t to_record = cur_tile_size; to_record > 0; to_record -= BATCH_SIZE) {
@@ -114,7 +126,11 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
     }
 
+#if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, table_updates));
     flip_state_bit(model, output);
+    stop_cpu_counter();
+#endif
 
     my_printf_debug("handle_relu output" NEWLINE);
     dump_params_nhwc_debug(model, output, node->output_name);
@@ -270,10 +286,12 @@ void handle_add(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 
     uint32_t data_offset = 0;
 #if INTERMITTENT
+    start_cpu_counter(offsetof(Counters, progress_seeking));
     uint32_t first_unfinished_job_idx = run_recovery(model, output);
     data_offset = batch_start(job_index_to_offset(output, first_unfinished_job_idx));
 
 #if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, state_query));
     uint16_t next_input_turning_point, next_output_turning_point;
     int16_t input_offset, output_offset;
     uint8_t input_turning_point_idx, output_turning_point_idx;
@@ -282,8 +300,9 @@ void handle_add(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
                            data_offset, model, X);
     find_initial_state_bit(&output_offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info,
                            data_offset, model, output);
+    stop_cpu_counter();
 #endif
-
+    stop_cpu_counter();
 #endif
 
     uint16_t buffer_size = X->dims[1];
@@ -291,7 +310,9 @@ void handle_add(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
             *buffer_b = buffer_a + buffer_size;
     my_memcpy_from_param(model, buffer_b, Y, 0, buffer_size * sizeof(int16_t));
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, embedding));
     move_weights(buffer_b, false, extend_for_footprints(buffer_size), buffer_size);
+    stop_cpu_counter();
 #endif
     my_printf_debug("weights" NEWLINE);
     dump_matrix_debug(buffer_b, buffer_size, ValueInfo(Y), false);
@@ -309,8 +330,15 @@ void handle_add(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 #if STATEFUL
         my_printf_debug("Before strip states" NEWLINE);
         dump_matrix_debug(buffer_a, cur_buffer_size, ValueInfo(output), false);
+
+        start_cpu_counter(offsetof(Counters, state_query));
         check_next_turning_point(input_offset, input_turning_point_idx, next_input_turning_point, input_slot_info, data_offset);
+        stop_cpu_counter();
+
+        start_cpu_counter(offsetof(Counters, embedding));
         update_states(buffer_a, cur_buffer_size, data_offset, input_offset, next_input_turning_point, false);
+        stop_cpu_counter();
+
         my_printf_debug("After strip states" NEWLINE);
         dump_matrix_debug(buffer_a, cur_buffer_size, ValueInfo(output), false);
 #endif
@@ -320,8 +348,12 @@ void handle_add(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
         dump_matrix_debug(buffer_a, cur_buffer_size, ValueInfo(output), false);
 
 #if INDIRECT_RECOVERY
+        start_cpu_counter(offsetof(Counters, state_query));
         check_next_turning_point(output_offset, output_turning_point_idx, next_output_turning_point, output_slot_info, data_offset);
+        stop_cpu_counter();
+        start_cpu_counter(offsetof(Counters, embedding));
         update_states(buffer_a, cur_buffer_size, data_offset, output_offset, next_output_turning_point, true);
+        stop_cpu_counter();
         my_printf_debug("After embedding states" NEWLINE);
         dump_matrix_debug(buffer_a, cur_buffer_size, ValueInfo(output), true);
 #endif
@@ -334,7 +366,11 @@ void handle_add(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
         cur_buffer_size = buffer_size;
     }
 
+#if INDIRECT_RECOVERY
+    start_cpu_counter(offsetof(Counters, table_updates));
     flip_state_bit(model, output);
+    stop_cpu_counter();
+#endif
 
     dump_params_nhwc_debug(model, output, node->output_name);
 }

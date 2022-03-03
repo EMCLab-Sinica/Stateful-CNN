@@ -86,10 +86,6 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
         commit_model();
     }
 
-#if ENABLE_COUNTERS
-    counters(model->layer_idx)->power_counters++;
-#endif
-
     dump_model_debug(model);
 
     for (uint16_t node_idx = model->layer_idx; node_idx < MODEL_NODES_LEN; node_idx++) {
@@ -162,7 +158,7 @@ static uint32_t print_counters() {
     uint32_t total = 0;
     for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
         total += counters(i)->*MemPtr;
-#if MY_DEBUG >= MY_DEBUG_LAYERS
+#if ENABLE_PER_LAYER_COUNTERS
         my_printf("%12" PRIu32, counters(i)->*MemPtr);
 #else
         break;
@@ -176,7 +172,7 @@ static uint32_t print_counters() {
 void print_all_counters() {
 #if ENABLE_COUNTERS
     my_printf("op types:            ");
-#if MY_DEBUG >= MY_DEBUG_LAYERS
+#if ENABLE_PER_LAYER_COUNTERS
     for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
         my_printf("% 12d", get_node(i)->op_type);
     }
@@ -197,6 +193,12 @@ void print_all_counters() {
     my_printf(NEWLINE "Table loading:       "); total_overhead += print_counters<&Counters::table_loading>();
     // recovery overheads
     my_printf(NEWLINE "Progress seeking:    "); total_overhead += print_counters<&Counters::progress_seeking>();
+    // misc
+    my_printf(NEWLINE "Memory layout:       "); total_overhead += print_counters<&Counters::memory_layout>();
+#if JAPARI
+    my_printf(NEWLINE "Data preservation:   "); total_overhead += print_counters<&Counters::preservation>();
+    my_printf(NEWLINE "Data loading:        "); total_overhead += print_counters<&Counters::data_loading>();
+#endif
 
     my_printf(NEWLINE "Total DMA bytes: %d", total_dma_bytes);
     my_printf(NEWLINE "Total MACs: %d", total_macs);
@@ -292,10 +294,9 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
 
 #endif
 
-void flip_state_bit(Model *model, const ParameterInfo *output) {
 #if INDIRECT_RECOVERY
-    start_cpu_counter(offsetof(Counters, table_updates));
 
+void flip_state_bit(Model *model, const ParameterInfo *output) {
 #if JAPARI
     MY_ASSERT(has_footprints(output));
 #endif
@@ -340,12 +341,7 @@ void flip_state_bit(Model *model, const ParameterInfo *output) {
 
     // Use first_unfinished_job_index = 0 here as all values finished and the initial state bit is flipped above
     check_feature_map_states(model, output, 0, output->params_len / sizeof(int16_t), __func__);
-
-    stop_cpu_counter();
-#endif // INDIRECT_RECOVERY
 }
-
-#if INDIRECT_RECOVERY
 
 int8_t get_state_bit(Model *model, uint8_t slot_id) {
     switch (slot_id) {
@@ -394,7 +390,7 @@ static uint8_t value_finished(Model* model, const ParameterInfo* output, uint32_
 }
 #endif
 
-static uint32_t job_index_to_offset_inner(const ParameterInfo* output, uint16_t job_index) {
+uint32_t job_index_to_offset(const ParameterInfo *output, uint16_t job_index) {
 #if STATEFUL
     if (job_index >= output->params_len / sizeof(int16_t)) {
         return job_index;
@@ -482,14 +478,6 @@ static uint32_t job_index_to_offset_inner(const ParameterInfo* output, uint16_t 
     return offset;
 }
 
-uint32_t job_index_to_offset(const ParameterInfo *output, uint16_t job_index) {
-    uint32_t ret;
-    start_cpu_counter(offsetof(Counters, progress_seeking));
-    ret = job_index_to_offset_inner(output, job_index);
-    stop_cpu_counter();
-    return ret;
-}
-
 uint32_t batch_start(uint32_t batch_end_offset) {
 #if JAPARI
     return batch_end_offset - BATCH_SIZE;
@@ -506,8 +494,6 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
     if (!after_recovery) {
         return 0;
     }
-
-    start_cpu_counter(offsetof(Counters, progress_seeking));
 
     // recovery from state bits
     uint32_t end_job_index = output->params_len / 2;
@@ -558,8 +544,6 @@ uint32_t run_recovery(Model *model, ParameterInfo *output) {
     }
 
     check_feature_map_states(model, output, first_unfinished_job_index, output->params_len / 2, __func__);
-
-    stop_cpu_counter();
 
     return first_unfinished_job_index;
 }

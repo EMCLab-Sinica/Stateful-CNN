@@ -135,6 +135,13 @@ struct Counters {
 
     // field offset = 44
     uint32_t progress_seeking;
+
+    // field offset = 48
+    uint32_t memory_layout;
+
+    // field offset = 52
+    uint32_t preservation;
+    uint32_t data_loading;
 };
 
 Counters *counters(uint16_t idx);
