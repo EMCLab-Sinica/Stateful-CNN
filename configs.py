@@ -29,7 +29,7 @@ configs = {
         'data_loader': load_data_cifar10,
         'n_all_samples': 10000,
         'sample_size': [32, 32, 3],
-        'op_filters': 4,
+        'op_filters': 2,
         'first_sample_outputs': [ 4.895500, 4.331344, 4.631835, 11.602396, 4.454658, 10.819544, 5.423588, 6.451203, 5.806091, 5.272837 ],
         'fp32_accuracy': 0.7704,
     },
