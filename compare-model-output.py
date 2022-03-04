@@ -9,7 +9,11 @@ def get_tensor(layer_out):
     if not len(arr):
         return []
     dims = np.array(layer_out.dims)
-    return np.reshape(arr, dims[dims!=0])
+    try:
+        return np.reshape(arr, dims[dims!=0])
+    except ValueError:
+        # Mismatched dimensions, which happen when T_n != N - ignoring for now
+        return np.array([])
 
 def main():
     parser = argparse.ArgumentParser()
