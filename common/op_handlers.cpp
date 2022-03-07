@@ -51,7 +51,9 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     int16_t vals[32];
     uint16_t i = output_offset;
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, embedding));
     const uint8_t real_relu_tile_size = extend_for_footprints(RELU_TILE_SIZE);
+    stop_cpu_counter();
 #else
     const uint8_t real_relu_tile_size = RELU_TILE_SIZE;
 #endif
@@ -161,12 +163,14 @@ void handle_reshape(Model *model, const ParameterInfo *input[], ParameterInfo *o
     uint16_t inferred_dim = output->params_len / sizeof(int16_t);
     int8_t auto_idx = -1;
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, embedding));
     uint8_t last_dim_idx;
     for (uint8_t i = 0; i < 4; i++) {
         if (output->dims[i]) {
             last_dim_idx = i;
         }
     }
+    stop_cpu_counter();
 #endif
     for (uint8_t i = 0; i < 4; i++) {
         if (output->dims[i] != RESHAPE_AUTO_DIM && output->dims[i] != 0) {

@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <cstdint>
 #include "cnn_common.h"
 #include "counters.h"
@@ -15,7 +16,9 @@ void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 
     output->dims[0] = A->dims[0];
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, embedding));
     output->dims[1] = B->dims[1] / BATCH_SIZE * (BATCH_SIZE + 1) + B->dims[1] % BATCH_SIZE;
+    stop_cpu_counter();
 #else
     output->dims[1] = B->dims[1];
 #endif
@@ -53,8 +56,10 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     int16_t *buffer_a = lea_buffer,
             *buffer_temp = buffer_a + A_len;
 #if JAPARI
-            buffer_temp += 2;
+    start_cpu_counter(offsetof(Counters, embedding));
+    buffer_temp += 2;
     int16_t* buffer_b = buffer_temp + extend_for_footprints(OP_FILTERS);
+    stop_cpu_counter();
 #else
     int16_t* buffer_b = buffer_temp + OP_FILTERS;
 #endif
@@ -86,7 +91,9 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     j_with_footprints = first_unfinished_value_offset % output_len;
 
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, embedding));
     j = j_with_footprints / (BATCH_SIZE + 1) * BATCH_SIZE;
+    stop_cpu_counter();
 #else
     j = j_with_footprints;
 #endif
@@ -99,13 +106,17 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         const uint16_t extended_tile_channels = tile_channels + 2;
 
 #if JAPARI
-        if (has_footprints(A)) {
+        start_cpu_counter(offsetof(Counters, stripping));
+        bool need_skipping = has_footprints(A);
+        if (need_skipping) {
             // somehow loading many pieces is faster than loading a chunk and moving values around to remove footprints, even with external FRAM
             uint16_t input_offset = extend_for_footprints(i);
             for (uint16_t idx = 0, output_idx = 0; output_idx < tile_channels; idx += BATCH_SIZE + 1, output_idx += BATCH_SIZE) {
                 my_memcpy_from_param(model, buffer_a + output_idx, A, input_offset + idx, BATCH_SIZE * sizeof(uint16_t));
             }
-        } else
+        }
+        stop_cpu_counter();
+        if (!need_skipping)
 #endif
         {
             my_memcpy_from_param(model, buffer_a, A, i, tile_channels * sizeof(uint16_t));
@@ -138,8 +149,10 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
             int16_t values_to_preserve = tile_width,
                     full_tile_width = tile_width;
 #if JAPARI
+            start_cpu_counter(offsetof(Counters, embedding));
             values_to_preserve = extend_for_footprints(tile_width);
             full_tile_width = (values_to_preserve + 1) / 2 * 2;
+            stop_cpu_counter();
 #endif
             int16_t *filter_ptr = buffer_b;
             my_fill_q15(0, filter_ptr, extended_tile_channels * full_tile_width);
@@ -155,6 +168,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                 filter_ptr += full_tile_width;
             }
 #if JAPARI
+            start_cpu_counter(offsetof(Counters, embedding));
             my_fill_q15(0, filter_ptr, 2 * full_tile_width);
             uint8_t processed_biases = 0, bias_offset = 0;
             for (uint16_t idx = 0; idx < values_to_preserve; idx++) {
@@ -169,6 +183,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     processed_biases++;
                 }
             }
+            stop_cpu_counter();
 #else
             if (tile == 0) {
                 for (uint16_t idx = 0; idx < values_to_preserve; idx++) {
@@ -243,7 +258,9 @@ void handle_gemmmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
         output_tile_size = output_len;
     }
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, embedding));
     output_tile_size = extend_for_footprints(output_tile_size);
+    stop_cpu_counter();
 #endif
 
     uint16_t merge_offset = 0;

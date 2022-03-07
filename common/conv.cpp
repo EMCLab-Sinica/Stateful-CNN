@@ -135,9 +135,11 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
     int16_t values_to_preserve = n_filters;
     int16_t channel_offset_c = conv_params->filter_idx;
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, embedding));
     values_to_preserve = extend_for_footprints(n_filters, conv_params->force_align_footprints);
     n_filters = padding_for_lea(values_to_preserve);
     channel_offset_c = extend_for_footprints(channel_offset_c);
+    stop_cpu_counter();
 #endif
 #if STATEFUL
     start_cpu_counter(offsetof(Counters, memory_layout));
@@ -230,12 +232,15 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
 
             uint16_t channel = idx;
 #if JAPARI
+            start_cpu_counter(offsetof(Counters, memory_layout));
             channel += channel / BATCH_SIZE;
+            stop_cpu_counter();
 #endif
             my_interleave_q15(filter_tmp, channel, n_filters, conv_params->filter_buffer_addr, conv_params->filter_offset);
         }
 
 #if JAPARI
+        start_cpu_counter(offsetof(Counters, embedding));
         int16_t* footprint_channels_ptr = conv_params->filter_buffer_addr + n_filters * (conv_params->filter_offset - 1);
         for (int16_t idx = BATCH_SIZE; idx < n_filters; idx += BATCH_SIZE + 1) {
             if (idx < n_keep_state_bits) {
@@ -244,6 +249,7 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
                 *(footprint_channels_ptr + idx) = (conv_params->old_output_offset > 0 ? -1 : 1);
             }
         }
+        stop_cpu_counter();
 #endif
 
 #if STATEFUL
@@ -414,7 +420,9 @@ static void handle_conv_inner_loop(Model *model, ConvTaskParams *conv_params) {
     int16_t *dest;
     int16_t max_n_filters = conv_params->flags->extra.conv.output_tile_c;
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, memory_layout));
     max_n_filters *= 2;
+    stop_cpu_counter();
 #endif
     // TEMP_FILTER_WIDTH additional filters for values before transpose
     uint16_t inputs_len = MIN_VAL(
@@ -925,8 +933,10 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
                                      next_output_turning_point, cur_output_slot_info, output_offset + real_chunk_len);
             stop_cpu_counter();
 #elif JAPARI
+            start_cpu_counter(offsetof(Counters, embedding));
             ConvMergeOutputChunkHandlerParams params({output_offset});
             iterate_chunks(model, output, output_offset, real_chunk_len, ConvMergeOutputChunkHandler, &params);
+            stop_cpu_counter();
 #endif
 
             my_printf_debug("After writing state bits in [%d, %d)" NEWLINE, output_offset, output_offset + real_chunk_len);

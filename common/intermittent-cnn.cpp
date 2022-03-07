@@ -114,11 +114,9 @@ static void run_model(int8_t *ansptr, const ParameterInfo **output_node_ptr) {
     my_memcpy_from_param(model, lea_buffer, output_node, 0, buffer_len * sizeof(int16_t));
 
 #if STATEFUL
-    start_cpu_counter(offsetof(Counters, stripping));
     for (uint8_t idx = BATCH_SIZE - 1; idx < buffer_len; idx += BATCH_SIZE) {
         strip_state(lea_buffer + idx);
     }
-    stop_cpu_counter();
 #endif
 
     if (sample_idx == 0) {

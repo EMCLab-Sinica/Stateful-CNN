@@ -60,10 +60,12 @@ void alloc_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *ou
     maxpool_params->need_nhwc2nchw = (node->flags.generic & NHWC2NCHW);
 
 #if JAPARI
+    start_cpu_counter(offsetof(Counters, embedding));
     if (maxpool_params->need_nhwc2nchw) {
         maxpool_params->new_W = extend_for_footprints(maxpool_params->new_W);
         CHANNEL = CHANNEL / (BATCH_SIZE + 1) * BATCH_SIZE;
     }
+    stop_cpu_counter();
 #endif
 
     output->params_len = maxpool_params->new_H * maxpool_params->new_W * CHANNEL * sizeof(int16_t);
@@ -108,10 +110,15 @@ static uint16_t maxpool_patch(MaxPoolParams *maxpool_params) {
             output_channel_offset = 0;
             for (uint16_t input_channel_offset = 0; input_channel_offset < maxpool_params->n_channels; input_channel_offset++) {
 #if JAPARI
-                if (offset_has_state(maxpool_params->start_channel + input_channel_offset)) {
+                start_cpu_counter(offsetof(Counters, stripping));
+                bool need_skipping = offset_has_state(maxpool_params->start_channel + input_channel_offset);
+                if (need_skipping) {
                     // not checking need_nhwc2nchw here - if that is true, input footprint channels should already be skipped
                     // before maxpool_patch is called
                     output_channel_offset++;
+                }
+                stop_cpu_counter();
+                if (need_skipping) {
                     continue;
                 }
 #endif
@@ -266,9 +273,11 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
         } else {
             // NCHW
 #if JAPARI
+            start_cpu_counter(offsetof(Counters, embedding));
             // extend c as input footprint channels are skipped.
             // Not using extend_for_footprints() as the initial c may not be on a footprint channel
             c += c / BATCH_SIZE;
+            stop_cpu_counter();
 #endif
 
 #if STATEFUL
@@ -280,7 +289,10 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
             uint8_t channel_stride = 1;
             for (; c < CHANNEL; c += channel_stride) {
 #if JAPARI
-                if (offset_has_state(c)) {
+                start_cpu_counter(offsetof(Counters, stripping));
+                bool need_skipping = offset_has_state(c);
+                stop_cpu_counter();
+                if (need_skipping) {
                     continue;
                 }
 #endif
@@ -289,16 +301,23 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
 #if !JAPARI
                     maxpool_params->output_w = output_w;
 #else
+                    start_cpu_counter(offsetof(Counters, embedding));
                     maxpool_params->output_w = output_w / (BATCH_SIZE + 1) * BATCH_SIZE + output_w % (BATCH_SIZE +1);
+                    stop_cpu_counter();
 #endif
                     for (; output_w < maxpool_params->new_W; output_w++) {
 #if JAPARI
-                        if (offset_has_state(output_offset)) {
+                        start_cpu_counter(offsetof(Counters, embedding));
+                        bool need_embedding = offset_has_state(output_offset);
+                        if (need_embedding) {
                             start_cpu_counter(offsetof(Counters, state_query));
                             check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
                             stop_cpu_counter();
                             put_q15_param(output, output_offset, (offset == 0x4000 ? 1 : -1));
                             output_offset++;
+                        }
+                        stop_cpu_counter();
+                        if (need_embedding) {
                             continue;
                         }
 #endif
@@ -397,9 +416,13 @@ void handle_globalaveragepool(Model *model, const ParameterInfo *input[], Parame
     for (uint16_t input_channel = 0; input_channel < CHANNEL; input_channel++) {
         int16_t output_val;
 #if JAPARI
-        if (offset_has_state(input_channel)) {
+        start_cpu_counter(offsetof(Counters, embedding));
+        bool need_embedding = offset_has_state(input_channel);
+        if (need_embedding) {
             output_val = -param_state_bit(model, output, output_channel);
-        } else
+        }
+        stop_cpu_counter();
+        if (!need_embedding)
 #endif
         {
             uint32_t total = 0;
