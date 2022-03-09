@@ -9,6 +9,10 @@
 #  include "plat-linux.h"
 #endif
 
+#define ENABLE_COUNTERS 0
+#define ENABLE_PER_LAYER_COUNTERS 0
+#define ENABLE_DEMO_COUNTERS 0
+
 struct ParameterInfo;
 struct Model;
 struct Counters;
@@ -28,7 +32,10 @@ Model* load_model_from_nvm(void);
 void commit_model(void);
 void first_run(void);
 void notify_model_finished(void);
+#if ENABLE_COUNTERS
 uint64_t get_nvm_writes(void);
+uint64_t get_nvm_reads(void);
+#endif
 #if HAWAII
 void write_hawaii_layer_footprint(uint16_t layer_idx, int16_t n_jobs);
 uint16_t read_hawaii_layer_footprint(uint16_t layer_idx);

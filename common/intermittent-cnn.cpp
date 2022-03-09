@@ -60,6 +60,11 @@ static void handle_node(Model *model, uint16_t node_idx) {
         model->running = 0;
         model->run_counter++;
     }
+
+#if ENABLE_DEMO_COUNTERS
+    my_printf("CMD,D,%" PRIu64 NEWLINE, get_nvm_reads() + get_nvm_writes());
+    my_printf("CMD,P,%d" NEWLINE, 100 * node_idx / MODEL_NODES_LEN);
+#endif
 }
 
 #if MY_DEBUG >= MY_DEBUG_NORMAL

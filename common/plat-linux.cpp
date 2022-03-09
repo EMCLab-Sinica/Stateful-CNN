@@ -28,7 +28,7 @@
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
 static uint32_t shutdown_counter = UINT32_MAX;
-static uint64_t nvm_writes = 0;
+static uint64_t nvm_reads = 0, nvm_writes = 0;
 static std::ofstream out_file;
 
 static Counters counters_data[COUNTERS_LEN];
@@ -180,6 +180,9 @@ void my_memcpy_from_parameters(void *dest, const ParameterInfo *param, uint32_t 
 void read_from_nvm(void *vm_buffer, uint32_t nvm_offset, size_t n) {
     MY_ASSERT(n <= 1024);
     my_memcpy_ex(vm_buffer, nvm + nvm_offset, n, 0);
+    if (dma_counter_enabled) {
+        nvm_reads += n;
+    }
 }
 
 void write_to_nvm(const void *vm_buffer, uint32_t nvm_offset, size_t n, uint16_t timer_delay) {
@@ -193,6 +196,10 @@ void write_to_nvm(const void *vm_buffer, uint32_t nvm_offset, size_t n, uint16_t
 
 uint64_t get_nvm_writes(void) {
     return nvm_writes;
+}
+
+uint64_t get_nvm_reads(void) {
+    return nvm_reads;
 }
 
 void my_erase() {

@@ -4,9 +4,6 @@
 #include "cnn_common.h"
 #include <cstdint>
 
-#define ENABLE_COUNTERS 0
-#define ENABLE_PER_LAYER_COUNTERS 0
-
 // Counter pointers have the form offsetof(Counter, field_name). I use offsetof() instead of
 // pointers to member fields like https://stackoverflow.com/questions/670734/pointer-to-class-data-member
 // as the latter involves pointer arithmetic and is slower for platforms with special pointer bitwidths (ex: MSP430)
