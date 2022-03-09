@@ -12,7 +12,6 @@
 #include "cnn_common.h"
 #include "counters.h"
 #include "platform.h"
-#include "platform-private.h"
 #include "data.h"
 #include "my_debug.h"
 #include "Tools/myuart.h"

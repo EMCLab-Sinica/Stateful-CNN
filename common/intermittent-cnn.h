@@ -5,12 +5,8 @@
 #include "data.h"
 #include "my_debug.h"
 
-extern uint16_t sample_idx;
-
 struct ParameterInfo;
 struct Model;
-uint8_t run_cnn_tests(uint16_t n_samples);
-void print_all_counters();
 
 uint32_t job_index_to_offset(const ParameterInfo* output, uint16_t job_index);
 uint32_t batch_start(uint32_t batch_end_offset);

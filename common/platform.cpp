@@ -5,7 +5,6 @@
 #include "counters.h"
 #include "data.h"
 #include "platform.h"
-#include "platform-private.h"
 #include "cnn_common.h"
 #include "my_debug.h"
 #include "intermittent-cnn.h" // for sample_idx

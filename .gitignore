@@ -2,15 +2,15 @@
 *.o
 *.pyc
 /build/
-/utils/parse_model/external/*.pb-c.*
-/utils/parse_model/parse_model
+/models/parse_model/external/*.pb-c.*
+/models/parse_model/parse_model
 /gcov/
 
 # data files
 /nvm.bin
 /samples.bin
 /images/
-/data/*.txt
+/exp/*.txt
 
 # CCS-generated files
 .launches/

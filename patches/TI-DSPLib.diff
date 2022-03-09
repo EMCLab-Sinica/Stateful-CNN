@@ -1,0 +1,215 @@
+diff --git a/include/DSPLib_matrix.h b/include/DSPLib_matrix.h
+index 598e696..b8f21e5 100644
+--- a/include/DSPLib_matrix.h
++++ b/include/DSPLib_matrix.h
+@@ -32,6 +32,10 @@
+ #ifndef __DSPLIB_MATRIX_H__
+ #define __DSPLIB_MATRIX_H__
+ 
++#include <stdint.h>
++#include <stdlib.h>
++#include "c_callbacks.h"
++
+ //******************************************************************************
+ //
+ //! \addtogroup dsplib_matrix_api Matrix
+@@ -483,7 +487,9 @@ extern msp_status msp_matrix_sub_iq31(const msp_matrix_sub_iq31_params *params,
+ extern msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params,
+                                      const _q15 *srcA,
+                                      const _q15 *srcB,
+-                                     _q15 *dst);
++                                     _q15 *dst,
++                                     data_preservation_func data_preserve, struct ParameterInfo *param, uint16_t offset_in_word, size_t values_to_preserve,
++                                     int16_t offset, int16_t n_keep_state_bits);
+ 
+ //******************************************************************************
+ //
+diff --git a/include/DSPLib_support.h b/include/DSPLib_support.h
+index a6adb7d..9289be8 100644
+--- a/include/DSPLib_support.h
++++ b/include/DSPLib_support.h
+@@ -288,7 +288,7 @@ static inline const void *__circular_increment( const void *ptr,
+ //! \return None
+ //
+ //******************************************************************************
+-static inline void msp_checkStatus(msp_status status)
++static void msp_checkStatus(msp_status status)
+ {
+ #ifndef MSP_DISABLE_DIAGNOSTICS
+     switch (status) {
+diff --git a/source/matrix/msp_matrix_mpy_q15.c b/source/matrix/msp_matrix_mpy_q15.c
+index 888148c..ccf43e5 100644
+--- a/source/matrix/msp_matrix_mpy_q15.c
++++ b/source/matrix/msp_matrix_mpy_q15.c
+@@ -31,10 +31,36 @@
+  * --/COPYRIGHT--*/
+ 
+ #include "DSPLib.h"
++#include <stdio.h>
++#include <stdint.h>
++#include "c_callbacks.h"
++#include "data.h"
++#include "Tools/our_misc.h"
++#include "Tools/myuart.h"
++#include "Tools/ext_fram/extfram.h"
++
++#if STATEFUL
++#ifdef __TI_COMPILER_VERSION__
++// Somehow TI CGT with LTO breaks the loop.
++// This function shouldn't be declared as `inline`, or FUNCTION_OPTIONS does not work.
++#pragma FUNCTION_OPTIONS(state_enforcement, "--opt_level=1")
++#endif
++static void state_enforcement(int16_t *dst, size_t values_to_preserve, int16_t offset, int16_t n_keep_state_bits, uint16_t computation_latency) {
++    int16_t *end = dst + values_to_preserve;
++    // Per C standard, true is 1 https://stackoverflow.com/a/40009143
++    uint16_t t = (offset < 0);
++    for (int16_t *ptr = dst + BATCH_SIZE - 1; ptr < end; ptr += BATCH_SIZE) {
++        t ^= (!n_keep_state_bits);
++        *ptr = (*ptr & 0x7fff) | (t << 15);
++        n_keep_state_bits -= BATCH_SIZE;
++        our_delay_cycles(computation_latency*BATCH_SIZE);
++    }
++}
++#endif
+ 
+ #if defined(MSP_USE_LEA)
+ 
+-msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q15 *srcA, const _q15 *srcB, _q15 *dst)
++msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q15 *srcA, const _q15 *srcB, _q15 *dst, data_preservation_func data_preserve, struct ParameterInfo *param, uint16_t offset_in_word, size_t values_to_preserve, int16_t offset, int16_t n_keep_state_bits)
+ {
+     uint16_t srcARows;
+     uint16_t srcACols;
+@@ -68,6 +94,12 @@ msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q1
+     }
+ #endif //MSP_DISABLE_DIAGNOSTICS
+ 
++    // Benchmarks [1] show that msp_matrix_mpy_q15 takes 16+3N/2 cycles.
++    // [1] https://www.ti.com/lit/an/slaa698b/slaa698b.pdf
++    uint16_t computation_latency = srcBRows*3/2;
++    // Writing each Q15 value takes 2bytes * 8bits/byte * 4cycles/bit (see SPIBRW in extfram.c)
++    uint16_t data_transfer_latency = 2*8*4;
++
+     /* Initialize LEA if it is not enabled. */
+     if (!(LEAPMCTL & LEACMDEN)) {
+         msp_lea_init();
+@@ -92,7 +124,43 @@ msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q1
+         LEAPMS1 = MSP_LEA_CONVERT_ADDRESS(leaParams);
+ 
+         /* Invoke the LEACMD__MPYMATRIXROW command. */
+-        msp_lea_invokeCommand(LEACMD__MPYMATRIXROW);
++
++        /* simplified from msp_lea_invokeCommand() */
++        /* Save interrupt state and disable interrupts. */
++        uint16_t interruptState = __get_interrupt_state();
++        __disable_interrupt();
++
++        /* Clear interrupt flag and invoke the command. */
++        msp_lea_ifg = 0;
++        LEAPMCB = LEACMD__MPYMATRIXROW | LEAITFLG1;
++
++        if (param) {
++            uint16_t total_computation_latency = computation_latency;
++#if STATEFUL
++            // Waiting for state-enforcement for each value. Each loop iteration takes roughly 30 CPU cycles.
++            total_computation_latency += 30;
++            record_overflow_handling_overhead(30*values_to_preserve);
++#endif
++            uint16_t timer_delay = (total_computation_latency > data_transfer_latency) ? (total_computation_latency/2) : 0;
++            // wait for the first job output (2 Q15 values)
++            our_delay_cycles(2*computation_latency);
++            data_preserve(param, offset_in_word, dst, values_to_preserve * sizeof(int16_t), timer_delay);
++        }
++
++#if STATEFUL
++        state_enforcement(dst, values_to_preserve, offset, n_keep_state_bits, computation_latency);
++#endif
++
++        __bis_SR_register(GIE);
++
++        while(!msp_lea_ifg);
++
++        if (param) {
++            SPI_WAIT_DMA();
++        }
++
++        /* Restore original interrupt state. */
++        __set_interrupt_state(interruptState);
+ 
+ #ifndef MSP_DISABLE_DIAGNOSTICS
+         /* Check LEA interrupt flags for any errors. */
+@@ -125,7 +193,7 @@ msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q1
+ 
+ #else //MSP_USE_LEA
+ 
+-msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q15 *srcA, const _q15 *srcB, _q15 *dst)
++msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q15 *srcA, const _q15 *srcB, _q15 *dst, data_preservation_func data_preserve, struct ParameterInfo *param, uint16_t offset_in_word, size_t values_to_preserve, int16_t offset, int16_t n_keep_state_bits)
+ {
+     uint16_t cntr;
+     uint16_t srcARows;
+@@ -233,6 +301,14 @@ msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q1
+     }
+ #endif //__MSP430_HAS_MPY32__
+ 
++#if STATEFUL
++    state_enforcement(dst, values_to_preserve, offset, n_keep_state_bits, 0);
++#endif
++
++    if (param) {
++        data_preserve(param, offset_in_word, dst, values_to_preserve * sizeof(int16_t), 0);
++    }
++
+     return MSP_SUCCESS;
+ }
+ 
+diff --git a/source/vector/msp_max_q15.c b/source/vector/msp_max_q15.c
+index 206f9f3..db073f5 100644
+--- a/source/vector/msp_max_q15.c
++++ b/source/vector/msp_max_q15.c
+@@ -150,10 +150,11 @@ msp_status msp_max_q15(const msp_max_q15_params *params, const _q15 *src, _q15 *
+     maximum = INT16_MIN;
+     i = 0;
+     
++    src = src + length - 1;
+     /* Loop through all vector elements. */
+     while (length--) {
+         /* Store vector element to local variable. */
+-        temp = *src++;
++        temp = *src--;
+         
+         /* Compare vector element with current maximum value. */
+         if (temp >= maximum) {
+@@ -165,7 +166,7 @@ msp_status msp_max_q15(const msp_max_q15_params *params, const _q15 *src, _q15 *
+     
+     /* Save local maximum and index to output arguments. */
+     *max = maximum;
+-    *index = params->length - (i + 1);
++    *index = i;
+ 
+     return MSP_SUCCESS;
+ }
+diff --git a/source/vector/msp_min_q15.c b/source/vector/msp_min_q15.c
+index 604fd5a..5fef37f 100644
+--- a/source/vector/msp_min_q15.c
++++ b/source/vector/msp_min_q15.c
+@@ -150,10 +150,11 @@ msp_status msp_min_q15(const msp_min_q15_params *params, const _q15 *src, _q15 *
+     minimum = INT16_MAX;
+     i = 0;
+     
++    src = src + length - 1;
+     /* Loop through all vector elements. */
+     while (length--) {
+         /* Store vector element to local variable. */
+-        temp = *src++;
++        temp = *src--;
+         
+         /* Compare vector element with current minimum value. */
+         if (temp <= minimum) {
+@@ -165,7 +166,7 @@ msp_status msp_min_q15(const msp_min_q15_params *params, const _q15 *src, _q15 *
+     
+     /* Save local minimum and index to output arguments. */
+     *min = minimum;
+-    *index = params->length - (i + 1);
++    *index = i;
+ 
+     return MSP_SUCCESS;
+ }

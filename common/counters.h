@@ -43,7 +43,11 @@ static inline void stop_cpu_counter(void) {
         current_counter = INVALID_POINTER;
     }
 }
+
+void print_all_counters();
+
 #else
 #define start_cpu_counter(mem_ptr)
 #define stop_cpu_counter()
+#define print_all_counters()
 #endif

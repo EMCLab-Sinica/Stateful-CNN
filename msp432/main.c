@@ -1,6 +1,6 @@
 #include <driverlib.h>
 #include "msp.h"
-#include "plat-msp430.h"
+#include "plat-mcu.h"
 #include "Tools/myuart.h"
 #include "Tools/dvfs.h"
 

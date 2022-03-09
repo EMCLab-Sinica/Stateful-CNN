@@ -8,7 +8,7 @@
 #include "intermittent-cnn.h"
 #include "my_dsplib.h"
 #include "op_utils.h"
-#include "platform-private.h"
+#include "platform.h"
 #ifdef USE_PROTOBUF
 #include "model_output.pb.h"
 #endif

@@ -38,7 +38,7 @@ if (NOT "${CCS_ARM_ROOT}" STREQUAL "")
     message(STATUS "Found CCS ARM root at ${CCS_ARM_ROOT}")
     option (BUILD_MSP432 "Build for MSP432" ON)
 else ()
-    message(WARNING "No CCS ARM root found. Not building plat-msp432.")
+    message(WARNING "No CCS ARM root found. Not building plat-mcu.")
     option (BUILD_MSP432 "Build for MSP432" OFF)
 endif ()
 
@@ -100,7 +100,7 @@ set (intermittent_cnn_SOURCES
     ${COMMON_SRC_PATH}/pooling.cpp
     ${COMMON_SRC_PATH}/cnn_common.cpp
     ${COMMON_SRC_PATH}/my_debug.cpp
-    ${COMMON_SRC_PATH}/plat-linux.cpp
+    ${COMMON_SRC_PATH}/plat-pc.cpp
     ${COMMON_SRC_PATH}/platform.cpp
     ${COMMON_SRC_PATH}/my_dsplib.cpp
     ${CMAKE_BINARY_DIR}/data.cpp
@@ -139,19 +139,19 @@ endif ()
 # clangd can identify platform-dependent codes
 
 if (BUILD_MSP432)
-    add_library(plat-msp432 ${COMMON_SRC_PATH}/plat-msp430.cpp)
-    target_include_directories(plat-msp432
+    add_library(plat-mcu ${COMMON_SRC_PATH}/plat-mcu.cpp)
+    target_include_directories(plat-mcu
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/msp432
     )
-    target_include_directories(plat-msp432
+    target_include_directories(plat-mcu
         SYSTEM PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/msp432/driverlib/MSP432P4xx
             ${CMAKE_BINARY_DIR}
             ${CCS_ARM_ROOT}/include
             $<TARGET_PROPERTY:arm_cmsis_dsp,INCLUDE_DIRECTORIES>
     )
-    target_compile_definitions(plat-msp432
+    target_compile_definitions(plat-mcu
         PRIVATE
             __MSP432__
             __MSP432P401R__

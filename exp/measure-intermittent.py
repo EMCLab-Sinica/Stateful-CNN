@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import pathlib
 import sys
 import time
 import warnings
@@ -7,8 +8,7 @@ import warnings
 import numpy as np
 import serial
 
-from utils import TOPDIR
-
+TOPDIR = pathlib.Path(__file__).absolute().parents[1]
 sys.path.append(str(TOPDIR / 'Tools'))
 
 from emclab import uart_utils

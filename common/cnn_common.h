@@ -146,7 +146,12 @@ struct Counters {
 
 Counters *counters(uint16_t idx);
 extern ParameterInfo intermediate_parameters_info_vm[MODEL_NODES_LEN];
+extern uint16_t sample_idx;
 
+/**********************************
+ *         The entry point        *
+ **********************************/
+uint8_t run_cnn_tests(uint16_t n_samples);
 
 /**********************************
  *          Miscellaneous         *

@@ -57,7 +57,7 @@ def main():
     build_and_test(config, suffix, intermittent=False)
 
     # Test intermittent running
-    if '--baseline' not in config:
+    if '--ideal' not in config:
         build_and_test(config, suffix, intermittent=True)
 
 if __name__ == '__main__':
