@@ -37,7 +37,7 @@ def build_and_test(config, suffix, intermittent):
     run_cmd = ['./build/intermittent-cnn']
     if intermittent:
         run_cmd = [
-            sys.executable, TOPDIR / 'run-intermittently.py',
+            sys.executable, TOPDIR / 'exp' / 'run-intermittently.py',
             '--rounds', str(rounds),
             '--interval', str(power_cycle),
             '--suffix', suffix,
