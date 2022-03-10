@@ -182,6 +182,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('config', choices=configs.keys())
 parser.add_argument('--all-samples', action='store_true')
 parser.add_argument('--write-images', action='store_true')
+parser.add_argument('--batch-size', type=int, default=1)
 parser.add_argument('--target', choices=('msp430', 'msp432'), required=True)
 parser.add_argument('--debug', action='store_true')
 intermittent_methodology = parser.add_mutually_exclusive_group(required=True)
@@ -205,6 +206,7 @@ if args.all_samples:
     Constants.NVM_SIZE += config['n_all_samples'] * 2*config['total_sample_size']  # multiply by 2 for Q15
 model_data = config['data_loader'](start=0, limit=Constants.N_SAMPLES)
 
+Constants.BATCH_SIZE = args.batch_size
 if args.stateful:
     Constants.STATEFUL = 1
     Constants.METHOD = "STATEFUL"
