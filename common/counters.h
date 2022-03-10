@@ -17,7 +17,7 @@ static inline void add_counter(uint8_t counter, uint32_t value) {
 }
 
 static inline void start_cpu_counter(uint8_t mem_ptr) {
-    MY_ASSERT(prev_counter == INVALID_POINTER);
+    MY_ASSERT(prev_counter == INVALID_POINTER, "There is already two counters - prev_counter=%d, current_counter=%d", prev_counter, current_counter);
 
     if (current_counter != INVALID_POINTER) {
         prev_counter = current_counter;
