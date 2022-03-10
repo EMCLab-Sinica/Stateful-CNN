@@ -28,7 +28,7 @@ def replace_placeholder_with_constant(graph_def, placeholder_name, my_value):
 
 def main():
     graph_def = tf.compat.v1.GraphDef()
-    with open('data/deep-learning-HAR/HAR-CNN.pb', 'rb') as f:
+    with open('models/deep-learning-HAR/HAR-CNN.pb', 'rb') as f:
         content = f.read()
         graph_def.ParseFromString(content)
 
@@ -49,7 +49,7 @@ def main():
 
     model_proto = onnx.shape_inference.infer_shapes(model_proto)
 
-    onnx.save_model(model_proto, 'data/HAR-CNN.onnx')
+    onnx.save_model(model_proto, 'models/HAR-CNN.onnx')
 
 if __name__ == "__main__":
     main()

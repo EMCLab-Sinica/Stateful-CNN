@@ -8,7 +8,7 @@ from utils import (
 # intermediate_values_size should < 65536, or TI's compiler gets confused
 configs = {
     'mnist': {
-        'onnx_model': 'data/mnist-8.onnx',
+        'onnx_model': 'models/mnist-8.onnx',
         'scale': 4,
         'input_scale': 4,
         'num_slots': 2,
@@ -21,7 +21,7 @@ configs = {
         'fp32_accuracy': 0.9890,
     },
     'cifar10': {
-        'onnx_model': 'data/squeezenet_cifar10.onnx',
+        'onnx_model': 'models/squeezenet_cifar10.onnx',
         'scale': 2,
         'input_scale': 4,
         'num_slots': 3,
@@ -34,7 +34,7 @@ configs = {
         'fp32_accuracy': 0.7704,
     },
     'kws': {
-        'onnx_model': 'data/KWS-DNN_S.onnx',
+        'onnx_model': 'models/KWS-DNN_S.onnx',
         'scale': 1,
         'input_scale': 120,
         'num_slots': 2,
@@ -47,7 +47,7 @@ configs = {
         'fp32_accuracy': 0.7983,
     },
     'har': {
-        'onnx_model': 'data/HAR-CNN.onnx',
+        'onnx_model': 'models/HAR-CNN.onnx',
         'scale': 2,
         'input_scale': 16,
         'num_slots': 2,

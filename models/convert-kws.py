@@ -34,7 +34,7 @@ def main():
     input_value_info = find_tensor_value_info(model_proto, 'Mfcc:0')
     input_value_info.CopyFrom(onnx.helper.make_tensor_value_info('Mfcc:0', onnx.TensorProto.FLOAT, [1] + configs['kws']['sample_size']))
 
-    onnx.save_model(model_proto, 'data/KWS-DNN_S.onnx')
+    onnx.save_model(model_proto, 'models/KWS-DNN_S.onnx')
 
 if __name__ == "__main__":
     main()

@@ -156,7 +156,7 @@ def kws_dnn_model():
 def load_har(start: int, limit: int):
     try:
         orig_sys_path = sys.path.copy()
-        sys.path.append(str(TOPDIR / 'data' / 'deep-learning-HAR' / 'utils'))
+        sys.path.append(str(TOPDIR / 'models' / 'deep-learning-HAR' / 'utils'))
         from utilities import read_data, standardize
 
         archive_dir = download_file('https://archive.ics.uci.edu/ml/machine-learning-databases/00240/UCI%20HAR%20Dataset.zip',
