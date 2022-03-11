@@ -20,7 +20,7 @@ import onnx.helper
 import numpy as np
 
 from configs import configs
-from utils import extract_data, find_initializer, find_node_by_output, find_tensor_value_info, load_model, get_model_ops, OPS_WITH_MERGE, DataLayout
+from utils import extract_data, find_initializer, find_node_by_output, find_tensor_value_info, load_model, get_model_ops, DataLayout
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -64,8 +64,6 @@ class Constants:
 
 # XXX: Transpose does nothing as we happens to need NHWC
 inplace_update_ops = ['Reshape', 'Softmax', 'Squeeze', 'Transpose', 'Unsqueeze']
-
-audio_ops = ['DecodeWav', 'AudioSpectrogram', 'Mfcc']
 
 other_flags = [
     # node flags
@@ -223,7 +221,7 @@ if args.target == 'msp432':
     Constants.USE_ARM_CMSIS = 1
 Constants.LEA_BUFFER_SIZE = lea_buffer_size[args.target]
 
-onnx_model = load_model(config)
+onnx_model = load_model(config, for_deployment=True)
 
 names = {}
 
@@ -290,23 +288,7 @@ def transpose_gemm(onnx_model: onnx.ModelProto):
 replace_nodes()
 transpose_gemm(onnx_model)
 
-# Split Conv/Gemm into Conv/Gemm and ConvMerge/GemmMerge (for OFM scaling up and merge of OFMs from channel tiling)
-new_nodes = []
-for idx, n in enumerate(onnx_model.graph.node):
-    if n.op_type in audio_ops:
-        logger.warning('skipping audio operator %s', n.op_type)
-        continue
-    new_nodes.append(n)
-    if n.op_type in OPS_WITH_MERGE:
-        output_name = n.output[0]
-        new_node = onnx.NodeProto()
-        new_node.name = (n.name or n.op_type) + ':merge'
-        new_node.op_type = n.op_type + 'Merge'
-        new_node.input[:] = n.output[:] = [output_name + '_before_merge']
-        new_node.output[:] = [output_name]
-        new_nodes.append(new_node)
-
-new_nodes = [n for n in new_nodes if n.output[0] not in replaced_nodes_map.keys()]
+new_nodes = [n for n in onnx_model.graph.node if n.output[0] not in replaced_nodes_map.keys()]
 for n in new_nodes:
     for idx, inp in enumerate(n.input):
         n.input[idx] = replaced_nodes_map.get(inp, inp)

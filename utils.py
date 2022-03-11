@@ -26,6 +26,8 @@ OPS_WITH_MERGE = ['Conv', 'Gemm']
 
 TOPDIR = pathlib.Path(__file__).absolute().parent
 
+audio_ops = ['DecodeWav', 'AudioSpectrogram', 'Mfcc']
+
 class DataLayout(enum.Enum):
     NEUTRAL = 0
     NCW = 1
@@ -270,7 +272,7 @@ def get_model_ops(onnx_model):
 
     return ops
 
-def load_model(config):
+def load_model(config, for_deployment):
     # https://github.com/onnx/onnx/blob/master/docs/PythonAPIOverview.md
     onnx_model = onnx.load_model(TOPDIR / config['onnx_model'])
 
@@ -289,7 +291,29 @@ def load_model(config):
 
     dynamic_shape_inference(onnx_model, config['sample_size'])
 
+    if for_deployment:
+        add_merge_nodes(onnx_model)
+
     return onnx_model
+
+def add_merge_nodes(model):
+    # Split Conv/Gemm into Conv/Gemm and ConvMerge/GemmMerge (for merging OFMs from channel tiling)
+    new_nodes = []
+    for idx, n in enumerate(model.graph.node):
+        if n.op_type in audio_ops:
+            logger.warning('skipping audio operator %s', n.op_type)
+            continue
+        new_nodes.append(n)
+        if n.op_type in OPS_WITH_MERGE:
+            output_name = n.output[0]
+            new_node = onnx.NodeProto()
+            new_node.name = (n.name or n.op_type) + ':merge'
+            new_node.op_type = n.op_type + 'Merge'
+            new_node.input[:] = n.output[:] = [output_name + '_before_merge']
+            new_node.output[:] = [output_name]
+            new_nodes.append(new_node)
+    del model.graph.node[:]
+    model.graph.node.extend(new_nodes)
 
 def onnxruntime_prepare_model(model):
     return backend.prepare(onnxruntime.InferenceSession(

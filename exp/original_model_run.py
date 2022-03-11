@@ -69,7 +69,7 @@ def print_tensor(tensor, print_histogram):
         print(f'Max={np.max(tensor)}, min={np.min(tensor)}')
 
 def prepare_model_and_data(config, limit):
-    model = load_model(config)
+    model = load_model(config, for_deployment=False)
     model_data = config['data_loader'](start=0, limit=limit)
 
     dynamic_shape_inference(model, config['sample_size'])
