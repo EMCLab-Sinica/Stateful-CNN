@@ -13,13 +13,12 @@
 /exp/*.txt
 
 # CCS-generated files
+# See also https://github.com/github/gitignore/blob/main/Global/Eclipse.gitignore
 .launches/
+.settings/
 /msp430/Large_Data/
 /msp432/Debug__GNU/
 
 # External projects
 /msp430/driverlib
 /msp432/driverlib
-/ARM-CMSIS/*
-!/ARM-CMSIS/*.sh
-!/ARM-CMSIS/*.diff
