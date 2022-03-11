@@ -54,8 +54,6 @@ void print_all_counters() {
     my_printf(NEWLINE "Total MACs: %d", total_macs);
     my_printf(NEWLINE "Total overhead: %" PRIu32, total_overhead);
     my_printf(NEWLINE "run_counter: %d" NEWLINE, get_model()->run_counter);
-
-    my_printf("NVM writes: %ld" NEWLINE, get_nvm_writes());
 }
 
 #endif

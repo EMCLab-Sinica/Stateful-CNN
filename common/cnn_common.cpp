@@ -162,7 +162,6 @@ static void handle_node(Model *model, uint16_t node_idx) {
     }
 
 #if ENABLE_DEMO_COUNTERS
-    my_printf("CMD,D,%" PRIu64 NEWLINE, get_nvm_reads() + get_nvm_writes());
     my_printf("CMD,P,%d" NEWLINE, 100 * node_idx / MODEL_NODES_LEN);
 #endif
 }

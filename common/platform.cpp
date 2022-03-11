@@ -13,7 +13,6 @@
 static_assert(NODES_OFFSET > SAMPLES_OFFSET + SAMPLES_DATA_LEN, "Incorrect NVM layout");
 
 Model model_vm;
-uint8_t dma_counter_enabled = 1;
 
 template<typename T>
 static uint32_t nvm_addr(uint8_t, uint16_t);
@@ -159,7 +158,6 @@ void commit_model(void) {
 }
 
 void first_run(void) {
-    dma_counter_enabled = 0;
     my_printf_debug("First run, resetting everything..." NEWLINE);
     my_erase();
     copy_samples_data();
@@ -171,7 +169,6 @@ void first_run(void) {
                            INTERMEDIATE_PARAMETERS_INFO_DATA_LEN, sizeof(ParameterInfo));
     write_to_nvm(model_data, nvm_addr<Model>(0, 0), MODEL_DATA_LEN);
     write_to_nvm(model_data, nvm_addr<Model>(1, 0), MODEL_DATA_LEN);
-    dma_counter_enabled = 1;
 
     load_model_from_nvm(); // refresh model_vm
     commit_model();

@@ -29,9 +29,6 @@ Counters *counters(uint16_t idx) {
     return counters_data;
 #endif
 }
-#if ENABLE_COUNTERS
-static uint64_t nvm_reads = 0, nvm_writes = 0;
-#endif
 
 #ifdef __MSP432__
 uint32_t last_cyccnt = 0;
@@ -94,11 +91,6 @@ void read_from_nvm(void* vm_buffer, uint32_t nvm_offset, size_t n) {
     addr.L = nvm_offset;
     MY_ASSERT(n <= 1024);
     SPI_READ(&addr, reinterpret_cast<uint8_t*>(vm_buffer), n);
-#if ENABLE_COUNTERS
-    if (dma_counter_enabled) {
-        nvm_reads += n;
-    }
-#endif
 }
 
 void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n, uint16_t timer_delay) {
@@ -110,22 +102,7 @@ void write_to_nvm(const void* vm_buffer, uint32_t nvm_offset, size_t n, uint16_t
     if (!timer_delay) {
         SPI_WAIT_DMA();
     }
-#if ENABLE_COUNTERS
-    if (dma_counter_enabled) {
-        nvm_writes += n;
-    }
-#endif
 }
-
-#if ENABLE_COUNTERS
-uint64_t get_nvm_writes(void) {
-    return nvm_writes;
-}
-
-uint64_t get_nvm_reads(void) {
-    return nvm_reads;
-}
-#endif
 
 void my_erase() {
     eraseFRAM2(0x00);
@@ -211,9 +188,6 @@ void button_pushed(uint16_t button1_status, uint16_t button2_status) {
 }
 
 void notify_model_finished(void) {
-#if ENABLE_COUNTERS
-    nvm_reads = nvm_writes = 0;
-#endif
 #if ENABLE_DEMO_COUNTERS
     my_printf("CMD,F" NEWLINE);
 #else

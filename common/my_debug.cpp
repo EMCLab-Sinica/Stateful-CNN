@@ -130,7 +130,6 @@ static void extract_dimensions(const ParameterInfo* cur_param, uint16_t* NUM, ui
 }
 
 void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, const char* layer_name) {
-    dma_counter_enabled = 0;
     uint16_t NUM, H, W, CHANNEL;
     extract_dimensions(cur_param, &NUM, &H, &W, &CHANNEL);
     LayerOutput* layer_out = nullptr;
@@ -157,7 +156,6 @@ void dump_params_nhwc(Model *model, const ParameterInfo *cur_param, const char* 
         }
         PRINT_NEWLINE_IF_DATA_NOT_SAVED
     }
-    dma_counter_enabled = 1;
 }
 
 void dump_model(Model *model) {
@@ -182,7 +180,6 @@ void dump_model(Model *model) {
 
 // dump in NCHW format
 void dump_params(Model *model, const ParameterInfo *cur_param, const char* layer_name) {
-    dma_counter_enabled = 0;
     uint16_t NUM, H, W, CHANNEL;
     extract_dimensions(cur_param, &NUM, &H, &W, &CHANNEL);
     LayerOutput* layer_out = nullptr;
@@ -205,7 +202,6 @@ void dump_params(Model *model, const ParameterInfo *cur_param, const char* layer
         }
         PRINT_NEWLINE_IF_DATA_NOT_SAVED
     }
-    dma_counter_enabled = 1;
 }
 
 void dump_turning_points(Model *model, const ParameterInfo *output) {

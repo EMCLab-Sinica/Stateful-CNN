@@ -27,7 +27,6 @@
 /* data on NVM, made persistent via mmap() with a file */
 uint8_t *nvm;
 static uint32_t shutdown_counter = UINT32_MAX;
-static uint64_t nvm_reads = 0, nvm_writes = 0;
 static std::ofstream out_file;
 
 static Counters counters_data[COUNTERS_LEN];
@@ -142,11 +141,6 @@ exit:
 }
 
 void my_memcpy_ex(void* dest, const void* src, size_t n, uint8_t write_to_nvm) {
-    if (!dma_counter_enabled) {
-        memcpy(dest, src, n);
-        return;
-    }
-
 #if ENABLE_COUNTERS
     Model* model = &model_vm;
     counters(model->layer_idx)->dma_invocations++;
@@ -179,26 +173,12 @@ void my_memcpy_from_parameters(void *dest, const ParameterInfo *param, uint32_t 
 void read_from_nvm(void *vm_buffer, uint32_t nvm_offset, size_t n) {
     MY_ASSERT(n <= 1024);
     my_memcpy_ex(vm_buffer, nvm + nvm_offset, n, 0);
-    if (dma_counter_enabled) {
-        nvm_reads += n;
-    }
 }
 
 void write_to_nvm(const void *vm_buffer, uint32_t nvm_offset, size_t n, uint16_t timer_delay) {
     MY_ASSERT(n <= 1024);
     check_nvm_write_address(nvm_offset, n);
     my_memcpy_ex(nvm + nvm_offset, vm_buffer, n, 1);
-    if (dma_counter_enabled) {
-        nvm_writes += n;
-    }
-}
-
-uint64_t get_nvm_writes(void) {
-    return nvm_writes;
-}
-
-uint64_t get_nvm_reads(void) {
-    return nvm_reads;
 }
 
 void my_erase() {
