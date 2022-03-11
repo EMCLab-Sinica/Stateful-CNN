@@ -29,14 +29,7 @@ uint8_t *nvm;
 static uint32_t shutdown_counter = UINT32_MAX;
 static std::ofstream out_file;
 
-static Counters counters_data[COUNTERS_LEN];
-Counters *counters(uint16_t idx) {
-#if MY_DEBUG >= MY_DEBUG_LAYERS
-    return counters_data + idx;
-#else
-    return counters_data;
-#endif
-}
+Counters counters_data[COUNTERS_LEN];
 
 #ifdef USE_PROTOBUF
 static void save_model_output_data() {
@@ -142,9 +135,8 @@ exit:
 
 void my_memcpy_ex(void* dest, const void* src, size_t n, uint8_t write_to_nvm) {
 #if ENABLE_COUNTERS
-    Model* model = &model_vm;
-    counters(model->layer_idx)->dma_invocations++;
-    counters(model->layer_idx)->dma_bytes += n;
+    counters()->dma_invocations++;
+    counters()->dma_bytes += n;
 #endif
     // Not using memcpy here so that it is more likely that power fails during
     // memcpy, which is the case for external FRAM

@@ -114,37 +114,6 @@ static_assert(sizeof(Model) == 8 + NUM_SLOTS * (2 + INDIRECT_RECOVERY * (2 + TUR
 /**********************************
  *          Global data           *
  **********************************/
-#define COUNTERS_LEN (MODEL_NODES_LEN+1)
-struct Counters {
-    // field offset = 0
-    uint32_t power_counters;
-    uint32_t dma_invocations;
-    uint32_t dma_bytes;
-    uint32_t macs;
-
-    // field offset = 16
-    uint32_t embedding;
-    uint32_t stripping;
-    uint32_t overflow_handling;
-
-    // field offset = 28
-    uint32_t state_query;
-    uint32_t table_updates;
-    uint32_t table_preservation;
-    uint32_t table_loading;
-
-    // field offset = 44
-    uint32_t progress_seeking;
-
-    // field offset = 48
-    uint32_t memory_layout;
-
-    // field offset = 52
-    uint32_t preservation;
-    uint32_t data_loading;
-};
-
-Counters *counters(uint16_t idx);
 extern ParameterInfo intermediate_parameters_info_vm[MODEL_NODES_LEN];
 extern uint16_t sample_idx;
 

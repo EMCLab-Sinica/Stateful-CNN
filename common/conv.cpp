@@ -286,9 +286,6 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
 #if !STATEFUL
     my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results,
                       conv_params->output, cur_output_data_offset, values_to_preserve, 0, 0);
-#if JAPARI
-    counters(conv_params->model->layer_idx)->preservation += (values_to_preserve-n_filters)*(4*8);
-#endif
 #else
     my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results,
                       conv_params->output, cur_output_data_offset, values_to_preserve,
@@ -351,7 +348,6 @@ static inline uint16_t load_input_vector(uint32_t src_addr, int16_t* dest_addr, 
     MY_ASSERT(len != 0);
 
 #if JAPARI
-    counters(conv_params->model->layer_idx)->preservation += (len/2)*(4*8);
     if (conv_params->conv_input_has_footprints) {
         memcpy_dest_addr = input_buffer_with_footprints;
     } else
@@ -906,7 +902,7 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
                 uint16_t cur_input_offset = input_tile_c_index * tiling_results_len + input_offset;
                 my_memcpy_from_param(model, to_add, data, cur_input_offset, real_chunk_len * sizeof(int16_t));
 #if JAPARI
-                counters(model->layer_idx)->data_loading += (real_chunk_len/2)*(4*8);
+                counters()->data_loading += (real_chunk_len/2)*(4*8);
 #endif
 #if STATEFUL
                 start_cpu_counter(offsetof(Counters, stripping));
@@ -944,9 +940,6 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
 #endif
 
             my_memcpy_to_param(output, output_offset, lea_buffer, real_chunk_len * sizeof(int16_t), 0);
-#if JAPARI
-            counters(model->layer_idx)->preservation += (real_chunk_len/2)*(4*8);
-#endif
 #if HAWAII
             hawaii_record_footprints(model, real_chunk_len);
 #endif

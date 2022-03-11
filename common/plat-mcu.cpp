@@ -21,14 +21,7 @@
 #ifdef __MSP430__
 #pragma DATA_SECTION(".nvm")
 #endif
-static Counters counters_data[COUNTERS_LEN];
-Counters *counters(uint16_t idx) {
-#if ENABLE_PER_LAYER_COUNTERS
-    return counters_data + idx;
-#else
-    return counters_data;
-#endif
-}
+Counters counters_data[COUNTERS_LEN];
 
 #ifdef __MSP432__
 uint32_t last_cyccnt = 0;

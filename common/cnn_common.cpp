@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "cnn_common.h"
+#include "counters.h"
 #include "data.h"
 #include "intermittent-cnn.h"
 #include "my_debug.h"

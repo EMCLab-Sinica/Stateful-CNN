@@ -201,7 +201,7 @@ void my_matrix_mpy_q15(uint16_t A_rows, uint16_t A_cols, uint16_t B_rows, uint16
 #endif
 #endif
 #if ENABLE_COUNTERS
-    counters(get_model()->layer_idx)->macs += A_rows * B_cols * A_cols;
+    counters()->macs += A_rows * B_cols * A_cols;
 #endif
 }
 

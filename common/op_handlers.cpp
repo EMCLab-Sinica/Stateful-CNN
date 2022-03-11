@@ -61,7 +61,7 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         uint8_t cur_tile_size = MIN_VAL(real_relu_tile_size, data_len - i);
         my_memcpy_from_param(model, vals, X, output_offset, cur_tile_size*sizeof(int16_t));
 #if JAPARI
-        counters(model->layer_idx)->data_loading += (cur_tile_size/2)*(4*8);
+        counters()->data_loading += (cur_tile_size/2)*(4*8);
 #endif
 
 #if STATEFUL
@@ -117,9 +117,6 @@ void handle_relu(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 #endif
 
         my_memcpy_to_param(output, output_offset, vals, cur_tile_size*sizeof(int16_t), 0);
-#if JAPARI
-        counters(model->layer_idx)->preservation += (cur_tile_size/2)*(4*8);
-#endif
         output_offset += cur_tile_size;
 #if HAWAII
         for (int8_t to_record = cur_tile_size; to_record > 0; to_record -= BATCH_SIZE) {

@@ -53,6 +53,15 @@ void my_memcpy_to_param(ParameterInfo *param, uint16_t offset_in_word, const voi
     uint32_t total_offset = param->params_offset + offset_in_word * sizeof(int16_t);
     MY_ASSERT(total_offset + n <= param->params_len);
     write_to_nvm(src, intermediate_values_offset(param->slot) + total_offset, n, timer_delay);
+#if ENABLE_COUNTERS
+#if JAPARI
+    uint16_t n_footprints = n / (BATCH_SIZE + 1);
+    counters()->job_preservation += n - n_footprints;
+    counters()->footprint_preservation += n_footprints;
+#else
+    counters()->job_preservation += n;
+#endif
+#endif
 }
 
 void my_memcpy_from_intermediate_values(void *dest, const ParameterInfo *param, uint16_t offset_in_word, size_t n) {
@@ -149,7 +158,7 @@ void commit_model(void) {
     commit_versioned_data<Model>(0);
     // send finish signals only after the whole network has really finished
 #if ENABLE_COUNTERS
-    counters(model_vm.layer_idx)->power_counters++;
+    counters()->power_counters++;
 #endif
     if (!model_vm.running) {
         notify_model_finished();
@@ -162,7 +171,7 @@ void first_run(void) {
     my_erase();
     copy_samples_data();
 #if ENABLE_COUNTERS
-    memset(counters(0), 0, sizeof(Counters) * COUNTERS_LEN);
+    memset(counters_data, 0, sizeof(Counters) * COUNTERS_LEN);
 #endif
 
     write_to_nvm_segmented(intermediate_parameters_info_data, intermediate_parameters_info_addr(0),
@@ -183,7 +192,7 @@ void write_to_nvm_segmented(const uint8_t* vm_buffer, uint32_t nvm_offset, uint1
 }
 
 void record_overflow_handling_overhead(uint32_t cycles) {
-    counters(get_model()->layer_idx)->overflow_handling += cycles;
+    counters()->overflow_handling += cycles;
 }
 
 #if HAWAII

@@ -9,10 +9,6 @@
 #  include "plat-pc.h"
 #endif
 
-#define ENABLE_COUNTERS 1
-#define ENABLE_PER_LAYER_COUNTERS 1
-#define ENABLE_DEMO_COUNTERS 1
-
 /* offsets for data on NVM */
 
 // growing up (like heap). Not starting from zero as first few 16 bytes are for testing (see testSPI() function)
