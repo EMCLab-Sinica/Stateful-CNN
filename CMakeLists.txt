@@ -25,8 +25,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -std=c++14 -Wold-style-c
 
 if (USE_PROTOBUF)
     find_package(Protobuf REQUIRED)
-    protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS model_output.proto)
-    protobuf_generate_python(PROTO_PY model_output.proto)
+    protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${CMAKE_CURRENT_SOURCE_DIR}/exp/model_output.proto)
+    protobuf_generate_python(PROTO_PY ${CMAKE_CURRENT_SOURCE_DIR}/exp/model_output.proto)
     add_custom_target(model_output_pb2 ALL DEPENDS ${PROTO_PY})
 endif ()
 
