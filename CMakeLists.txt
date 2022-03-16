@@ -83,7 +83,7 @@ target_include_directories(dsplib
     SYSTEM PUBLIC
         ${DSPLIB_PATH}/include
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/fake-msp430sdk
+        ${CMAKE_CURRENT_SOURCE_DIR}/msp430-compat
     PRIVATE
         ${COMMON_SRC_PATH}
         ${CMAKE_CURRENT_SOURCE_DIR}
