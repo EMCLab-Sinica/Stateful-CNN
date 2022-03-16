@@ -50,6 +50,9 @@ struct Counters {
 
 extern Counters counters_data[COUNTERS_LEN];
 Counters *counters();
+#if ENABLE_DEMO_COUNTERS
+extern uint32_t total_jobs;
+#endif
 
 extern uint8_t current_counter;
 extern uint8_t prev_counter;

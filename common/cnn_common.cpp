@@ -161,8 +161,8 @@ static void handle_node(Model *model, uint16_t node_idx) {
         model->running = 0;
         model->run_counter++;
 #if ENABLE_DEMO_COUNTERS
-        if (!model->n_jobs) {
-            model->n_jobs = counters()->job_preservation / 2;
+        if (!total_jobs) {
+            total_jobs = counters()->job_preservation / 2;
         }
 #endif
     }

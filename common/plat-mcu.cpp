@@ -23,6 +23,11 @@
 #endif
 Counters counters_data[COUNTERS_LEN];
 
+#ifdef __MSP430__
+#pragma DATA_SECTION(".nvm")
+#endif
+uint32_t total_jobs = 0;
+
 #ifdef __MSP432__
 uint32_t last_cyccnt = 0;
 #endif

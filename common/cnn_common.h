@@ -101,7 +101,6 @@ typedef struct SlotInfo {
 } SlotInfo;
 
 typedef struct Model {
-    uint32_t n_jobs;
     uint16_t running;
     uint16_t run_counter;
     uint16_t layer_idx;
@@ -110,7 +109,7 @@ typedef struct Model {
     uint8_t version; // must be the last field in this struct
 } Model;
 
-static_assert(sizeof(Model) == 12 + NUM_SLOTS * (2 + INDIRECT_RECOVERY * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
+static_assert(sizeof(Model) == 8 + NUM_SLOTS * (2 + INDIRECT_RECOVERY * (2 + TURNING_POINTS_LEN * 2)), "Unexpected size for Model");
 
 /**********************************
  *          Global data           *

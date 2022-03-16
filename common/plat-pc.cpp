@@ -30,6 +30,7 @@ static uint32_t shutdown_counter = UINT32_MAX;
 static std::ofstream out_file;
 
 Counters counters_data[COUNTERS_LEN];
+uint32_t total_jobs = 0;
 
 #ifdef USE_PROTOBUF
 static void save_model_output_data() {

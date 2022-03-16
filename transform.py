@@ -552,7 +552,6 @@ outputs = {
 Constants.MODEL_NODES_LEN = len(graph)
 
 model = outputs['model']
-model.write(to_bytes(0, size=32))  # Model.n_jobs
 model.write(to_bytes(0))  # Model.running
 model.write(to_bytes(0))  # Model.run_counter
 model.write(to_bytes(0))  # Model.layer_idx

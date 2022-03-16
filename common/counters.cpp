@@ -82,12 +82,11 @@ void report_progress() {
 #if ENABLE_DEMO_COUNTERS
     static uint8_t last_progress = 0;
 
-    Model* model = get_model();
-    if (!model->n_jobs) {
+    if (!total_jobs) {
         return;
     }
     uint32_t cur_jobs = counters()->job_preservation / 2;
-    uint8_t cur_progress = 100 * cur_jobs / model->n_jobs;
+    uint8_t cur_progress = 100 * cur_jobs / total_jobs;
     // report only when the percentage is changed to avoid high UART overheads
     if (cur_progress != last_progress) {
         my_printf("P,%d,%d,%d" NEWLINE, cur_progress,
