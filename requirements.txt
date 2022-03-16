@@ -1,6 +1,11 @@
-numpy==1.22.3
+# Some requirements do not have version constraints as the latest
+# version does not support Python 3.7
+
+numpy
 onnx==1.11.0
 onnxoptimizer==0.2.6
 onnxruntime==1.10.0
 tensorflow==2.8.0
 torchaudio==0.10.1
+# needed for deep-learning-HAR
+pandas
