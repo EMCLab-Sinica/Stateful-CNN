@@ -1,5 +1,8 @@
 #include <cinttypes>
+#include <cstring>
+#include "cnn_common.h"
 #include "counters.h"
+#include "platform.h"
 
 #if ENABLE_COUNTERS
 uint8_t current_counter = INVALID_POINTER;
@@ -29,6 +32,10 @@ static uint32_t print_counters() {
 }
 
 void print_all_counters() {
+#if ENABLE_DEMO_COUNTERS
+    return;
+#endif
+
     my_printf("op types:                ");
 #if ENABLE_PER_LAYER_COUNTERS
     for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
@@ -63,6 +70,31 @@ void print_all_counters() {
     my_printf(NEWLINE "Total MACs: %d", total_macs);
     my_printf(NEWLINE "Total overhead: %" PRIu32, total_overhead);
     my_printf(NEWLINE "run_counter: %d" NEWLINE, get_model()->run_counter);
+}
+
+void reset_counters() {
+#if ENABLE_COUNTERS
+    memset(counters_data, 0, sizeof(Counters) * COUNTERS_LEN);
+#endif
+}
+
+void report_progress() {
+#if ENABLE_DEMO_COUNTERS
+    static uint8_t last_progress = 0;
+
+    Model* model = get_model();
+    if (!model->n_jobs) {
+        return;
+    }
+    uint32_t cur_jobs = counters()->job_preservation / 2;
+    uint8_t cur_progress = 100 * cur_jobs / model->n_jobs;
+    // report only when the percentage is changed to avoid high UART overheads
+    if (cur_progress != last_progress) {
+        my_printf("P,%d,%d,%d" NEWLINE, cur_progress,
+                  counters()->job_preservation/1024, counters()->footprint_preservation/1024);
+        last_progress = cur_progress;
+    }
+#endif
 }
 
 #endif

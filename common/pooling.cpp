@@ -269,6 +269,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                     c = 0;
                 }
                 output_w = 0;
+                report_progress();
             }
             output_h = 0;
         } else {
@@ -358,6 +359,7 @@ void handle_maxpool(Model *model, const ParameterInfo *input[], ParameterInfo *o
                 output_h = 0;
             }
             c = 0;
+            report_progress();
         }
     }
 

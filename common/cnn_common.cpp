@@ -160,11 +160,12 @@ static void handle_node(Model *model, uint16_t node_idx) {
     if (node_idx == MODEL_NODES_LEN - 1) {
         model->running = 0;
         model->run_counter++;
-    }
-
 #if ENABLE_DEMO_COUNTERS
-    my_printf("CMD,P,%d" NEWLINE, 100 * node_idx / MODEL_NODES_LEN);
+        if (!model->n_jobs) {
+            model->n_jobs = counters()->job_preservation / 2;
+        }
 #endif
+    }
 }
 
 #if MY_DEBUG >= MY_DEBUG_NORMAL

@@ -181,11 +181,7 @@ void button_pushed(uint16_t button1_status, uint16_t button2_status) {
 }
 
 void notify_model_finished(void) {
-#if ENABLE_DEMO_COUNTERS
-    my_printf("CMD,F" NEWLINE);
-#else
     my_printf("." NEWLINE);
-#endif
     // Trigger a short peak so that multiple inferences in long power cycles are correctly recorded
     GPIO_setOutputHighOnPin(GPIO_COUNTER_PORT, GPIO_COUNTER_PIN);
     our_delay_cycles(5E-3 * getFrequency(FreqLevel));

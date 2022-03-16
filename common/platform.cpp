@@ -154,6 +154,11 @@ Model* get_model(void) {
 }
 
 void commit_model(void) {
+#if ENABLE_DEMO_COUNTERS
+    if (!model_vm.running) {
+        reset_counters();
+    }
+#endif
     start_cpu_counter(offsetof(Counters, table_preservation));
     commit_versioned_data<Model>(0);
     // send finish signals only after the whole network has really finished
@@ -170,9 +175,7 @@ void first_run(void) {
     my_printf_debug("First run, resetting everything..." NEWLINE);
     my_erase();
     copy_samples_data();
-#if ENABLE_COUNTERS
-    memset(counters_data, 0, sizeof(Counters) * COUNTERS_LEN);
-#endif
+    reset_counters();
 
     write_to_nvm_segmented(intermediate_parameters_info_data, intermediate_parameters_info_addr(0),
                            INTERMEDIATE_PARAMETERS_INFO_DATA_LEN, sizeof(ParameterInfo));

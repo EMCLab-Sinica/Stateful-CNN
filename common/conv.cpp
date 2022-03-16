@@ -753,6 +753,7 @@ void handle_conv(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                     handle_conv_inner_loop(model, conv_params);
                 }
                 conv_params->input_h = conv_params->input_h_first;
+                report_progress();
             }
             conv_params->input_w = conv_params->input_w_first;
             conv_params->filter_tile_index++;
@@ -950,6 +951,8 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
         output_w = 0;
         output_h++;
         input_offset = output_h * OUTPUT_CHANNEL; // NWHC, where only output_h is nonzero at this point
+
+        report_progress();
     }
 
     my_printf_debug("After merging tiling results" NEWLINE);
