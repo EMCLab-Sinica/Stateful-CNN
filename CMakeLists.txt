@@ -11,7 +11,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Too many parameters are unused if some features are not enabled
 set(COMMON_FLAGS "-Wall -Wextra -Wshadow -Wundef -Wno-unused-parameter -pedantic")
 if (${MY_DEBUG} GREATER 1)
-    set(COMMON_FLAGS "${COMMON_FLAGS} -g -O0")
+    set(COMMON_FLAGS "${COMMON_FLAGS} -g3 -O0")
 else ()
     set(COMMON_FLAGS "${COMMON_FLAGS} -O3")
 endif ()
