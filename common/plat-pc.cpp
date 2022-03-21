@@ -29,7 +29,8 @@ uint8_t *nvm;
 static uint32_t shutdown_counter = UINT32_MAX;
 static std::ofstream out_file;
 
-Counters counters_data[COUNTERS_LEN];
+Counters counters_data[2][COUNTERS_LEN];
+uint8_t counters_cur_copy_id = 0;
 uint32_t total_jobs = 0;
 
 #ifdef USE_PROTOBUF

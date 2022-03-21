@@ -10,9 +10,9 @@ uint8_t prev_counter = INVALID_POINTER;
 
 Counters *counters() {
 #if ENABLE_PER_LAYER_COUNTERS
-    return counters_data + model_vm.layer_idx;
+    return counters_data[counters_cur_copy_id] + model_vm.layer_idx;
 #else
-    return counters_data;
+    return counters_data[counters_cur_copy_id];
 #endif
 }
 
@@ -20,9 +20,9 @@ template<uint32_t Counters::* MemPtr>
 static uint32_t print_counters() {
     uint32_t total = 0;
     for (uint16_t i = 0; i < MODEL_NODES_LEN; i++) {
-        total += counters_data[i].*MemPtr;
+        total += counters_data[counters_cur_copy_id][i].*MemPtr;
 #if ENABLE_PER_LAYER_COUNTERS
-        my_printf("%12" PRIu32, counters_data[i].*MemPtr);
+        my_printf("%12" PRIu32, counters_data[counters_cur_copy_id][i].*MemPtr);
 #else
         break;
 #endif
@@ -74,7 +74,8 @@ void print_all_counters() {
 
 void reset_counters() {
 #if ENABLE_COUNTERS
-    memset(counters_data, 0, sizeof(Counters) * COUNTERS_LEN);
+    memset(counters_data[counters_cur_copy_id ^ 1], 0, sizeof(Counters) * COUNTERS_LEN);
+    counters_cur_copy_id ^= 1;
 #endif
 }
 
@@ -89,8 +90,9 @@ void report_progress() {
     uint8_t cur_progress = 100 * cur_jobs / total_jobs;
     // report only when the percentage is changed to avoid high UART overheads
     if (cur_progress != last_progress) {
-        my_printf("P,%d,%d,%d" NEWLINE, cur_progress,
-                  counters()->job_preservation/1024, counters()->footprint_preservation/1024);
+        my_printf("P,%d,%d,", cur_progress,
+                  counters()->job_preservation/1024);
+        my_printf("%d" NEWLINE, counters()->footprint_preservation/1024);
         last_progress = cur_progress;
     }
 #endif

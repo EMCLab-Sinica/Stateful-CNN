@@ -48,7 +48,8 @@ struct Counters {
     uint32_t footprint_preservation;
 };
 
-extern Counters counters_data[COUNTERS_LEN];
+extern uint8_t counters_cur_copy_id;
+extern Counters counters_data[2][COUNTERS_LEN];
 Counters *counters();
 #if ENABLE_DEMO_COUNTERS
 extern uint32_t total_jobs;
