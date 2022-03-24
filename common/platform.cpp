@@ -195,7 +195,9 @@ void write_to_nvm_segmented(const uint8_t* vm_buffer, uint32_t nvm_offset, uint1
 }
 
 void record_overflow_handling_overhead(uint32_t cycles) {
+#if ENABLE_COUNTERS
     counters()->overflow_handling += cycles;
+#endif
 }
 
 #if HAWAII

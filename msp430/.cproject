@@ -50,8 +50,9 @@
 								<option id="com.ti.ccstudio.buildDefinitions.MSP430_20.2.compilerID.OPT_FOR_SPEED.1149274484" name="Speed vs. size trade-offs (--opt_for_speed, -mf)" superClass="com.ti.ccstudio.buildDefinitions.MSP430_20.2.compilerID.OPT_FOR_SPEED" value="com.ti.ccstudio.buildDefinitions.MSP430_20.2.compilerID.OPT_FOR_SPEED.5" valueType="enumerated"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.ti.ccstudio.buildDefinitions.MSP430_20.2.compilerID.INCLUDE_PATH.413097960" name="Add dir to #include search path (--include_path, -I)" superClass="com.ti.ccstudio.buildDefinitions.MSP430_20.2.compilerID.INCLUDE_PATH" valueType="includePath">
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}"/>
-									<listOptionValue builtIn="false" value="${PROJECT_LOC}/intermittent-cnn"/>
-									<listOptionValue builtIn="false" value="${PROJECT_LOC}/TI-DSPLib/include"/>
+									<listOptionValue builtIn="false" value="${PROJECT_LOC}/.."/>
+									<listOptionValue builtIn="false" value="${PROJECT_LOC}/../common"/>
+									<listOptionValue builtIn="false" value="${PROJECT_LOC}/../TI-DSPLib/include"/>
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}/driverlib/MSP430FR5xx_6xx"/>
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}/../build"/>
 									<listOptionValue builtIn="false" value="${CCS_BASE_ROOT}/msp430/include"/>

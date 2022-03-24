@@ -142,6 +142,7 @@ if (BUILD_MSP432)
     add_library(plat-mcu ${COMMON_SRC_PATH}/plat-mcu.cpp)
     target_include_directories(plat-mcu
         PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
             ${CMAKE_CURRENT_SOURCE_DIR}/msp432
     )
     target_include_directories(plat-mcu

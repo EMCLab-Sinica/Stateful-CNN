@@ -4,11 +4,11 @@
 #include "cnn_common.h"
 #include <cstdint>
 
-#define ENABLE_COUNTERS 1
+#define ENABLE_COUNTERS 0
 #define ENABLE_PER_LAYER_COUNTERS 0
-#define ENABLE_DEMO_COUNTERS 1
+#define ENABLE_DEMO_COUNTERS 0
 // Some demo codes assume counters are accumulated across layers
-static_assert(ENABLE_PER_LAYER_COUNTERS ^ ENABLE_DEMO_COUNTERS, "ENABLE_PER_LAYER_COUNTERS and ENABLE_DEMO_COUNTERS are mutually exclusive");
+static_assert((!ENABLE_PER_LAYER_COUNTERS) || (!ENABLE_DEMO_COUNTERS), "ENABLE_PER_LAYER_COUNTERS and ENABLE_DEMO_COUNTERS are mutually exclusive");
 
 // Counter pointers have the form offsetof(Counter, field_name). I use offsetof() instead of
 // pointers to member fields like https://stackoverflow.com/questions/670734/pointer-to-class-data-member
@@ -107,4 +107,6 @@ void report_progress();
 #define start_cpu_counter(mem_ptr)
 #define stop_cpu_counter()
 #define print_all_counters()
+#define reset_counters()
+#define report_progress()
 #endif
