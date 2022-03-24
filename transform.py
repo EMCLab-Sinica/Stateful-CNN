@@ -754,7 +754,8 @@ struct Node;
             val = getattr(Constants, item)
         else:
             val = config[item]
-            if not isinstance(val, (int, float, np.int64)):
+            # Somehow for integers, numpy.array uses int64 on Linux and int32 on Windows
+            if not isinstance(val, (int, float, np.int64, np.int32)):
                 continue
         # Making it long to avoid overflow for expressions like
         # INTERMEDIATE_VALUES_SIZE * NUM_SLOTS on 16-bit systems

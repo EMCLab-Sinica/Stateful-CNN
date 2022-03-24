@@ -1,5 +1,4 @@
 import enum
-import fcntl
 import functools
 import itertools
 import logging
@@ -14,11 +13,13 @@ import zipfile
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional
 from urllib.request import urlretrieve
 
+import filelock
 import numpy as np
 import onnx
 import onnxoptimizer
 import onnxruntime
 import onnxruntime.backend as backend
+import platformdirs
 
 logger = logging.getLogger(__name__)
 
@@ -170,14 +171,9 @@ def load_har(start: int, limit: int):
         sys.path = orig_sys_path
 
 def download_file(url: str, filename: str, post_processor: Optional[Callable] = None) -> os.PathLike:
-    xdg_cache_home = pathlib.Path(os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache')))
+    xdg_cache_home = platformdirs.user_cache_path()
 
-    # Based on https://myapollo.com.tw/zh-tw/python-fcntl-flock/
     lock_path = xdg_cache_home / f'{filename}.lock'
-    try:
-        lock_f = open(lock_path, 'r')
-    except FileNotFoundError:
-        lock_f = open(lock_path, 'w')
 
     # Inspired by https://stackoverflow.com/a/53643011
     class ProgressHandler:
@@ -190,9 +186,7 @@ def download_file(url: str, filename: str, post_processor: Optional[Callable] = 
                 logger.info('Downloaded: %d%%', progress)
                 self.last_reported = progress
 
-    try:
-        fcntl.flock(lock_f, fcntl.LOCK_EX)
-
+    with filelock.FileLock(lock_path):
         local_path = xdg_cache_home / filename
         if not local_path.exists():
             urlretrieve(url, local_path, ProgressHandler())
@@ -200,8 +194,6 @@ def download_file(url: str, filename: str, post_processor: Optional[Callable] = 
         ret = local_path
         if post_processor:
             ret = post_processor(local_path)
-    finally:
-        lock_f.close()
 
     return ret
 

@@ -1,6 +1,7 @@
 # Some requirements do not have version constraints as the latest
 # version does not support Python 3.7
 
+filelock==3.4.2
 numpy
 onnx==1.11.0
 onnxoptimizer==0.2.6
@@ -9,3 +10,4 @@ tensorflow==2.8.0
 torchaudio==0.10.1
 # needed for deep-learning-HAR
 pandas
+platformdirs==2.5.0

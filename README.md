@@ -82,7 +82,6 @@ Below is an explanation of the directories/files found in this repo.
 
 Here are basic software and hardware requirements to build the Stateful NN inference engine:
 
-* A Unix-like operating system. Currently Windows is not supported.
 * Python >= 3.7
 * Several deep learning Python libraries defined in `requirements.txt`. Those libraries can be installed with `pip3 install -r requirements.txt`.
 * [Code composer studio](https://www.ti.com/tool/CCSTUDIO) >= 11.0
@@ -95,6 +94,8 @@ To build the simulator, basic toolchain for C/C++ development is also necessary:
 
 * CMake >= 2.8.12
 * A modern compiler (gcc or clang) supporting C++ 14
+
+Note that the simulator requires a Unix-like operating system. Currently Windows is not supported.
 
 ### Setup and Build
 
