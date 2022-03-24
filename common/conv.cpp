@@ -902,7 +902,7 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
                 int16_t *to_add = lea_buffer + input_tile_c_index * chunk_len;
                 uint16_t cur_input_offset = input_tile_c_index * tiling_results_len + input_offset;
                 my_memcpy_from_param(model, to_add, data, cur_input_offset, real_chunk_len * sizeof(int16_t));
-#if JAPARI
+#if JAPARI && ENABLE_COUNTERS
                 counters()->data_loading += (real_chunk_len/2)*(4*8);
 #endif
 #if STATEFUL
