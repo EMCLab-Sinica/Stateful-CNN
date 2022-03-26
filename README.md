@@ -46,9 +46,9 @@ Below is an explanation of the directories/files found in this repo.
 │   ├── plat-mcu.*
 │   ├── platform.*
 │   └── pooling.cpp
-├── exp
+├── dnn-models
 │   └── ...
-├── models
+├── exp
 │   └── ...
 ├── msp430
 ├── msp432
@@ -72,7 +72,7 @@ Below is an explanation of the directories/files found in this repo.
 * `common/my_dsplib.*` abstract differences between hardware for accelerated computation.
 * `common/my_debug.*` and `common/counters.*` include helper functions for developing inference engines and measuring the performance.
 * `exp` includes scripts for measuring model accuracy and inference latency in experiments.
-* `models` includes training scripts, pre-trained models used in experiments and scripts for converting different model formats to ONNX.
+* `dnn-models` includes training scripts, pre-trained models used in experiments and scripts for converting different model formats to ONNX.
 * `transform.py` is responsible for transforming an off-the-shelf deep learning model into a custom format recognized by the Stateful NN inference engine, and `configs.py` includes model parameters used during transformation.
 * `utils.py` includes Python functions shared by `transform.py` and scripts under `exp/`.
 

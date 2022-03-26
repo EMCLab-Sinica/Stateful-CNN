@@ -10,7 +10,7 @@ def main():
     for initializer in model.graph.initializer:
         if initializer.name == 'Pooling160_Output_0_reshape0_shape':
             initializer.int64_data[:] = [-1, 256]
-    onnx.save_model(model, 'models/mnist-8.onnx')
+    onnx.save_model(model, 'dnn-models/mnist-8.onnx')
 
 if __name__ == '__main__':
     main()

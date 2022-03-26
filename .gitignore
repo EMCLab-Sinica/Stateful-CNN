@@ -2,8 +2,8 @@
 *.o
 *.pyc
 /build/
-/models/parse_model/external/*.pb-c.*
-/models/parse_model/parse_model
+/dnn-models/parse_model/external/*.pb-c.*
+/dnn-models/parse_model/parse_model
 /gcov/
 
 # data files
