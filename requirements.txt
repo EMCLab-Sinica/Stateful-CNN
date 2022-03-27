@@ -1,12 +1,12 @@
 filelock==3.4.2
-numpy==1.22.3; python_version >= '3.7'
-numpy==1.21.5; python_version < '3.7'
+numpy==1.22.3; python_version >= '3.8'
+numpy==1.21.5; python_version < '3.8'
 onnx==1.11.0
 onnxoptimizer==0.2.6
 onnxruntime==1.11.0
 tensorflow==2.8.0
 torchaudio==0.10.1
 # pandas needed for deep-learning-HAR
-pandas==1.4.1; python_version >= '3.7'
-pandas==1.3.5; python_version < '3.7'
+pandas==1.4.1; python_version >= '3.8'
+pandas==1.3.5; python_version < '3.8'
 platformdirs==2.5.0
