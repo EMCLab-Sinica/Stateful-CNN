@@ -21,7 +21,7 @@ def build_and_test(config, suffix, intermittent):
         except ValueError:
             pass
         my_debug = 3
-    check_call([sys.executable, TOPDIR / 'transform.py', *config])
+    check_call([sys.executable, TOPDIR / 'dnn-models' / 'transform.py', *config])
 
     check_call(['cmake', '-S', TOPDIR, '-B', 'build', '-DBUILD_MSP432=OFF', f'-DMY_DEBUG={my_debug}'])
     check_call(['make', '-C', 'build'])
