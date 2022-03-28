@@ -9,6 +9,10 @@
 #include "my_dsplib.h"
 #include "intermittent-cnn.h"
 
+/**
+ * For fully-connected layers, which are implemented via Gemm in ONNX.
+ */
+
 void alloc_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *output, const Node* node) {
     const ParameterInfo *A = input[0], *B = input[1];
 

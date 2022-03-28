@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 OPS_WITH_MERGE = ['Conv', 'Gemm']
 
-TOPDIR = pathlib.Path(__file__).absolute().parent
+TOPDIR = pathlib.Path(__file__).absolute().parents[1]
 
 audio_ops = ['DecodeWav', 'AudioSpectrogram', 'Mfcc']
 

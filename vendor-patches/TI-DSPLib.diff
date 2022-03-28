@@ -49,9 +49,9 @@ index 888148c..ccf43e5 100644
 +#include <stdint.h>
 +#include "c_callbacks.h"
 +#include "data.h"
-+#include "Tools/our_misc.h"
-+#include "Tools/myuart.h"
-+#include "Tools/ext_fram/extfram.h"
++#include "tools/our_misc.h"
++#include "tools/myuart.h"
++#include "tools/ext_fram/extfram.h"
 +
 +#if STATEFUL
 +#ifdef __TI_COMPILER_VERSION__

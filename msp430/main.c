@@ -4,8 +4,8 @@
  *  Author: Meenchen
  */
 
-#include <Tools/myuart.h>
-#include <Tools/dvfs.h>
+#include <tools/myuart.h>
+#include <tools/dvfs.h>
 
 #include "plat-mcu.h"
 

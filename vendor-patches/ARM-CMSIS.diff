@@ -38,7 +38,7 @@ index 670ace1..c4998e8 100644
  #include "arm_math.h"
 +#include "data.h"
 +#ifdef __MSP432__
-+#include "Tools/ext_fram/extfram.h"
++#include "tools/ext_fram/extfram.h"
 +
 +static uint8_t dma_started;
 +static inline void try_invoke_dma(data_preservation_func data_preserve, struct ParameterInfo *param, uint16_t offset_in_word, size_t values_to_preserve, q15_t *pData, uint16_t timer_delay) {

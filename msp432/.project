@@ -31,11 +31,6 @@
 			<locationURI>PARENT-1-PROJECT_LOC/ARM-CMSIS</locationURI>
 		</link>
 		<link>
-			<name>Tools</name>
-			<type>2</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Tools</locationURI>
-		</link>
-		<link>
 			<name>common</name>
 			<type>2</type>
 			<locationURI>PARENT-1-PROJECT_LOC/common</locationURI>
@@ -44,6 +39,11 @@
 			<name>data.cpp</name>
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/build/data.cpp</locationURI>
+		</link>
+		<link>
+			<name>tools</name>
+			<type>2</type>
+			<locationURI>PARENT-1-PROJECT_LOC/tools</locationURI>
 		</link>
 	</linkedResources>
 </projectDescription>

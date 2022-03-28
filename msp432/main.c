@@ -1,8 +1,8 @@
 #include <driverlib.h>
 #include "msp.h"
 #include "plat-mcu.h"
-#include "Tools/myuart.h"
-#include "Tools/dvfs.h"
+#include "tools/myuart.h"
+#include "tools/dvfs.h"
 
 /**
  * main.c

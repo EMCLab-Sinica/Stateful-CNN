@@ -1,7 +1,7 @@
 #pragma once
 
 #include "data.h"
-#include "Tools/ext_fram/extfram.h"
+#include "tools/ext_fram/extfram.h"
 #include <stdint.h>
 
 #define PLAT_LABELS_DATA_LEN 1

@@ -16,7 +16,7 @@
 #endif
 
 #if defined(__MSP430__) || defined(__MSP432__)
-#  include "Tools/myuart.h"
+#  include "tools/myuart.h"
 #  define my_printf print2uart_new
 #  define my_flush()
 #  define NEWLINE "\r\n"

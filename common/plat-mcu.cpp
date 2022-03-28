@@ -14,9 +14,9 @@
 #include "platform.h"
 #include "data.h"
 #include "my_debug.h"
-#include "Tools/myuart.h"
-#include "Tools/our_misc.h"
-#include "Tools/dvfs.h"
+#include "tools/myuart.h"
+#include "tools/our_misc.h"
+#include "tools/dvfs.h"
 
 #ifdef __MSP430__
 #define DATA_SECTION_NVM _Pragma("DATA_SECTION(\".nvm\")")

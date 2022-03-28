@@ -6,7 +6,7 @@
 	path = dnn-models/deep-learning-HAR
 	url = ssh://git@github.com/EMCLab-Sinica/deep-learning-HAR.git
 [submodule "Tools"]
-	path = Tools
+	path = tools
 	url = ssh://git@github.com/EMCLab-Sinica/Tools.git
 [submodule "TI-DSPLib"]
 	path = TI-DSPLib
