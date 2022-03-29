@@ -54,8 +54,8 @@ Here are basic software and hardware requirements to build Stateful and the ligh
 * Several deep learning Python libraries defined in `requirements.txt`. Those libraries can be installed with `pip3 install -r requirements.txt`.
 * [Code composer studio](https://www.ti.com/tool/CCSTUDIO) >= 11.0
 * [MSP-EXP430FR5994 LaunchPad](https://www.ti.com/tool/MSP-EXP430FR5994) or [MSP-EXP432P401R LaunchPad](https://www.ti.com/tool/MSP-EXP432P401R)
-* For MSP432, [ARM CMSIS Library](https://github.com/ARM-software/CMSIS_5/) 5.7.0 and [MSP432 driverlib 3.21.00.05](https://www.ti.com/tool/MSPDRIVERLIB)
-* For MSP430, [MSP DSP Library](https://www.ti.com/tool/MSP-DSPLIB) 1.30.00.02 and [MSP430 driverlib 2.91.13.01](https://www.ti.com/tool/MSPDRIVERLIB)
+* For MSP432, [ARM CMSIS Library](https://github.com/ARM-software/CMSIS_5/) 5.7.0 and [MSP432 driverlib](https://www.ti.com/tool/MSPDRIVERLIB) 3.21.00.05
+* For MSP430, [MSP DSP Library](https://www.ti.com/tool/MSP-DSPLIB) 1.30.00.02 and [MSP430 driverlib](https://www.ti.com/tool/MSPDRIVERLIB) 2.91.13.01
 
 ### Setup and Build
 
