@@ -27,7 +27,7 @@ index 48bee62..e858f7a 100644
    /**
     * @brief Q31 matrix multiplication
 diff --git a/CMSIS/DSP/Source/MatrixFunctions/arm_mat_mult_fast_q15.c b/CMSIS/DSP/Source/MatrixFunctions/arm_mat_mult_fast_q15.c
-index 670ace1..c4998e8 100644
+index 670ace1..616043f 100644
 --- a/CMSIS/DSP/Source/MatrixFunctions/arm_mat_mult_fast_q15.c
 +++ b/CMSIS/DSP/Source/MatrixFunctions/arm_mat_mult_fast_q15.c
 @@ -26,7 +26,37 @@

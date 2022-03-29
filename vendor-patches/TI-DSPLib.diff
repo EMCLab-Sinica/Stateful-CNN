@@ -38,10 +38,10 @@ index a6adb7d..9289be8 100644
  #ifndef MSP_DISABLE_DIAGNOSTICS
      switch (status) {
 diff --git a/source/matrix/msp_matrix_mpy_q15.c b/source/matrix/msp_matrix_mpy_q15.c
-index 888148c..ccf43e5 100644
+index 888148c..d33ed96 100644
 --- a/source/matrix/msp_matrix_mpy_q15.c
 +++ b/source/matrix/msp_matrix_mpy_q15.c
-@@ -31,10 +31,36 @@
+@@ -31,10 +31,37 @@
   * --/COPYRIGHT--*/
  
  #include "DSPLib.h"
@@ -51,7 +51,6 @@ index 888148c..ccf43e5 100644
 +#include "data.h"
 +#include "tools/our_misc.h"
 +#include "tools/myuart.h"
-+#include "tools/ext_fram/extfram.h"
 +
 +#if STATEFUL
 +#ifdef __TI_COMPILER_VERSION__
@@ -75,11 +74,13 @@ index 888148c..ccf43e5 100644
  #if defined(MSP_USE_LEA)
  
 -msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q15 *srcA, const _q15 *srcB, _q15 *dst)
++#include "tools/ext_fram/extfram.h"
++
 +msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q15 *srcA, const _q15 *srcB, _q15 *dst, data_preservation_func data_preserve, struct ParameterInfo *param, uint16_t offset_in_word, size_t values_to_preserve, int16_t offset, int16_t n_keep_state_bits)
  {
      uint16_t srcARows;
      uint16_t srcACols;
-@@ -68,6 +94,12 @@ msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q1
+@@ -68,6 +95,12 @@ msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q1
      }
  #endif //MSP_DISABLE_DIAGNOSTICS
  
@@ -92,7 +93,7 @@ index 888148c..ccf43e5 100644
      /* Initialize LEA if it is not enabled. */
      if (!(LEAPMCTL & LEACMDEN)) {
          msp_lea_init();
-@@ -92,7 +124,43 @@ msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q1
+@@ -92,7 +125,43 @@ msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q1
          LEAPMS1 = MSP_LEA_CONVERT_ADDRESS(leaParams);
  
          /* Invoke the LEACMD__MPYMATRIXROW command. */
@@ -137,7 +138,7 @@ index 888148c..ccf43e5 100644
  
  #ifndef MSP_DISABLE_DIAGNOSTICS
          /* Check LEA interrupt flags for any errors. */
-@@ -125,7 +193,7 @@ msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q1
+@@ -125,7 +194,7 @@ msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q1
  
  #else //MSP_USE_LEA
  
@@ -146,7 +147,7 @@ index 888148c..ccf43e5 100644
  {
      uint16_t cntr;
      uint16_t srcARows;
-@@ -233,6 +301,14 @@ msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q1
+@@ -233,6 +302,14 @@ msp_status msp_matrix_mpy_q15(const msp_matrix_mpy_q15_params *params, const _q1
      }
  #endif //__MSP430_HAS_MPY32__
  
