@@ -8,6 +8,7 @@ option(USE_PROTOBUF "Use Protobuf to save results" OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 # Too many parameters are unused if some features are not enabled
 set(COMMON_FLAGS "-Wall -Wextra -Wshadow -Wundef -Wno-unused-parameter -pedantic")
 if (${MY_DEBUG} GREATER 1)
@@ -22,6 +23,7 @@ endif ()
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS} -Wstrict-prototypes -std=c11")
 # Don't use something that require C++17 or newer, which are not supported by MSP-CGT yet
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -std=c++14 -Wold-style-cast")
+endif ()
 
 if (USE_PROTOBUF)
     find_package(Protobuf REQUIRED)
@@ -34,11 +36,11 @@ set(COMMON_SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/common)
 
 
 file(GLOB CCS_ARM_ROOT $ENV{HOME}/ti/ccs*/ccs/ccs_base/arm)
-if (NOT "${CCS_ARM_ROOT}" STREQUAL "")
+if (NOT "${CCS_ARM_ROOT}" STREQUAL "" AND NOT CMAKE_CROSSCOMPILING)
     message(STATUS "Found CCS ARM root at ${CCS_ARM_ROOT}")
     option (BUILD_MSP432 "Build for MSP432" ON)
 else ()
-    message(WARNING "No CCS ARM root found. Not building plat-mcu.")
+    message(WARNING "No CCS ARM root found or cross-compiling detected. Not building plat-mcu.")
     option (BUILD_MSP432 "Build for MSP432" OFF)
 endif ()
 
@@ -112,7 +114,7 @@ add_executable(intermittent-cnn ${intermittent_cnn_SOURCES})
 
 target_compile_definitions(intermittent-cnn
     PRIVATE
-        POSIX_BUILD
+        PC_BUILD
         MY_DEBUG=${MY_DEBUG}
 )
 

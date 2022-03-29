@@ -183,6 +183,7 @@ parser.add_argument('--write-images', action='store_true')
 parser.add_argument('--batch-size', type=int, default=1)
 parser.add_argument('--target', choices=('msp430', 'msp432'), required=True)
 parser.add_argument('--debug', action='store_true')
+parser.add_argument('--data-output-dir', metavar='DIR', default='build')
 intermittent_methodology = parser.add_mutually_exclusive_group(required=True)
 intermittent_methodology.add_argument('--ideal', action='store_true')
 intermittent_methodology.add_argument('--hawaii', action='store_true')
@@ -734,9 +735,9 @@ if args.write_images:
     with open('images/ans.txt', 'w') as f:
         f.write(' '.join(map(str, model_data.labels)))
 
-pathlib.Path('build').mkdir(exist_ok=True)
+pathlib.Path(args.data_output_dir).mkdir(exist_ok=True)
 
-with open('build/data.cpp', 'w') as output_c, open('build/data.h', 'w') as output_h:
+with open(f'{args.data_output_dir}/data.cpp', 'w') as output_c, open(f'{args.data_output_dir}/data.h', 'w') as output_h:
     output_h.write('''
 #pragma once
 
@@ -803,14 +804,18 @@ struct Node;
             '''))
         else:
             output_c.write(textwrap.dedent(f'''
+                #if defined(__GNUC__) || defined(__clang__)
                 void __attribute__((weak)) alloc_{op.lower()}(struct Model *model, const struct ParameterInfo *[], struct ParameterInfo *output, const struct Node*) {{
                     ERROR_OCCURRED();
                 }}
+                #endif
             '''))
         output_c.write(textwrap.dedent(f'''
+            #if defined(__GNUC__) || defined(__clang__)
             void __attribute__((weak)) handle_{op.lower()}(struct Model *model, const struct ParameterInfo *[], struct ParameterInfo *output, const struct Node*) {{
                 ERROR_OCCURRED();
             }}
+            #endif
         '''))
 
     # data

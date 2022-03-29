@@ -2,6 +2,7 @@
 *.o
 *.pyc
 /build/
+/build-windows/
 /dnn-models/parse_model/external/*.pb-c.*
 /dnn-models/parse_model/parse_model
 /gcov/

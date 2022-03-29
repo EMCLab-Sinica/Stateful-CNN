@@ -143,7 +143,7 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
         for (; j < B->dims[1]; j += OP_FILTERS) {
             int16_t tile_width;
             // this variable is used only for JAPARI. Don't use [[maybe_unused]] until TI CGT support C++17.
-            bool exact_tile __attribute__((unused)) = true;
+            bool exact_tile = true;
             if (OP_FILTERS > B->dims[1] - j) {
                 tile_width = B->dims[1] - j;
                 exact_tile = true;
@@ -168,6 +168,8 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
                 start_cpu_counter(offsetof(Counters, embedding));
                 move_weights(filter_ptr, exact_tile, values_to_preserve, tile_width);
                 stop_cpu_counter();
+#else
+                (void)exact_tile; // silent a compiler warning
 #endif
                 filter_ptr += full_tile_width;
             }

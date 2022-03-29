@@ -1,4 +1,16 @@
-#ifdef POSIX_BUILD
+/*
+ * A simulator for running Stateful NN on PC.
+ *
+ * To build it, basic toolchain for C/C++ development is necessary:
+ *
+ * CMake >= 2.8.12
+ * A modern compiler (gcc or clang) supporting C++ 14
+ *
+ * After transforming the model with `transform.py`, the simulator can be built with `cmake -B build -S .` and `make -C build`.
+ * The built program can be run with `./build/intermittent-cnn`.
+ */
+
+#ifdef PC_BUILD
 
 #include "intermittent-cnn.h"
 #include "cnn_common.h"
@@ -9,6 +21,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#ifdef __linux__
 #include <fcntl.h>
 #include <getopt.h>
 #include <unistd.h>
@@ -18,6 +31,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/ptrace.h>
+#endif
 #include <fstream>
 #include <memory>
 #ifdef USE_PROTOBUF
@@ -44,6 +58,8 @@ static void save_model_output_data() {
 int main(int argc, char* argv[]) {
     int ret = 0, opt_ch, button_pushed = 0, read_only = 0, n_samples = 0;
     Model *model;
+
+#ifdef __linux__
     int nvm_fd = -1;
 
     while((opt_ch = getopt(argc, argv, "bfrc:s:")) != -1) {
@@ -93,6 +109,10 @@ int main(int argc, char* argv[]) {
         perror("mmap() failed");
         goto exit;
     }
+#else
+    (void)read_only; // no simulated NVM other than Linux - silent a compiler warning
+    nvm = new uint8_t[NVM_SIZE]();
+#endif
 
 #if USE_ARM_CMSIS
     my_printf_debug("Use DSP from ARM CMSIS pack" NEWLINE);
@@ -123,16 +143,22 @@ int main(int argc, char* argv[]) {
 
     print_all_counters();
 
+#ifdef __linux__
 exit:
     close(nvm_fd);
+#else
+    delete [] nvm;
+#endif
     return ret;
 }
 
 [[ noreturn ]] static void exit_with_status(uint8_t exit_code) {
+#ifdef __linux__
     if (ptrace(PTRACE_TRACEME, 0, NULL, 0) == -1) {
         // Let the debugger break
         kill(getpid(), SIGINT);
     }
+#endif
     // give up otherwise
     exit(exit_code);
 }
@@ -182,19 +208,17 @@ void my_erase() {
 }
 
 void copy_samples_data(void) {
-    std::ifstream samples_file("samples.bin");
+    std::ifstream samples_file("samples.bin", std::ios::binary);
+    MY_ASSERT(samples_file.good(), "Failed to open samples.bin");
     const uint16_t samples_buflen = 1024;
     char samples_buffer[samples_buflen];
     uint32_t samples_offset = SAMPLES_OFFSET;
-    while (true) {
+    while (!samples_file.eof()) {
         samples_file.read(samples_buffer, samples_buflen);
         int16_t read_len = samples_file.gcount();
         write_to_nvm(samples_buffer, samples_offset, read_len);
         samples_offset += read_len;
         my_printf_debug("Copied %d bytes of samples data" NEWLINE, read_len);
-        if (read_len < samples_buflen) {
-            break;
-        }
     }
 }
 
@@ -204,4 +228,4 @@ void notify_model_finished(void) {}
     exit_with_status(1);
 }
 
-#endif // POSIX_BUILD
+#endif // PC_BUILD
