@@ -9,9 +9,9 @@ import numpy as np
 import serial
 
 TOPDIR = pathlib.Path(__file__).absolute().parents[1]
-sys.path.append(str(TOPDIR / 'Tools'))
+sys.path.append(str(TOPDIR / 'tools'))
 
-from emclab import uart_utils
+import uart_utils
 
 class DataHandler:
     N = 100
