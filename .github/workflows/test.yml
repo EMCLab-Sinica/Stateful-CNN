@@ -4,15 +4,33 @@ on: push
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
     steps:
     - uses: actions/checkout@v3
       with:
         ssh-key: ${{ secrets.ci_ssh_key }}
         submodules: recursive
+
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
         python-version: 3.7
+        cache: pip
+
+    - name: Add msbuild to PATH
+      uses: microsoft/setup-msbuild@v1.1
+      if: ${{ matrix.os == 'windows-latest' }}
+
+    # Strings in expressions should use single quotes https://docs.github.com/en/actions/learn-github-actions/expressions#literals
     - name: Run tests
       run: utils/test-github-actions.sh
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+
+    - name: Run Windows tests
+      run: utils/test-github-actions-windows.bat
+      if: ${{ matrix.os == 'windows-latest' }}
