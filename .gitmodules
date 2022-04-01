@@ -1,7 +1,6 @@
 [submodule "models/SqueezeNet_vs_CIFAR10.git"]
 	path = dnn-models/SqueezeNet_vs_CIFAR10
 	url = ssh://git@github.com/EMCLab-Sinica/SqueezeNet_vs_CIFAR10.git
-	ignore = untracked
 [submodule "models/deep-learning-HAR"]
 	path = dnn-models/deep-learning-HAR
 	url = ssh://git@github.com/EMCLab-Sinica/deep-learning-HAR.git
