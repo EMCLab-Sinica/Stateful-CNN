@@ -1,0 +1,4 @@
+*.pyc
+data/
+checkpoints-cnn/
+.ipynb_checkpoints/

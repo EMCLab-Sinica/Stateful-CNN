@@ -1,0 +1,6 @@
+# For HAR-CNN.ipynb
+numpy
+pandas
+scikit-learn
+matplotlib
+tensorflow-gpu<2
