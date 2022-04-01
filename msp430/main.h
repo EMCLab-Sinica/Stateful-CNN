@@ -1,7 +1,6 @@
 /*
  *  main.h
  *
- *  Author: Meenchen
  */
 
 #define configTICK_VECTOR           TIMER0_A0_VECTOR

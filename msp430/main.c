@@ -1,7 +1,6 @@
 /*
  *  main.c
  *
- *  Author: Meenchen
  */
 
 #include <tools/myuart.h>
