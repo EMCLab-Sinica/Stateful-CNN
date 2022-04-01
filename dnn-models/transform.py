@@ -723,9 +723,6 @@ for idx in range(model_data.images.shape[0]):
         os.makedirs('images', exist_ok=True)
         # Restore conanical image format (H, W, C)
         im = np.squeeze(im * 256)
-        if args.config == 'mnist':
-            im = np.expand_dims(im, axis=-1)
-            im = 255 - im
         cv2.imwrite(f'images/test{idx:02d}.png', im)
 
 for label in model_data.labels:

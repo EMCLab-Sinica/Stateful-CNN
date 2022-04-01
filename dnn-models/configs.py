@@ -1,5 +1,4 @@
 from utils import (
-    load_data_mnist,
     load_data_cifar10,
     load_data_google_speech,
     load_har,
@@ -7,19 +6,6 @@ from utils import (
 
 # intermediate_values_size should < 65536, or TI's compiler gets confused
 configs = {
-    'mnist': {
-        'onnx_model': 'dnn-models/mnist-8.onnx',
-        'scale': 4,
-        'input_scale': 4,
-        'num_slots': 2,
-        'intermediate_values_size': 26000,
-        'data_loader': load_data_mnist,
-        'n_all_samples': 10000,
-        'sample_size': [1, 28, 28],
-        'op_filters': 4,
-        'first_sample_outputs': [ -1.247997, 0.624493, 8.609308, 9.392411, -13.685033, -6.018567, -23.386677, 28.214134, -6.762523, 3.924627 ],
-        'fp32_accuracy': 0.9890,
-    },
     'cifar10': {
         'onnx_model': 'dnn-models/squeezenet_cifar10.onnx',
         'scale': 2,

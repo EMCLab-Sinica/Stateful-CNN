@@ -5,7 +5,6 @@ import logging
 import os.path
 import pathlib
 import pickle
-import re
 import struct
 import sys
 import tarfile
@@ -53,37 +52,6 @@ def extract_archive(archive_path: pathlib.Path, subdir: str):
                 members = [member for member in zip_f.namelist() if member.startswith(subdir)]
                 zip_f.extractall(archive_path.parent, members=members)
     return archive_dir
-
-def load_data_mnist(start: int, limit: int) -> ModelData:
-    images = []
-    labels = []
-
-    filename = download_file('https://github.com/microsoft/NativeKeras/raw/master/Datasets/cntk_mnist/Test-28x28_cntk_text.txt',
-                             'MNIST-Test-28x28_cntk_text.txt')
-
-    with open(filename) as f:
-        counter = 0
-        for line in f:
-            if start > 0:
-                start -= 1
-                continue
-            mobj = re.match(r'\|labels ([\d ]+) \|features ([\d ]+)', line)
-            if mobj is None:
-                raise ValueError
-            labels.append(np.argmax(list(map(int, mobj.group(1).split(' ')))))
-            im = np.reshape(np.array(list(map(int, mobj.group(2).split(' ')))), (28, 28))
-
-            # Check CNTK_103*.ipynb in https://github.com/microsoft/CNTK/tree/master/Tutorials
-            # for data formats
-            im = im / 256
-            im = np.expand_dims(im, axis=0)
-            images.append(im)
-
-            counter += 1
-            if limit is not None and counter >= limit:
-                break
-
-    return ModelData(labels=labels, images=np.array(images, dtype=np.float32), data_layout=DataLayout.NCHW)
 
 def load_data_cifar10(start: int, limit: int) -> ModelData:
     archive_dir = download_file('https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz',
