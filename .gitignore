@@ -11,7 +11,6 @@
 /nvm.bin
 /samples.bin
 /images/
-/exp/*.txt
 
 # CCS-generated files
 # See also https://github.com/github/gitignore/blob/main/Global/Eclipse.gitignore
