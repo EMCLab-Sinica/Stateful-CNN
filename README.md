@@ -66,7 +66,7 @@ Here are basic software and hardware requirements to build Stateful and the ligh
     cd ./ARM-CMSIS && patch -Np1 -i ../vendor-patches/ARM-CMSIS.diff
     cd ./TI-DSPLib && patch -Np1 -i ../vendor-patches/TI-DSPLib.diff
     ```
-1. Convert the provided pre-trained models with the command `./dnn-models/transform.py --target (msp430|msp432) (--ideal|--hawaii|--japari|--stateful) (cifar10|har|kws)` to specify the target platform, the intermittent inference approach and the model to deploy.
+1. Convert the provided pre-trained models with the command `python3 dnn-models/transform.py --target (msp430|msp432) (--ideal|--hawaii|--japari|--stateful) (cifar10|har|kws)` to specify the target platform, the intermittent inference approach and the model to deploy.
 
 #### Building for MSP430FR5994
 
