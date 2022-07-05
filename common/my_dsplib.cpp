@@ -24,10 +24,17 @@
 #endif
 #endif
 
+static uint8_t check_buffer_address_with_base(const int16_t* base_addr, uint32_t whole_buffer_size, const int16_t* addr, uint32_t blockSize) {
+    uint8_t ret = 1;
+    ret &= (addr >= base_addr && addr < base_addr + whole_buffer_size);
+    ret &= (addr + blockSize - 1 >= base_addr && addr + blockSize - 1 < base_addr + whole_buffer_size);
+    ret &= ((addr - base_addr) % 2 == 0);
+    return ret;
+}
+
 void check_buffer_address(const int16_t* addr, uint32_t blockSize) {
-    MY_ASSERT(addr >= lea_buffer && addr < lea_buffer + LEA_BUFFER_SIZE);
-    MY_ASSERT(addr + blockSize - 1 >= lea_buffer && addr + blockSize - 1 < lea_buffer + LEA_BUFFER_SIZE);
-    MY_ASSERT((addr - lea_buffer) % 2 == 0);
+    MY_ASSERT(check_buffer_address_with_base(lea_buffer, LEA_BUFFER_SIZE, addr, blockSize) ||
+              check_buffer_address_with_base(state_offsets, OUTPUT_LEN, addr, blockSize));
 }
 
 void my_add_q15(const int16_t *pSrcA, const int16_t *pSrcB, int16_t *pDst, uint32_t blockSize) {
@@ -42,6 +49,10 @@ void my_add_q15(const int16_t *pSrcA, const int16_t *pSrcB, int16_t *pDst, uint3
 }
 
 void my_fill_q15(int16_t value, int16_t *pDst, uint32_t blockSize) {
+    if (!blockSize) {
+        return;
+    }
+
     check_buffer_address(pDst, blockSize);
 #if !USE_ARM_CMSIS
     uint32_t blockSizeForLEA = blockSize / 2 * 2;
