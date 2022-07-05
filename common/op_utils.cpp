@@ -14,6 +14,8 @@
 #endif
 int16_t lea_buffer[LEA_BUFFER_SIZE];
 
+int16_t state_offsets[OUTPUT_LEN] = { 0 };
+
 #if HAWAII
 static int16_t non_recorded_jobs = 0;
 void hawaii_record_footprints(Model* model, uint16_t vector_len) {
@@ -238,27 +240,45 @@ void my_offset_q15_batched(const int16_t *pSrc, int16_t offset, int16_t *pDst, u
 }
 
 #if INDIRECT_RECOVERY
-uint16_t update_states(int16_t* buffer, uint16_t buffer_size, uint32_t offset, int16_t embedding_offset, uint16_t next_turning_point, bool enforce_states) {
-    uint16_t buffer_size_first = MIN_VAL(next_turning_point - offset, buffer_size);
-    MY_ASSERT(buffer_size_first <= buffer_size);
-#if STATEFUL
-    my_offset_q15_batched(buffer, -embedding_offset, buffer, buffer_size_first, enforce_states);
-#else
-    for (uint16_t j = BATCH_SIZE; j < buffer_size; j += BATCH_SIZE + 1) {
-        buffer[j] = (-embedding_offset > 0) ? 1 : -1;
-    }
-#endif
-    if (buffer_size_first != buffer_size) {
-        int16_t* to_offset = buffer + buffer_size_first;
-#if STATEFUL
-        my_offset_q15_batched(to_offset, embedding_offset, to_offset, buffer_size - buffer_size_first, enforce_states);
-#else
-        for (uint16_t j = BATCH_SIZE; j < buffer_size - buffer_size_first; j += BATCH_SIZE + 1) {
-            to_offset[j] = (embedding_offset > 0) ? 1 : -1;
+void fill_state_offsets(const uint16_t cur_output_data_offset, const uint16_t n_filters, int16_t* old_output_offset, uint8_t* turning_point_idx, uint16_t* next_turning_point, const SlotInfo* cur_slot_info) {
+    uint16_t last_range_start = 0;
+    while (*next_turning_point < cur_output_data_offset) {
+        *old_output_offset = -*old_output_offset;
+        if (*turning_point_idx < cur_slot_info->n_turning_points) {
+            *next_turning_point = cur_slot_info->turning_points[*turning_point_idx];
+            (*turning_point_idx)++;
+        } else {
+            *next_turning_point = INVALID_TURNING_POINT;
+            break;
         }
-#endif
     }
-    return buffer_size_first;
+    while ((*next_turning_point >= cur_output_data_offset) && (*next_turning_point < cur_output_data_offset + n_filters)) {
+        my_printf_debug("next_turning_point = %d" NEWLINE, *next_turning_point);
+        uint16_t cur_range_end = *next_turning_point - cur_output_data_offset;
+        my_fill_q15(-*old_output_offset, state_offsets + last_range_start, cur_range_end - last_range_start);
+        last_range_start = cur_range_end;
+        *old_output_offset = -*old_output_offset;
+        if (*turning_point_idx < cur_slot_info->n_turning_points) {
+            *next_turning_point = cur_slot_info->turning_points[*turning_point_idx];
+            (*turning_point_idx)++;
+        } else {
+            *next_turning_point = INVALID_TURNING_POINT;
+        }
+    }
+    my_fill_q15(-*old_output_offset, state_offsets + last_range_start, n_filters - last_range_start);
+}
+
+void update_states(int16_t* buffer, uint16_t buffer_size, bool enforce_states) {
+#if STATEFUL
+    for (uint16_t j = BATCH_SIZE - 1; j < buffer_size; j += BATCH_SIZE) {
+        buffer[j] += state_offsets[j];
+    }
+#endif
+#if JAPARI
+    for (uint16_t j = BATCH_SIZE; j < buffer_size; j += BATCH_SIZE + 1) {
+        buffer[j] = (state_offset[j] > 0) ? 1 : -1;
+    }
+#endif
 }
 #endif
 

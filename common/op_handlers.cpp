@@ -293,12 +293,10 @@ void handle_add(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 
 #if INDIRECT_RECOVERY
     start_cpu_counter(offsetof(Counters, state_query));
-    uint16_t next_input_turning_point, next_output_turning_point;
-    int16_t input_offset, output_offset;
-    uint8_t input_turning_point_idx, output_turning_point_idx;
-    SlotInfo *input_slot_info, *output_slot_info;
-    find_initial_state_bit(&input_offset, &input_turning_point_idx, &next_input_turning_point, &input_slot_info,
-                           data_offset, model, X);
+    uint16_t next_output_turning_point;
+    int16_t output_offset;
+    uint8_t output_turning_point_idx;
+    SlotInfo* output_slot_info;
     find_initial_state_bit(&output_offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info,
                            data_offset, model, output);
     stop_cpu_counter();
@@ -332,13 +330,9 @@ void handle_add(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
         my_printf_debug("Before strip states" NEWLINE);
         dump_matrix_debug(buffer_a, cur_buffer_size, ValueInfo(output), false);
 
-        start_cpu_counter(offsetof(Counters, state_query));
-        check_next_turning_point(input_offset, input_turning_point_idx, next_input_turning_point, input_slot_info, data_offset);
-        stop_cpu_counter();
-
-        start_cpu_counter(offsetof(Counters, embedding));
-        update_states(buffer_a, cur_buffer_size, data_offset, input_offset, next_input_turning_point, false);
-        stop_cpu_counter();
+        for (uint16_t val_idx = BATCH_SIZE - 1; val_idx < cur_buffer_size; val_idx += BATCH_SIZE) {
+            strip_state(buffer_a + val_idx);
+        }
 
         my_printf_debug("After strip states" NEWLINE);
         dump_matrix_debug(buffer_a, cur_buffer_size, ValueInfo(output), false);
@@ -350,10 +344,10 @@ void handle_add(Model *model, const ParameterInfo *input[], ParameterInfo *outpu
 
 #if INDIRECT_RECOVERY
         start_cpu_counter(offsetof(Counters, state_query));
-        check_next_turning_point(output_offset, output_turning_point_idx, next_output_turning_point, output_slot_info, data_offset);
+        fill_state_offsets(data_offset, cur_buffer_size, &output_offset, &output_turning_point_idx, &next_output_turning_point, output_slot_info);
         stop_cpu_counter();
         start_cpu_counter(offsetof(Counters, embedding));
-        update_states(buffer_a, cur_buffer_size, data_offset, output_offset, next_output_turning_point, true);
+        update_states(buffer_a, cur_buffer_size, true);
         stop_cpu_counter();
         my_printf_debug("After embedding states" NEWLINE);
         dump_matrix_debug(buffer_a, cur_buffer_size, ValueInfo(output), true);

@@ -82,7 +82,6 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
     uint8_t output_turning_point_idx;
     SlotInfo *output_slot_info;
     find_initial_state_bit(&offset, &output_turning_point_idx, &next_output_turning_point, &output_slot_info, first_unfinished_value_offset, model, output);
-    offset = -offset;
     stop_cpu_counter();
 #endif
 
@@ -200,27 +199,20 @@ void handle_gemm(Model *model, const ParameterInfo *input[], ParameterInfo *outp
 
 #if INDIRECT_RECOVERY
             start_cpu_counter(offsetof(Counters, state_query));
-            check_next_turning_point(offset, output_turning_point_idx, next_output_turning_point, output_slot_info, output_offset);
+            fill_state_offsets(output_offset, tile_width, &offset, &output_turning_point_idx, &next_output_turning_point, output_slot_info);
             stop_cpu_counter();
 #endif
 
 #if STATEFUL
             start_cpu_counter(offsetof(Counters, embedding));
-            uint16_t tile_width_first = update_states(filter_ptr, tile_width, output_offset, offset, next_output_turning_point, false);
+            update_states(filter_ptr, tile_width, false);
             stop_cpu_counter();
 #endif
 
             my_printf_debug("Tile for B" NEWLINE);
             dump_matrix_debug(buffer_b, extended_tile_channels, full_tile_width, ValueInfo(B, model));
-
-#if STATEFUL
             my_matrix_mpy_q15(1, extended_tile_channels, extended_tile_channels, full_tile_width, buffer_a, buffer_b, buffer_temp,
-                              output, output_offset, values_to_preserve, offset, tile_width_first);
-#else
-            my_matrix_mpy_q15(1, extended_tile_channels, extended_tile_channels, full_tile_width, buffer_a, buffer_b, buffer_temp,
-                              output, output_offset, values_to_preserve, 0, 0);
-#endif
-
+                              output, output_offset, values_to_preserve);
             my_printf_debug("matrix_mpy_results" NEWLINE);
             dump_matrix_debug(buffer_temp, full_tile_width, ValueInfo(output, model));
             my_printf_debug(NEWLINE);

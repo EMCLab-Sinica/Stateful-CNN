@@ -10,13 +10,6 @@
 #include "my_dsplib.h"
 #include "platform.h"
 
-// TODO: make these adjustable on runtime
-#if !USE_ARM_CMSIS
-#define OUTPUT_LEN 100
-#else
-#define OUTPUT_LEN 256
-#endif
-
 /* Better to not use macros
  * https://stackoverflow.com/a/3437484/3786245
  */
@@ -91,20 +84,18 @@ static ConvTaskParams conv_params_obj;
 int16_t * const matrix_mpy_results = lea_buffer + LEA_BUFFER_SIZE - OUTPUT_LEN;
 
 #if INDIRECT_RECOVERY
-static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filters, uint16_t len, uint8_t first_round) {
-    MY_ASSERT(len < OUTPUT_LEN);
+static void flip_filter_state_bits(ConvTaskParams *conv_params, uint16_t n_filters) {
 #if STATEFUL
-    int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + n_filters * conv_params->filter_offset;
-    if (first_round) {
-        to_flip_state_bits -= len;
-    } else {
-        to_flip_state_bits -= n_filters;
-    }
+    int16_t *to_flip_state_bits = nullptr;
+    to_flip_state_bits = conv_params->filter_buffer_addr + n_filters * (conv_params->filter_offset - 1);
     // need negating filter value here as it will be multiplied with _Q15(-1.0), or -32768
-    int16_t offset = get_value_state_bit(-*(to_flip_state_bits + BATCH_SIZE - 1))*0x4000;
-    my_printf_debug("Flipping %d state bits in filters; first_round=%d, offset=%d" NEWLINE, len, first_round, offset);
-    my_offset_q15_batched(to_flip_state_bits, offset, to_flip_state_bits, len);
-    my_offset_q15_batched(to_flip_state_bits, offset, to_flip_state_bits, len);
+    int8_t state_multiplier = -1;
+    for (uint16_t idx = 0; idx < n_filters; idx++) {
+        if (get_value_state_bit(to_flip_state_bits[idx]) != state_multiplier * get_value_state_bit(state_offsets[idx])) {
+            my_printf_debug("Flipping state bit in filter %d" NEWLINE, idx);
+            to_flip_state_bits[idx] += 0x8000;
+        }
+    }
 #endif
 #if JAPARI
     int16_t *to_flip_state_bits = conv_params->filter_buffer_addr + n_filters * (conv_params->filter_offset - 1);
@@ -160,17 +151,9 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
 
 #if INDIRECT_RECOVERY
     start_cpu_counter(offsetof(Counters, embedding));
-    SlotInfo *cur_slot_info = conv_params->cur_slot_info;
-    int16_t n_keep_state_bits = n_filters;
-    if (conv_params->turning_point_idx <= cur_slot_info->n_turning_points && conv_params->next_turning_point != INVALID_TURNING_POINT) {
-        my_printf_debug("next_turning_point = %d" NEWLINE, conv_params->next_turning_point);
-        uint16_t ending_offset = MAX_VAL(conv_params->next_turning_point, cur_output_data_offset);
-        if (ending_offset < cur_output_data_offset + n_filters) {
-            n_keep_state_bits -= cur_output_data_offset + n_filters - ending_offset;
-        }
-    }
-    my_printf_debug("n_keep_state_bits = %d" NEWLINE, n_keep_state_bits);
-    MY_ASSERT(n_keep_state_bits >= 0);
+    fill_state_offsets(cur_output_data_offset, n_filters, &conv_params->old_output_offset, &conv_params->turning_point_idx, &conv_params->next_turning_point, conv_params->cur_slot_info);
+    my_printf_debug("State offsets" NEWLINE);
+    dump_matrix_debug(state_offsets, n_filters, ValueInfo(conv_params->conv_input, nullptr), false);
     stop_cpu_counter();
 #endif
 
@@ -204,7 +187,10 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
             bool has_state = offset_has_state(cur_output_data_offset + idx);
             if (has_state) {
                 my_printf_debug("Adding state bit for newly loaded filter idx=%d" NEWLINE, idx);
-                filter_tmp[conv_params->filter_offset - 1] = -(idx < n_keep_state_bits ? -conv_params->old_output_offset : conv_params->old_output_offset);
+                filter_tmp[conv_params->filter_offset - 1] = state_offsets[idx];
+#if ENABLE_COUNTERS
+                counters()->embedded_values++;
+#endif
             }
             stop_cpu_counter();
             if (!has_state)
@@ -255,7 +241,7 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
 #if STATEFUL
         start_cpu_counter(offsetof(Counters, memory_layout));
         if (conv_params->output_padding) {
-            conv_params->filter_buffer_addr[n_filters * conv_params->filter_offset - 1] = -((n_filters - 1 < n_keep_state_bits) ? -conv_params->old_output_offset : conv_params->old_output_offset);
+            conv_params->filter_buffer_addr[n_filters * conv_params->filter_offset - 1] = -state_offsets[n_filters - 1];
         }
         stop_cpu_counter();
 #endif
@@ -265,10 +251,7 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
     } else {
 #if INDIRECT_RECOVERY
         start_cpu_counter(offsetof(Counters, embedding));
-        if (n_keep_state_bits != n_filters) {
-            int16_t n_flip_state_bits = n_filters - n_keep_state_bits;
-            flip_filter_state_bits(conv_params, n_filters, n_flip_state_bits, 1);
-        }
+        flip_filter_state_bits(conv_params, n_filters);
         stop_cpu_counter();
 #endif
     }
@@ -283,14 +266,9 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
     B_cols = n_filters;
     MY_ASSERT(A_rows * B_cols <= OUTPUT_LEN);
     MY_ASSERT(input_buffer_addr + A_rows * A_cols <= filter_buffer_addr);
-#if !STATEFUL
+    MY_ASSERT(A_rows * B_cols <= OUTPUT_LEN);
     my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results,
-                      conv_params->output, cur_output_data_offset, values_to_preserve, 0, 0);
-#else
-    my_matrix_mpy_q15(A_rows, A_cols, B_rows, B_cols, input_buffer_addr, filter_buffer_addr, matrix_mpy_results,
-                      conv_params->output, cur_output_data_offset, values_to_preserve,
-                      -conv_params->old_output_offset, n_keep_state_bits);
-#endif
+                      conv_params->output, cur_output_data_offset, values_to_preserve);
 
     /* START dump data */
     my_printf_debug("input_h=%d" NEWLINE, cur_input_h);
@@ -322,20 +300,6 @@ static void convTask(int16_t cur_input_h, ConvTaskParams *conv_params) {
 
 #if HAWAII
     hawaii_record_footprints(conv_params->model, values_to_preserve);
-#endif
-
-#if INDIRECT_RECOVERY
-    start_cpu_counter(offsetof(Counters, embedding));
-    if (n_keep_state_bits != n_filters) {
-        start_cpu_counter(offsetof(Counters, state_query));
-        check_next_turning_point(conv_params->old_output_offset, conv_params->turning_point_idx,
-                                 conv_params->next_turning_point, conv_params->cur_slot_info, cur_output_data_offset + conv_params->OUTPUT_CHANNEL);
-        stop_cpu_counter();
-        my_printf_debug("old_output_offset flipped to %d" NEWLINE, conv_params->old_output_offset);
-
-        flip_filter_state_bits(conv_params, n_filters, n_keep_state_bits, 0);
-    }
-    stop_cpu_counter();
 #endif
 }
 
@@ -921,13 +885,12 @@ void handle_convmerge(Model *model, const ParameterInfo *input[], ParameterInfo 
 #if INDIRECT_RECOVERY
 
 #if STATEFUL
-            start_cpu_counter(offsetof(Counters, embedding));
-            update_states(lea_buffer, real_chunk_len, output_offset, old_embedding_offset, next_output_turning_point, true);
+            start_cpu_counter(offsetof(Counters, state_query));
+            fill_state_offsets(output_offset, real_chunk_len, &old_embedding_offset, &output_turning_point_idx, &next_output_turning_point, cur_output_slot_info);
             stop_cpu_counter();
 
-            start_cpu_counter(offsetof(Counters, state_query));
-            check_next_turning_point(old_embedding_offset, output_turning_point_idx,
-                                     next_output_turning_point, cur_output_slot_info, output_offset + real_chunk_len);
+            start_cpu_counter(offsetof(Counters, embedding));
+            update_states(lea_buffer, real_chunk_len, true);
             stop_cpu_counter();
 #elif JAPARI
             start_cpu_counter(offsetof(Counters, embedding));
