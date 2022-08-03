@@ -18,7 +18,7 @@ Our middleware is built on top of a lightweight inference engine, and contains f
 
 <!-- For more technical details, please refer to our paper **TODO**. -->
 
-Demo video: https://www.youtube.com/watch?v=nANmUAO-1Ag
+Demo video: https://www.youtube.com/watch?v=Lkr583-X2gU
 
 <!-- TABLE OF CONTENTS -->
 ## Table of Contents
