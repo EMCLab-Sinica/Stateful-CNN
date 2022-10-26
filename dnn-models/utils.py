@@ -46,7 +46,26 @@ def extract_archive(archive_path: pathlib.Path, subdir: str):
         if '.tar' in str(archive_path):
             with tarfile.open(archive_path) as tar:
                 members = [member for member in tar.getmembers() if member.name.startswith(subdir)]
-                tar.extractall(archive_path.parent, members=members)
+                def is_within_directory(directory, target):
+                    
+                    abs_directory = os.path.abspath(directory)
+                    abs_target = os.path.abspath(target)
+                
+                    prefix = os.path.commonprefix([abs_directory, abs_target])
+                    
+                    return prefix == abs_directory
+                
+                def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+                
+                    for member in tar.getmembers():
+                        member_path = os.path.join(path, member.name)
+                        if not is_within_directory(path, member_path):
+                            raise Exception("Attempted Path Traversal in Tar File")
+                
+                    tar.extractall(path, members, numeric_owner=numeric_owner) 
+                    
+                
+                safe_extract(tar, archive_path.parent, members=members)
         elif str(archive_path).endswith('.zip'):
             with zipfile.ZipFile(archive_path) as zip_f:
                 members = [member for member in zip_f.namelist() if member.startswith(subdir)]
